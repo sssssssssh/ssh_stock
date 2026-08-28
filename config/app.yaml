@@ -1,0 +1,7 @@
+app:
+  name: stock-opportunity-system
+  timezone: Asia/Shanghai
+  algo_version: v1.0
+  scheduler:
+    daily_cron: "10 18 * * 1-5"
+

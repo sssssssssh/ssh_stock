@@ -1,0 +1,41 @@
+universe:
+  exclude_st: true
+  min_listed_trading_days: 120
+  min_avg_amount_20_cny: 50000000
+  min_close: 2.0
+
+benchmark:
+  primary: 000300.SH
+  market_indices:
+    - 000300.SH
+    - 000001.SH
+    - 000852.SH
+
+factor:
+  ma_windows: [5, 10, 20, 60, 120, 250]
+  return_windows: [1, 3, 5, 20, 60, 120, 250]
+  rps_windows: [20, 60, 120, 250]
+  atr_window: 20
+
+right_side:
+  min_score: 70
+  min_rps20: 70
+  volume_ratio_confirm: 1.20
+  base_ma60_distance_pct: 0.10
+  s3_max_days: 5
+
+trend:
+  s4_min_score: 70
+  s4_min_rps60: 70
+  s5_min_score: 85
+  s5_min_rps60: 90
+  s5_min_rps120: 80
+
+market:
+  risk_on_score: 70
+  risk_off_score: 45
+
+sector:
+  heat_main_up: 75
+  heat_climax: 90
+  heat_watch: 40

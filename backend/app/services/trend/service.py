@@ -1,0 +1,175 @@
+from datetime import date, timedelta
+from typing import Any
+
+import pandas as pd
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.models.market_data import (
+    MarketDaily,
+    SectorFactorDaily,
+    SectorMember,
+    StockFactorDaily,
+    StockStateDaily,
+    StrategySignal,
+)
+from app.repositories.upsert import upsert_rows
+from app.services.trend.engine import (
+    TrendConfig,
+    calculate_stock_states,
+    generate_strategy_signals,
+)
+
+
+class TrendService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.settings = get_settings()
+
+    def recalc(self, start: date, end: date, algo_version: str | None = None) -> dict[str, int]:
+        version = algo_version or self.settings.algo_version
+        lookback_start = start - timedelta(days=180)
+        factors = self._read_factors(lookback_start, end)
+        market = self._read_market(lookback_start, end)
+        sector_members = self._read_sector_members()
+        sector_factors = self._read_sector_factors(lookback_start, end)
+        previous_states = self._read_previous_states(lookback_start, start, version)
+
+        config = TrendConfig.from_strategy(self.settings.strategy, algo_version=version)
+        states = calculate_stock_states(
+            factors=factors,
+            market=market,
+            sector_members=sector_members,
+            sector_factors=sector_factors,
+            previous_states=previous_states,
+            start=start,
+            end=end,
+            config=config,
+        )
+        state_rows = [_clean_row(row) for row in states.to_dict("records")]
+        state_count = upsert_rows(
+            self.db,
+            StockStateDaily,
+            state_rows,
+            ["trade_date", "ts_code", "algo_version"],
+        )
+
+        signals = generate_strategy_signals(states, config)
+        signal_rows = [_clean_row(row) for row in signals.to_dict("records")]
+        signal_count = upsert_rows(
+            self.db,
+            StrategySignal,
+            signal_rows,
+            ["trade_date", "ts_code", "signal_type", "algo_version"],
+        )
+        self.db.commit()
+        logger.info(
+            "recalculated trend states start={} end={} states={} signals={}",
+            start,
+            end,
+            state_count,
+            signal_count,
+        )
+        return {"states": state_count, "signals": signal_count}
+
+    def _read_factors(self, start: date, end: date) -> pd.DataFrame:
+        stmt = (
+            select(
+                StockFactorDaily.trade_date,
+                StockFactorDaily.ts_code,
+                StockFactorDaily.adj_close,
+                StockFactorDaily.ma20,
+                StockFactorDaily.ma60,
+                StockFactorDaily.ma120,
+                StockFactorDaily.return20,
+                StockFactorDaily.ma20_slope5,
+                StockFactorDaily.ma60_slope10,
+                StockFactorDaily.atr20_pct,
+                StockFactorDaily.amount_ratio20,
+                StockFactorDaily.prev_high20,
+                StockFactorDaily.breakout20,
+                StockFactorDaily.breakout60,
+                StockFactorDaily.cross_above_ma20,
+                StockFactorDaily.cross_above_ma60,
+                StockFactorDaily.higher_low,
+                StockFactorDaily.higher_low_pct,
+                StockFactorDaily.drawdown_high60,
+                StockFactorDaily.max_drawdown60,
+                StockFactorDaily.trend_efficiency20,
+                StockFactorDaily.rps20,
+                StockFactorDaily.rps60,
+                StockFactorDaily.rps120,
+                StockFactorDaily.rps20_delta5,
+                StockFactorDaily.rps60_delta5,
+                StockFactorDaily.eligible,
+            )
+            .where(StockFactorDaily.trade_date >= start, StockFactorDaily.trade_date <= end)
+            .order_by(StockFactorDaily.ts_code, StockFactorDaily.trade_date)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_market(self, start: date, end: date) -> pd.DataFrame:
+        stmt = (
+            select(MarketDaily.trade_date, MarketDaily.market_score)
+            .where(MarketDaily.trade_date >= start, MarketDaily.trade_date <= end)
+            .order_by(MarketDaily.trade_date)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_sector_members(self) -> pd.DataFrame:
+        stmt = select(
+            SectorMember.sector_id,
+            SectorMember.ts_code,
+            SectorMember.valid_from,
+            SectorMember.valid_to,
+            SectorMember.is_latest,
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_sector_factors(self, start: date, end: date) -> pd.DataFrame:
+        stmt = (
+            select(
+                SectorFactorDaily.trade_date,
+                SectorFactorDaily.sector_id,
+                SectorFactorDaily.heat_score,
+                SectorFactorDaily.heat_momentum3,
+            )
+            .where(SectorFactorDaily.trade_date >= start, SectorFactorDaily.trade_date <= end)
+            .order_by(SectorFactorDaily.trade_date, SectorFactorDaily.sector_id)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_previous_states(
+        self, start: date, target_start: date, algo_version: str
+    ) -> pd.DataFrame:
+        stmt = (
+            select(
+                StockStateDaily.trade_date,
+                StockStateDaily.ts_code,
+                StockStateDaily.state,
+                StockStateDaily.state_day_count,
+            )
+            .where(
+                StockStateDaily.trade_date >= start,
+                StockStateDaily.trade_date < target_start,
+                StockStateDaily.algo_version == algo_version,
+            )
+            .order_by(StockStateDaily.ts_code, StockStateDaily.trade_date)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+
+def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for key, value in row.items():
+        if isinstance(value, (dict, list)):
+            cleaned[key] = value
+        elif pd.isna(value):
+            cleaned[key] = None
+        elif hasattr(value, "item"):
+            cleaned[key] = value.item()
+        else:
+            cleaned[key] = value
+    return cleaned

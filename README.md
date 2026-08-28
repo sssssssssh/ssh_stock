@@ -1,0 +1,599 @@
+# A 股机会发现与趋势研究系统
+
+本项目按 `docs/` 下两份 V1.0 Markdown 文档开发：
+
+- `docs/股票机会发现系统_PRD_V1.0.md`
+- `docs/股票机会发现系统_系统设计_V1.0.md`
+
+当前实现范围：Milestone 0 到 Milestone 7。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、CLI 和测试。
+
+## 已实现
+
+- Python 3.12 + FastAPI 后端骨架
+- SQLAlchemy 2.x 数据模型
+- Alembic 数据库迁移
+- PostgreSQL Docker Compose 本地开发配置
+- Pydantic Settings + YAML 配置加载
+- MarketDataProvider 抽象
+- TushareProvider，token 只从环境变量读取
+- stock_basic / trade_calendar / stock_daily / stock_adj_factor / stock_daily_basic / index_daily 入库服务
+- daily / backfill / scheduler CLI
+- job_run 与 provider_api_log 运行日志
+- P0 原始数据质量检查
+- stock_factor_daily 因子表
+- Factor Engine：复权 OHLC、MA、收益率、斜率、ATR、突破、higher-low、回撤、趋势效率、Eligible Universe、RPS
+- market_daily 市场温度表：Market Score、Regime、市场宽度、涨跌家数、新高新低、成交额活跃度
+- sector / sector_member / sector_factor_daily 行业表：行业元数据、行业成分、Sector Heat、Heat Momentum、Lifecycle
+- recalc-market / recalc-sectors CLI，并已接入 daily / backfill
+- stock_state_daily 趋势状态表：RightSideScore、TrendScore、S0-S6、OpportunityScore
+- strategy_signal 策略信号表：RIGHT_SIDE_NEW、TREND_ENTER、MAIN_UP_ENTER、TREND_DECAY、LEADER_BREAKOUT
+- recalc-states CLI，并已接入 daily / backfill
+- signal_forward_eval 后验评估表
+- evaluate-signals CLI：计算信号后 5/10/20/60 个交易日收益、MFE20、MAE20
+- Dashboard / Stocks / Sectors / Research REST API
+- Vue 3 + TypeScript + Vite + ECharts 前端
+- pytest 单元测试与 API 集成测试
+
+## 先判断你的数据库环境
+
+### 场景 A：你用云端 PostgreSQL
+
+你已经有云端 PostgreSQL，例如 PG17。
+
+这种情况下：
+
+- 不需要执行 `docker compose up -d postgres`
+- 只需要在 `.env` 里填写云端 `DATABASE_URL`
+- 仍然需要执行 `python -m alembic upgrade head` 创建业务表
+
+`.env` 示例：
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://用户名:密码@云数据库地址:5432/数据库名
+TUSHARE_TOKEN=你的TushareToken
+TUSHARE_HTTP_URL=https://fastapic.stockai888.top
+TUSHARE_MIN_INTERVAL_SECONDS=1.5
+API_HOST=127.0.0.1
+API_PORT=8000
+APP_TIMEZONE=Asia/Shanghai
+LOG_LEVEL=INFO
+```
+
+如果云数据库要求 SSL，使用：
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://用户名:密码@云数据库地址:5432/数据库名?sslmode=require
+```
+
+### 场景 B：你用本机已安装的 PostgreSQL
+
+你电脑上已经安装并启动了 PostgreSQL。
+
+这种情况下：
+
+- 不需要执行 `docker compose up -d postgres`
+- 只需要把 `.env` 的 `DATABASE_URL` 指向本机 PostgreSQL
+- 仍然需要执行 `python -m alembic upgrade head` 创建业务表
+
+`.env` 示例：
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
+TUSHARE_TOKEN=你的TushareToken
+TUSHARE_HTTP_URL=https://fastapic.stockai888.top
+TUSHARE_MIN_INTERVAL_SECONDS=1.5
+API_HOST=127.0.0.1
+API_PORT=8000
+APP_TIMEZONE=Asia/Shanghai
+LOG_LEVEL=INFO
+```
+
+### 场景 C：你没有数据库，想用 Docker 本地启动 PostgreSQL
+
+这种情况下才需要执行：
+
+```powershell
+docker compose up -d postgres
+```
+
+`.env` 可以使用：
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
+POSTGRES_PASSWORD=stock
+TUSHARE_TOKEN=你的TushareToken
+TUSHARE_HTTP_URL=https://fastapic.stockai888.top
+TUSHARE_MIN_INTERVAL_SECONDS=1.5
+API_HOST=127.0.0.1
+API_PORT=8000
+APP_TIMEZONE=Asia/Shanghai
+LOG_LEVEL=INFO
+```
+
+## 第一次启动流程
+
+### 1. 复制环境变量文件
+
+```powershell
+Copy-Item .env.example .env
+```
+
+作用：生成本机私有配置文件。
+
+什么时候跳过：如果你已经有 `.env`，不要重复覆盖，直接编辑现有 `.env`。
+
+### 2. 编辑 `.env`
+
+必须填写：
+
+```dotenv
+DATABASE_URL=你的数据库连接
+TUSHARE_TOKEN=你的TushareToken
+TUSHARE_HTTP_URL=https://fastapic.stockai888.top
+TUSHARE_MIN_INTERVAL_SECONDS=1.5
+```
+
+说明：
+
+- `DATABASE_URL` 控制 Alembic、API、CLI 连接哪个数据库。
+- `TUSHARE_TOKEN` 用来调用 Tushare 代理接口。
+- `TUSHARE_HTTP_URL` 是 Tushare SDK 的代理 API 地址，当前使用 `https://fastapic.stockai888.top`。
+- `TUSHARE_MIN_INTERVAL_SECONDS` 控制每次 Tushare 请求之间的最小间隔，默认 `1.5` 秒。代理频繁断开时可以改成 `2` 或 `3`；确认不限流时可以改成 `0` 关闭节流。
+- `.env` 不会进入 Git，不要把密码写进 README 或代码。
+
+本项目使用代理版 Tushare 初始化方式：先执行 `ts.set_token(TUSHARE_TOKEN)`，再执行无参数 `ts.pro_api()`，最后把 SDK 内部请求地址改为 `TUSHARE_HTTP_URL`。这段逻辑集中在 `backend/app/providers/tushare_provider.py`，业务服务不要直接调用 `tushare`。
+
+如果你曾经在系统环境变量里单独设置过 Tushare SDK 自己使用的 token，建议删除或确保它和 `.env` 里的 `TUSHARE_TOKEN` 一致。项目代码会显式调用 `ts.set_token(...)`，但保留旧的系统级 token 容易让排查变复杂。
+
+### 3. 安装 Python 依赖
+
+推荐普通安装：
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
+作用：安装运行、开发和测试依赖。
+
+什么时候跳过：同一台电脑已经安装过，且 `requirements*.txt` 没变，可以跳过。
+
+也可以使用 editable 安装：
+
+```powershell
+python -m pip install -e .[dev]
+```
+
+作用：把当前项目以开发模式安装到 Python 环境。频繁开发 Python 包时更方便。
+
+### 4. 设置 PYTHONPATH
+
+```powershell
+$env:PYTHONPATH = "backend"
+```
+
+作用：让 Python 能找到 `backend/app` 里的 `app` 包。
+
+什么时候跳过：
+
+- 如果你使用的是 `uvicorn --app-dir backend` 启动 API，可以不设置。
+- 如果你已经执行过 `python -m pip install -e .[dev]`，多数情况下也可以不设置。
+- 如果执行 `python -m app.cli ...` 提示找不到 `app`，就必须设置。
+
+### 5. 启动数据库
+
+只有场景 C 需要执行：
+
+```powershell
+docker compose up -d postgres
+```
+
+作用：用 Docker 在本机启动 PostgreSQL。
+
+什么时候跳过：
+
+- 你使用云端 PostgreSQL，跳过。
+- 你使用本机已安装 PostgreSQL，跳过。
+
+### 6. 自动建表
+
+```powershell
+python -m alembic upgrade head
+```
+
+作用：读取 `.env` 里的 `DATABASE_URL`，自动在目标 PostgreSQL 里创建或升级业务表。
+
+什么时候跳过：
+
+- 第一次连接一个新数据库时不能跳过。
+- 后续代码没有新增 migration 时可以跳过。
+- 拉到新代码后如果 `migrations/versions/` 有新增文件，需要再执行一次。
+
+当前会创建这些表：
+
+- `stock_basic`
+- `trade_calendar`
+- `stock_daily`
+- `stock_adj_factor`
+- `stock_daily_basic`
+- `index_daily`
+- `job_run`
+- `provider_api_log`
+- `stock_factor_daily`
+- `market_daily`
+- `sector`
+- `sector_member`
+- `sector_factor_daily`
+- `stock_state_daily`
+- `strategy_signal`
+- `signal_forward_eval`
+
+### 7. 启动 API
+
+```powershell
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+作用：启动后端 HTTP 服务。
+
+启动后检查：
+
+```text
+http://127.0.0.1:8000/health
+```
+
+查看系统数据状态：
+
+```text
+http://127.0.0.1:8000/api/v1/system/status
+```
+
+什么时候跳过：如果你只想跑 CLI 同步数据，不需要打开 API，可以跳过。
+
+如果你像之前一样使用 `9034` 端口启动，命令改成：
+
+```powershell
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 9034
+```
+
+对应检查地址就是：
+
+```text
+http://127.0.0.1:9034/health
+http://127.0.0.1:9034/api/v1/system/status
+```
+
+如果 Windows 启动 8000 端口时报 `WinError 10013` 或提示端口绑定权限不允许，可以直接改用 9034；同时把 `frontend/.env` 里的 `VITE_API_PROXY_TARGET` 改成 `http://127.0.0.1:9034`。
+
+注意：`/` 根路径没有页面，直接打开会返回 404。后端健康检查用 `/health`，前端页面用下面的 Vite 地址。
+
+### 8. 启动前端
+
+第一次进入前端目录需要安装依赖：
+
+```powershell
+cd frontend
+npm install
+```
+
+作用：安装 Vue、Vite、ECharts 等前端依赖。
+
+什么时候跳过：同一台电脑已经执行过，且 `frontend/package-lock.json` 没变化，可以跳过。
+
+启动前端：
+
+```powershell
+npm run dev
+```
+
+默认打开：
+
+```text
+http://127.0.0.1:5173
+```
+
+前端默认把 `/api` 代理到 `http://127.0.0.1:9034`。如果你的后端跑在 8000，把 `frontend/.env.example` 复制为 `frontend/.env` 后修改：
+
+```dotenv
+VITE_API_BASE_URL=/api/v1
+VITE_API_PROXY_TARGET=http://127.0.0.1:8000
+```
+
+## 常用命令
+
+### 检查配置是否读到
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli check-config
+```
+
+作用：脱敏显示当前读取到的 `.env` 路径、数据库连接是否存在、Tushare token 是否存在、token 长度、首尾掩码、Tushare 代理地址和请求最小间隔。
+
+如果 `tushare_token_length` 明显不是你预期的长度，通常是 `.env` 中 `TUSHARE_TOKEN` 填错、复制了额外内容、带了多余空格/引号，或者填成了其他平台的 token。如果 `tushare_http_url` 不是 `https://fastapic.stockai888.top`，说明代理地址没有按当前项目要求加载。如果 `tushare_min_interval_seconds` 太小，历史回填时可能更容易触发代理限流或瞬断。
+
+### 检查 Tushare token 是否可用
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli check-tushare
+```
+
+作用：调用一个很小的 Tushare `trade_cal` 请求，确认 token 是否能被 Tushare 服务端接受。
+
+如果返回类似 `token无效` 或 Tushare 错误码 `40101`，说明当前 `.env` 里的 token 没有被 Tushare 接受。此时先去 Tushare Pro 个人中心重新复制 token，只复制 token 本身，不要复制说明文字、前后空格或换行。
+
+### 常见报错处理
+
+如果 `daily` 报 SQLAlchemy 链接 `https://sqlalche.me/e/20/e3q8`，先看报错前面的真实错误：
+
+- 如果数据库迁移版本不是最新，执行 `python -m alembic upgrade head`。当前最新应为 `0006_signal_forward_eval`。
+- 如果看到 `number of parameters must be between 0 and 65535`，说明旧代码一次性 upsert 行数太多；当前代码已经把 `upsert_rows` 改为自动分批写入。
+- 如果 `sector_factor_daily rows=0` 但任务成功，通常是因为数据库只有单日行情，Eligible Universe 需要历史 lookback。先做历史回填，再重算行业热度。
+
+如果前端任务状态显示失败，并且错误中包含 `SSLEOFError`、`UNEXPECTED_EOF_WHILE_READING` 或 `Max retries exceeded with url: /trade_cal` / `/stock_basic`，通常是 Tushare 代理 HTTPS 连接被中途断开，不是数据库重复或建表问题。当前 `TushareProvider` 已对 `requests` 网络异常做 3 次自动重试，并默认在每次 Tushare 请求之间等待 `TUSHARE_MIN_INTERVAL_SECONDS=1.5` 秒；如果仍失败，可以把 `.env` 改成 `TUSHARE_MIN_INTERVAL_SECONDS=2` 或 `3`，重启后端后再重新点击“拉取数据”。可以先执行：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli check-tushare
+```
+
+如果 `check-tushare` 返回 `tushare_ok=true`，说明 token 和代理当前可用。
+
+### 健康检查
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/health
+```
+
+### 同步某一天数据
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli daily --trade-date 2026-08-25
+```
+
+作用：调用 Tushare，同步指定交易日的原始数据。
+
+会同步：
+
+- 交易日历
+- 股票基础信息
+- A 股日线
+- 复权因子
+- 每日指标
+- 指数日线
+- 申万行业元数据
+- 申万行业成分
+
+随后会自动计算：
+
+- `stock_factor_daily`
+- `market_daily`
+- `sector_factor_daily`
+- `stock_state_daily`
+- `strategy_signal`
+
+什么时候跳过：如果你只是启动 API 看服务是否能跑，不需要同步数据，可以跳过。
+
+### 历史回填
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli backfill --start 2021-01-01 --end 2026-08-25
+```
+
+作用：按交易日循环同步历史数据。
+
+什么时候使用：第一次初始化历史数据库时使用。
+
+注意：历史回填会比较慢，也会消耗 Tushare 调用额度。
+
+### 重算因子
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli recalc-factors --start 2026-08-25 --end 2026-08-25
+```
+
+作用：从数据库中的 `stock_daily`、`stock_adj_factor`、`stock_basic`、`index_daily` 读取数据，计算并写入 `stock_factor_daily`。
+
+什么时候使用：
+
+- 你已经同步过原始行情，想单独重算因子。
+- 修改了 `config/strategy.yaml` 中的 universe / factor 参数。
+- 新增或修复因子计算逻辑后，需要回填历史因子。
+
+注意：`daily` 和 `backfill` 当前已经会自动调用因子、市场温度、行业热度、趋势状态和策略信号计算；手动 `recalc-factors` 主要用于补算或重算个股因子。
+
+### 重算市场温度
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli recalc-market --start 2026-08-25 --end 2026-08-25
+```
+
+作用：从数据库中的 `stock_factor_daily`、`stock_daily`、`index_daily` 读取数据，计算并写入 `market_daily`。
+
+什么时候使用：
+
+- 已经有原始行情和个股因子，想单独重算 Market Score / Regime。
+- 修改了 `config/strategy.yaml` 中 `market` 或 `benchmark` 参数。
+- 修复市场温度算法后，需要回填历史市场状态。
+
+注意：市场温度依赖 `stock_factor_daily`，所以如果你刚改过因子逻辑，先执行 `recalc-factors`。
+
+### 重算行业热度
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli recalc-sectors --start 2026-08-25 --end 2026-08-25
+```
+
+作用：从数据库中的 `sector_member`、`stock_factor_daily`、`index_daily` 读取数据，计算并写入 `sector_factor_daily`。
+
+什么时候使用：
+
+- 已经同步过行业元数据、行业成分和个股因子，想单独重算 Sector Heat。
+- 修改了 `config/strategy.yaml` 中 `sector` 或 `benchmark` 参数。
+- 修复行业热度或生命周期算法后，需要回填历史行业热度。
+
+注意：行业热度依赖 `sector`、`sector_member` 和 `stock_factor_daily`。如果行业表没有数据，先执行一次 `daily` 或 `backfill` 让系统同步行业元数据和成分。
+
+### 重算趋势状态和策略信号
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli recalc-states --start 2026-08-25 --end 2026-08-25 --algo-version v1.0
+```
+
+作用：从数据库中的 `stock_factor_daily`、`market_daily`、`sector_member`、`sector_factor_daily` 和历史 `stock_state_daily` 读取数据，计算并写入 `stock_state_daily` 和 `strategy_signal`。
+
+什么时候使用：
+
+- 已经完成原始行情、个股因子、市场温度和行业热度计算，想单独重算 S0-S6。
+- 修改了 `config/strategy.yaml` 中 `right_side` 或 `trend` 参数。
+- 修复状态机或信号规则后，需要回填历史状态和信号。
+
+注意：如果数据库只有单日行情，系统会先生成基础状态；RIGHT_SIDE_NEW 等信号通常需要足够历史 lookback 才会出现。
+
+### 评估信号后验收益
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli evaluate-signals --signal-type RIGHT_SIDE_NEW --algo-version v1.0
+```
+
+作用：读取 `strategy_signal` 和 `stock_factor_daily`，计算信号后 5/10/20/60 个交易日收益、MFE20、MAE20，并写入 `signal_forward_eval`。
+
+什么时候使用：
+
+- 已经完成历史回填，并且 `strategy_signal` 中有信号。
+- 想查看某类信号的真实后验表现。
+- 修改信号规则后，需要重新评估历史信号。
+
+注意：后验评估只写入 `signal_forward_eval`，不会反写当日因子、状态或信号表，避免未来函数。
+
+### 常用 API
+
+```text
+GET /api/v1/dashboard/summary
+GET /api/v1/system/data-coverage?start=&end=&limit=120
+GET /api/v1/sectors/heat?trade_date=&level=L1&sort=heat_score&limit=30
+GET /api/v1/sectors/{sector_id}?trade_date=
+GET /api/v1/sectors/{sector_id}/history?start=&end=
+GET /api/v1/stocks/right-side?trade_date=&new_only=true&limit=50
+GET /api/v1/stocks/trends?trade_date=&states=S4,S5&limit=50
+GET /api/v1/stocks/decay?trade_date=&limit=50
+GET /api/v1/stocks/{ts_code}/overview?trade_date=
+GET /api/v1/stocks/{ts_code}/history?start=&end=
+GET /api/v1/stocks/{ts_code}/factors?start=&end=
+GET /api/v1/research/signals/stats?signal_type=RIGHT_SIDE_NEW&algo_version=v1.0
+GET /api/v1/research/signals/buckets?signal_type=RIGHT_SIDE_NEW&bucket_field=opportunity_score
+GET /api/v1/jobs?status=success&job_type=daily&limit=20&offset=0
+POST /api/v1/jobs/daily
+POST /api/v1/jobs/backfill
+```
+
+`/api/v1/system/data-coverage` 用来查看已经拉取了哪些交易日，以及每个交易日在核心数据表里的行数。前端首页底部的“数据覆盖”面板已经接入这个接口。
+
+数据覆盖面板右上角可以直接选择开始日期和结束日期，点击“拉取数据”。这会调用后端 `POST /api/v1/jobs/backfill` 创建后台任务，不需要再去终端执行 `python -m app.cli backfill ...`。
+
+如果勾选“评估信号”，回填完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。
+
+同一时间只允许一个 `daily` 或 `backfill` 拉取任务处于 `QUEUED/RUNNING` 状态，避免重复点击造成多个长任务同时跑。任务进度可以通过 `GET /api/v1/jobs?limit=20` 查看。
+
+数据覆盖面板中间会显示“当前任务”和“最近任务”：
+
+- `当前任务`：显示排队中/运行中/已完成/失败、进度条、当前步骤、当前交易日、已处理交易日数量和已写入行数。
+- `最近任务`：显示最近 5 个任务的类型、状态、步骤和日期范围。
+- 页面每 5 秒自动刷新任务状态；有运行中任务时也会同步刷新数据覆盖表。
+
+### 本地定时任务
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli scheduler
+```
+
+作用：启动本地 APScheduler，按 `config/app.yaml` 里的时间运行 daily job。
+
+什么时候跳过：你打算手动执行 daily，或者用云服务器 crontab/定时任务调度时，可以跳过。
+
+## 最简启动路径
+
+### 你已经填好云端数据库连接
+
+终端 1 执行：
+
+```powershell
+python -m pip install -r requirements-dev.txt
+$env:PYTHONPATH = "backend"
+python -m alembic upgrade head
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+终端 2 执行：
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+不要执行：
+
+```powershell
+docker compose up -d postgres
+```
+
+### 你要用 Docker 本地数据库
+
+终端 1 执行：
+
+```powershell
+Copy-Item .env.example .env
+python -m pip install -r requirements-dev.txt
+docker compose up -d postgres
+$env:PYTHONPATH = "backend"
+python -m alembic upgrade head
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+终端 2 执行：
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+## 测试
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m pytest
+python -m ruff check .
+cd frontend
+npm run build
+```
+
+## 换电脑继续开发
+
+1. 安装 Python 3.12、Docker Desktop、Git、Node.js 22 LTS。
+2. 进入项目根目录。
+3. 阅读 `PROJECT_RULES.md`、`docs/` 下两份 Markdown 文档和本 README。
+4. 复制 `.env.example` 为 `.env`，填入数据库连接和 `TUSHARE_TOKEN`。
+5. 执行 `python -m pip install -r requirements-dev.txt`。
+6. 如果使用 Docker 本地数据库，执行 `docker compose up -d postgres`；如果使用云数据库或已有本机数据库，跳过。
+7. 执行 `python -m alembic upgrade head`。
+8. 执行 `python -m pytest` 确认环境正确。
+9. 进入 `frontend`，执行 `npm install` 和 `npm run build` 确认前端环境正确。
+
+## 给 Codex 的继续开发约束
+
+- 先完成当前 Milestone 的验收标准，再进入下一个 Milestone。
+- 不要把阈值硬编码进业务代码，必须从 `config/strategy.yaml` 或配置对象读取。
+- 不要在服务层直接 import `tushare`，只能通过 Provider 抽象访问数据源。
+- 不要把 token、密码、数据库 dump、缓存数据提交进项目。
+- 所有信号和后验统计必须避免未来函数。
+- 每次修改后同步更新 README、PROJECT_RULES 和 `docs/` 下两份 Markdown 的“实现进度”。

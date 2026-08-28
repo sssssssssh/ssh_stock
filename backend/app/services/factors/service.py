@@ -1,0 +1,99 @@
+from datetime import date, timedelta
+from typing import Any
+
+import pandas as pd
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.models.market_data import (
+    IndexDaily,
+    StockAdjFactor,
+    StockBasic,
+    StockDaily,
+    StockFactorDaily,
+)
+from app.repositories.upsert import upsert_rows
+from app.services.factors.engine import FactorConfig, calculate_stock_factors
+
+
+class FactorService:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.settings = get_settings()
+
+    def recalc(self, start: date, end: date) -> int:
+        lookback_start = start - timedelta(days=430)
+        daily = self._read_daily(lookback_start, end)
+        adj_factor = self._read_adj_factor(lookback_start, end)
+        stock_basic = self._read_stock_basic()
+        index_daily = self._read_index_daily(lookback_start, end)
+
+        benchmark = self.settings.strategy.get("benchmark", {}).get("primary", "000300.SH")
+        config = FactorConfig.from_strategy(self.settings.strategy)
+        factors = calculate_stock_factors(
+            daily=daily,
+            adj_factor=adj_factor,
+            stock_basic=stock_basic,
+            index_daily=index_daily,
+            benchmark_code=benchmark,
+            start=start,
+            end=end,
+            config=config,
+        )
+        rows = [_clean_row(row) for row in factors.to_dict("records")]
+        count = upsert_rows(self.db, StockFactorDaily, rows, ["trade_date", "ts_code"])
+        self.db.commit()
+        logger.info("recalculated stock_factor_daily start={} end={} rows={}", start, end, count)
+        return count
+
+    def _read_daily(self, start: date, end: date) -> pd.DataFrame:
+        stmt = (
+            select(
+                StockDaily.trade_date,
+                StockDaily.ts_code,
+                StockDaily.open,
+                StockDaily.high,
+                StockDaily.low,
+                StockDaily.close,
+                StockDaily.vol,
+                StockDaily.amount,
+            )
+            .where(StockDaily.trade_date >= start, StockDaily.trade_date <= end)
+            .order_by(StockDaily.ts_code, StockDaily.trade_date)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_adj_factor(self, start: date, end: date) -> pd.DataFrame:
+        stmt = select(
+            StockAdjFactor.trade_date,
+            StockAdjFactor.ts_code,
+            StockAdjFactor.adj_factor,
+        ).where(StockAdjFactor.trade_date >= start, StockAdjFactor.trade_date <= end)
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_stock_basic(self) -> pd.DataFrame:
+        stmt = select(StockBasic.ts_code, StockBasic.name, StockBasic.list_status)
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_index_daily(self, start: date, end: date) -> pd.DataFrame:
+        stmt = (
+            select(IndexDaily.trade_date, IndexDaily.ts_code, IndexDaily.close)
+            .where(IndexDaily.trade_date >= start, IndexDaily.trade_date <= end)
+            .order_by(IndexDaily.ts_code, IndexDaily.trade_date)
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+
+def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for key, value in row.items():
+        if pd.isna(value):
+            cleaned[key] = None
+        elif hasattr(value, "item"):
+            cleaned[key] = value.item()
+        else:
+            cleaned[key] = value
+    return cleaned
+
