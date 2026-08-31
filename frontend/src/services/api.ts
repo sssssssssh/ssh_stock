@@ -1,5 +1,6 @@
 import type {
   ApiEnvelope,
+  DataCalendarRow,
   DataCoverageRow,
   DashboardSummary,
   JobRun,
@@ -36,6 +37,10 @@ export function fetchDataCoverage(): Promise<DataCoverageRow[]> {
   return request<DataCoverageRow[]>("/system/data-coverage?limit=120");
 }
 
+export function fetchDataCalendar(start: string, end: string): Promise<DataCalendarRow[]> {
+  return request<DataCalendarRow[]>(`/system/data-calendar?start=${start}&end=${end}`);
+}
+
 export function fetchJobs(): Promise<JobRun[]> {
   return request<JobRun[]>("/jobs?limit=10");
 }
@@ -66,6 +71,18 @@ export function enqueueBackfillJob(payload: {
   evaluate_signals?: boolean;
 }): Promise<JobRun> {
   return request<JobRun>("/jobs/backfill", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
+export function enqueueRecalculateJob(payload: {
+  start: string;
+  end: string;
+  evaluate_signals?: boolean;
+}): Promise<JobRun> {
+  return request<JobRun>("/jobs/recalculate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)

@@ -7,6 +7,8 @@
 
 当前实现范围：Milestone 0 到 Milestone 7。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、CLI 和测试。
 
+当前网页显示名称为“空间”。
+
 ## 已实现
 
 - Python 3.12 + FastAPI 后端骨架
@@ -492,15 +494,43 @@ GET /api/v1/research/signals/buckets?signal_type=RIGHT_SIDE_NEW&bucket_field=opp
 GET /api/v1/jobs?status=success&job_type=daily&limit=20&offset=0
 POST /api/v1/jobs/daily
 POST /api/v1/jobs/backfill
+POST /api/v1/jobs/recalculate
 ```
 
-`/api/v1/system/data-coverage` 用来查看已经拉取了哪些交易日，以及每个交易日在核心数据表里的行数。前端首页底部的“数据覆盖”面板已经接入这个接口。
+`/api/v1/system/data-coverage` 用来查看已经拉取了哪些交易日，以及每个交易日在核心数据表里的行数。前端“数据”页面的“数据覆盖”面板已经接入这个接口。
 
-数据覆盖面板右上角可以直接选择开始日期和结束日期，点击“拉取数据”。这会调用后端 `POST /api/v1/jobs/backfill` 创建后台任务，不需要再去终端执行 `python -m app.cli backfill ...`。
+前端已经改为带目录的页面切换结构，左侧目录包含：
+
+- `总览`：市场核心指标、市场分布图、行业热度图、信号后验统计。
+- `数据`：数据覆盖、日期范围拉取、当前任务、最近任务和覆盖明细表。
+- `长线`：右侧池、趋势池和行业热度列表。
+- `短线`：衰退/风险池、策略信号计数和行业短线动量。
+
+如果页面出现目录按钮像浏览器默认按钮、内容从最左侧裸排的情况，通常是 Vite 开发服务仍在返回旧的 `frontend/src/style.css`。处理方式：在前端终端按 `Ctrl+C` 停掉 `npm run dev`，重新执行 `npm run dev -- --host 127.0.0.1 --port 5173`，然后浏览器强制刷新页面。
+
+“数据”页面右上角可以直接选择开始日期和结束日期，点击“拉取数据”。这会调用后端 `POST /api/v1/jobs/backfill` 创建后台任务，不需要再去终端执行 `python -m app.cli backfill ...`。
+
+“数据”页面第一块是“补算因子与股票池”。当你已经补拉了更早的原始行情，但总览、行业热度、股票池仍然为空时，可以在这里选择日期范围并点击“开始补算”。它会调用 `POST /api/v1/jobs/recalculate` 创建后台任务，依次重新计算：
+
+- `stock_factor_daily`：均线、收益、RPS、Eligible Universe 等个股因子。
+- `market_daily`：市场温度。
+- `sector_factor_daily`：行业热度。
+- `stock_state_daily` / `strategy_signal`：趋势状态和股票池信号。
+- 可选 `signal_forward_eval`：信号后验评估。
+
+补算任务的因子阶段会按自然月拆分执行。页面任务状态会显示当前分块范围、累计写入行数和进度百分比；行数会在当前因子分块完成并写库后更新，所以单个分块计算中可能短时间保持 0。
+
+“数据覆盖日历”会按月份显示数据覆盖情况：
+
+- `休`：休市日。
+- `缺`：交易日但还没有拉取日线。
+- `原`：已拉原始行情，但还没有完成分析补算。
+- `算`：已经完成因子、市场和状态等基础分析。
+- `全`：基础分析和行业热度都已完成。
 
 如果勾选“评估信号”，回填完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。
 
-同一时间只允许一个 `daily` 或 `backfill` 拉取任务处于 `QUEUED/RUNNING` 状态，避免重复点击造成多个长任务同时跑。任务进度可以通过 `GET /api/v1/jobs?limit=20` 查看。
+同一时间只允许一个 `daily`、`backfill` 或 `recalculate` 任务处于 `QUEUED/RUNNING` 状态，避免重复点击造成多个长任务同时跑。任务进度可以通过 `GET /api/v1/jobs?limit=20` 查看。
 
 数据覆盖面板中间会显示“当前任务”和“最近任务”：
 

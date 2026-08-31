@@ -30,6 +30,22 @@ export type DataCoverageRow = {
   signal_eval_rows: number;
 };
 
+export type DataCalendarRow = {
+  date: string;
+  is_open: boolean | null;
+  coverage_status: "CLOSED" | "MISSING" | "RAW_ONLY" | "ANALYZED" | "COMPLETE";
+  stock_daily_rows: number;
+  daily_basic_rows: number;
+  adj_factor_rows: number;
+  index_daily_rows: number;
+  factor_rows: number;
+  market_rows: number;
+  sector_factor_rows: number;
+  state_rows: number;
+  signal_rows: number;
+  signal_eval_rows: number;
+};
+
 export type JobRun = {
   id: string;
   job_type: string;
@@ -84,6 +100,8 @@ export type SectorHeat = {
   return5?: number | null;
   return20?: number | null;
   up_rate?: number | null;
+  heat_momentum1?: number | null;
+  heat_momentum3?: number | null;
 };
 
 export type StockPoolItem = {

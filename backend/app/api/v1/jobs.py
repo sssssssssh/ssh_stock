@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -15,6 +15,11 @@ from app.models.job import JobRun
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.repositories.job_run import start_job, update_job
+from app.services.factors import FactorService
+from app.services.market import MarketService
+from app.services.research import SignalEvaluationService
+from app.services.sector import SectorService
+from app.services.trend import TrendService
 
 router = APIRouter()
 
@@ -27,6 +32,12 @@ class BackfillJobRequest(BaseModel):
     start: date
     end: date
     evaluate_signals: bool = Field(default=False)
+
+
+class RecalculateJobRequest(BaseModel):
+    start: date
+    end: date
+    evaluate_signals: bool = Field(default=True)
 
 
 @router.get("")
@@ -117,11 +128,44 @@ def enqueue_backfill_job(
     return envelope(_job_payload(job), {"accepted": True})
 
 
+@router.post("/recalculate")
+def enqueue_recalculate_job(
+    payload: RecalculateJobRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if payload.end < payload.start:
+        raise HTTPException(status_code=400, detail="end must be greater than or equal to start")
+    _reject_if_active_ingestion_job(db)
+    job = start_job(
+        db,
+        "recalculate",
+        payload.end,
+        status="QUEUED",
+        step="queued from api",
+        metadata={
+            "source": "api",
+            "start": payload.start.isoformat(),
+            "end": payload.end.isoformat(),
+            "evaluate_signals": payload.evaluate_signals,
+            "progress_pct": 0,
+        },
+    )
+    background_tasks.add_task(
+        _run_recalculate_job,
+        job.id,
+        payload.start,
+        payload.end,
+        payload.evaluate_signals,
+    )
+    return envelope(_job_payload(job), {"accepted": True})
+
+
 def _reject_if_active_ingestion_job(db: Session) -> None:
     active = db.execute(
         select(JobRun.id)
         .where(
-            JobRun.job_type.in_(["daily", "backfill"]),
+            JobRun.job_type.in_(["daily", "backfill", "recalculate"]),
             JobRun.status.in_(["QUEUED", "RUNNING"]),
         )
         .limit(1)
@@ -169,6 +213,127 @@ def _run_backfill_job(
                 )
         except Exception as exc:
             _mark_background_failed(db, job_id, exc)
+
+
+def _run_recalculate_job(
+    job_id: uuid.UUID,
+    start: date,
+    end: date,
+    evaluate_signals: bool,
+) -> None:
+    with SessionLocal() as db:
+        job = db.get(JobRun, job_id)
+        if not job:
+            return
+        metadata: dict[str, Any] = {
+            "source": "api",
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "evaluate_signals": evaluate_signals,
+            "stage": "starting",
+            "progress_pct": 0,
+        }
+        total_rows = 0
+        try:
+            factor_chunks = _month_chunks(start, end)
+            factor_service = FactorService(db)
+            for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
+                start_progress = round(8 + ((index - 1) / len(factor_chunks)) * 52, 1)
+                chunk_metadata = {
+                    **metadata,
+                    "stage": "factors",
+                    "progress_pct": start_progress,
+                    "factor_chunk_index": index,
+                    "factor_chunk_count": len(factor_chunks),
+                    "factor_chunk_start": chunk_start.isoformat(),
+                    "factor_chunk_end": chunk_end.isoformat(),
+                }
+                update_job(
+                    db,
+                    job,
+                    status="RUNNING",
+                    step=f"90 factors {chunk_start}..{chunk_end}",
+                    row_count=total_rows,
+                    metadata=chunk_metadata,
+                )
+                total_rows += factor_service.recalc(chunk_start, chunk_end)
+                metadata = {
+                    **chunk_metadata,
+                    "progress_pct": round(8 + (index / len(factor_chunks)) * 52, 1),
+                }
+                update_job(
+                    db,
+                    job,
+                    status="RUNNING",
+                    step=f"90 factors done {chunk_end}",
+                    row_count=total_rows,
+                    metadata=metadata,
+                )
+
+            update_job(
+                db,
+                job,
+                step="100 calculate market score",
+                row_count=total_rows,
+                metadata={**metadata, "stage": "market", "progress_pct": 65},
+            )
+            total_rows += MarketService(db).recalc(start, end)
+
+            update_job(
+                db,
+                job,
+                step="110 calculate sector heat",
+                row_count=total_rows,
+                metadata={**metadata, "stage": "sectors", "progress_pct": 78},
+            )
+            total_rows += SectorService(db).recalc(start, end)
+
+            update_job(
+                db,
+                job,
+                step="120 calculate trend states",
+                row_count=total_rows,
+                metadata={**metadata, "stage": "states", "progress_pct": 90},
+            )
+            trend_rows = TrendService(db).recalc(start, end)
+            total_rows += trend_rows["states"] + trend_rows["signals"]
+
+            if evaluate_signals:
+                update_job(
+                    db,
+                    job,
+                    step="190 evaluate signals",
+                    row_count=total_rows,
+                    metadata={**metadata, "stage": "signal_eval", "progress_pct": 96},
+                )
+                signal_eval_rows = SignalEvaluationService(db).evaluate(start=start, end=end)
+                metadata["signal_eval"] = signal_eval_rows
+                total_rows += signal_eval_rows["evaluated"]
+
+            update_job(
+                db,
+                job,
+                status="SUCCESS",
+                step="200 recalculation complete",
+                row_count=total_rows,
+                metadata={**metadata, "stage": "success", "progress_pct": 100},
+            )
+        except Exception as exc:
+            _mark_background_failed(db, job_id, exc)
+
+
+def _month_chunks(start: date, end: date) -> list[tuple[date, date]]:
+    chunks: list[tuple[date, date]] = []
+    current = start
+    while current <= end:
+        if current.month == 12:
+            next_month = date(current.year + 1, 1, 1)
+        else:
+            next_month = date(current.year, current.month + 1, 1)
+        chunk_end = min(end, next_month - timedelta(days=1))
+        chunks.append((current, chunk_end))
+        current = chunk_end + timedelta(days=1)
+    return chunks
 
 
 def _provider(db: Session) -> LoggingMarketDataProvider:

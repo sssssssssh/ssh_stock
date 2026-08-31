@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     log_level: str = "INFO"
 
-    app_name: str = "stock-opportunity-system"
+    app_name: str = "空间"
     algo_version: str = "v1.0"
     strategy: dict[str, Any] = Field(default_factory=dict)
     app_config: dict[str, Any] = Field(default_factory=dict)
