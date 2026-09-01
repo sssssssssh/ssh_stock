@@ -58,3 +58,32 @@ def test_tushare_provider_waits_between_calls(monkeypatch) -> None:
 
     assert len(df.index) == 1
     assert sleeps == [1.0]
+
+
+def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:
+    requested_statuses = []
+    fake_pro = SimpleNamespace(_DataApi__http_url=None)
+
+    def stock_basic(**kwargs):
+        status = kwargs["list_status"]
+        requested_statuses.append(status)
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": f"00000{len(requested_statuses)}.SZ",
+                    "list_status": status,
+                }
+            ]
+        )
+
+    fake_pro.stock_basic = stock_basic
+    fake_ts = ModuleType("tushare")
+    fake_ts.set_token = lambda token: None
+    fake_ts.pro_api = lambda: fake_pro
+    monkeypatch.setitem(__import__("sys").modules, "tushare", fake_ts)
+
+    provider = TushareProvider(token="test-token", min_interval_seconds=0)
+    df = provider.get_stock_basic()
+
+    assert requested_statuses == ["L", "D", "P"]
+    assert set(df["list_status"]) == {"L", "D", "P"}

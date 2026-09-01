@@ -96,7 +96,8 @@ def realtime_kline(
     try:
         daily = TushareProvider().get_daily_range(ts_code=ts_code, start=start, end=target_end)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"tushare realtime kline failed: {exc}") from exc
+        detail = f"tushare realtime kline failed: {exc}"
+        raise HTTPException(status_code=502, detail=detail) from exc
 
     rows = []
     if daily is not None and not daily.empty:

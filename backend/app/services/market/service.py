@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.market_data import IndexDaily, MarketDaily, StockDaily, StockFactorDaily
 from app.repositories.upsert import upsert_rows
+from app.services.calc_metadata import calculation_metadata
 from app.services.market.engine import MarketConfig, calculate_market_daily
 
 
@@ -17,7 +19,7 @@ class MarketService:
         self.db = db
         self.settings = get_settings()
 
-    def recalc(self, start: date, end: date) -> int:
+    def recalc(self, start: date, end: date, calc_run_id: uuid.UUID | None = None) -> int:
         lookback_start = start - timedelta(days=100)
         factors = self._read_factors(lookback_start, end)
         daily = self._read_daily(lookback_start, end)
@@ -32,7 +34,12 @@ class MarketService:
             end=end,
             config=config,
         )
-        rows = [_clean_row(row) for row in market.to_dict("records")]
+        metadata = calculation_metadata(
+            config=self.settings.strategy,
+            calc_version="market_v1",
+            calc_run_id=calc_run_id,
+        )
+        rows = [{**_clean_row(row), **metadata} for row in market.to_dict("records")]
         count = upsert_rows(self.db, MarketDaily, rows, ["trade_date"])
         self.db.commit()
         logger.info("recalculated market_daily start={} end={} rows={}", start, end, count)

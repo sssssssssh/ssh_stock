@@ -9,6 +9,7 @@ from app.repositories.job_run import start_job, update_job
 from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.market import MarketService
+from app.services.quality.daily_quality import record_cross_table_quality
 from app.services.sector import SectorService
 from app.services.trend import TrendService
 
@@ -51,7 +52,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 3),
             )
-            total_rows += self.ingestion.sync_daily(trade_date)
+            total_rows += self.ingestion.sync_daily(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
@@ -60,7 +61,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 4),
             )
-            total_rows += self.ingestion.sync_adj_factor(trade_date)
+            total_rows += self.ingestion.sync_adj_factor(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
@@ -69,7 +70,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 5),
             )
-            total_rows += self.ingestion.sync_daily_basic(trade_date)
+            total_rows += self.ingestion.sync_daily_basic(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
@@ -78,7 +79,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 6),
             )
-            total_rows += self.ingestion.sync_index_daily(trade_date)
+            total_rows += self.ingestion.sync_index_daily(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
@@ -105,7 +106,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 9),
             )
-            total_rows += FactorService(self.db).recalc(trade_date, trade_date)
+            total_rows += FactorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -114,7 +115,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 10),
             )
-            total_rows += MarketService(self.db).recalc(trade_date, trade_date)
+            total_rows += MarketService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -123,7 +124,7 @@ class DailyJob:
                 row_count=total_rows,
                 metadata=_progress(metadata, 11),
             )
-            total_rows += SectorService(self.db).recalc(trade_date, trade_date)
+            total_rows += SectorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -134,6 +135,7 @@ class DailyJob:
             )
             trend_rows = TrendService(self.db).recalc(trade_date, trade_date)
             total_rows += trend_rows["states"] + trend_rows["signals"]
+            record_cross_table_quality(self.db, trade_date, job_id=job.id)
 
             update_job(
                 self.db,

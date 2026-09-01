@@ -39,3 +39,8 @@ sector:
   heat_main_up: 75
   heat_climax: 90
   heat_watch: 40
+
+data_quality:
+  daily:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95

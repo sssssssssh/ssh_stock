@@ -609,7 +609,8 @@ button {
 .job-current-head span,
 .job-progress-meta,
 .job-current small,
-.job-date {
+.job-date,
+.job-duration {
   color: #667085;
   font-size: 12px;
 }
@@ -657,15 +658,61 @@ button {
   margin-top: 7px;
 }
 
+.job-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  border-top: 1px solid #dbeafe;
+  padding-top: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.job-time-row strong {
+  color: #111827;
+  font-size: 13px;
+}
+
 .job-list {
   display: grid;
   gap: 7px;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.job-list-head {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -12px -12px 2px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 8px 12px 7px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.job-list-head span {
+  color: #334155;
+  font-weight: 720;
+}
+
+.job-list-head strong {
+  color: #475569;
+  font-weight: 650;
 }
 
 .job-row {
   min-height: 30px;
   display: grid;
-  grid-template-columns: 72px 66px minmax(110px, 1fr) minmax(160px, 1.2fr);
+  grid-template-columns: 76px 68px minmax(120px, 1fr) minmax(190px, 1.4fr) 84px;
+  gap: 10px;
   border-bottom: 1px solid #e2e8f0;
   padding-bottom: 7px;
   font-size: 12px;
@@ -712,6 +759,7 @@ button {
 
 .job-step,
 .job-date,
+.job-duration,
 .job-error-line {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -720,6 +768,10 @@ button {
 
 .job-step {
   color: #334155;
+}
+
+.job-duration {
+  justify-self: end;
 }
 
 .job-error-line {
@@ -794,6 +846,12 @@ button {
   border-color: #fed7aa;
   background: #fff7ed;
   color: #c2410c;
+}
+
+.calendar-legend .degraded {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .calendar-legend .missing {
@@ -954,6 +1012,15 @@ button {
 
 .calendar-day.raw_only strong {
   color: #c2410c;
+}
+
+.calendar-day.degraded {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.calendar-day.degraded strong {
+  color: #92400e;
 }
 
 .calendar-day.analyzed {

@@ -105,14 +105,27 @@ class TushareProvider:
         )
 
     def get_stock_basic(self) -> pd.DataFrame:
-        return self._call(
-            "stock_basic",
-            list_status="L",
-            fields=(
-                "ts_code,symbol,name,area,industry,market,exchange,list_status,"
-                "list_date,delist_date,is_hs"
-            ),
+        frames: list[pd.DataFrame] = []
+        fetched_statuses: set[str] = set()
+        fields = (
+            "ts_code,symbol,name,area,industry,market,exchange,list_status,"
+            "list_date,delist_date,is_hs"
         )
+        for status in ("L", "D", "P"):
+            try:
+                df = self._call("stock_basic", list_status=status, fields=fields)
+            except Exception as exc:
+                logger.warning("stock_basic status={} failed: {}", status, exc)
+                continue
+            if not df.empty:
+                frames.append(df)
+                fetched_statuses.add(status)
+        missing_required = {"L", "D"} - fetched_statuses
+        if missing_required:
+            raise RuntimeError(
+                f"stock_basic required statuses missing: {sorted(missing_required)}"
+            )
+        return pd.concat(frames, ignore_index=True).drop_duplicates(subset=["ts_code"])
 
     def get_daily(self, trade_date: date) -> pd.DataFrame:
         return self._call(

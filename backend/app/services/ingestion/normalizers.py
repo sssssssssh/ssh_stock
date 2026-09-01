@@ -2,6 +2,7 @@ from datetime import date
 from typing import Any
 
 import pandas as pd
+from loguru import logger
 
 
 def parse_tushare_date(value: Any) -> date | None:
@@ -137,24 +138,38 @@ def normalize_sectors(df: pd.DataFrame, source: str = "SW") -> list[dict[str, An
 
 
 def normalize_sector_members(
-    df: pd.DataFrame, sector_code_to_id: dict[str, int], sector_level: str = "L1"
+    df: pd.DataFrame,
+    sector_code_to_id: dict[str, int],
+    sector_level: str = "L1",
+    stock_list_dates: dict[str, date] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     level_code_column = f"{sector_level.lower()}_code"
+    stock_list_dates = stock_list_dates or {}
     for item in df.to_dict("records"):
         sector_code = (
             item.get(level_code_column) or item.get("index_code") or item.get("industry_code")
         )
         ts_code = item.get("con_code") or item.get("ts_code")
-        valid_from = parse_tushare_date(item.get("in_date")) or date(1900, 1, 1)
+        valid_from = parse_tushare_date(item.get("in_date"))
+        if valid_from is None and ts_code:
+            valid_from = stock_list_dates.get(str(ts_code))
+        if valid_from is None:
+            logger.warning(
+                "sector member missing in_date sector_code={} ts_code={}",
+                sector_code,
+                ts_code,
+            )
+            valid_from = date(1900, 1, 1)
+        valid_to = parse_tushare_date(item.get("out_date"))
         sector_id = sector_code_to_id.get(str(sector_code))
         rows.append(
             {
                 "sector_id": sector_id,
                 "ts_code": ts_code,
                 "valid_from": valid_from,
-                "valid_to": parse_tushare_date(item.get("out_date")),
-                "is_latest": True,
+                "valid_to": valid_to,
+                "is_latest": valid_to is None,
             }
         )
     return [row for row in rows if row["sector_id"] and row["ts_code"]]

@@ -8,13 +8,23 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.common import clamp_limit, clamp_offset, envelope, scalar_count
+from app.core.config import get_settings
 from app.core.db import SessionLocal, get_db
 from app.jobs.backfill_job import BackfillJob
 from app.jobs.daily_job import DailyJob
 from app.models.job import JobRun
+from app.models.market_data import DataDirtyRange
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.repositories.job_run import start_job, update_job
+from app.services.calc_metadata import config_hash
+from app.services.dirty import (
+    latest_raw_trade_date,
+    mark_dirty_ranges_failed,
+    mark_dirty_ranges_processing,
+    mark_dirty_ranges_resolved,
+    open_dirty_ranges,
+)
 from app.services.factors import FactorService
 from app.services.market import MarketService
 from app.services.research import SignalEvaluationService
@@ -38,6 +48,7 @@ class RecalculateJobRequest(BaseModel):
     start: date
     end: date
     evaluate_signals: bool = Field(default=True)
+    mode: str = Field(default="manual", pattern="^(manual|dirty_repair)$")
 
 
 @router.get("")
@@ -137,26 +148,47 @@ def enqueue_recalculate_job(
     if payload.end < payload.start:
         raise HTTPException(status_code=400, detail="end must be greater than or equal to start")
     _reject_if_active_ingestion_job(db)
+    start = payload.start
+    end = payload.end
+    dirty_range_ids: list[int] = []
+    if payload.mode == "dirty_repair":
+        dirty_ranges = open_dirty_ranges(db)
+        if not dirty_ranges:
+            raise HTTPException(status_code=404, detail="no open dirty ranges")
+        latest = latest_raw_trade_date(db)
+        if latest is None:
+            raise HTTPException(status_code=422, detail="no stock_daily data available")
+        start = min(row.dirty_start_date for row in dirty_ranges)
+        end = latest
+        dirty_range_ids = [row.id for row in dirty_ranges]
+    settings = get_settings()
+    hash_value = config_hash(settings.strategy)
     job = start_job(
         db,
         "recalculate",
-        payload.end,
+        end,
         status="QUEUED",
         step="queued from api",
         metadata={
-            "source": "api",
-            "start": payload.start.isoformat(),
-            "end": payload.end.isoformat(),
+            "source": payload.mode,
+            "mode": payload.mode,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
             "evaluate_signals": payload.evaluate_signals,
+            "calc_run_id": None,
+            "config_hash": hash_value,
+            "dirty_range_ids": dirty_range_ids,
             "progress_pct": 0,
         },
     )
     background_tasks.add_task(
         _run_recalculate_job,
         job.id,
-        payload.start,
-        payload.end,
+        start,
+        end,
         payload.evaluate_signals,
+        payload.mode,
+        dirty_range_ids,
     )
     return envelope(_job_payload(job), {"accepted": True})
 
@@ -220,21 +252,37 @@ def _run_recalculate_job(
     start: date,
     end: date,
     evaluate_signals: bool,
+    mode: str = "manual",
+    dirty_range_ids: list[int] | None = None,
 ) -> None:
     with SessionLocal() as db:
         job = db.get(JobRun, job_id)
         if not job:
             return
+        dirty_ranges = _load_dirty_ranges(db, dirty_range_ids or [])
+        settings = get_settings()
+        hash_value = config_hash(settings.strategy)
         metadata: dict[str, Any] = {
-            "source": "api",
+            "source": mode,
+            "mode": mode,
             "start": start.isoformat(),
             "end": end.isoformat(),
             "evaluate_signals": evaluate_signals,
+            "calc_run_id": str(job_id),
+            "config_hash": hash_value,
+            "factor_calc_version": "factor_v1",
+            "market_calc_version": "market_v1",
+            "sector_calc_version": "sector_v1",
+            "dirty_range_ids": dirty_range_ids or [],
+            "dirty_start_date": start.isoformat() if mode == "dirty_repair" else None,
+            "recalc_end_date": end.isoformat() if mode == "dirty_repair" else None,
             "stage": "starting",
             "progress_pct": 0,
         }
         total_rows = 0
         try:
+            if dirty_ranges:
+                mark_dirty_ranges_processing(db, dirty_ranges)
             factor_chunks = _month_chunks(start, end)
             factor_service = FactorService(db)
             for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
@@ -256,7 +304,7 @@ def _run_recalculate_job(
                     row_count=total_rows,
                     metadata=chunk_metadata,
                 )
-                total_rows += factor_service.recalc(chunk_start, chunk_end)
+                total_rows += factor_service.recalc(chunk_start, chunk_end, calc_run_id=job_id)
                 metadata = {
                     **chunk_metadata,
                     "progress_pct": round(8 + (index / len(factor_chunks)) * 52, 1),
@@ -277,7 +325,7 @@ def _run_recalculate_job(
                 row_count=total_rows,
                 metadata={**metadata, "stage": "market", "progress_pct": 65},
             )
-            total_rows += MarketService(db).recalc(start, end)
+            total_rows += MarketService(db).recalc(start, end, calc_run_id=job_id)
 
             update_job(
                 db,
@@ -286,7 +334,7 @@ def _run_recalculate_job(
                 row_count=total_rows,
                 metadata={**metadata, "stage": "sectors", "progress_pct": 78},
             )
-            total_rows += SectorService(db).recalc(start, end)
+            total_rows += SectorService(db).recalc(start, end, calc_run_id=job_id)
 
             update_job(
                 db,
@@ -318,7 +366,11 @@ def _run_recalculate_job(
                 row_count=total_rows,
                 metadata={**metadata, "stage": "success", "progress_pct": 100},
             )
+            if dirty_ranges:
+                mark_dirty_ranges_resolved(db, dirty_ranges)
         except Exception as exc:
+            if dirty_ranges:
+                mark_dirty_ranges_failed(db, dirty_ranges)
             _mark_background_failed(db, job_id, exc)
 
 
@@ -338,6 +390,18 @@ def _month_chunks(start: date, end: date) -> list[tuple[date, date]]:
 
 def _provider(db: Session) -> LoggingMarketDataProvider:
     return LoggingMarketDataProvider(db, TushareProvider())
+
+
+def _load_dirty_ranges(db: Session, dirty_range_ids: list[int]) -> list[DataDirtyRange]:
+    if not dirty_range_ids:
+        return []
+    return list(
+        db.execute(
+            select(DataDirtyRange).where(DataDirtyRange.id.in_(dirty_range_ids))
+        )
+        .scalars()
+        .all()
+    )
 
 
 def _mark_background_failed(db: Session, job_id: uuid.UUID, exc: Exception) -> None:

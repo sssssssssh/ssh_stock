@@ -40,6 +40,7 @@
 - 后验评估表 `signal_forward_eval`
 - `evaluate-signals` CLI
 - Vue 3 + TypeScript + Vite + ECharts 前端
+- Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率、行业历史成分有效期、NULL upsert 保护、dirty range 向后重算、计算版本追踪
 - pytest
 
 当前阶段剩余重点：
@@ -60,6 +61,13 @@
 - 原始数据表和任务表必须幂等写入。
 - 数据库迁移用 Alembic，不手写临时建表脚本替代迁移。
 - 配置阈值放在 `config/strategy.yaml`。
+- `stock_basic` 必须同步 `L`、`D`、`P` 状态；历史股票池必须使用 `list_date/delist_date/trade_date` 判断，不得只依赖当前 `list_status == L`。
+- `daily` 原始数据质量不得使用固定 `min_rows=1`；必须按当日 Point-in-Time 股票池计算 expected_count，并按 `config/strategy.yaml` 的 `data_quality.daily` 阈值判定 PASS/WARNING/ERROR。
+- `data_quality_daily` 记录日线覆盖率和跨表完整性；`data-calendar` 状态支持 `DEGRADED`，表示有原始数据但质量 ERROR。
+- `sector_member` 历史计算必须使用 `valid_from/valid_to`，`is_latest` 只可用于当前展示，不得参与历史回测过滤。
+- 原始事实表启用 NULL upsert 保护时，新 NULL 不得覆盖已有非空值；历史原始非空值发生修订时必须记录 `data_dirty_range`。
+- `recalculate` 支持 `manual` 和 `dirty_repair` 两种模式；`dirty_repair` 从最早 OPEN dirty date 重算到最新已拉取交易日，完成后标记 RESOLVED。
+- `stock_factor_daily`、`market_daily`、`sector_factor_daily` 必须写入 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`。
 - 后验收益只能写入 `signal_forward_eval`，不得反写当日因子、状态或信号表。
 - 前端 API 地址用 `frontend/.env` 的 `VITE_API_BASE_URL` / `VITE_API_PROXY_TARGET` 控制，不在源码里写死云端地址。
 - 网页用户可见名称和浏览器标题统一使用“空间”，不要显示“股票机会发现系统”。
@@ -74,7 +82,9 @@
 - 修改 `frontend/src/style.css` 或页面主布局后，必须重启 Vite 开发服务并用浏览器检查 `.workspace-shell`、`.nav-button` 等关键样式是否命中，避免新模板加载旧 CSS。
 - API 触发数据拉取或补算时必须创建 `job_run` 记录；同一时间只允许一个 `daily/backfill/recalculate` 任务处于 `QUEUED/RUNNING`。
 - 长任务必须持续更新 `job_run.step`、`row_count` 和 `job_metadata.progress_pct`，前端不得只显示“已提交”。
+- 前端任务面板必须根据 `job_run.started_at/finished_at` 展示耗时；运行中任务显示实时已耗时，完成/失败任务显示总耗时。
 - 前端任务列表必须展示 `error_message`，不能只显示“失败”。
+- 前端任务列表默认请求最近 30 条任务，列表内部滚动展示；步骤、日期范围、耗时和错误信息必须提供完整 `title`，方便鼠标悬停查看完整文本。
 - Tushare 代理请求的 `requests` 网络异常必须自动重试；重试耗尽后再写入 FAILED。
 - 本地开发时如果后端端口从 8000 改为 9034，必须同步修改 `frontend/.env` 的 `VITE_API_PROXY_TARGET`，否则前端会继续请求旧端口。
 
@@ -102,6 +112,6 @@
 - `PROJECT_RULES.md`
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
-- 对应 `.docx` 版本
+- 对应 `.docx` 版本仅在用户明确要求或准备正式导出时更新
 
 Markdown 是源码级文档，`.docx` 是面向阅读的导出版。

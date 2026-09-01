@@ -112,6 +112,13 @@ def test_normalize_sectors_and_sw2021_members() -> None:
                 "in_date": "19931008",
                 "out_date": None,
                 "is_new": "Y",
+            },
+            {
+                "l1_code": "801880.SI",
+                "l1_name": "汽车",
+                "ts_code": "600680.SH",
+                "in_date": "19931008",
+                "out_date": "20211231",
             }
         ]
     )
@@ -124,3 +131,6 @@ def test_normalize_sectors_and_sw2021_members() -> None:
     assert members[0]["sector_id"] == 1
     assert members[0]["ts_code"] == "600679.SH"
     assert members[0]["valid_from"] == date(1993, 10, 8)
+    assert members[0]["is_latest"] is True
+    assert members[1]["valid_to"] == date(2021, 12, 31)
+    assert members[1]["is_latest"] is False

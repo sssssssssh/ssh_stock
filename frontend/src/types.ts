@@ -28,12 +28,13 @@ export type DataCoverageRow = {
   state_rows: number;
   signal_rows: number;
   signal_eval_rows: number;
+  quality_status?: string | null;
 };
 
 export type DataCalendarRow = {
   date: string;
   is_open: boolean | null;
-  coverage_status: "CLOSED" | "MISSING" | "RAW_ONLY" | "ANALYZED" | "COMPLETE";
+  coverage_status: "CLOSED" | "MISSING" | "RAW_ONLY" | "ANALYZED" | "COMPLETE" | "DEGRADED";
   stock_daily_rows: number;
   daily_basic_rows: number;
   adj_factor_rows: number;
@@ -44,6 +45,7 @@ export type DataCalendarRow = {
   state_rows: number;
   signal_rows: number;
   signal_eval_rows: number;
+  quality_status?: string | null;
 };
 
 export type JobRun = {

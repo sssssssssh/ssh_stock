@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
@@ -14,7 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -184,6 +185,10 @@ class StockFactorDaily(Base):
     relative_return60: Mapped[float | None] = mapped_column(Float)
     eligible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     exclusion_reason: Mapped[str | None] = mapped_column(String(128))
+    calc_version: Mapped[str | None] = mapped_column(String(32))
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class MarketDaily(Base):
@@ -209,6 +214,10 @@ class MarketDaily(Base):
     ad_score: Mapped[float | None] = mapped_column(Float)
     new_high_low_score: Mapped[float | None] = mapped_column(Float)
     liquidity_score: Mapped[float | None] = mapped_column(Float)
+    calc_version: Mapped[str | None] = mapped_column(String(32))
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Sector(Base):
@@ -272,6 +281,51 @@ class SectorFactorDaily(Base):
     heat_rank: Mapped[int | None] = mapped_column(Integer)
     rank_change: Mapped[int | None] = mapped_column(Integer)
     lifecycle: Mapped[str | None] = mapped_column(String(32))
+    calc_version: Mapped[str | None] = mapped_column(String(32))
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DataQualityDaily(Base):
+    __tablename__ = "data_quality_daily"
+    __table_args__ = (
+        UniqueConstraint("trade_date", "dataset", name="uq_data_quality_daily_dataset_date"),
+        Index("idx_data_quality_daily_date_status", "trade_date", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    dataset: Mapped[str] = mapped_column(String(64), nullable=False)
+    expected_rows: Mapped[int | None] = mapped_column(Integer)
+    actual_rows: Mapped[int | None] = mapped_column(Integer)
+    coverage_rate: Mapped[float | None] = mapped_column(Float)
+    missing_count: Mapped[int | None] = mapped_column(Integer)
+    duplicate_count: Mapped[int | None] = mapped_column(Integer)
+    null_count: Mapped[int | None] = mapped_column(Integer)
+    warning_count: Mapped[int | None] = mapped_column(Integer)
+    error_count: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    issue_codes: Mapped[dict | None] = mapped_column(JSONB)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class DataDirtyRange(Base):
+    __tablename__ = "data_dirty_range"
+    __table_args__ = (
+        Index("idx_data_dirty_range_status_start", "status", "dirty_start_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    dataset: Mapped[str] = mapped_column(String(64), nullable=False)
+    dirty_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    dirty_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(256))
+    source_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StockStateDaily(Base):

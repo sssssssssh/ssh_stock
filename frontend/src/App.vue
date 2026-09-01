@@ -81,6 +81,7 @@ const selectedKlineDays = ref(180);
 const klineData = ref<RealtimeKlineResponse | null>(null);
 const klineLoading = ref(false);
 const klineError = ref("");
+const nowMs = ref(Date.now());
 const status = ref<SystemStatus | null>(null);
 const summary = ref<DashboardSummary | null>(null);
 const sectorHeat = ref<SectorHeat[]>([]);
@@ -98,6 +99,7 @@ let marketChart: EChartsType | null = null;
 let sectorChart: EChartsType | null = null;
 let klineChart: EChartsType | null = null;
 let jobPollTimer: number | undefined;
+let elapsedTimer: number | undefined;
 
 const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "overview", label: "总览", description: "市场状态与后验表现" },
@@ -123,7 +125,7 @@ const activeJob = computed(() =>
   jobs.value.find((job) => ["QUEUED", "RUNNING"].includes(job.status))
 );
 
-const latestJobs = computed(() => jobs.value.slice(0, 5));
+const latestJobs = computed(() => jobs.value);
 
 const coveragePageSizeOptions = [10, 20, 50, 100];
 const klineDayOptions = [90, 180, 365];
@@ -553,12 +555,18 @@ onMounted(() => {
   jobPollTimer = window.setInterval(() => {
     void refreshJobStatus();
   }, 5000);
+  elapsedTimer = window.setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000);
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
   if (jobPollTimer) {
     window.clearInterval(jobPollTimer);
+  }
+  if (elapsedTimer) {
+    window.clearInterval(elapsedTimer);
   }
 });
 
@@ -570,6 +578,29 @@ function formatNumber(value: number | null | undefined, digits = 2) {
 function formatPercent(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) return "--";
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatJobElapsed(job: JobRun | null | undefined) {
+  if (!job?.started_at) return "--";
+  const startedAt = Date.parse(job.started_at);
+  if (Number.isNaN(startedAt)) return "--";
+  const finishedAt = job.finished_at ? Date.parse(job.finished_at) : nowMs.value;
+  if (Number.isNaN(finishedAt) || finishedAt < startedAt) return "--";
+  return formatDuration(finishedAt - startedAt);
+}
+
+function formatDuration(durationMs: number) {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}小时${String(minutes).padStart(2, "0")}分${String(seconds).padStart(2, "0")}秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes}分${String(seconds).padStart(2, "0")}秒`;
+  }
+  return `${seconds}秒`;
 }
 
 function scoreTone(value: number | null | undefined) {
@@ -638,7 +669,8 @@ function calendarStatusLabel(status: DataCalendarRow["coverage_status"] | undefi
     MISSING: "缺",
     RAW_ONLY: "原",
     ANALYZED: "算",
-    COMPLETE: "全"
+    COMPLETE: "全",
+    DEGRADED: "差"
   };
   return status ? map[status] : "--";
 }
@@ -691,6 +723,20 @@ function metadataText(job: JobRun) {
       : "";
   const currentPart = current ? ` / 当前 ${current}` : "";
   return `${datePart}${chunkPart}${chunkDatePart}${progressPart}${currentPart}`;
+}
+
+function jobTooltip(job: JobRun) {
+  const parts = [
+    `类型：${job.job_type}`,
+    `状态：${statusLabel(job.status)}`,
+    `步骤：${job.step || "--"}`,
+    `范围：${metadataText(job)}`,
+    `耗时：${formatJobElapsed(job)}`
+  ];
+  if (job.error_message) {
+    parts.push(`错误：${job.error_message}`);
+  }
+  return parts.join("\n");
 }
 
 function rowCountHint(job: JobRun) {
@@ -930,6 +976,10 @@ function statusLabel(status: string) {
                   <span>{{ activeJob.step || "--" }}</span>
                 </div>
                 <p>{{ metadataText(activeJob) }}</p>
+                <div class="job-time-row">
+                  <span>已耗时</span>
+                  <strong>{{ formatJobElapsed(activeJob) }}</strong>
+                </div>
                 <p v-if="activeJob.error_message" class="job-error">
                   {{ activeJob.error_message }}
                 </p>
@@ -943,14 +993,25 @@ function statusLabel(status: string) {
               </template>
             </section>
             <section class="job-list">
-              <div v-for="job in latestJobs" :key="job.id" class="job-row">
-                <span class="job-type">{{ job.job_type }}</span>
-                <span class="job-status" :class="job.status.toLowerCase()">
+              <div class="job-list-head">
+                <span>最近任务</span>
+                <strong>{{ latestJobs.length }} 条</strong>
+              </div>
+              <div v-for="job in latestJobs" :key="job.id" class="job-row" :title="jobTooltip(job)">
+                <span class="job-type" :title="job.job_type">{{ job.job_type }}</span>
+                <span
+                  class="job-status"
+                  :class="job.status.toLowerCase()"
+                  :title="statusLabel(job.status)"
+                >
                   {{ statusLabel(job.status) }}
                 </span>
-                <span class="job-step">{{ job.step || "--" }}</span>
-                <span class="job-date">{{ metadataText(job) }}</span>
-                <span v-if="job.error_message" class="job-error-line">
+                <span class="job-step" :title="job.step || '--'">{{ job.step || "--" }}</span>
+                <span class="job-date" :title="metadataText(job)">{{ metadataText(job) }}</span>
+                <span class="job-duration" :title="formatJobElapsed(job)">
+                  {{ formatJobElapsed(job) }}
+                </span>
+                <span v-if="job.error_message" class="job-error-line" :title="job.error_message">
                   {{ job.error_message }}
                 </span>
               </div>
@@ -989,6 +1050,7 @@ function statusLabel(status: string) {
               <span class="analyzed">算 已算基础</span>
               <span class="complete">全 行业完成</span>
               <span class="raw-only">原 已拉未算</span>
+              <span class="degraded">差 质量异常</span>
               <span class="missing">缺 未拉取</span>
               <span class="closed">休 休市</span>
             </div>

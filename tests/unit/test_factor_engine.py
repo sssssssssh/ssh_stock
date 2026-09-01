@@ -1,3 +1,5 @@
+from datetime import date
+
 import pandas as pd
 import pytest
 from app.services.factors import FactorConfig, calculate_stock_factors
@@ -37,9 +39,24 @@ def _fixture_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFr
     ]
     stock_basic = pd.DataFrame(
         [
-            {"ts_code": "000001.SZ", "name": "测试A", "list_status": "L"},
-            {"ts_code": "000002.SZ", "name": "测试B", "list_status": "L"},
-            {"ts_code": "000003.SZ", "name": "*ST测试", "list_status": "L"},
+            {
+                "ts_code": "000001.SZ",
+                "name": "测试A",
+                "list_date": date(2020, 1, 1),
+                "delist_date": None,
+            },
+            {
+                "ts_code": "000002.SZ",
+                "name": "测试B",
+                "list_date": date(2020, 1, 1),
+                "delist_date": None,
+            },
+            {
+                "ts_code": "000003.SZ",
+                "name": "*ST测试",
+                "list_date": date(2020, 1, 1),
+                "delist_date": None,
+            },
         ]
     )
     return (
@@ -126,7 +143,16 @@ def test_breakout_uses_previous_high_not_today_high() -> None:
         {"trade_date": trade_date, "ts_code": "000001.SZ", "adj_factor": 1.0}
         for trade_date in dates
     ])
-    stock_basic = pd.DataFrame([{"ts_code": "000001.SZ", "name": "测试A", "list_status": "L"}])
+    stock_basic = pd.DataFrame(
+        [
+            {
+                "ts_code": "000001.SZ",
+                "name": "测试A",
+                "list_date": date(2020, 1, 1),
+                "delist_date": None,
+            }
+        ]
+    )
 
     result = calculate_stock_factors(
         daily=daily,

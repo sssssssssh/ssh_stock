@@ -989,3 +989,37 @@ V1 验证指标：
 - 增加信号后验导出、按市场环境/行业生命周期分层统计。
 - 增加前端个股详情页和行业详情页的交互入口。
 - 增加生产部署、权限控制和可观测性面板。
+
+---
+
+## 25. 实现进度（2026-09-01，Milestone 8 数据可靠性）
+
+本轮按《ssh_stock 数据层优化改造任务书》完成数据层正确性和可追溯性改造，产品侧新增或强化以下能力：
+
+- 历史股票池改为 Point-in-Time 口径：任意历史交易日根据 `list_date` 和 `delist_date` 判断股票是否属于当日可研究股票池。
+- 股票基础信息同步范围扩展为 `L` 当前上市、`D` 退市、`P` 暂停/其他历史状态，降低幸存者偏差。
+- 日线原始数据质量检查改为动态覆盖率，不再使用固定 `min_rows=1`。系统按当日历史股票池计算 expected_count，并输出 actual_count、coverage_rate、missing_codes、extra_codes。
+- 数据质量结果写入 `data_quality_daily`，后续页面可以看到每日质量状态；数据日历新增 `DEGRADED` 状态，表示原始数据存在但质量 ERROR。
+- 行业成分使用 `valid_from/valid_to` 做历史匹配，`is_latest` 只用于当前展示，不再参与历史计算过滤。
+- 原始核心表启用 NULL upsert 保护，避免接口偶发缺字段把数据库已有非空值清空。
+- 原始历史数据非空值发生修订时记录 `data_dirty_range`，支持后续从最早 dirty date 向后重算。
+- `recalculate` 任务新增 `manual` 和 `dirty_repair` 模式；`dirty_repair` 会从 OPEN dirty range 的最早日期重算到最新已拉取交易日。
+- `stock_factor_daily`、`market_daily`、`sector_factor_daily` 增加 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，便于解释某条结果由哪个配置和哪次计算任务产生。
+
+本轮用户可见变化：
+
+- 数据日历可能出现 `差` 状态，含义为质量异常且不应继续生成当日最终机会池。
+- 如果历史 raw 数据被 Tushare 修订，系统不会只重算当天，而是记录 dirty range，后续可触发向后修复。
+
+验证结果：
+
+- `python -m alembic upgrade head`：已升级到 `0007_data_reliability`。
+- `python -m pytest`：42 passed，1 个第三方弃用警告。
+- `python -m ruff check backend tests migrations`：All checks passed。
+- `npm run build`：前端生产构建成功。
+
+### 25.1 追加更新（2026-09-01）
+
+- 数据页面任务面板新增耗时展示：当前运行任务显示实时“已耗时”，最近任务列表显示每条任务的耗时。
+- 已完成或失败任务使用 `finished_at - started_at` 显示总耗时；运行中任务使用当前前端时间减 `started_at`，每秒刷新一次，不增加后端轮询频率。
+- 最近任务列表默认展示最近 30 条，列表内部滚动；步骤、日期范围、耗时和错误信息支持鼠标悬停查看完整文本。

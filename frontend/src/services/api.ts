@@ -43,7 +43,7 @@ export function fetchDataCalendar(start: string, end: string): Promise<DataCalen
 }
 
 export function fetchJobs(): Promise<JobRun[]> {
-  return request<JobRun[]>("/jobs?limit=10");
+  return request<JobRun[]>("/jobs?limit=30");
 }
 
 export function fetchRightSidePool(): Promise<StockPoolItem[]> {

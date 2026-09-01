@@ -12,6 +12,7 @@ from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
 from app.services.market import MarketService
+from app.services.quality.daily_quality import record_cross_table_quality
 from app.services.sector import SectorService
 from app.services.trend import TrendService
 
@@ -93,10 +94,10 @@ class BackfillJob:
                     row_count=total_rows,
                     metadata=metadata,
                 )
-                total_rows += self.ingestion.sync_daily(current)
-                total_rows += self.ingestion.sync_adj_factor(current)
-                total_rows += self.ingestion.sync_daily_basic(current)
-                total_rows += self.ingestion.sync_index_daily(current)
+                total_rows += self.ingestion.sync_daily(current, job_id=job.id)
+                total_rows += self.ingestion.sync_adj_factor(current, job_id=job.id)
+                total_rows += self.ingestion.sync_daily_basic(current, job_id=job.id)
+                total_rows += self.ingestion.sync_index_daily(current, job_id=job.id)
             metadata = {
                 **metadata,
                 "completed_open_days": len(open_dates),
@@ -110,7 +111,7 @@ class BackfillJob:
                 row_count=total_rows,
                 metadata={**metadata, "stage": "factors", "progress_pct": 75},
             )
-            total_rows += FactorService(self.db).recalc(start, end)
+            total_rows += FactorService(self.db).recalc(start, end, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -119,7 +120,7 @@ class BackfillJob:
                 row_count=total_rows,
                 metadata={**metadata, "stage": "market", "progress_pct": 83},
             )
-            total_rows += MarketService(self.db).recalc(start, end)
+            total_rows += MarketService(self.db).recalc(start, end, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -128,7 +129,7 @@ class BackfillJob:
                 row_count=total_rows,
                 metadata={**metadata, "stage": "sectors", "progress_pct": 90},
             )
-            total_rows += SectorService(self.db).recalc(start, end)
+            total_rows += SectorService(self.db).recalc(start, end, calc_run_id=job.id)
 
             update_job(
                 self.db,
@@ -139,6 +140,8 @@ class BackfillJob:
             )
             trend_rows = TrendService(self.db).recalc(start, end)
             total_rows += trend_rows["states"] + trend_rows["signals"]
+            for current in open_dates:
+                record_cross_table_quality(self.db, current, job_id=job.id)
 
             update_job(
                 self.db,

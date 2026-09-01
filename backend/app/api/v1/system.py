@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.common import envelope
 from app.core.db import get_db
 from app.models.market_data import (
+    DataQualityDaily,
     IndexDaily,
     MarketDaily,
     SectorFactorDaily,
@@ -88,7 +89,9 @@ def data_coverage(
     coverage_start = min(trade_dates)
     coverage_end = max(trade_dates)
     stock_daily_counts = _counts_by_date(db, StockDaily.trade_date, coverage_start, coverage_end)
-    daily_basic_counts = _counts_by_date(db, StockDailyBasic.trade_date, coverage_start, coverage_end)
+    daily_basic_counts = _counts_by_date(
+        db, StockDailyBasic.trade_date, coverage_start, coverage_end
+    )
     adj_factor_counts = _counts_by_date(db, StockAdjFactor.trade_date, coverage_start, coverage_end)
     index_daily_counts = _counts_by_date(db, IndexDaily.trade_date, coverage_start, coverage_end)
     factor_counts = _counts_by_date(db, StockFactorDaily.trade_date, coverage_start, coverage_end)
@@ -96,7 +99,10 @@ def data_coverage(
     sector_counts = _counts_by_date(db, SectorFactorDaily.trade_date, coverage_start, coverage_end)
     state_counts = _counts_by_date(db, StockStateDaily.trade_date, coverage_start, coverage_end)
     signal_counts = _counts_by_date(db, StrategySignal.trade_date, coverage_start, coverage_end)
-    signal_eval_counts = _counts_by_date(db, SignalForwardEval.trade_date, coverage_start, coverage_end)
+    signal_eval_counts = _counts_by_date(
+        db, SignalForwardEval.trade_date, coverage_start, coverage_end
+    )
+    quality_status = _quality_status_by_date(db, coverage_start, coverage_end)
 
     rows = []
     for trade_date in trade_dates:
@@ -113,6 +119,7 @@ def data_coverage(
                 "state_rows": state_counts.get(trade_date, 0),
                 "signal_rows": signal_counts.get(trade_date, 0),
                 "signal_eval_rows": signal_eval_counts.get(trade_date, 0),
+                "quality_status": quality_status.get(trade_date),
             }
         )
 
@@ -156,6 +163,7 @@ def data_calendar(
     state_counts = _counts_by_date(db, StockStateDaily.trade_date, start, end)
     signal_counts = _counts_by_date(db, StrategySignal.trade_date, start, end)
     signal_eval_counts = _counts_by_date(db, SignalForwardEval.trade_date, start, end)
+    quality_status = _quality_status_by_date(db, start, end)
 
     rows = []
     current = start
@@ -168,8 +176,11 @@ def data_calendar(
         market_rows = market_counts.get(current, 0)
         state_rows = state_counts.get(current, 0)
         sector_rows = sector_counts.get(current, 0)
+        day_quality_status = quality_status.get(current)
         if is_open is False:
             coverage_status = "CLOSED"
+        elif day_quality_status == "ERROR" and stock_rows > 0:
+            coverage_status = "DEGRADED"
         elif stock_rows <= 0:
             coverage_status = "MISSING"
         elif factor_rows > 0 and market_rows > 0 and state_rows > 0 and sector_rows > 0:
@@ -194,6 +205,7 @@ def data_calendar(
                 "state_rows": state_rows,
                 "signal_rows": signal_counts.get(current, 0),
                 "signal_eval_rows": signal_eval_counts.get(current, 0),
+                "quality_status": day_quality_status,
             }
         )
         current += timedelta(days=1)
@@ -214,3 +226,21 @@ def _counts_by_date(db: Session, column: Any, start: date, end: date) -> dict[da
         .all()
     )
     return {row.trade_date: int(row.rows) for row in rows}
+
+
+def _quality_status_by_date(db: Session, start: date, end: date) -> dict[date, str]:
+    rows = (
+        db.execute(
+            select(DataQualityDaily.trade_date, DataQualityDaily.status)
+            .where(DataQualityDaily.trade_date >= start, DataQualityDaily.trade_date <= end)
+            .where(DataQualityDaily.status.in_(["ERROR", "WARNING"]))
+            .order_by(DataQualityDaily.trade_date)
+        )
+        .all()
+    )
+    priority = {"ERROR": 2, "WARNING": 1}
+    result: dict[date, str] = {}
+    for trade_date, status in rows:
+        if priority[status] > priority.get(result.get(trade_date, ""), 0):
+            result[trade_date] = status
+    return result

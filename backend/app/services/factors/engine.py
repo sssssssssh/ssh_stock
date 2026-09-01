@@ -5,6 +5,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.services.universe import is_stock_active_on
+
 
 @dataclass(frozen=True)
 class FactorConfig:
@@ -62,9 +64,17 @@ def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
         for idx in np.flatnonzero(st_mask.to_numpy()):
             reasons[idx].append("ST")
 
-    inactive_mask = df.get("list_status", pd.Series("L", index=df.index)).fillna("L") != "L"
+    active_mask = df.apply(
+        lambda row: is_stock_active_on(
+            row.get("list_date"),
+            row.get("delist_date"),
+            row["trade_date"],
+        ),
+        axis=1,
+    )
+    inactive_mask = ~active_mask
     for idx in np.flatnonzero(inactive_mask.to_numpy()):
-        reasons[idx].append("NOT_LISTED")
+        reasons[idx].append("NOT_ACTIVE_ON_DATE")
 
     young_mask = listed_days < config.min_listed_trading_days
     for idx in np.flatnonzero(young_mask.to_numpy()):
@@ -101,14 +111,18 @@ def calculate_stock_factors(
 
     df = daily.merge(adj_factor, on=["trade_date", "ts_code"], how="left")
     if stock_basic is not None and not stock_basic.empty:
+        stock_basic = stock_basic.copy()
+        stock_basic["list_date"] = pd.to_datetime(stock_basic["list_date"]).dt.date
+        stock_basic["delist_date"] = pd.to_datetime(stock_basic["delist_date"]).dt.date
         df = df.merge(
-            stock_basic[["ts_code", "name", "list_status"]],
+            stock_basic[["ts_code", "name", "list_date", "delist_date"]],
             on="ts_code",
             how="left",
         )
     else:
         df["name"] = None
-        df["list_status"] = "L"
+        df["list_date"] = None
+        df["delist_date"] = None
 
     df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
     df = df.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)

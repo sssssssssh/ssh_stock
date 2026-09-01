@@ -7,6 +7,8 @@
 
 当前实现范围：Milestone 0 到 Milestone 7。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、CLI 和测试。
 
+已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。
+
 当前网页显示名称为“空间”。
 
 ## 已实现
@@ -228,6 +230,8 @@ python -m alembic upgrade head
 - `stock_state_daily`
 - `strategy_signal`
 - `signal_forward_eval`
+- `data_quality_daily`
+- `data_dirty_range`
 
 ### 7. 启动 API
 
@@ -533,6 +537,42 @@ POST /api/v1/jobs/recalculate
 - `原`：已拉原始行情，但还没有完成分析补算。
 - `算`：已经完成因子、市场和状态等基础分析。
 - `全`：基础分析和行业热度都已完成。
+- `差`：原始数据存在，但质量检查发现 ERROR，系统会阻止当日下游计算。
+
+### 数据可靠性规则
+
+本项目当前数据层遵循以下规则：
+
+- `stock_basic` 同步时会分别拉取 `L` 当前上市、`D` 退市、`P` 暂停/其他历史状态，避免历史研究只剩当前上市股票。
+- 历史股票池不再依赖当前 `list_status == L`，而是使用 `list_date <= trade_date` 且 `delist_date` 为空或 `trade_date <= delist_date`。
+- `daily` 不再使用固定 `min_rows=1`。系统会从 `stock_basic` 计算当日 expected 股票数，再和 Tushare 返回的实际代码集合比较。
+- 覆盖率阈值在 `config/strategy.yaml`：
+
+```yaml
+data_quality:
+  daily:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
+```
+
+达到 WARNING 时可以继续入库；低于 ERROR 时会记录 `data_quality_daily` 并阻止后续因子、市场、行业、状态和信号计算。
+
+- `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 启用 NULL upsert 保护。新数据字段为 NULL 时不会清空数据库已有非空值。
+- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。
+- `stock_factor_daily`、`market_daily`、`sector_factor_daily` 新增 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，用于追溯这条衍生数据由哪个配置和哪次任务算出。
+
+Dirty repair API 请求示例：
+
+```json
+{
+  "start": "2026-01-01",
+  "end": "2026-08-31",
+  "evaluate_signals": true,
+  "mode": "dirty_repair"
+}
+```
+
+`dirty_repair` 模式下后端会自动使用 `data_dirty_range` 的最早 OPEN 日期作为开始日期，并以最新 `stock_daily` 日期作为结束日期；请求里的 `start/end` 只是为了保持接口兼容。
 
 如果勾选“评估信号”，回填完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。
 
@@ -541,7 +581,9 @@ POST /api/v1/jobs/recalculate
 数据覆盖面板中间会显示“当前任务”和“最近任务”：
 
 - `当前任务`：显示排队中/运行中/已完成/失败、进度条、当前步骤、当前交易日、已处理交易日数量和已写入行数。
-- `最近任务`：显示最近 5 个任务的类型、状态、步骤和日期范围。
+- `当前任务`：运行中会每秒刷新“已耗时”。
+- `最近任务`：默认请求最近 30 个任务，列表区域内部滚动展示；显示任务类型、状态、步骤、日期范围和耗时。已完成/失败任务显示总耗时，运行中任务显示当前已耗时。
+- 任务步骤、日期范围和错误信息如果被列宽截断，可以把鼠标移动到对应行或错误文本上查看完整内容。
 - 页面每 5 秒自动刷新任务状态；有运行中任务时也会同步刷新数据覆盖表。
 - 底部“覆盖明细”默认加载全部已拉取交易日，并按页展示，默认每页 20 条，可切换为 10 / 20 / 50 / 100 条，避免数据多时页面无限下拉。
 

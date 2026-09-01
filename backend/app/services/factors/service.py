@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -15,6 +16,7 @@ from app.models.market_data import (
     StockFactorDaily,
 )
 from app.repositories.upsert import upsert_rows
+from app.services.calc_metadata import calculation_metadata
 from app.services.factors.engine import FactorConfig, calculate_stock_factors
 
 
@@ -23,7 +25,7 @@ class FactorService:
         self.db = db
         self.settings = get_settings()
 
-    def recalc(self, start: date, end: date) -> int:
+    def recalc(self, start: date, end: date, calc_run_id: uuid.UUID | None = None) -> int:
         lookback_start = start - timedelta(days=430)
         daily = self._read_daily(lookback_start, end)
         adj_factor = self._read_adj_factor(lookback_start, end)
@@ -42,7 +44,12 @@ class FactorService:
             end=end,
             config=config,
         )
-        rows = [_clean_row(row) for row in factors.to_dict("records")]
+        metadata = calculation_metadata(
+            config=self.settings.strategy,
+            calc_version="factor_v1",
+            calc_run_id=calc_run_id,
+        )
+        rows = [{**_clean_row(row), **metadata} for row in factors.to_dict("records")]
         count = upsert_rows(self.db, StockFactorDaily, rows, ["trade_date", "ts_code"])
         self.db.commit()
         logger.info("recalculated stock_factor_daily start={} end={} rows={}", start, end, count)
@@ -74,7 +81,12 @@ class FactorService:
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_stock_basic(self) -> pd.DataFrame:
-        stmt = select(StockBasic.ts_code, StockBasic.name, StockBasic.list_status)
+        stmt = select(
+            StockBasic.ts_code,
+            StockBasic.name,
+            StockBasic.list_date,
+            StockBasic.delist_date,
+        )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_index_daily(self, start: date, end: date) -> pd.DataFrame:
@@ -96,4 +108,3 @@ def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
         else:
             cleaned[key] = value
     return cleaned
-

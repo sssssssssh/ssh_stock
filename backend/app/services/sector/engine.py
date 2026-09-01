@@ -70,7 +70,6 @@ def _prepare_member_factors(factors: pd.DataFrame, members: pd.DataFrame) -> pd.
     factor_df["trade_date"] = pd.to_datetime(factor_df["trade_date"]).dt.date
     member_df["valid_from"] = pd.to_datetime(member_df["valid_from"]).dt.date
     member_df["valid_to"] = pd.to_datetime(member_df["valid_to"]).dt.date
-    member_df = member_df[member_df["is_latest"].fillna(True)]
 
     merged = factor_df.merge(member_df, on="ts_code", how="inner")
     valid_to = merged["valid_to"].fillna(date(9999, 12, 31))

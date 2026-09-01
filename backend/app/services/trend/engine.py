@@ -463,7 +463,6 @@ def _merge_context(
         members = sector_members.copy()
         members["valid_from"] = pd.to_datetime(members["valid_from"]).dt.date
         members["valid_to"] = pd.to_datetime(members["valid_to"]).dt.date
-        members = members[members["is_latest"].fillna(True)]
         result = result.merge(members, on="ts_code", how="left")
         valid_to = result["valid_to"].fillna(date(9999, 12, 31))
         valid_member = (result["trade_date"] >= result["valid_from"]) & (
