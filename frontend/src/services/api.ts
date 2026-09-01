@@ -4,6 +4,7 @@ import type {
   DataCoverageRow,
   DashboardSummary,
   JobRun,
+  RealtimeKlineResponse,
   ResearchStats,
   SectorHeat,
   StockPoolItem,
@@ -34,7 +35,7 @@ export function fetchDashboardSummary(): Promise<DashboardSummary> {
 }
 
 export function fetchDataCoverage(): Promise<DataCoverageRow[]> {
-  return request<DataCoverageRow[]>("/system/data-coverage?limit=120");
+  return request<DataCoverageRow[]>("/system/data-coverage");
 }
 
 export function fetchDataCalendar(start: string, end: string): Promise<DataCalendarRow[]> {
@@ -59,6 +60,12 @@ export function fetchDecayPool(): Promise<StockPoolItem[]> {
 
 export function fetchSectorHeat(): Promise<SectorHeat[]> {
   return request<SectorHeat[]>("/sectors/heat?limit=50");
+}
+
+export function fetchRealtimeKline(tsCode: string, days = 180): Promise<RealtimeKlineResponse> {
+  return request<RealtimeKlineResponse>(
+    `/stocks/${encodeURIComponent(tsCode)}/realtime-kline?days=${days}`
+  );
 }
 
 export function fetchResearchStats(): Promise<ResearchStats> {

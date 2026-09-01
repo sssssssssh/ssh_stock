@@ -119,6 +119,14 @@ class TushareProvider:
             "daily", log_trade_date=trade_date, trade_date=to_tushare_date(trade_date)
         )
 
+    def get_daily_range(self, ts_code: str, start: date, end: date) -> pd.DataFrame:
+        return self._call(
+            "daily",
+            ts_code=ts_code,
+            start_date=to_tushare_date(start),
+            end_date=to_tushare_date(end),
+        )
+
     def get_adj_factor(self, trade_date: date) -> pd.DataFrame:
         return self._call(
             "adj_factor", log_trade_date=trade_date, trade_date=to_tushare_date(trade_date)

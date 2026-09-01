@@ -479,7 +479,7 @@ python -m app.cli evaluate-signals --signal-type RIGHT_SIDE_NEW --algo-version v
 
 ```text
 GET /api/v1/dashboard/summary
-GET /api/v1/system/data-coverage?start=&end=&limit=120
+GET /api/v1/system/data-coverage?start=&end=&limit=
 GET /api/v1/sectors/heat?trade_date=&level=L1&sort=heat_score&limit=30
 GET /api/v1/sectors/{sector_id}?trade_date=
 GET /api/v1/sectors/{sector_id}/history?start=&end=
@@ -489,6 +489,7 @@ GET /api/v1/stocks/decay?trade_date=&limit=50
 GET /api/v1/stocks/{ts_code}/overview?trade_date=
 GET /api/v1/stocks/{ts_code}/history?start=&end=
 GET /api/v1/stocks/{ts_code}/factors?start=&end=
+GET /api/v1/stocks/{ts_code}/realtime-kline?days=180
 GET /api/v1/research/signals/stats?signal_type=RIGHT_SIDE_NEW&algo_version=v1.0
 GET /api/v1/research/signals/buckets?signal_type=RIGHT_SIDE_NEW&bucket_field=opportunity_score
 GET /api/v1/jobs?status=success&job_type=daily&limit=20&offset=0
@@ -498,6 +499,7 @@ POST /api/v1/jobs/recalculate
 ```
 
 `/api/v1/system/data-coverage` 用来查看已经拉取了哪些交易日，以及每个交易日在核心数据表里的行数。前端“数据”页面的“数据覆盖”面板已经接入这个接口。
+不传 `limit` 时会返回数据库里全部已拉取交易日；传入 `start` / `end` 时只返回日期范围内的已拉取交易日；传入 `limit` 时只截取指定条数且不设置后端最大上限。
 
 前端已经改为带目录的页面切换结构，左侧目录包含：
 
@@ -505,6 +507,8 @@ POST /api/v1/jobs/recalculate
 - `数据`：数据覆盖、日期范围拉取、当前任务、最近任务和覆盖明细表。
 - `长线`：右侧池、趋势池和行业热度列表。
 - `短线`：衰退/风险池、策略信号计数和行业短线动量。
+
+长线股票池和短线风险池里的股票代码可以点击查看实时 K 线。该功能调用 `GET /api/v1/stocks/{ts_code}/realtime-kline?days=180`，后端实时从 Tushare 查询最近 180 个自然日的日 K 数据，返回前端绘制 K 线和 MA5 / MA20 / MA60，不写入本地数据库。180 个自然日通常覆盖约 120 个交易日，适合观察中期趋势；页面也提供 90 / 180 / 365 日切换。
 
 如果页面出现目录按钮像浏览器默认按钮、内容从最左侧裸排的情况，通常是 Vite 开发服务仍在返回旧的 `frontend/src/style.css`。处理方式：在前端终端按 `Ctrl+C` 停掉 `npm run dev`，重新执行 `npm run dev -- --host 127.0.0.1 --port 5173`，然后浏览器强制刷新页面。
 
@@ -537,6 +541,7 @@ POST /api/v1/jobs/recalculate
 - `当前任务`：显示排队中/运行中/已完成/失败、进度条、当前步骤、当前交易日、已处理交易日数量和已写入行数。
 - `最近任务`：显示最近 5 个任务的类型、状态、步骤和日期范围。
 - 页面每 5 秒自动刷新任务状态；有运行中任务时也会同步刷新数据覆盖表。
+- 底部“覆盖明细”默认加载全部已拉取交易日，并按页展示，默认每页 20 条，可切换为 10 / 20 / 50 / 100 条，避免数据多时页面无限下拉。
 
 ### 本地定时任务
 

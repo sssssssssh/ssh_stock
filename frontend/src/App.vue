@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { BarChart, PieChart } from "echarts/charts";
-import { GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { BarChart, CandlestickChart, LineChart, PieChart } from "echarts/charts";
+import {
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent
+} from "echarts/components";
 import { init, use, type EChartsType } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 import {
   enqueueBackfillJob,
@@ -13,6 +18,7 @@ import {
   fetchDataCoverage,
   fetchDecayPool,
   fetchJobs,
+  fetchRealtimeKline,
   fetchResearchStats,
   fetchRightSidePool,
   fetchSectorHeat,
@@ -24,6 +30,8 @@ import type {
   DataCalendarRow,
   DataCoverageRow,
   JobRun,
+  RealtimeKlineResponse,
+  RealtimeKlineRow,
   ResearchStats,
   SectorHeat,
   StockPoolItem,
@@ -33,7 +41,17 @@ import type {
 type ViewKey = "overview" | "data" | "long" | "short";
 type PoolTab = "right" | "trend";
 
-use([BarChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
+use([
+  BarChart,
+  CandlestickChart,
+  LineChart,
+  PieChart,
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+  CanvasRenderer
+]);
 
 const loading = ref(true);
 const submittingIngestion = ref(false);
@@ -50,6 +68,13 @@ const evaluateSignals = ref(false);
 const recalcEvaluateSignals = ref(true);
 const calendarMonth = ref(todayIso().slice(0, 7));
 const selectedCalendarDate = ref("");
+const coveragePage = ref(1);
+const coveragePageSize = ref(20);
+const selectedKlineStock = ref<StockPoolItem | null>(null);
+const selectedKlineDays = ref(180);
+const klineData = ref<RealtimeKlineResponse | null>(null);
+const klineLoading = ref(false);
+const klineError = ref("");
 const status = ref<SystemStatus | null>(null);
 const summary = ref<DashboardSummary | null>(null);
 const sectorHeat = ref<SectorHeat[]>([]);
@@ -62,8 +87,10 @@ const decayPool = ref<StockPoolItem[]>([]);
 const researchStats = ref<ResearchStats | null>(null);
 const marketChartRef = ref<HTMLDivElement | null>(null);
 const sectorChartRef = ref<HTMLDivElement | null>(null);
+const klineChartRef = ref<HTMLDivElement | null>(null);
 let marketChart: EChartsType | null = null;
 let sectorChart: EChartsType | null = null;
+let klineChart: EChartsType | null = null;
 let jobPollTimer: number | undefined;
 
 const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
@@ -92,6 +119,32 @@ const activeJob = computed(() =>
 
 const latestJobs = computed(() => jobs.value.slice(0, 5));
 
+const coveragePageSizeOptions = [10, 20, 50, 100];
+const klineDayOptions = [90, 180, 365];
+
+const coverageTotalPages = computed(() =>
+  Math.max(1, Math.ceil(dataCoverage.value.length / coveragePageSize.value))
+);
+
+const pagedDataCoverage = computed(() => {
+  const start = (coveragePage.value - 1) * coveragePageSize.value;
+  return dataCoverage.value.slice(start, start + coveragePageSize.value);
+});
+
+const coveragePageStart = computed(() =>
+  dataCoverage.value.length ? (coveragePage.value - 1) * coveragePageSize.value + 1 : 0
+);
+
+const coveragePageEnd = computed(() =>
+  Math.min(dataCoverage.value.length, coveragePage.value * coveragePageSize.value)
+);
+
+const klineTitle = computed(() => {
+  const stock = selectedKlineStock.value;
+  if (!stock) return "实时 K 线";
+  return `${stock.name || stock.ts_code} ${stock.ts_code}`;
+});
+
 const calendarRowsByDate = computed(() => {
   const rows = new Map<string, DataCalendarRow>();
   for (const row of dataCalendar.value) rows.set(row.date, row);
@@ -118,6 +171,8 @@ const calendarSummary = computed(() => {
     complete: openRows.filter((row) => row.coverage_status === "COMPLETE").length
   };
 });
+
+watch([dataCoverage, coveragePageSize], clampCoveragePage);
 
 const metrics = computed(() => {
   const market = summary.value?.market;
@@ -282,9 +337,47 @@ async function submitRecalculation() {
   }
 }
 
+async function openRealtimeKline(row: StockPoolItem) {
+  selectedKlineStock.value = row;
+  await loadRealtimeKline();
+}
+
+async function loadRealtimeKline() {
+  const stock = selectedKlineStock.value;
+  if (!stock) return;
+  klineLoading.value = true;
+  klineError.value = "";
+  klineData.value = null;
+  try {
+    klineData.value = await fetchRealtimeKline(stock.ts_code, selectedKlineDays.value);
+    klineLoading.value = false;
+    await nextTick();
+    renderKlineChart();
+  } catch (error) {
+    klineError.value = error instanceof Error ? error.message : "K 线加载失败";
+    klineLoading.value = false;
+  }
+}
+
+async function setKlineDays(days: number) {
+  selectedKlineDays.value = days;
+  if (selectedKlineStock.value) {
+    await loadRealtimeKline();
+  }
+}
+
+function closeRealtimeKline() {
+  selectedKlineStock.value = null;
+  klineData.value = null;
+  klineError.value = "";
+  klineChart?.dispose();
+  klineChart = null;
+}
+
 function renderCharts() {
   renderMarketChart();
   renderSectorChart();
+  renderKlineChart();
 }
 
 function renderMarketChart() {
@@ -342,9 +435,71 @@ function renderSectorChart() {
   });
 }
 
+function renderKlineChart() {
+  if (!klineChartRef.value || !klineData.value?.rows.length) return;
+  klineChart ||= init(klineChartRef.value);
+  const rows = klineData.value.rows.filter(
+    (row) =>
+      row.open !== null && row.close !== null && row.low !== null && row.high !== null
+  );
+  const dates = rows.map((row) => row.trade_date);
+  const candles = rows.map((row) => [row.open, row.close, row.low, row.high]);
+  const closes = rows.map((row) => row.close);
+  klineChart.setOption({
+    color: ["#2563eb", "#16a34a", "#f97316"],
+    animation: false,
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "cross" },
+      valueFormatter: (value: unknown) =>
+        typeof value === "number" ? value.toFixed(2) : `${value ?? "--"}`
+    },
+    legend: {
+      top: 0,
+      data: ["K线", "MA5", "MA20", "MA60"],
+      textStyle: { color: "#64748b" }
+    },
+    grid: { left: 56, right: 20, top: 34, bottom: 54 },
+    xAxis: {
+      type: "category",
+      data: dates,
+      boundaryGap: true,
+      axisLabel: { color: "#64748b" },
+      axisLine: { lineStyle: { color: "#cbd5e1" } }
+    },
+    yAxis: {
+      type: "value",
+      scale: true,
+      axisLabel: { color: "#64748b" },
+      splitLine: { lineStyle: { color: "#e2e8f0" } }
+    },
+    dataZoom: [
+      { type: "inside", start: 45, end: 100 },
+      { type: "slider", height: 22, bottom: 16, start: 45, end: 100 }
+    ],
+    series: [
+      {
+        name: "K线",
+        type: "candlestick",
+        data: candles,
+        itemStyle: {
+          color: "#dc2626",
+          color0: "#16a34a",
+          borderColor: "#dc2626",
+          borderColor0: "#16a34a"
+        }
+      },
+      lineSeries("MA5", movingAverage(closes, 5)),
+      lineSeries("MA20", movingAverage(closes, 20)),
+      lineSeries("MA60", movingAverage(closes, 60))
+    ]
+  });
+}
+
 function handleResize() {
   marketChart?.resize();
   sectorChart?.resize();
+  klineChart?.resize();
 }
 
 async function setActiveView(view: ViewKey) {
@@ -361,6 +516,28 @@ async function shiftCalendarMonth(delta: number) {
 
 function selectCalendarDay(row: DataCalendarRow | null) {
   selectedCalendarDate.value = row?.date || "";
+}
+
+function movingAverage(values: Array<RealtimeKlineRow["close"]>, windowSize: number) {
+  return values.map((_, index) => {
+    if (index < windowSize - 1) return null;
+    const windowValues = values.slice(index + 1 - windowSize, index + 1);
+    if (windowValues.some((value) => value === null)) return null;
+    const numericValues = windowValues as number[];
+    const sum = numericValues.reduce((total, value) => total + value, 0);
+    return Number((sum / windowSize).toFixed(2));
+  });
+}
+
+function lineSeries(name: string, data: Array<number | null>) {
+  return {
+    name,
+    type: "line",
+    data,
+    smooth: true,
+    symbol: "none",
+    lineStyle: { width: 1.4 }
+  };
 }
 
 window.addEventListener("resize", handleResize);
@@ -516,6 +693,14 @@ function rowCountHint(job: JobRun) {
     typeof job.metadata.factor_chunk_index === "number" &&
     job.step?.startsWith("90 factors ");
   return isFactorRecalculate ? "当前因子分块完成后更新行数" : "";
+}
+
+function clampCoveragePage() {
+  coveragePage.value = Math.min(Math.max(coveragePage.value, 1), coverageTotalPages.value);
+}
+
+function setCoveragePage(page: number) {
+  coveragePage.value = Math.min(Math.max(page, 1), coverageTotalPages.value);
 }
 
 function statusLabel(status: string) {
@@ -827,6 +1012,36 @@ function statusLabel(status: string) {
               </template>
             </aside>
           </div>
+          <div class="coverage-table-toolbar">
+            <span>
+              覆盖明细 {{ coveragePageStart }}-{{ coveragePageEnd }} / {{ dataCoverage.length }}
+            </span>
+            <div class="pagination-controls">
+              <label>
+                <span>每页</span>
+                <select v-model.number="coveragePageSize" aria-label="覆盖明细每页条数">
+                  <option v-for="size in coveragePageSizeOptions" :key="size" :value="size">
+                    {{ size }}
+                  </option>
+                </select>
+              </label>
+              <button
+                type="button"
+                :disabled="coveragePage <= 1"
+                @click="setCoveragePage(coveragePage - 1)"
+              >
+                上一页
+              </button>
+              <strong>{{ coveragePage }} / {{ coverageTotalPages }}</strong>
+              <button
+                type="button"
+                :disabled="coveragePage >= coverageTotalPages"
+                @click="setCoveragePage(coveragePage + 1)"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
           <div class="table-wrap compact">
             <table>
               <thead>
@@ -845,7 +1060,7 @@ function statusLabel(status: string) {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in dataCoverage" :key="row.trade_date">
+                <tr v-for="row in pagedDataCoverage" :key="row.trade_date">
                   <td>{{ row.trade_date }}</td>
                   <td>{{ row.stock_daily_rows }}</td>
                   <td>{{ row.daily_basic_rows }}</td>
@@ -896,7 +1111,11 @@ function statusLabel(status: string) {
               </thead>
               <tbody>
                 <tr v-for="row in currentPool" :key="`${row.ts_code}-${row.trade_date}`">
-                  <td>{{ row.ts_code }}</td>
+                  <td>
+                    <button class="stock-code-button" type="button" @click="openRealtimeKline(row)">
+                      {{ row.ts_code }}
+                    </button>
+                  </td>
                   <td>{{ row.name || "--" }}</td>
                   <td><span class="state-pill">{{ row.state }}</span></td>
                   <td>{{ formatNumber(row.opportunity_score, 1) }}</td>
@@ -956,7 +1175,11 @@ function statusLabel(status: string) {
                 </thead>
                 <tbody>
                   <tr v-for="row in decayPool" :key="`${row.ts_code}-${row.trade_date}`">
-                    <td>{{ row.ts_code }}</td>
+                    <td>
+                      <button class="stock-code-button" type="button" @click="openRealtimeKline(row)">
+                        {{ row.ts_code }}
+                      </button>
+                    </td>
                     <td>{{ row.name || "--" }}</td>
                     <td><span class="state-pill warning">{{ row.state }}</span></td>
                     <td>{{ formatNumber(row.opportunity_score, 1) }}</td>
@@ -1010,5 +1233,44 @@ function statusLabel(status: string) {
         </section>
       </section>
     </section>
+
+    <div v-if="selectedKlineStock" class="modal-backdrop" @click.self="closeRealtimeKline">
+      <section class="kline-modal" role="dialog" aria-modal="true" :aria-label="klineTitle">
+        <header class="kline-header">
+          <div>
+            <span>实时 K 线</span>
+            <h2>{{ klineTitle }}</h2>
+          </div>
+          <div class="kline-actions">
+            <div class="segmented">
+              <button
+                v-for="days in klineDayOptions"
+                :key="days"
+                type="button"
+                :class="{ active: selectedKlineDays === days }"
+                @click="setKlineDays(days)"
+              >
+                {{ days }}日
+              </button>
+            </div>
+            <button class="ghost-button" type="button" :disabled="klineLoading" @click="loadRealtimeKline">
+              {{ klineLoading ? "加载中" : "刷新" }}
+            </button>
+            <button class="icon-button" type="button" aria-label="关闭" @click="closeRealtimeKline">
+              ×
+            </button>
+          </div>
+        </header>
+        <div class="kline-meta">
+          <span>{{ klineData?.start || "--" }} 到 {{ klineData?.end || "--" }}</span>
+          <span>{{ klineData?.rows.length || 0 }} 个交易日</span>
+          <span>{{ klineData?.source || "tushare" }} / 不入库</span>
+        </div>
+        <div v-if="klineError" class="empty-block kline-error">{{ klineError }}</div>
+        <div v-else-if="klineLoading" class="empty-block">加载中</div>
+        <div v-else-if="klineData?.rows.length" ref="klineChartRef" class="kline-chart"></div>
+        <div v-else class="empty-block">暂无 K 线数据</div>
+      </section>
+    </div>
   </main>
 </template>

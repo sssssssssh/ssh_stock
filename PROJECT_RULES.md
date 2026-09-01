@@ -64,9 +64,12 @@
 - 前端 API 地址用 `frontend/.env` 的 `VITE_API_BASE_URL` / `VITE_API_PROXY_TARGET` 控制，不在源码里写死云端地址。
 - 网页用户可见名称和浏览器标题统一使用“空间”，不要显示“股票机会发现系统”。
 - 前端一级目录固定为 `总览`、`数据`、`长线`、`短线`。补算因子入口、数据拉取入口、任务状态、数据覆盖日历和数据覆盖表必须放在 `数据` 页面；长线股票池和行业热度放在 `长线` 页面；短线风险池、信号计数和短线动量放在 `短线` 页面。
+- 股票池中的股票代码必须可点击查看实时 K 线；实时 K 线使用 `GET /api/v1/stocks/{ts_code}/realtime-kline?days=180`，只从 Tushare 查询并返回前端绘图，不写入本地数据库。默认展示 180 个自然日，并支持 90 / 180 / 365 日切换。
 - 后端必须提供 `POST /api/v1/jobs/recalculate` 作为页面补算入口，按因子、市场、行业、状态、信号评估的顺序运行；因子阶段必须按自然月分块执行，并持续更新 `job_run.step`、`row_count`、`job_metadata.progress_pct`、`factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start` 和 `factor_chunk_end`。
 - `recalculate` 的 `row_count` 在因子分块完成写库后更新；前端在分块计算中必须提示“当前因子分块完成后更新行数”，避免把 0 行误解为卡死。
 - 数据覆盖日历使用 `GET /api/v1/system/data-calendar`，状态含义固定为 `CLOSED` 休市、`MISSING` 未拉取、`RAW_ONLY` 已拉未算、`ANALYZED` 基础分析完成、`COMPLETE` 行业热度也完成。
+- 前端数据覆盖明细表必须分页展示，默认每页 20 条，支持 10 / 20 / 50 / 100 条切换；不得直接全量渲染成长页面。
+- `GET /api/v1/system/data-coverage` 不传 `limit` 时必须返回全部已拉取交易日；可选 `limit` 不设置后端最大上限，前端默认不得写死最近 120 条。
 - 修改 `frontend/src/style.css` 或页面主布局后，必须重启 Vite 开发服务并用浏览器检查 `.workspace-shell`、`.nav-button` 等关键样式是否命中，避免新模板加载旧 CSS。
 - API 触发数据拉取或补算时必须创建 `job_run` 记录；同一时间只允许一个 `daily/backfill/recalculate` 任务处于 `QUEUED/RUNNING`。
 - 长任务必须持续更新 `job_run.step`、`row_count` 和 `job_metadata.progress_pct`，前端不得只显示“已提交”。

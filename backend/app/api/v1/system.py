@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import Select, desc, func, select
 from sqlalchemy.orm import Session
 
-from app.api.v1.common import clamp_limit, envelope
+from app.api.v1.common import envelope
 from app.core.db import get_db
 from app.models.market_data import (
     IndexDaily,
@@ -63,32 +63,56 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
 def data_coverage(
     start: date | None = None,
     end: date | None = None,
-    limit: int = 90,
+    limit: int | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    row_limit = clamp_limit(limit, default=90, maximum=1000)
     date_stmt = select(StockDaily.trade_date).distinct().order_by(desc(StockDaily.trade_date))
     if start:
         date_stmt = date_stmt.where(StockDaily.trade_date >= start)
     if end:
         date_stmt = date_stmt.where(StockDaily.trade_date <= end)
-    trade_dates = db.execute(date_stmt.limit(row_limit)).scalars().all()
+    if limit is not None:
+        date_stmt = date_stmt.limit(max(1, limit))
+    trade_dates = db.execute(date_stmt).scalars().all()
+    if not trade_dates:
+        return envelope(
+            [],
+            {
+                "start": start.isoformat() if start else None,
+                "end": end.isoformat() if end else None,
+                "limit": limit,
+                "total": 0,
+            },
+        )
+
+    coverage_start = min(trade_dates)
+    coverage_end = max(trade_dates)
+    stock_daily_counts = _counts_by_date(db, StockDaily.trade_date, coverage_start, coverage_end)
+    daily_basic_counts = _counts_by_date(db, StockDailyBasic.trade_date, coverage_start, coverage_end)
+    adj_factor_counts = _counts_by_date(db, StockAdjFactor.trade_date, coverage_start, coverage_end)
+    index_daily_counts = _counts_by_date(db, IndexDaily.trade_date, coverage_start, coverage_end)
+    factor_counts = _counts_by_date(db, StockFactorDaily.trade_date, coverage_start, coverage_end)
+    market_counts = _counts_by_date(db, MarketDaily.trade_date, coverage_start, coverage_end)
+    sector_counts = _counts_by_date(db, SectorFactorDaily.trade_date, coverage_start, coverage_end)
+    state_counts = _counts_by_date(db, StockStateDaily.trade_date, coverage_start, coverage_end)
+    signal_counts = _counts_by_date(db, StrategySignal.trade_date, coverage_start, coverage_end)
+    signal_eval_counts = _counts_by_date(db, SignalForwardEval.trade_date, coverage_start, coverage_end)
 
     rows = []
     for trade_date in trade_dates:
         rows.append(
             {
                 "trade_date": trade_date.isoformat(),
-                "stock_daily_rows": _count_by_date(db, StockDaily.trade_date, trade_date),
-                "daily_basic_rows": _count_by_date(db, StockDailyBasic.trade_date, trade_date),
-                "adj_factor_rows": _count_by_date(db, StockAdjFactor.trade_date, trade_date),
-                "index_daily_rows": _count_by_date(db, IndexDaily.trade_date, trade_date),
-                "factor_rows": _count_by_date(db, StockFactorDaily.trade_date, trade_date),
-                "market_rows": _count_by_date(db, MarketDaily.trade_date, trade_date),
-                "sector_factor_rows": _count_by_date(db, SectorFactorDaily.trade_date, trade_date),
-                "state_rows": _count_by_date(db, StockStateDaily.trade_date, trade_date),
-                "signal_rows": _count_by_date(db, StrategySignal.trade_date, trade_date),
-                "signal_eval_rows": _count_by_date(db, SignalForwardEval.trade_date, trade_date),
+                "stock_daily_rows": stock_daily_counts.get(trade_date, 0),
+                "daily_basic_rows": daily_basic_counts.get(trade_date, 0),
+                "adj_factor_rows": adj_factor_counts.get(trade_date, 0),
+                "index_daily_rows": index_daily_counts.get(trade_date, 0),
+                "factor_rows": factor_counts.get(trade_date, 0),
+                "market_rows": market_counts.get(trade_date, 0),
+                "sector_factor_rows": sector_counts.get(trade_date, 0),
+                "state_rows": state_counts.get(trade_date, 0),
+                "signal_rows": signal_counts.get(trade_date, 0),
+                "signal_eval_rows": signal_eval_counts.get(trade_date, 0),
             }
         )
 
@@ -97,7 +121,8 @@ def data_coverage(
         {
             "start": start.isoformat() if start else None,
             "end": end.isoformat() if end else None,
-            "limit": row_limit,
+            "limit": limit,
+            "total": len(rows),
         },
     )
 
@@ -174,12 +199,6 @@ def data_calendar(
         current += timedelta(days=1)
 
     return envelope(rows, {"start": start.isoformat(), "end": end.isoformat()})
-
-
-def _count_by_date(db: Session, column: Any, trade_date: date) -> int:
-    table = column.class_
-    stmt = select(func.count()).select_from(table).where(column == trade_date)
-    return int(db.execute(stmt).scalar_one())
 
 
 def _counts_by_date(db: Session, column: Any, start: date, end: date) -> dict[date, int]:

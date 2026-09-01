@@ -124,6 +124,33 @@ export type StockPoolItem = {
   reason_codes: string[] | Record<string, unknown> | null;
 };
 
+export type RealtimeKlineRow = {
+  ts_code: string;
+  trade_date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  pre_close: number | null;
+  change: number | null;
+  pct_chg: number | null;
+  vol: number | null;
+  amount: number | null;
+};
+
+export type RealtimeKlineResponse = {
+  stock: {
+    ts_code: string;
+    name?: string | null;
+  } & Record<string, unknown>;
+  source: string;
+  stored: boolean;
+  days: number;
+  start: string;
+  end: string;
+  rows: RealtimeKlineRow[];
+};
+
 export type DashboardSummary = {
   trade_date: string | null;
   market: MarketSummary | null;
