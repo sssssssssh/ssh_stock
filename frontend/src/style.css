@@ -374,13 +374,68 @@ button {
   margin-bottom: 10px;
 }
 
+.panel.collapsed .panel-title {
+  margin-bottom: 0;
+}
+
 .panel-title h2 {
+  display: flex;
+  align-items: center;
   margin: 0;
   color: #111827;
   font-size: 15px;
-  line-height: 1.2;
+  line-height: 22px;
   font-weight: 720;
   letter-spacing: 0;
+}
+
+.panel-title-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 22px;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  padding: 0;
+  font: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-title-button:hover {
+  color: #1d4ed8;
+}
+
+.panel-title-button .collapse-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #475569;
+  box-sizing: border-box;
+}
+
+.panel-title-button .collapse-icon::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.panel.collapsed .panel-title-button .collapse-icon::before {
+  transform: rotate(-45deg) translate(0, 0);
+}
+
+.panel-collapsible {
+  min-width: 0;
 }
 
 .panel-title span {
@@ -389,8 +444,14 @@ button {
   white-space: nowrap;
 }
 
+.panel-title-button span:last-child {
+  color: inherit;
+  font-size: inherit;
+  white-space: normal;
+}
+
 .coverage-title {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .coverage-title > div {

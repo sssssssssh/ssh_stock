@@ -40,6 +40,7 @@ import type {
 
 type ViewKey = "overview" | "data" | "long" | "short";
 type PoolTab = "right" | "trend";
+type DataPanelKey = "recalc" | "tasks" | "coverage";
 
 use([
   BarChart,
@@ -60,6 +61,11 @@ const errorMessage = ref("");
 const jobMessage = ref("");
 const activeView = ref<ViewKey>("overview");
 const activePool = ref<PoolTab>("right");
+const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
+  recalc: false,
+  tasks: false,
+  coverage: false
+});
 const backfillStart = ref(daysAgoIso(30));
 const backfillEnd = ref(todayIso());
 const recalcStart = ref(daysAgoIso(180));
@@ -703,6 +709,10 @@ function setCoveragePage(page: number) {
   coveragePage.value = Math.min(Math.max(page, 1), coverageTotalPages.value);
 }
 
+function toggleDataPanel(panel: DataPanelKey) {
+  collapsedDataPanels.value[panel] = !collapsedDataPanels.value[panel];
+}
+
 function statusLabel(status: string) {
   const map: Record<string, string> = {
     QUEUED: "排队中",
@@ -826,10 +836,20 @@ function statusLabel(status: string) {
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">
-        <article class="panel action-panel">
+        <article class="panel action-panel" :class="{ collapsed: collapsedDataPanels.recalc }">
           <div class="panel-title coverage-title">
             <div>
-              <h2>补算因子与股票池</h2>
+              <h2>
+                <button
+                  class="panel-title-button"
+                  type="button"
+                  :aria-expanded="!collapsedDataPanels.recalc"
+                  @click="toggleDataPanel('recalc')"
+                >
+                  <span class="collapse-icon" aria-hidden="true"></span>
+                  <span>补算因子与股票池</span>
+                </button>
+              </h2>
               <span>原始行情补充后，用这里重新计算分析结果</span>
             </div>
             <form class="coverage-actions" @submit.prevent="submitRecalculation">
@@ -850,19 +870,31 @@ function statusLabel(status: string) {
               </button>
             </form>
           </div>
-          <div class="recalc-flow">
-            <span>因子</span>
-            <span>市场</span>
-            <span>行业</span>
-            <span>状态</span>
-            <span>信号</span>
+          <div v-show="!collapsedDataPanels.recalc" class="panel-collapsible">
+            <div class="recalc-flow">
+              <span>因子</span>
+              <span>市场</span>
+              <span>行业</span>
+              <span>状态</span>
+              <span>信号</span>
+            </div>
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel" :class="{ collapsed: collapsedDataPanels.tasks }">
           <div class="panel-title coverage-title">
             <div>
-              <h2>拉取数据与任务</h2>
+              <h2>
+                <button
+                  class="panel-title-button"
+                  type="button"
+                  :aria-expanded="!collapsedDataPanels.tasks"
+                  @click="toggleDataPanel('tasks')"
+                >
+                  <span class="collapse-icon" aria-hidden="true"></span>
+                  <span>拉取数据与任务</span>
+                </button>
+              </h2>
               <span>最近 {{ dataCoverage.length }} 个交易日</span>
             </div>
             <form class="coverage-actions" @submit.prevent="submitBackfill">
@@ -883,7 +915,7 @@ function statusLabel(status: string) {
               </button>
             </form>
           </div>
-          <div class="job-status-grid">
+          <div v-show="!collapsedDataPanels.tasks" class="job-status-grid panel-collapsible">
             <section class="job-current" :class="activeJob?.status.toLowerCase() || 'idle'">
               <div class="job-current-head">
                 <span>当前任务</span>
@@ -927,10 +959,20 @@ function statusLabel(status: string) {
           </div>
         </article>
 
-        <article class="panel">
+        <article class="panel" :class="{ collapsed: collapsedDataPanels.coverage }">
           <div class="panel-title coverage-title">
             <div>
-              <h2>数据覆盖日历</h2>
+              <h2>
+                <button
+                  class="panel-title-button"
+                  type="button"
+                  :aria-expanded="!collapsedDataPanels.coverage"
+                  @click="toggleDataPanel('coverage')"
+                >
+                  <span class="collapse-icon" aria-hidden="true"></span>
+                  <span>数据覆盖日历</span>
+                </button>
+              </h2>
               <span>
                 已拉 {{ calendarSummary.pulled }} / 开市 {{ calendarSummary.open }}，
                 已算 {{ calendarSummary.analyzed }}
@@ -942,142 +984,144 @@ function statusLabel(status: string) {
               <button type="button" @click="shiftCalendarMonth(1)">下月</button>
             </div>
           </div>
-          <div class="calendar-legend">
-            <span class="analyzed">算 已算基础</span>
-            <span class="complete">全 行业完成</span>
-            <span class="raw-only">原 已拉未算</span>
-            <span class="missing">缺 未拉取</span>
-            <span class="closed">休 休市</span>
-          </div>
-          <div class="coverage-calendar-layout">
-            <section class="coverage-calendar">
-              <div class="calendar-week">一</div>
-              <div class="calendar-week">二</div>
-              <div class="calendar-week">三</div>
-              <div class="calendar-week">四</div>
-              <div class="calendar-week">五</div>
-              <div class="calendar-week">六</div>
-              <div class="calendar-week">日</div>
-              <button
-                v-for="cell in calendarCells"
-                :key="cell.key"
-                class="calendar-day"
-                :class="[
-                  cell.row?.coverage_status.toLowerCase(),
-                  { blank: !cell.row, selected: selectedCalendarDate === cell.row?.date }
-                ]"
-                type="button"
-                :disabled="!cell.row"
-                :title="cell.row ? `${cell.row.date} ${calendarStatusLabel(cell.row.coverage_status)}` : ''"
-                @click="selectCalendarDay(cell.row)"
-              >
-                <span>{{ cell.day || "" }}</span>
-                <strong v-if="cell.row">{{ calendarStatusLabel(cell.row.coverage_status) }}</strong>
-              </button>
-            </section>
-            <aside class="calendar-detail">
-              <template v-if="selectedCalendarRow">
-                <span>{{ selectedCalendarRow.date }}</span>
-                <strong>{{ calendarStatusLabel(selectedCalendarRow.coverage_status) }}</strong>
-                <dl>
-                  <div>
-                    <dt>日线</dt>
-                    <dd>{{ selectedCalendarRow.stock_daily_rows }}</dd>
-                  </div>
-                  <div>
-                    <dt>因子</dt>
-                    <dd>{{ selectedCalendarRow.factor_rows }}</dd>
-                  </div>
-                  <div>
-                    <dt>行业</dt>
-                    <dd>{{ selectedCalendarRow.sector_factor_rows }}</dd>
-                  </div>
-                  <div>
-                    <dt>状态</dt>
-                    <dd>{{ selectedCalendarRow.state_rows }}</dd>
-                  </div>
-                  <div>
-                    <dt>信号</dt>
-                    <dd>{{ selectedCalendarRow.signal_rows }}</dd>
-                  </div>
-                  <div>
-                    <dt>后验</dt>
-                    <dd>{{ selectedCalendarRow.signal_eval_rows }}</dd>
-                  </div>
-                </dl>
-              </template>
-              <template v-else>
-                <span>日期明细</span>
-                <strong>点击日历查看</strong>
-              </template>
-            </aside>
-          </div>
-          <div class="coverage-table-toolbar">
-            <span>
-              覆盖明细 {{ coveragePageStart }}-{{ coveragePageEnd }} / {{ dataCoverage.length }}
-            </span>
-            <div class="pagination-controls">
-              <label>
-                <span>每页</span>
-                <select v-model.number="coveragePageSize" aria-label="覆盖明细每页条数">
-                  <option v-for="size in coveragePageSizeOptions" :key="size" :value="size">
-                    {{ size }}
-                  </option>
-                </select>
-              </label>
-              <button
-                type="button"
-                :disabled="coveragePage <= 1"
-                @click="setCoveragePage(coveragePage - 1)"
-              >
-                上一页
-              </button>
-              <strong>{{ coveragePage }} / {{ coverageTotalPages }}</strong>
-              <button
-                type="button"
-                :disabled="coveragePage >= coverageTotalPages"
-                @click="setCoveragePage(coveragePage + 1)"
-              >
-                下一页
-              </button>
+          <div v-show="!collapsedDataPanels.coverage" class="panel-collapsible">
+            <div class="calendar-legend">
+              <span class="analyzed">算 已算基础</span>
+              <span class="complete">全 行业完成</span>
+              <span class="raw-only">原 已拉未算</span>
+              <span class="missing">缺 未拉取</span>
+              <span class="closed">休 休市</span>
             </div>
-          </div>
-          <div class="table-wrap compact">
-            <table>
-              <thead>
-                <tr>
-                  <th>日期</th>
-                  <th>日线</th>
-                  <th>指标</th>
-                  <th>复权</th>
-                  <th>指数</th>
-                  <th>因子</th>
-                  <th>市场</th>
-                  <th>行业</th>
-                  <th>状态</th>
-                  <th>信号</th>
-                  <th>后验</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in pagedDataCoverage" :key="row.trade_date">
-                  <td>{{ row.trade_date }}</td>
-                  <td>{{ row.stock_daily_rows }}</td>
-                  <td>{{ row.daily_basic_rows }}</td>
-                  <td>{{ row.adj_factor_rows }}</td>
-                  <td>{{ row.index_daily_rows }}</td>
-                  <td>{{ row.factor_rows }}</td>
-                  <td>{{ row.market_rows }}</td>
-                  <td>{{ row.sector_factor_rows }}</td>
-                  <td>{{ row.state_rows }}</td>
-                  <td>{{ row.signal_rows }}</td>
-                  <td>{{ row.signal_eval_rows }}</td>
-                </tr>
-                <tr v-if="!dataCoverage.length">
-                  <td colspan="11" class="empty-cell">暂无已拉取交易日</td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="coverage-calendar-layout">
+              <section class="coverage-calendar">
+                <div class="calendar-week">一</div>
+                <div class="calendar-week">二</div>
+                <div class="calendar-week">三</div>
+                <div class="calendar-week">四</div>
+                <div class="calendar-week">五</div>
+                <div class="calendar-week">六</div>
+                <div class="calendar-week">日</div>
+                <button
+                  v-for="cell in calendarCells"
+                  :key="cell.key"
+                  class="calendar-day"
+                  :class="[
+                    cell.row?.coverage_status.toLowerCase(),
+                    { blank: !cell.row, selected: selectedCalendarDate === cell.row?.date }
+                  ]"
+                  type="button"
+                  :disabled="!cell.row"
+                  :title="cell.row ? `${cell.row.date} ${calendarStatusLabel(cell.row.coverage_status)}` : ''"
+                  @click="selectCalendarDay(cell.row)"
+                >
+                  <span>{{ cell.day || "" }}</span>
+                  <strong v-if="cell.row">{{ calendarStatusLabel(cell.row.coverage_status) }}</strong>
+                </button>
+              </section>
+              <aside class="calendar-detail">
+                <template v-if="selectedCalendarRow">
+                  <span>{{ selectedCalendarRow.date }}</span>
+                  <strong>{{ calendarStatusLabel(selectedCalendarRow.coverage_status) }}</strong>
+                  <dl>
+                    <div>
+                      <dt>日线</dt>
+                      <dd>{{ selectedCalendarRow.stock_daily_rows }}</dd>
+                    </div>
+                    <div>
+                      <dt>因子</dt>
+                      <dd>{{ selectedCalendarRow.factor_rows }}</dd>
+                    </div>
+                    <div>
+                      <dt>行业</dt>
+                      <dd>{{ selectedCalendarRow.sector_factor_rows }}</dd>
+                    </div>
+                    <div>
+                      <dt>状态</dt>
+                      <dd>{{ selectedCalendarRow.state_rows }}</dd>
+                    </div>
+                    <div>
+                      <dt>信号</dt>
+                      <dd>{{ selectedCalendarRow.signal_rows }}</dd>
+                    </div>
+                    <div>
+                      <dt>后验</dt>
+                      <dd>{{ selectedCalendarRow.signal_eval_rows }}</dd>
+                    </div>
+                  </dl>
+                </template>
+                <template v-else>
+                  <span>日期明细</span>
+                  <strong>点击日历查看</strong>
+                </template>
+              </aside>
+            </div>
+            <div class="coverage-table-toolbar">
+              <span>
+                覆盖明细 {{ coveragePageStart }}-{{ coveragePageEnd }} / {{ dataCoverage.length }}
+              </span>
+              <div class="pagination-controls">
+                <label>
+                  <span>每页</span>
+                  <select v-model.number="coveragePageSize" aria-label="覆盖明细每页条数">
+                    <option v-for="size in coveragePageSizeOptions" :key="size" :value="size">
+                      {{ size }}
+                    </option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  :disabled="coveragePage <= 1"
+                  @click="setCoveragePage(coveragePage - 1)"
+                >
+                  上一页
+                </button>
+                <strong>{{ coveragePage }} / {{ coverageTotalPages }}</strong>
+                <button
+                  type="button"
+                  :disabled="coveragePage >= coverageTotalPages"
+                  @click="setCoveragePage(coveragePage + 1)"
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>日线</th>
+                    <th>指标</th>
+                    <th>复权</th>
+                    <th>指数</th>
+                    <th>因子</th>
+                    <th>市场</th>
+                    <th>行业</th>
+                    <th>状态</th>
+                    <th>信号</th>
+                    <th>后验</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in pagedDataCoverage" :key="row.trade_date">
+                    <td>{{ row.trade_date }}</td>
+                    <td>{{ row.stock_daily_rows }}</td>
+                    <td>{{ row.daily_basic_rows }}</td>
+                    <td>{{ row.adj_factor_rows }}</td>
+                    <td>{{ row.index_daily_rows }}</td>
+                    <td>{{ row.factor_rows }}</td>
+                    <td>{{ row.market_rows }}</td>
+                    <td>{{ row.sector_factor_rows }}</td>
+                    <td>{{ row.state_rows }}</td>
+                    <td>{{ row.signal_rows }}</td>
+                    <td>{{ row.signal_eval_rows }}</td>
+                  </tr>
+                  <tr v-if="!dataCoverage.length">
+                    <td colspan="11" class="empty-cell">暂无已拉取交易日</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </article>
       </section>
