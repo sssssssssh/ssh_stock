@@ -1,5 +1,6 @@
 from datetime import date
 
+import app.services.quality.daily_quality as daily_quality_module
 import app.services.quality.raw_completeness as raw_module
 from app.models.market_data import IndexDaily, StockAdjFactor, StockDailyBasic
 from app.services.quality.raw_completeness import check_raw_completeness
@@ -125,6 +126,77 @@ def test_adj_factor_invalid_values_do_not_count_as_actual(monkeypatch) -> None:
         "000002.SZ",
         "000003.SZ",
     ]
+
+
+def test_raw_completeness_preserves_existing_stock_daily_detail_counts(monkeypatch) -> None:
+    quality_rows = {
+        (date(2026, 8, 31), "stock_daily"): {
+            "trade_date": date(2026, 8, 31),
+            "dataset": "stock_daily",
+            "expected_rows": 1,
+            "actual_rows": 1,
+            "coverage_rate": 1.0,
+            "missing_count": 0,
+            "duplicate_count": 3,
+            "null_count": 25,
+            "warning_count": 0,
+            "error_count": 0,
+            "status": "PASS",
+            "issue_codes": {},
+            "job_id": None,
+        }
+    }
+
+    def fake_upsert_rows(db, model, rows, conflict_columns, update_columns=None, **kwargs):
+        for row in rows:
+            key = (row["trade_date"], row["dataset"])
+            if key not in quality_rows:
+                quality_rows[key] = dict(row)
+                continue
+            columns = update_columns or [
+                column for column in row if column not in set(conflict_columns) | {"id"}
+            ]
+            for column in columns:
+                quality_rows[key][column] = row[column]
+        return len(rows)
+
+    monkeypatch.setattr(daily_quality_module, "upsert_rows", fake_upsert_rows)
+    monkeypatch.setattr(
+        raw_module,
+        "expected_stock_codes",
+        lambda db, trade_date: {"000001.SZ", "000002.SZ"},
+    )
+    monkeypatch.setattr(
+        raw_module,
+        "_codes_for_date",
+        lambda db, model, column, trade_date: {"000001.SZ"},
+    )
+    monkeypatch.setattr(
+        raw_module,
+        "_valid_codes_for_date",
+        lambda db, model, column, trade_date, **kwargs: (
+            {"000001.SZ"},
+            set(),
+        )
+        if model.__tablename__ != "index_daily"
+        else ({"000300.SH"}, set()),
+    )
+
+    result = check_raw_completeness(
+        object(),
+        date(2026, 8, 31),
+        strategy={"benchmark": {"market_indices": ["000300.SH"]}},
+        persist=True,
+    )
+
+    stock_daily_quality = quality_rows[(date(2026, 8, 31), "stock_daily")]
+    assert result.stock_daily_status == "ERROR"
+    assert stock_daily_quality["expected_rows"] == 2
+    assert stock_daily_quality["actual_rows"] == 1
+    assert stock_daily_quality["coverage_rate"] == 0.5
+    assert stock_daily_quality["status"] == "ERROR"
+    assert stock_daily_quality["duplicate_count"] == 3
+    assert stock_daily_quality["null_count"] == 25
 
 
 def test_raw_completeness_overall_status_prioritizes_error_over_warning() -> None:

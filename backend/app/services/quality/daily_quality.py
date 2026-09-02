@@ -127,6 +127,7 @@ def persist_coverage_result(
     null_count: int = 0,
     job_id: uuid.UUID | None = None,
     extra_issue_codes: dict[str, Any] | None = None,
+    preserve_existing_detail_counts: bool = False,
 ) -> None:
     issue_codes: dict[str, Any] = {
         "missing_codes": result.missing_codes,
@@ -153,7 +154,26 @@ def persist_coverage_result(
             "job_id": job_id,
         }
     ]
-    upsert_rows(db, DataQualityDaily, rows, ["trade_date", "dataset"])
+    update_columns = None
+    if preserve_existing_detail_counts:
+        update_columns = [
+            "expected_rows",
+            "actual_rows",
+            "coverage_rate",
+            "missing_count",
+            "warning_count",
+            "error_count",
+            "status",
+            "issue_codes",
+            "job_id",
+        ]
+    upsert_rows(
+        db,
+        DataQualityDaily,
+        rows,
+        ["trade_date", "dataset"],
+        update_columns=update_columns,
+    )
 
 
 def record_cross_table_quality(

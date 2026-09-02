@@ -693,6 +693,7 @@ Raw 数据层最终收尾已完成：
 - `validate-data` 汇总的 `pass_days`、`warning_days`、`error_days` 根据 `RawCompletenessResult.overall_status` 统计，不再只看 `stock_daily`。
 - API 进度元数据会返回 `current_day_datasets`、`current_day_status` 和 `current_day_invalid_counts`。
 - CLI `validate-data` 在成功后显式 `commit()`，异常时显式 `rollback()`。
+- RawCompleteness / validate-data 二次完整性校验不会覆盖 `sync_daily()` 首次采集记录的 `duplicate_count` 和 `null_count`。
 - Raw 核心字段有效性已纳入完整性：`adj_factor` 必须非空且大于 0，`index_daily.close/pre_close` 必须非空且大于 0，`daily_basic` 只检查 `close/total_mv/circ_mv`。
 - `sector_member` 当前成员批次 `is_new=Y` 返回空结果会失败并提示 L1 行业代码；历史批次 `is_new=N` 允许为空。
 - Raw 数据层按当前 Milestone 8 范围封版；后续可交易性数据进入 Milestone 9。

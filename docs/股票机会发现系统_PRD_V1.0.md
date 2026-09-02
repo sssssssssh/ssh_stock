@@ -1057,6 +1057,7 @@ V1 验证指标：
 - `pass_days`、`warning_days`、`error_days` 按 `RawCompletenessResult.overall_status` 汇总：任一 Raw 数据集 ERROR 则当日 ERROR；无 ERROR 但任一 WARNING 则当日 WARNING；全部 PASS 才是 PASS。
 - `validate-data` API 进度增加当前四类 Raw 数据集状态和当日整体状态，方便定位是哪张 Raw 表导致异常。
 - CLI `validate-data` 成功后显式提交质量结果，异常时回滚。
+- 二次完整性校验只更新覆盖率、状态、缺失和无效字段信息，不覆盖 `sync_daily()` 首次采集写入的 `duplicate_count/null_count`。
 - Raw 核心字段质量已纳入有效行判断：复权因子必须非空且大于 0，指数收盘/昨收必须非空且大于 0，每日指标只要求 close、total_mv、circ_mv 三个核心字段。
 - 字段无效记录会写入 `data_quality_daily.issue_codes.invalid_count/invalid_codes`，无效代码最多保留 100 个。
 - 申万行业成分当前批次 `is_new=Y` 空结果直接失败并携带 L1 行业代码；历史批次 `is_new=N` 空结果允许。

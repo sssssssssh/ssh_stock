@@ -206,6 +206,7 @@ def check_raw_completeness(
         error_coverage_rate=_daily_threshold(strategy, "error", 0.95),
         job_id=job_id,
         persist=persist,
+        preserve_existing_detail_counts=True,
     )
     adj_factor = _coverage_dataset(
         db,
@@ -261,6 +262,7 @@ def _coverage_dataset(
     job_id: uuid.UUID | None,
     persist: bool,
     invalid_codes: set[str] | None = None,
+    preserve_existing_detail_counts: bool = False,
 ) -> RawDatasetCompleteness:
     invalid_codes = invalid_codes or set()
     result = check_daily_coverage(
@@ -277,6 +279,7 @@ def _coverage_dataset(
             result,
             job_id=job_id,
             extra_issue_codes=_invalid_issue_codes(invalid_codes),
+            preserve_existing_detail_counts=preserve_existing_detail_counts,
         )
     return RawDatasetCompleteness(
         dataset=dataset,
