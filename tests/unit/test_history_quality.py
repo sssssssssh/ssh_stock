@@ -50,6 +50,7 @@ def test_historical_quality_validate_writes_pass_warning_error(monkeypatch) -> N
         "record_cross_table_quality",
         lambda db, trade_date, **kwargs: cross_checked.append(trade_date),
     )
+    monkeypatch.setattr(history_quality, "ensure_stock_basic_ready", lambda db: None)
 
     summary = _FakeHistoricalQualityService().validate(date(2026, 1, 1), date(2026, 1, 31))
 

@@ -14,6 +14,7 @@ from app.services.quality.daily_quality import (
     persist_coverage_result,
     record_cross_table_quality,
 )
+from app.services.quality.raw_completeness import ensure_stock_basic_ready
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class HistoricalDataQualityService:
         job_id: uuid.UUID | None = None,
         progress_callback: ProgressCallback | None = None,
     ) -> HistoricalQualitySummary:
+        ensure_stock_basic_ready(self.db)
         trade_dates = self._open_trade_dates(start, end)
         total_days = len(trade_dates)
         pass_days = 0

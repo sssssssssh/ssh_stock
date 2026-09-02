@@ -75,7 +75,6 @@ export function fetchResearchStats(): Promise<ResearchStats> {
 export function enqueueBackfillJob(payload: {
   start: string;
   end: string;
-  evaluate_signals?: boolean;
 }): Promise<JobRun> {
   return request<JobRun>("/jobs/backfill", {
     method: "POST",

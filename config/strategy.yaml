@@ -57,3 +57,18 @@ data_quality:
     state_vs_factor:
       warning_coverage_rate: 0.98
       error_coverage_rate: 0.90
+
+raw_quality:
+  adj_factor:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
+  daily_basic:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
+
+provider:
+  tushare:
+    safe_limits:
+      stock_basic: 5800
+      daily: 5800
+      daily_basic: 5800

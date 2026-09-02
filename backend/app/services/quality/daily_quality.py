@@ -74,6 +74,8 @@ def check_daily_coverage(
     error_coverage_rate: float = 0.95,
     dataset: str = "stock_daily",
 ) -> CoverageResult:
+    # Current expected universe is listed and not delisted stocks only. Suspended
+    # stocks are not excluded until Milestone 9 adds suspension data.
     if not expected_codes:
         return CoverageResult(
             trade_date=trade_date,

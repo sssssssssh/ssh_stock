@@ -2,25 +2,29 @@ import uuid
 from datetime import date
 
 from loguru import logger
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.models.market_data import (
-    DataQualityDaily,
-    IndexDaily,
-    StockAdjFactor,
-    StockDaily,
-    StockDailyBasic,
-    TradeCalendar,
-)
+from app.models.market_data import TradeCalendar
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
 from app.services.ingestion import IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
-from app.services.quality.history_quality import HistoricalDataQualityService
+from app.services.quality.raw_completeness import (
+    RawCompletenessResult,
+    check_raw_completeness,
+    ensure_stock_basic_ready,
+    validate_trade_calendar_rows,
+)
+
+RAW_DATASET_STEPS = {
+    "stock_daily": ("30 sync daily", "sync_daily"),
+    "adj_factor": ("40 sync adj_factor", "sync_adj_factor"),
+    "daily_basic": ("50 sync daily_basic", "sync_daily_basic"),
+    "index_daily": ("60 sync index_daily", "sync_index_daily"),
+}
 
 
 class BackfillJob:
@@ -46,6 +50,7 @@ class BackfillJob:
         )
         total_rows = 0
         try:
+            ensure_stock_basic_ready(self.db)
             update_job(
                 self.db,
                 job,
@@ -54,7 +59,9 @@ class BackfillJob:
             )
             calendar_df = self.provider.get_trade_calendar(start, end)
             calendar_rows = normalize_trade_calendar(calendar_df)
+            validate_trade_calendar_rows(start, end, calendar_rows)
             total_rows += upsert_rows(self.db, TradeCalendar, calendar_rows, ["cal_date"])
+            self.db.commit()
             open_dates = [row["cal_date"] for row in calendar_rows if row["is_open"]]
             metadata = {
                 **metadata,
@@ -63,12 +70,31 @@ class BackfillJob:
                 "stage": "daily",
                 "progress_pct": 10,
             }
+            if _any_index_daily_incomplete(self.db, open_dates):
+                update_job(
+                    self.db,
+                    job,
+                    step="60 sync index_daily range",
+                    row_count=total_rows,
+                    metadata={**metadata, "stage": "index_daily_range", "progress_pct": 14},
+                )
+                total_rows += self.ingestion.sync_index_daily_range(start, end, job_id=job.id)
 
             skipped_raw_days = 0
+            synced_dataset_count = 0
+            skipped_dataset_count = 0
             for index, current in enumerate(open_dates, 1):
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
-                if _raw_data_complete(self.db, current, job_id=job.id):
+                completeness = check_raw_completeness(
+                    self.db,
+                    current,
+                    strategy=get_settings().strategy,
+                    job_id=job.id,
+                    persist=True,
+                )
+                if completeness.is_complete:
                     skipped_raw_days += 1
+                    skipped_dataset_count += len(RAW_DATASET_STEPS)
                     update_job(
                         self.db,
                         job,
@@ -76,30 +102,63 @@ class BackfillJob:
                         row_count=total_rows,
                         metadata={
                             **metadata,
+                            **completeness.as_metadata(),
                             "current_day_action": "skip",
                             "skipped_raw_days": skipped_raw_days,
+                            "synced_dataset_count": synced_dataset_count,
+                            "skipped_dataset_count": skipped_dataset_count,
                         },
                     )
                     continue
-                update_job(
-                    self.db,
-                    job,
-                    step=f"30 sync daily {current}",
-                    row_count=total_rows,
-                    metadata={
-                        **metadata,
-                        "current_day_action": "sync",
-                        "skipped_raw_days": skipped_raw_days,
-                    },
-                )
-                total_rows += self.ingestion.sync_daily(current, job_id=job.id)
-                total_rows += self.ingestion.sync_adj_factor(current, job_id=job.id)
-                total_rows += self.ingestion.sync_daily_basic(current, job_id=job.id)
-                total_rows += self.ingestion.sync_index_daily(current, job_id=job.id)
+
+                for dataset in RAW_DATASET_STEPS:
+                    completeness = _refresh_after_stock_daily_if_needed(
+                        self.db,
+                        current,
+                        completeness,
+                        job.id,
+                    )
+                    dataset_status = completeness.dataset(dataset).status
+                    if _dataset_is_skippable(completeness, dataset):
+                        skipped_dataset_count += 1
+                        continue
+
+                    step_prefix, method_name = RAW_DATASET_STEPS[dataset]
+                    update_job(
+                        self.db,
+                        job,
+                        step=f"{step_prefix} {current}",
+                        row_count=total_rows,
+                        metadata={
+                            **metadata,
+                            **completeness.as_metadata(),
+                            "current_day_action": "sync",
+                            "current_day_dataset": dataset,
+                            "current_day_dataset_status": dataset_status,
+                            "skipped_raw_days": skipped_raw_days,
+                            "synced_dataset_count": synced_dataset_count,
+                            "skipped_dataset_count": skipped_dataset_count,
+                        },
+                    )
+                    sync_method = getattr(self.ingestion, method_name)
+                    total_rows += sync_method(current, job_id=job.id)
+                    synced_dataset_count += 1
+                    completeness = check_raw_completeness(
+                        self.db,
+                        current,
+                        strategy=get_settings().strategy,
+                        job_id=job.id,
+                        persist=True,
+                    )
+
+                if not completeness.is_complete:
+                    raise ValueError(_raw_incomplete_error(completeness))
             metadata = _clear_daily_progress({
                 **metadata,
                 "completed_open_days": len(open_dates),
                 "current_open_day_index": len(open_dates),
+                "synced_dataset_count": synced_dataset_count,
+                "skipped_dataset_count": skipped_dataset_count,
             })
 
             update_job(
@@ -147,6 +206,8 @@ def _clear_daily_progress(metadata: dict[str, object]) -> dict[str, object]:
     cleaned.pop("current_open_day_index", None)
     cleaned.pop("completed_open_days", None)
     cleaned.pop("current_day_action", None)
+    cleaned.pop("current_day_dataset", None)
+    cleaned.pop("current_day_dataset_status", None)
     return cleaned
 
 
@@ -156,39 +217,54 @@ def _raw_data_complete(
     *,
     job_id: uuid.UUID | None = None,
 ) -> bool:
-    table_counts = [
-        _date_row_count(db, StockDaily.trade_date, trade_date),
-        _date_row_count(db, StockAdjFactor.trade_date, trade_date),
-        _date_row_count(db, StockDailyBasic.trade_date, trade_date),
-        _date_row_count(db, IndexDaily.trade_date, trade_date),
-    ]
-    if any(count <= 0 for count in table_counts):
-        return False
-
-    quality_status = db.execute(
-        select(DataQualityDaily.status)
-        .where(DataQualityDaily.trade_date == trade_date)
-        .where(DataQualityDaily.dataset == "stock_daily")
-        .order_by(DataQualityDaily.checked_at.desc())
-        .limit(1)
-    ).scalar_one_or_none()
-    if quality_status in {"PASS", "WARNING"}:
-        return True
-    if quality_status == "ERROR":
-        return False
-
-    result = HistoricalDataQualityService(db, get_settings().strategy).validate_trade_date(
+    return check_raw_completeness(
+        db,
         trade_date,
+        strategy=get_settings().strategy,
         job_id=job_id,
-        include_cross_table=False,
+        persist=True,
+    ).is_complete
+
+
+def _dataset_is_skippable(completeness: RawCompletenessResult, dataset: str) -> bool:
+    if dataset == "index_daily":
+        return completeness.index_daily.status == "PASS"
+    return completeness.dataset(dataset).is_acceptable
+
+
+def _refresh_after_stock_daily_if_needed(
+    db: Session,
+    trade_date: date,
+    completeness: RawCompletenessResult,
+    job_id: uuid.UUID,
+) -> RawCompletenessResult:
+    if completeness.stock_daily.is_acceptable:
+        return completeness
+    return check_raw_completeness(
+        db,
+        trade_date,
+        strategy=get_settings().strategy,
+        job_id=job_id,
+        persist=True,
     )
-    return result.status in {"PASS", "WARNING"}
 
 
-def _date_row_count(db: Session, column: object, trade_date: date) -> int:
-    table = column.class_
-    return int(
-        db.execute(
-            select(func.count()).select_from(table).where(column == trade_date)
-        ).scalar_one()
+def _raw_incomplete_error(completeness: RawCompletenessResult) -> str:
+    statuses = completeness.as_metadata()["current_day_datasets"]
+    return (
+        "raw data incomplete after sync: "
+        f"trade_date={completeness.trade_date} statuses={statuses}"
+    )
+
+
+def _any_index_daily_incomplete(db: Session, open_dates: list[date]) -> bool:
+    return any(
+        check_raw_completeness(
+            db,
+            trade_date,
+            strategy=get_settings().strategy,
+            persist=False,
+        ).index_daily.status
+        != "PASS"
+        for trade_date in open_dates
     )

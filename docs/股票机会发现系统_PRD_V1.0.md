@@ -659,15 +659,11 @@ flowchart TD
 
 顺序：
 
-1. 股票基础信息；
-2. 交易日历；
-3. 日线；
-4. 复权因子；
-5. daily_basic；
-6. 指数；
-7. 行业分类及成分；
-8. 因子批量计算；
-9. 状态机从最早日期顺序重放。
+1. `sync-basic`：同步 `stock_basic`、申万行业分类和申万行业成分，不触发计算；
+2. `backfill`：同步交易日历、日线、复权因子、daily_basic 和指数日线，不触发计算；
+3. `recalculate`：按因子、市场温度、行业热度、趋势状态、策略信号和可选后验评估顺序计算。
+
+`backfill` 启动前必须确认 `stock_basic` 至少具备 `L` 当前上市和 `D` 退市状态；缺失时提示先执行 `sync-basic`。回填失败后重跑同一日期范围时，系统按 Raw 数据集逐项判断完整性，完整数据集跳过，不完整数据集补拉。
 
 ### 15.2 信号后验统计
 
@@ -889,6 +885,8 @@ V1 验证指标：
 - 已实现 daily / sync-basic / backfill / scheduler CLI；其中 `sync-basic` 只同步股票与行业基础信息，`backfill` 只同步历史原始行情。
 - 已补充 `check-config` 和 `check-tushare`，用于脱敏检查配置与 Tushare token 可用性。
 - 已按代理版 Tushare 要求调整 SDK 初始化方式：`ts.set_token(...)`、无参数 `ts.pro_api()`、设置 `_DataApi__http_url` 为 `TUSHARE_HTTP_URL`。
+- 已将 Tushare 请求节流调整为进程级限流，`TUSHARE_MIN_INTERVAL_SECONDS` 对所有 Provider 实例生效。
+- 已增加 Tushare 返回行数安全上限告警，达到 `config/strategy.yaml` 的 `provider.tushare.safe_limits` 时在 Provider 日志中记录 WARNING。
 - 已实现 `stock_factor_daily` 因子表和 Alembic 迁移 `0002_stock_factor_daily`。
 - 已实现 Factor Engine：复权 OHLC、MA、收益率、斜率、ATR、突破、higher-low、回撤、趋势效率、Eligible Universe、RPS，并补充 `return1` / `return3` 支撑行业短周期收益。
 - 已实现 `recalc-factors` CLI，并接入 daily / recalculate 任务链路。
@@ -899,6 +897,7 @@ V1 验证指标：
 - 已实现 `recalc-market` / `recalc-sectors` CLI，并接入 daily / recalculate 任务链路。
 - 已修复 PostgreSQL 单条 SQL 参数上限问题，`upsert_rows` 会按参数数量自动分批写入，避免 `number of parameters must be between 0 and 65535`。
 - 已兼容代理接口的申万行业口径：行业分类使用 `SW2021`，行业成员使用 `SW` 返回的 `l1_code` 映射到一级行业。
+- 申万行业成分已改为按一级行业 `L1` 分批请求 `is_new=Y/N`，同时保存当前和历史成分。
 - 已实现 `stock_state_daily` 状态表和 `strategy_signal` 信号表，新增 Alembic 迁移 `0005_trend_state_signal`。
 - 已实现 RightSideScore V1、TrendScore V1、S0-S6 状态机、OpportunityScore。
 - 已实现 RIGHT_SIDE_NEW、TREND_ENTER、MAIN_UP_ENTER、TREND_DECAY、LEADER_BREAKOUT 信号生成。
@@ -1038,5 +1037,16 @@ V1 验证指标：
 - backfill 遇到旧历史数据 `quality_status=None` 时，会先执行库内质量补校验；PASS/WARNING 才跳过，ERROR 会重新拉取。
 - 新增 `sync-basic` 独立基础信息任务，页面按钮为“同步基础信息”，只同步 `stock_basic`、`sector`、`sector_member`。
 - `backfill` 拆为只拉原始行情，不再同步股票基础信息，也不再触发因子、市场、行业、状态、信号或后验计算。
-- 跨表质量校验增加 ERROR 阈值；`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 严重缺失时，`daily` / `recalculate` 不允许标记成功。`backfill` 只在原始日线覆盖率 ERROR 时失败。
+- 跨表质量校验增加 ERROR 阈值；`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 严重缺失时，`daily` / `recalculate` 不允许标记成功。`backfill` 按 Raw 数据集完整性决定跳过或补拉，不触发计算。
 - 数据日历继续使用 `差` 展示质量 ERROR 日期，便于先修复数据再做策略判断。
+
+### 25.3 数据拉取链路优化（2026-09-02）
+
+- `backfill` 完整性判断从“表里有记录”升级为 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 四个 Raw 数据集覆盖率检查，并在任务元数据写入每个数据集状态。
+- 已增加 `stock_basic` 前置校验，`backfill` 和 `validate-data` 在基础信息缺失或 `L/D` 状态不完整时直接失败，提示先执行 `sync-basic`。
+- `trade_calendar` 返回空、无有效日期或不覆盖请求范围时会失败；`daily` 遇到休市日会标记 `SUCCESS` 并写入 `noop=true`。
+- Provider API 日志改为独立数据库 Session 写入，避免日志写入提前提交业务数据。
+- 历史 `index_daily` 回填改为按指数代码和日期区间批量拉取，减少 Tushare 请求数量。
+- `daily` 不再同步申万行业分类和行业成分；行业基础信息只由 `sync-basic` 独立维护。
+- `backfill` API 去掉 `evaluate_signals` 含义，拉取原始数据和信号评估彻底分离。
+- 当前 Raw 完整性检查尚未扣除停牌股票，expected 股票池按上市/退市日期判断；停牌数据留到 Milestone 9 以后扩展。

@@ -1,85 +1,33 @@
 from datetime import date
-from unittest.mock import Mock
+from types import SimpleNamespace
 
 import app.jobs.backfill_job as backfill_job_module
 from app.jobs.backfill_job import _raw_data_complete
 
 
-def _result(value: object, scalar_method: str = "scalar_one") -> Mock:
-    result = Mock()
-    getattr(result, scalar_method).return_value = value
-    return result
+def _completeness(is_complete: bool):
+    return SimpleNamespace(is_complete=is_complete)
 
 
-def test_raw_data_complete_when_all_raw_tables_have_rows() -> None:
-    db = Mock()
-    db.execute.side_effect = [
-        _result(5000),
-        _result(5000),
-        _result(5000),
-        _result(3),
-        _result("PASS", "scalar_one_or_none"),
-    ]
-
-    assert _raw_data_complete(db, date(2026, 6, 24)) is True
-
-
-def test_raw_data_is_not_complete_when_any_raw_table_is_missing() -> None:
-    db = Mock()
-    db.execute.side_effect = [
-        _result(5000),
-        _result(0),
-        _result(5000),
-        _result(3),
-        _result("PASS", "scalar_one_or_none"),
-    ]
-
-    assert _raw_data_complete(db, date(2026, 6, 24)) is False
-
-
-def test_raw_data_is_not_complete_when_quality_failed() -> None:
-    db = Mock()
-    db.execute.side_effect = [
-        _result(5000),
-        _result(5000),
-        _result(5000),
-        _result(3),
-        _result("ERROR", "scalar_one_or_none"),
-    ]
-
-    assert _raw_data_complete(db, date(2026, 6, 24)) is False
-
-
-def test_raw_data_with_missing_quality_is_validated_before_skip(monkeypatch) -> None:
-    db = Mock()
-    db.execute.side_effect = [
-        _result(5000),
-        _result(5000),
-        _result(5000),
-        _result(3),
-        _result(None, "scalar_one_or_none"),
-    ]
+def test_raw_data_complete_uses_raw_completeness(monkeypatch) -> None:
     calls = []
 
-    class _FakeHistoricalQualityService:
-        def __init__(self, db, strategy):
-            self.db = db
-            self.strategy = strategy
+    def fake_check(db, trade_date, **kwargs):
+        calls.append((db, trade_date, kwargs))
+        return _completeness(True)
 
-        def validate_trade_date(self, trade_date, **kwargs):
-            calls.append((trade_date, kwargs))
-            return Mock(status="PASS")
+    monkeypatch.setattr(backfill_job_module, "check_raw_completeness", fake_check)
 
+    assert _raw_data_complete(object(), date(2026, 6, 24)) is True
+    assert calls[0][1] == date(2026, 6, 24)
+    assert calls[0][2]["persist"] is True
+
+
+def test_raw_data_incomplete_when_any_raw_dataset_fails(monkeypatch) -> None:
     monkeypatch.setattr(
         backfill_job_module,
-        "HistoricalDataQualityService",
-        _FakeHistoricalQualityService,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _completeness(False),
     )
 
-    assert _raw_data_complete(db, date(2026, 6, 24)) is True
-    assert calls == [
-        (
-            date(2026, 6, 24),
-            {"job_id": None, "include_cross_table": False},
-        )
-    ]
+    assert _raw_data_complete(object(), date(2026, 6, 24)) is False

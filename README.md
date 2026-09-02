@@ -7,7 +7,7 @@
 
 当前实现范围：Milestone 0 到 Milestone 8。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、数据可靠性改造、CLI 和测试。
 
-已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。
+已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
 当前网页显示名称为“空间”。
 
@@ -143,7 +143,7 @@ TUSHARE_MIN_INTERVAL_SECONDS=1.5
 - `DATABASE_URL` 控制 Alembic、API、CLI 连接哪个数据库。
 - `TUSHARE_TOKEN` 用来调用 Tushare 代理接口。
 - `TUSHARE_HTTP_URL` 是 Tushare SDK 的代理 API 地址，当前使用 `https://fastapic.stockai888.top`。
-- `TUSHARE_MIN_INTERVAL_SECONDS` 控制每次 Tushare 请求之间的最小间隔，默认 `1.5` 秒。代理频繁断开时可以改成 `2` 或 `3`；确认不限流时可以改成 `0` 关闭节流。
+- `TUSHARE_MIN_INTERVAL_SECONDS` 控制整个后端进程内每次 Tushare 请求之间的最小间隔，默认 `1.5` 秒。代理频繁断开时可以改成 `2` 或 `3`；确认不限流时可以改成 `0` 关闭节流。
 - `.env` 不会进入 Git，不要把密码写进 README 或代码。
 
 本项目使用代理版 Tushare 初始化方式：先执行 `ts.set_token(TUSHARE_TOKEN)`，再执行无参数 `ts.pro_api()`，最后把 SDK 内部请求地址改为 `TUSHARE_HTTP_URL`。这段逻辑集中在 `backend/app/providers/tushare_provider.py`，业务服务不要直接调用 `tushare`。
@@ -443,7 +443,7 @@ python -m app.cli backfill --start 2021-01-01 --end 2026-08-25
 
 什么时候使用：第一次初始化历史数据库时使用。
 
-注意：历史回填会比较慢，也会消耗 Tushare 调用额度。回填同一日期范围时，已经完整并通过质量校验的交易日会跳过，避免重复拉取。回填完成后如需更新总览、行业热度和股票池，再执行 `POST /api/v1/jobs/recalculate` 或下面的补算命令。
+注意：历史回填会比较慢，也会消耗 Tushare 调用额度。回填前必须先完成“同步基础信息”，否则无法建立 Point-in-Time 股票池。回填同一日期范围时，已经完整并通过质量校验的 Raw 数据集会跳过，避免重复拉取。回填完成后如需更新总览、行业热度和股票池，再执行 `POST /api/v1/jobs/recalculate` 或下面的补算命令。
 
 ### 重算因子
 
@@ -624,14 +624,33 @@ data_quality:
     state_vs_factor:
       warning_coverage_rate: 0.98
       error_coverage_rate: 0.90
+raw_quality:
+  adj_factor:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
+  daily_basic:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
+provider:
+  tushare:
+    safe_limits:
+      stock_basic: 5800
+      daily: 5800
+      daily_basic: 5800
 ```
 
 达到 WARNING 时可以继续入库；低于 ERROR 时会记录 `data_quality_daily` 并阻止后续因子、市场、行业、状态和信号计算。
-跨表校验中，`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 不允许标记 SUCCESS。`backfill` 现在只负责原始数据拉取，只在原始日线覆盖率 ERROR 时失败。
+跨表校验中，`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 不允许标记 SUCCESS。`backfill` 现在只负责原始数据拉取，并按 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 四个 Raw 数据集逐项判断完整性；完整数据集会跳过，不完整数据集才重新请求 Tushare。
 
 - `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 启用 NULL upsert 保护。新数据字段为 NULL 时不会清空数据库已有非空值。
 - 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。repair 失败后 dirty range 会恢复为 `OPEN`，并记录 `retry_count`、`last_error`、`last_failed_at`，下一次可以继续重试。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 新增 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，用于追溯这条衍生数据由哪个配置和哪次任务算出。
+- `backfill` 和 `validate-data` 启动前会检查 `stock_basic` 是否同时具备 `L` 和 `D` 状态；缺失时会失败并提示 `stock_basic is missing or incomplete, run sync-basic first`。
+- 申万行业成分同步按一级行业 `L1` 分批请求 `is_new=Y/N`，同时保存当前和历史成分，不再只按股票代码去重。
+- `index_daily` 历史回填会优先按指数代码和日期区间批量拉取，避免逐交易日重复请求指数。
+- Provider API 调用日志使用独立数据库 Session 写入，不会提前提交业务数据；业务入库成功和失败仍由同步服务自己的事务控制。
+- 交易日历为空或返回范围不覆盖请求日期时会失败；`daily` 如果目标日期是休市日，会以 `SUCCESS` + `noop=true` 结束，不继续拉行情和计算。
+- 当前 Raw 完整性检查尚未扣除停牌股票，expected 股票池仍按上市/退市日期判断；停牌维度留到 Milestone 9 以后增加。
 
 Dirty repair API 请求示例：
 
@@ -750,11 +769,11 @@ npm run build
 
 - 任务列表默认显示最近 30 条，列表内部滚动；错误信息会单独占整行展示，鼠标悬停可以看完整错误。
 - 失败任务的错误信息会占用独立的第二行并撑开当前任务行，不会覆盖下一条任务。
-- `30 拉取交易日数据` 阶段会显示当前正在拉取的交易日。
-- backfill 失败后可以重跑同一日期范围；系统会跳过日线、每日指标、复权因子、指数日线都已存在且质量不是 ERROR 的交易日，避免重复请求 Tushare。
+- `30/40/50/60` Raw 拉取阶段会显示当前交易日和当前数据集。
+- backfill 失败后可以重跑同一日期范围；系统会按 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 分数据集判断完整性，已完整的数据集会跳过，未完整的数据集才重新请求 Tushare。
 - 旧历史数据如果 `quality_status=None`，backfill 不会直接当作已验证；系统会先用库内已有数据补做一次质量校验，PASS/WARNING 才跳过，ERROR 会重新拉取。
 - `90 计算个股因子` 阶段按自然月分块显示，行数会在当前分块完成写库后更新。
-- `100/110/120` 分别表示计算市场温度、行业热度、趋势状态与策略信号；这些批量计算阶段可能在完成后才更新处理行数。
+- `recalculate` 的 `100/110/120` 分别表示计算市场温度、行业热度、趋势状态与策略信号；这些批量计算阶段可能在完成后才更新处理行数。`daily` 不再同步行业元数据和行业成分，行业基础信息由 `sync-basic` 独立维护。
 - `stock_basic required statuses missing` 会同时展示 Tushare 对应状态的原始错误，例如限频、代理 SSL 或接口返回异常，便于判断真实失败原因。
 - 如果后端正在执行旧进程中的任务，修改后的后端进度展示规则要等该任务结束并重启后端后，才会作用于新任务。
 

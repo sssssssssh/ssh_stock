@@ -46,7 +46,6 @@ class DailyJobRequest(BaseModel):
 class BackfillJobRequest(BaseModel):
     start: date
     end: date
-    evaluate_signals: bool = Field(default=False)
 
 
 class RecalculateJobRequest(BaseModel):
@@ -154,7 +153,6 @@ def enqueue_backfill_job(
             "source": "api",
             "start": payload.start.isoformat(),
             "end": payload.end.isoformat(),
-            "evaluate_signals": payload.evaluate_signals,
             "calculate": False,
         },
     )
@@ -163,7 +161,6 @@ def enqueue_backfill_job(
         job.id,
         payload.start,
         payload.end,
-        payload.evaluate_signals,
     )
     return envelope(_job_payload(job), {"accepted": True})
 
@@ -290,7 +287,6 @@ def _run_backfill_job(
     job_id: uuid.UUID,
     start: date,
     end: date,
-    _evaluate_signals: bool,
 ) -> None:
     with SessionLocal() as db:
         job = db.get(JobRun, job_id)

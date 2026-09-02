@@ -1,7 +1,6 @@
 from collections.abc import Callable
 from datetime import date
-from threading import Lock
-from time import perf_counter, sleep
+from time import perf_counter
 from typing import Any
 
 import pandas as pd
@@ -10,6 +9,7 @@ from requests.exceptions import RequestException
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
 
 from app.core.config import get_settings
+from app.providers.rate_limiter import wait_for_rate_limit
 
 
 def to_tushare_date(value: date) -> str:
@@ -43,8 +43,9 @@ class TushareProvider:
             else min_interval_seconds
         )
         self._min_interval_seconds = max(0.0, float(configured_interval))
-        self._rate_limit_lock = Lock()
-        self._last_call_started_at = 0.0
+        self._safe_limits = settings.strategy.get("provider", {}).get("tushare", {}).get(
+            "safe_limits", {}
+        )
 
         import tushare as ts
 
@@ -54,21 +55,7 @@ class TushareProvider:
             self._pro._DataApi__http_url = self._http_url
 
     def _wait_for_rate_limit(self, api_name: str) -> None:
-        if self._min_interval_seconds <= 0:
-            return
-
-        with self._rate_limit_lock:
-            now = perf_counter()
-            wait_seconds = self._min_interval_seconds - (now - self._last_call_started_at)
-            if wait_seconds > 0:
-                logger.debug(
-                    "provider rate limit sleep provider={} api={} seconds={:.2f}",
-                    self.provider_name,
-                    api_name,
-                    wait_seconds,
-                )
-                sleep(wait_seconds)
-            self._last_call_started_at = perf_counter()
+        wait_for_rate_limit(self.provider_name, api_name, self._min_interval_seconds)
 
     @retry(
         retry=retry_if_exception_type((TimeoutError, ConnectionError, RequestException)),
@@ -101,7 +88,30 @@ class TushareProvider:
             len(df.index) if df is not None else 0,
             elapsed_ms,
         )
-        return df if df is not None else pd.DataFrame()
+        result = df if df is not None else pd.DataFrame()
+        self._mark_possible_truncation(api_name, result)
+        return result
+
+    def _mark_possible_truncation(self, api_name: str, df: pd.DataFrame) -> None:
+        if df.empty or not isinstance(self._safe_limits, dict):
+            return
+        safe_limit = self._safe_limits.get(api_name)
+        if safe_limit is None:
+            return
+        row_count = len(df.index)
+        if row_count < int(safe_limit):
+            return
+        df.attrs["provider_warning"] = "POSSIBLE_TRUNCATION"
+        df.attrs["provider_warning_message"] = (
+            f"{api_name} returned {row_count} rows, safe_limit={safe_limit}"
+        )
+        logger.warning(
+            "provider possible truncation provider={} api={} rows={} safe_limit={}",
+            self.provider_name,
+            api_name,
+            row_count,
+            safe_limit,
+        )
 
     def get_trade_calendar(self, start: date, end: date) -> pd.DataFrame:
         return self._call(
@@ -176,8 +186,89 @@ class TushareProvider:
         ]
         return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
+    def get_index_daily_range(self, ts_code: str, start: date, end: date) -> pd.DataFrame:
+        return self._call(
+            "index_daily",
+            ts_code=ts_code,
+            start_date=to_tushare_date(start),
+            end_date=to_tushare_date(end),
+        )
+
     def get_sector_classification(self) -> pd.DataFrame:
         return self._call("index_classify", src="SW2021")
 
     def get_sector_members(self) -> pd.DataFrame:
-        return self._call("index_member_all", src="SW")
+        classification = self.get_sector_classification()
+        l1_codes = _sector_l1_codes(classification)
+        if not l1_codes:
+            raise RuntimeError("sector_member batch fetch failed: no L1 sector codes")
+
+        frames: list[pd.DataFrame] = []
+        errors: list[str] = []
+        for l1_code in l1_codes:
+            for is_new in ("Y", "N"):
+                try:
+                    df = self._call(
+                        "index_member_all",
+                        src="SW",
+                        l1_code=l1_code,
+                        is_new=is_new,
+                    )
+                except Exception as exc:
+                    errors.append(f"{l1_code}/{is_new}: {_compact_error(exc)}")
+                    continue
+                if not df.empty:
+                    if "l1_code" not in df.columns:
+                        df = df.copy()
+                        df["l1_code"] = l1_code
+                    frames.append(df)
+        if errors:
+            raise RuntimeError(
+                "sector_member batch fetch failed: " + "; ".join(errors[:20])
+            )
+        if not frames:
+            return pd.DataFrame()
+        return _deduplicate_sector_members(pd.concat(frames, ignore_index=True))
+
+
+def _sector_l1_codes(classification: pd.DataFrame) -> list[str]:
+    if classification.empty:
+        return []
+    code_column = next(
+        (
+            column
+            for column in ["index_code", "industry_code", "ts_code"]
+            if column in classification.columns
+        ),
+        None,
+    )
+    if code_column is None:
+        return []
+    if "level" in classification.columns:
+        rows = classification[classification["level"].astype(str).str.upper().eq("L1")]
+    elif "industry_level" in classification.columns:
+        rows = classification[
+            classification["industry_level"].astype(str).str.upper().isin({"L1", "一级行业"})
+        ]
+    else:
+        rows = classification
+    return sorted({str(code) for code in rows[code_column].dropna().tolist() if str(code)})
+
+
+def _deduplicate_sector_members(df: pd.DataFrame) -> pd.DataFrame:
+    keys = [
+        column
+        for column in [
+            "l1_code",
+            "index_code",
+            "industry_code",
+            "con_code",
+            "ts_code",
+            "in_date",
+            "out_date",
+        ]
+        if column in df.columns
+    ]
+    if not keys:
+        return df.drop_duplicates()
+    return df.drop_duplicates(subset=keys)

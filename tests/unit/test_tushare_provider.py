@@ -40,25 +40,55 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
 
 
 def test_tushare_provider_waits_between_calls(monkeypatch) -> None:
-    fake_pro = SimpleNamespace(_DataApi__http_url=None)
-    fake_pro.trade_cal = lambda **_: pd.DataFrame([{"cal_date": "20260825"}])
-    fake_ts = ModuleType("tushare")
-    fake_ts.set_token = lambda token: None
-    fake_ts.pro_api = lambda: fake_pro
-    monkeypatch.setitem(__import__("sys").modules, "tushare", fake_ts)
+    calls = []
+    provider = object.__new__(TushareProvider)
+    provider._min_interval_seconds = 1.5
+    monkeypatch.setattr(
+        tushare_provider_module,
+        "wait_for_rate_limit",
+        lambda *args: calls.append(args),
+    )
 
-    sleeps = []
-    ticks = iter([10.5, 12.0, 12.0, 12.2])
-    monkeypatch.setattr(tushare_provider_module, "perf_counter", lambda: next(ticks))
-    monkeypatch.setattr(tushare_provider_module, "sleep", lambda seconds: sleeps.append(seconds))
+    provider._wait_for_rate_limit("daily")
 
-    provider = TushareProvider(token="test-token", min_interval_seconds=1.5)
-    provider._last_call_started_at = 10.0
+    assert calls == [("tushare", "daily", 1.5)]
 
-    df = provider.get_trade_calendar(date(2026, 8, 25), date(2026, 8, 25))
 
+def test_tushare_provider_marks_possible_truncation() -> None:
+    provider = object.__new__(TushareProvider)
+    provider._safe_limits = {"daily": 2}
+    provider.provider_name = "tushare"
+    df = pd.DataFrame([{"ts_code": "000001.SZ"}, {"ts_code": "000002.SZ"}])
+
+    provider._mark_possible_truncation("daily", df)
+
+    assert df.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
+    assert "safe_limit=2" in df.attrs["provider_warning_message"]
+
+
+def test_tushare_provider_fetches_index_daily_range(monkeypatch) -> None:
+    provider = object.__new__(TushareProvider)
+    calls = []
+
+    def fake_call(api_name, **kwargs):
+        calls.append((api_name, kwargs))
+        return pd.DataFrame([{"ts_code": kwargs["ts_code"]}])
+
+    monkeypatch.setattr(provider, "_call", fake_call)
+
+    df = provider.get_index_daily_range("000300.SH", date(2026, 8, 1), date(2026, 8, 31))
+
+    assert calls == [
+        (
+            "index_daily",
+            {
+                "ts_code": "000300.SH",
+                "start_date": "20260801",
+                "end_date": "20260831",
+            },
+        )
+    ]
     assert len(df.index) == 1
-    assert sleeps == [1.0]
 
 
 def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:

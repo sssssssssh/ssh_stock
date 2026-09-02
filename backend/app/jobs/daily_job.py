@@ -11,6 +11,7 @@ from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.market import MarketService
 from app.services.quality.daily_quality import DataQualityError, record_cross_table_quality
+from app.services.quality.raw_completeness import trade_calendar_open_status
 from app.services.sector import SectorService
 from app.services.trend import TrendService
 
@@ -22,7 +23,7 @@ class DailyJob:
 
     def run(self, trade_date: date, job: JobRun | None = None) -> None:
         job = job or start_job(self.db, "daily", trade_date)
-        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 12}
+        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 10}
         update_job(
             self.db,
             job,
@@ -36,6 +37,20 @@ class DailyJob:
             total_rows += self.ingestion.sync_trade_calendar(
                 trade_date - timedelta(days=10), trade_date
             )
+            is_open = trade_calendar_open_status(self.db, trade_date)
+            if is_open is False:
+                update_job(
+                    self.db,
+                    job,
+                    status="SUCCESS",
+                    step="180 no trading day",
+                    row_count=total_rows,
+                    metadata={**metadata, "stage_index": 1, "progress_pct": 100, "noop": True},
+                )
+                logger.info("daily job noop closed trade_date={} rows={}", trade_date, total_rows)
+                return
+            if is_open is None:
+                raise ValueError(f"trade_calendar missing target date: {trade_date}")
 
             update_job(
                 self.db,
@@ -85,54 +100,36 @@ class DailyJob:
             update_job(
                 self.db,
                 job,
-                step="70 sync sector metadata",
+                step="70 calculate stock factors",
                 row_count=total_rows,
                 metadata=_progress(metadata, 7),
-            )
-            total_rows += self.ingestion.sync_sector_metadata()
-
-            update_job(
-                self.db,
-                job,
-                step="80 sync sector members",
-                row_count=total_rows,
-                metadata=_progress(metadata, 8),
-            )
-            total_rows += self.ingestion.sync_sector_members()
-
-            update_job(
-                self.db,
-                job,
-                step="90 calculate stock factors",
-                row_count=total_rows,
-                metadata=_progress(metadata, 9),
             )
             total_rows += FactorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="100 calculate market score",
+                step="80 calculate market score",
                 row_count=total_rows,
-                metadata=_progress(metadata, 10),
+                metadata=_progress(metadata, 8),
             )
             total_rows += MarketService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="110 calculate sector heat",
+                step="90 calculate sector heat",
                 row_count=total_rows,
-                metadata=_progress(metadata, 11),
+                metadata=_progress(metadata, 9),
             )
             total_rows += SectorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="120 calculate trend states",
+                step="100 calculate trend states",
                 row_count=total_rows,
-                metadata=_progress(metadata, 12),
+                metadata=_progress(metadata, 10),
             )
             trend_rows = TrendService(self.db).recalc(trade_date, trade_date)
             total_rows += trend_rows["states"] + trend_rows["signals"]
@@ -154,7 +151,7 @@ class DailyJob:
                 status="SUCCESS",
                 step="180 mark SUCCESS",
                 row_count=total_rows,
-                metadata={**metadata, "stage_index": 12, "progress_pct": 100},
+                metadata={**metadata, "stage_index": 10, "progress_pct": 100},
             )
             logger.info("daily job success trade_date={} rows={}", trade_date, total_rows)
         except Exception as exc:
