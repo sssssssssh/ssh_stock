@@ -85,6 +85,13 @@
 - 前端任务面板必须根据 `job_run.started_at/finished_at` 展示耗时；运行中任务显示实时已耗时，完成/失败任务显示总耗时。
 - 前端任务列表必须展示 `error_message`，不能只显示“失败”。
 - 前端任务列表默认请求最近 30 条任务，列表内部滚动展示；步骤、日期范围、耗时和错误信息必须提供完整 `title`，方便鼠标悬停查看完整文本。
+- 前端任务列表的错误信息必须跨整行展示，并占用独立网格行撑开当前任务行，不能挤在步骤/日期列下面，也不能覆盖下一条任务。
+- 前端必须把 `job_run.step` 的英文内部步骤映射成中文可读步骤，同时在 `title` 中保留原始步骤便于排查。
+- backfill 在拉取日线后的因子阶段必须按自然月分块更新进度，写入 `factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start`、`factor_chunk_end`；进入市场、行业、趋势和信号阶段前必须清理上一交易日拉取阶段的 `current_trade_date`，避免前端展示过期日期。
+- `row_count` 在长时间批量计算阶段可能只在阶段或分块完成后更新，前端必须给出“当前计算阶段完成后更新行数”的提示。
+- backfill 重跑同一日期范围时必须跳过原始数据已完整的交易日；完整条件为 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 当日都有记录，且 `data_quality_daily(stock_daily)` 不是 `ERROR`。
+- backfill 跳过完整交易日时必须更新任务步骤为 `30 skip existing raw {date}`，并在 `job_metadata.skipped_raw_days` 记录累计跳过数量。
+- `TushareProvider.get_stock_basic()` 如果核心状态 `L/D` 缺失，最终异常必须包含缺失状态和对应 Tushare 原始错误；不得只返回 `required statuses missing` 这类聚合错误。
 - Tushare 代理请求的 `requests` 网络异常必须自动重试；重试耗尽后再写入 FAILED。
 - 本地开发时如果后端端口从 8000 改为 9034，必须同步修改 `frontend/.env` 的 `VITE_API_PROXY_TARGET`，否则前端会继续请求旧端口。
 

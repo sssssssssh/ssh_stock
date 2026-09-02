@@ -692,6 +692,7 @@ function progressPct(job: JobRun | undefined) {
 function metadataText(job: JobRun) {
   const start = typeof job.metadata.start === "string" ? job.metadata.start : null;
   const end = typeof job.metadata.end === "string" ? job.metadata.end : null;
+  const stage = typeof job.metadata.stage === "string" ? job.metadata.stage : null;
   const current =
     typeof job.metadata.current_trade_date === "string" ? job.metadata.current_trade_date : null;
   const completed =
@@ -709,27 +710,77 @@ function metadataText(job: JobRun) {
     typeof job.metadata.factor_chunk_start === "string" ? job.metadata.factor_chunk_start : null;
   const factorChunkEnd =
     typeof job.metadata.factor_chunk_end === "string" ? job.metadata.factor_chunk_end : null;
+  const skippedRawDays =
+    typeof job.metadata.skipped_raw_days === "number" ? job.metadata.skipped_raw_days : 0;
+  const isDailyStage = stage === "daily" || Boolean(job.step?.startsWith("30 sync daily"));
   const datePart = start && end ? `${start} 到 ${end}` : job.target_trade_date || "--";
+  const stagePart = stage && stage !== "daily" ? ` / ${jobStageText(job)}` : "";
   const chunkPart = factorChunkIndex !== null && factorChunkCount !== null
     ? ` / 因子分块 ${factorChunkIndex}/${factorChunkCount}`
     : "";
   const chunkDatePart = factorChunkStart && factorChunkEnd
     ? `：${factorChunkStart} 到 ${factorChunkEnd}`
     : "";
-  const progressPart = currentIndex !== null && total !== null
+  const progressPart = isDailyStage && currentIndex !== null && total !== null
     ? ` / 第 ${currentIndex}/${total} 个交易日`
-    : completed !== null && total !== null
+    : isDailyStage && completed !== null && total !== null
       ? ` / 已完成 ${completed}/${total} 个交易日`
       : "";
-  const currentPart = current ? ` / 当前 ${current}` : "";
-  return `${datePart}${chunkPart}${chunkDatePart}${progressPart}${currentPart}`;
+  const skippedPart = isDailyStage && skippedRawDays > 0
+    ? ` / 已跳过 ${skippedRawDays} 个已完整交易日`
+    : "";
+  const totalPart = !isDailyStage && total !== null ? ` / 覆盖 ${total} 个交易日` : "";
+  const currentPart = isDailyStage && current ? ` / 当前 ${current}` : "";
+  return `${datePart}${stagePart}${chunkPart}${chunkDatePart}${progressPart}${skippedPart}${totalPart}${currentPart}`;
+}
+
+function jobStageText(job: JobRun) {
+  const stage = typeof job.metadata.stage === "string" ? job.metadata.stage : "";
+  const map: Record<string, string> = {
+    starting: "准备任务",
+    calendar: "同步交易日历",
+    metadata: "同步基础资料",
+    daily: "拉取交易日数据",
+    factors: "计算个股因子",
+    market: "计算市场温度",
+    sectors: "计算行业热度",
+    states: "计算趋势状态与策略信号",
+    signal_eval: "评估信号后验",
+    success: "任务完成"
+  };
+  return map[stage] || jobStepText(job);
+}
+
+function jobStepText(job: JobRun) {
+  const step = job.step || "--";
+  if (step.startsWith("00 start backfill")) return "00 准备拉取任务";
+  if (step.startsWith("10 sync trade_calendar")) return "10 同步交易日历";
+  if (step.startsWith("20 sync stock_basic")) return "20 同步股票基础信息";
+  if (step.startsWith("25 sync sector metadata")) return "25 同步行业分类";
+  if (step.startsWith("26 sync sector members")) return "26 同步行业成分";
+  if (step.startsWith("30 skip existing raw")) {
+    return `30 跳过已完整交易日 ${step.replace("30 skip existing raw", "").trim()}`;
+  }
+  if (step.startsWith("30 sync daily")) return `30 拉取交易日数据 ${step.replace("30 sync daily", "").trim()}`;
+  if (step.startsWith("90 factors done")) return "90 个股因子分块完成";
+  if (step.startsWith("90 factors")) return "90 计算个股因子分块";
+  if (step.startsWith("90 calculate stock factors")) return "90 计算个股因子";
+  if (step.startsWith("100 calculate market score")) return "100 计算市场温度";
+  if (step.startsWith("110 calculate sector heat")) return "110 计算行业热度";
+  if (step.startsWith("120 calculate trend states")) return "120 计算趋势状态与策略信号";
+  if (step.startsWith("180 mark SUCCESS")) return "180 拉取任务完成";
+  if (step.startsWith("190 evaluate signals")) return "190 评估信号后验";
+  if (step.startsWith("200 signal eval complete")) return "200 信号后验完成";
+  if (step.startsWith("200 recalculation complete")) return "200 重算完成";
+  return step;
 }
 
 function jobTooltip(job: JobRun) {
   const parts = [
     `类型：${job.job_type}`,
     `状态：${statusLabel(job.status)}`,
-    `步骤：${job.step || "--"}`,
+    `步骤：${jobStepText(job)}`,
+    `原始步骤：${job.step || "--"}`,
     `范围：${metadataText(job)}`,
     `耗时：${formatJobElapsed(job)}`
   ];
@@ -740,11 +791,17 @@ function jobTooltip(job: JobRun) {
 }
 
 function rowCountHint(job: JobRun) {
-  const isFactorRecalculate =
-    job.job_type === "recalculate" &&
-    typeof job.metadata.factor_chunk_index === "number" &&
-    job.step?.startsWith("90 factors ");
-  return isFactorRecalculate ? "当前因子分块完成后更新行数" : "";
+  const stage = typeof job.metadata.stage === "string" ? job.metadata.stage : "";
+  if (stage === "factors" && typeof job.metadata.factor_chunk_index === "number") {
+    return "当前因子分块完成后更新行数";
+  }
+  if (stage === "daily" && job.metadata.current_day_action === "skip") {
+    return "该交易日原始数据已完整，已跳过重复拉取";
+  }
+  if (["factors", "market", "sectors", "states", "signal_eval"].includes(stage)) {
+    return "当前计算阶段完成后更新行数";
+  }
+  return "";
 }
 
 function clampCoveragePage() {
@@ -973,7 +1030,7 @@ function statusLabel(status: string) {
                 </div>
                 <div class="job-progress-meta">
                   <span>{{ formatNumber(progressPct(activeJob), 1) }}%</span>
-                  <span>{{ activeJob.step || "--" }}</span>
+                  <span :title="activeJob.step || '--'">{{ jobStepText(activeJob) }}</span>
                 </div>
                 <p>{{ metadataText(activeJob) }}</p>
                 <div class="job-time-row">
@@ -997,7 +1054,13 @@ function statusLabel(status: string) {
                 <span>最近任务</span>
                 <strong>{{ latestJobs.length }} 条</strong>
               </div>
-              <div v-for="job in latestJobs" :key="job.id" class="job-row" :title="jobTooltip(job)">
+              <div
+                v-for="job in latestJobs"
+                :key="job.id"
+                class="job-row"
+                :class="{ 'has-error': Boolean(job.error_message) }"
+                :title="jobTooltip(job)"
+              >
                 <span class="job-type" :title="job.job_type">{{ job.job_type }}</span>
                 <span
                   class="job-status"
@@ -1006,7 +1069,7 @@ function statusLabel(status: string) {
                 >
                   {{ statusLabel(job.status) }}
                 </span>
-                <span class="job-step" :title="job.step || '--'">{{ job.step || "--" }}</span>
+                <span class="job-step" :title="job.step || '--'">{{ jobStepText(job) }}</span>
                 <span class="job-date" :title="metadataText(job)">{{ metadataText(job) }}</span>
                 <span class="job-duration" :title="formatJobElapsed(job)">
                   {{ formatJobElapsed(job) }}

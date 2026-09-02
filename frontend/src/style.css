@@ -598,8 +598,7 @@ button {
 }
 
 .job-current-head,
-.job-progress-meta,
-.job-row {
+.job-progress-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -709,26 +708,38 @@ button {
 }
 
 .job-row {
-  min-height: 30px;
   display: grid;
   grid-template-columns: 76px 68px minmax(120px, 1fr) minmax(190px, 1.4fr) 84px;
-  gap: 10px;
+  grid-template-areas: "type status step date duration";
+  column-gap: 10px;
+  row-gap: 0;
+  align-items: start;
   border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 7px;
+  padding: 7px 0;
   font-size: 12px;
+}
+
+.job-row.has-error {
+  grid-template-areas:
+    "type status step date duration"
+    "error error error error error";
+  row-gap: 6px;
 }
 
 .job-row:last-child {
   border-bottom: 0;
-  padding-bottom: 0;
 }
 
 .job-type {
+  grid-area: type;
+  align-self: center;
   color: #334155;
   font-weight: 650;
 }
 
 .job-status {
+  grid-area: status;
+  align-self: center;
   justify-self: start;
   border-radius: 999px;
   padding: 3px 8px;
@@ -767,16 +778,34 @@ button {
 }
 
 .job-step {
+  grid-area: step;
+  align-self: center;
   color: #334155;
 }
 
+.job-date {
+  grid-area: date;
+  align-self: center;
+}
+
 .job-duration {
+  grid-area: duration;
+  align-self: center;
   justify-self: end;
 }
 
 .job-error-line {
-  grid-column: 3 / -1;
+  grid-area: error;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-left: 2px solid #fca5a5;
+  border-radius: 6px;
+  background: #fff1f2;
+  padding: 4px 8px;
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .compact-empty {
@@ -1553,6 +1582,20 @@ td:nth-child(6) {
 
   .job-row {
     grid-template-columns: 64px 62px minmax(130px, 1fr);
+    grid-template-areas:
+      "type status duration"
+      "step step step"
+      "date date date";
+    row-gap: 5px;
+  }
+
+  .job-row.has-error {
+    grid-template-areas:
+      "type status duration"
+      "step step step"
+      "date date date"
+      "error error error";
+    row-gap: 6px;
   }
 
   .job-date,

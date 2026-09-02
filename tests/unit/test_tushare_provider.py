@@ -3,7 +3,8 @@ from types import ModuleType, SimpleNamespace
 
 import app.providers.tushare_provider as tushare_provider_module
 import pandas as pd
-from app.providers.tushare_provider import TushareProvider, to_tushare_date
+import pytest
+from app.providers.tushare_provider import TushareProvider, _compact_error, to_tushare_date
 
 
 def test_to_tushare_date() -> None:
@@ -87,3 +88,34 @@ def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:
 
     assert requested_statuses == ["L", "D", "P"]
     assert set(df["list_status"]) == {"L", "D", "P"}
+
+
+def test_stock_basic_required_status_error_includes_source_error(monkeypatch) -> None:
+    fake_pro = SimpleNamespace(_DataApi__http_url=None)
+
+    def stock_basic(**kwargs):
+        status = kwargs["list_status"]
+        if status == "L":
+            raise RuntimeError("tushare frequency limit exceeded")
+        return pd.DataFrame([{"ts_code": f"00000{status}.SZ", "list_status": status}])
+
+    fake_pro.stock_basic = stock_basic
+    fake_ts = ModuleType("tushare")
+    fake_ts.set_token = lambda token: None
+    fake_ts.pro_api = lambda: fake_pro
+    monkeypatch.setitem(__import__("sys").modules, "tushare", fake_ts)
+
+    provider = TushareProvider(token="test-token", min_interval_seconds=0)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.get_stock_basic()
+
+    message = str(exc_info.value)
+    assert "stock_basic required statuses missing: ['L']" in message
+    assert "stock_basic source errors: L: tushare frequency limit exceeded" in message
+
+
+def test_compact_error_limits_long_source_error() -> None:
+    message = _compact_error(RuntimeError("x" * 1000), max_length=12)
+
+    assert message == "x" * 12 + "..."

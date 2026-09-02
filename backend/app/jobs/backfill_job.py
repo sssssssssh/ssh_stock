@@ -1,10 +1,18 @@
-from datetime import date
+from datetime import date, timedelta
 
 from loguru import logger
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.job import JobRun
-from app.models.market_data import TradeCalendar
+from app.models.market_data import (
+    DataQualityDaily,
+    IndexDaily,
+    StockAdjFactor,
+    StockDaily,
+    StockDailyBasic,
+    TradeCalendar,
+)
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
@@ -85,33 +93,76 @@ class BackfillJob:
             )
             total_rows += self.ingestion.sync_sector_members()
 
+            skipped_raw_days = 0
             for index, current in enumerate(open_dates, 1):
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
+                if _raw_data_complete(self.db, current):
+                    skipped_raw_days += 1
+                    update_job(
+                        self.db,
+                        job,
+                        step=f"30 skip existing raw {current}",
+                        row_count=total_rows,
+                        metadata={
+                            **metadata,
+                            "current_day_action": "skip",
+                            "skipped_raw_days": skipped_raw_days,
+                        },
+                    )
+                    continue
                 update_job(
                     self.db,
                     job,
                     step=f"30 sync daily {current}",
                     row_count=total_rows,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "current_day_action": "sync",
+                        "skipped_raw_days": skipped_raw_days,
+                    },
                 )
                 total_rows += self.ingestion.sync_daily(current, job_id=job.id)
                 total_rows += self.ingestion.sync_adj_factor(current, job_id=job.id)
                 total_rows += self.ingestion.sync_daily_basic(current, job_id=job.id)
                 total_rows += self.ingestion.sync_index_daily(current, job_id=job.id)
-            metadata = {
+            metadata = _clear_daily_progress({
                 **metadata,
                 "completed_open_days": len(open_dates),
                 "current_open_day_index": len(open_dates),
-            }
+            })
 
-            update_job(
-                self.db,
-                job,
-                step="90 calculate stock factors",
-                row_count=total_rows,
-                metadata={**metadata, "stage": "factors", "progress_pct": 75},
-            )
-            total_rows += FactorService(self.db).recalc(start, end, calc_run_id=job.id)
+            factor_chunks = _month_chunks(start, end)
+            factor_service = FactorService(self.db)
+            for chunk_index, (chunk_start, chunk_end) in enumerate(factor_chunks, 1):
+                start_progress = round(75 + ((chunk_index - 1) / len(factor_chunks)) * 8, 1)
+                chunk_metadata = {
+                    **metadata,
+                    "stage": "factors",
+                    "progress_pct": start_progress,
+                    "factor_chunk_index": chunk_index,
+                    "factor_chunk_count": len(factor_chunks),
+                    "factor_chunk_start": chunk_start.isoformat(),
+                    "factor_chunk_end": chunk_end.isoformat(),
+                }
+                update_job(
+                    self.db,
+                    job,
+                    step=f"90 factors {chunk_start}..{chunk_end}",
+                    row_count=total_rows,
+                    metadata=chunk_metadata,
+                )
+                total_rows += factor_service.recalc(chunk_start, chunk_end, calc_run_id=job.id)
+                metadata = {
+                    **chunk_metadata,
+                    "progress_pct": round(75 + (chunk_index / len(factor_chunks)) * 8, 1),
+                }
+                update_job(
+                    self.db,
+                    job,
+                    step=f"90 factors done {chunk_end}",
+                    row_count=total_rows,
+                    metadata=metadata,
+                )
 
             update_job(
                 self.db,
@@ -180,3 +231,55 @@ def _daily_progress(
         "open_days": open_days,
         "progress_pct": round(16 + daily_pct * 59, 1),
     }
+
+
+def _clear_daily_progress(metadata: dict[str, object]) -> dict[str, object]:
+    cleaned = dict(metadata)
+    cleaned.pop("current_trade_date", None)
+    cleaned.pop("current_open_day_index", None)
+    cleaned.pop("completed_open_days", None)
+    cleaned.pop("current_day_action", None)
+    return cleaned
+
+
+def _raw_data_complete(db: Session, trade_date: date) -> bool:
+    table_counts = [
+        _date_row_count(db, StockDaily.trade_date, trade_date),
+        _date_row_count(db, StockAdjFactor.trade_date, trade_date),
+        _date_row_count(db, StockDailyBasic.trade_date, trade_date),
+        _date_row_count(db, IndexDaily.trade_date, trade_date),
+    ]
+    if any(count <= 0 for count in table_counts):
+        return False
+
+    quality_status = db.execute(
+        select(DataQualityDaily.status)
+        .where(DataQualityDaily.trade_date == trade_date)
+        .where(DataQualityDaily.dataset == "stock_daily")
+        .order_by(DataQualityDaily.checked_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    return quality_status != "ERROR"
+
+
+def _date_row_count(db: Session, column: object, trade_date: date) -> int:
+    table = column.class_
+    return int(
+        db.execute(
+            select(func.count()).select_from(table).where(column == trade_date)
+        ).scalar_one()
+    )
+
+
+def _month_chunks(start: date, end: date) -> list[tuple[date, date]]:
+    chunks: list[tuple[date, date]] = []
+    current = start
+    while current <= end:
+        if current.month == 12:
+            next_month = date(current.year + 1, 1, 1)
+        else:
+            next_month = date(current.year, current.month + 1, 1)
+        chunk_end = min(end, next_month - timedelta(days=1))
+        chunks.append((current, chunk_end))
+        current = chunk_end + timedelta(days=1)
+    return chunks

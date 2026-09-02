@@ -16,6 +16,13 @@ def to_tushare_date(value: date) -> str:
     return value.strftime("%Y%m%d")
 
 
+def _compact_error(exc: Exception, max_length: int = 800) -> str:
+    message = " ".join(str(exc).split())
+    if len(message) <= max_length:
+        return message
+    return f"{message[:max_length]}..."
+
+
 class TushareProvider:
     provider_name = "tushare"
 
@@ -107,6 +114,7 @@ class TushareProvider:
     def get_stock_basic(self) -> pd.DataFrame:
         frames: list[pd.DataFrame] = []
         fetched_statuses: set[str] = set()
+        source_errors: dict[str, str] = {}
         fields = (
             "ts_code,symbol,name,area,industry,market,exchange,list_status,"
             "list_date,delist_date,is_hs"
@@ -115,6 +123,7 @@ class TushareProvider:
             try:
                 df = self._call("stock_basic", list_status=status, fields=fields)
             except Exception as exc:
+                source_errors[status] = _compact_error(exc)
                 logger.warning("stock_basic status={} failed: {}", status, exc)
                 continue
             if not df.empty:
@@ -122,8 +131,13 @@ class TushareProvider:
                 fetched_statuses.add(status)
         missing_required = {"L", "D"} - fetched_statuses
         if missing_required:
+            details = "; ".join(
+                f"{status}: {source_errors.get(status, 'empty response')}"
+                for status in sorted(missing_required)
+            )
             raise RuntimeError(
-                f"stock_basic required statuses missing: {sorted(missing_required)}"
+                f"stock_basic required statuses missing: {sorted(missing_required)}; "
+                f"stock_basic source errors: {details}"
             )
         return pd.concat(frames, ignore_index=True).drop_duplicates(subset=["ts_code"])
 
