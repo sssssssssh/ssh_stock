@@ -1,6 +1,7 @@
 from datetime import date
 from unittest.mock import Mock
 
+import app.jobs.backfill_job as backfill_job_module
 from app.jobs.backfill_job import _raw_data_complete
 
 
@@ -47,3 +48,38 @@ def test_raw_data_is_not_complete_when_quality_failed() -> None:
     ]
 
     assert _raw_data_complete(db, date(2026, 6, 24)) is False
+
+
+def test_raw_data_with_missing_quality_is_validated_before_skip(monkeypatch) -> None:
+    db = Mock()
+    db.execute.side_effect = [
+        _result(5000),
+        _result(5000),
+        _result(5000),
+        _result(3),
+        _result(None, "scalar_one_or_none"),
+    ]
+    calls = []
+
+    class _FakeHistoricalQualityService:
+        def __init__(self, db, strategy):
+            self.db = db
+            self.strategy = strategy
+
+        def validate_trade_date(self, trade_date, **kwargs):
+            calls.append((trade_date, kwargs))
+            return Mock(status="PASS")
+
+    monkeypatch.setattr(
+        backfill_job_module,
+        "HistoricalDataQualityService",
+        _FakeHistoricalQualityService,
+    )
+
+    assert _raw_data_complete(db, date(2026, 6, 24)) is True
+    assert calls == [
+        (
+            date(2026, 6, 24),
+            {"job_id": None, "include_cross_table": False},
+        )
+    ]

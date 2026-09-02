@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 7。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、CLI 和测试。
+当前实现范围：Milestone 0 到 Milestone 8。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、数据可靠性改造、CLI 和测试。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。
 
@@ -21,17 +21,18 @@
 - MarketDataProvider 抽象
 - TushareProvider，token 只从环境变量读取
 - stock_basic / trade_calendar / stock_daily / stock_adj_factor / stock_daily_basic / index_daily 入库服务
-- daily / backfill / scheduler CLI
+- sync-basic / backfill / recalculate 三段式任务：基础信息、原始行情、分析计算分开运行
+- daily / scheduler CLI 保留收盘后一体化日更流水线
 - job_run 与 provider_api_log 运行日志
 - P0 原始数据质量检查
 - stock_factor_daily 因子表
 - Factor Engine：复权 OHLC、MA、收益率、斜率、ATR、突破、higher-low、回撤、趋势效率、Eligible Universe、RPS
 - market_daily 市场温度表：Market Score、Regime、市场宽度、涨跌家数、新高新低、成交额活跃度
 - sector / sector_member / sector_factor_daily 行业表：行业元数据、行业成分、Sector Heat、Heat Momentum、Lifecycle
-- recalc-market / recalc-sectors CLI，并已接入 daily / backfill
+- recalc-market / recalc-sectors CLI，并已接入 daily / recalculate
 - stock_state_daily 趋势状态表：RightSideScore、TrendScore、S0-S6、OpportunityScore
 - strategy_signal 策略信号表：RIGHT_SIDE_NEW、TREND_ENTER、MAIN_UP_ENTER、TREND_DECAY、LEADER_BREAKOUT
-- recalc-states CLI，并已接入 daily / backfill
+- recalc-states CLI，并已接入 daily / recalculate
 - signal_forward_eval 后验评估表
 - evaluate-signals CLI：计算信号后 5/10/20/60 个交易日收益、MFE20、MAE20
 - Dashboard / Stocks / Sectors / Research REST API
@@ -332,7 +333,7 @@ python -m app.cli check-tushare
 
 如果 `daily` 报 SQLAlchemy 链接 `https://sqlalche.me/e/20/e3q8`，先看报错前面的真实错误：
 
-- 如果数据库迁移版本不是最新，执行 `python -m alembic upgrade head`。当前最新应为 `0006_signal_forward_eval`。
+- 如果数据库迁移版本不是最新，执行 `python -m alembic upgrade head`。当前最新应为 `0008_dirty_retry_metadata`。
 - 如果看到 `number of parameters must be between 0 and 65535`，说明旧代码一次性 upsert 行数太多；当前代码已经把 `upsert_rows` 改为自动分批写入。
 - 如果 `sector_factor_daily rows=0` 但任务成功，通常是因为数据库只有单日行情，Eligible Universe 需要历史 lookback。先做历史回填，再重算行业热度。
 
@@ -358,7 +359,7 @@ $env:PYTHONPATH = "backend"
 python -m app.cli daily --trade-date 2026-08-25
 ```
 
-作用：调用 Tushare，同步指定交易日的原始数据。
+作用：调用 Tushare，执行指定交易日的完整收盘后流水线。
 
 会同步：
 
@@ -379,7 +380,34 @@ python -m app.cli daily --trade-date 2026-08-25
 - `stock_state_daily`
 - `strategy_signal`
 
-什么时候跳过：如果你只是启动 API 看服务是否能跑，不需要同步数据，可以跳过。
+什么时候使用：你想对某一个交易日执行“拉取 + 计算”的完整日更任务时使用。
+
+什么时候跳过：如果你只是启动 API 看服务是否能跑，或者只想拉原始数据、不想计算，可以跳过。只拉原始数据时用下面的 `sync-basic` + `backfill`。
+
+### 同步基础信息
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli sync-basic
+```
+
+作用：只调用 Tushare 同步股票基础信息、申万行业元数据和申万行业成分。
+
+会同步：
+
+- `stock_basic`
+- `sector`
+- `sector_member`
+
+不会计算：
+
+- `stock_factor_daily`
+- `market_daily`
+- `sector_factor_daily`
+- `stock_state_daily`
+- `strategy_signal`
+
+什么时候使用：第一次建库、Tushare 股票状态变化后，或者前端拉原始数据前发现 `stock_basic` 缺失时使用。这个任务容易受 Tushare 基础资料接口影响，已经和原始行情回填、因子计算拆开。
 
 ### 历史回填
 
@@ -388,11 +416,34 @@ $env:PYTHONPATH = "backend"
 python -m app.cli backfill --start 2021-01-01 --end 2026-08-25
 ```
 
-作用：按交易日循环同步历史数据。
+作用：按交易日循环同步历史原始行情数据。
+
+会同步：
+
+- 交易日历
+- A 股日线
+- 复权因子
+- 每日指标
+- 指数日线
+
+不会同步：
+
+- 股票基础信息
+- 行业元数据
+- 行业成分
+
+不会计算：
+
+- 个股因子
+- 市场温度
+- 行业热度
+- 趋势状态
+- 策略信号
+- 信号后验
 
 什么时候使用：第一次初始化历史数据库时使用。
 
-注意：历史回填会比较慢，也会消耗 Tushare 调用额度。
+注意：历史回填会比较慢，也会消耗 Tushare 调用额度。回填同一日期范围时，已经完整并通过质量校验的交易日会跳过，避免重复拉取。回填完成后如需更新总览、行业热度和股票池，再执行 `POST /api/v1/jobs/recalculate` 或下面的补算命令。
 
 ### 重算因子
 
@@ -409,7 +460,7 @@ python -m app.cli recalc-factors --start 2026-08-25 --end 2026-08-25
 - 修改了 `config/strategy.yaml` 中的 universe / factor 参数。
 - 新增或修复因子计算逻辑后，需要回填历史因子。
 
-注意：`daily` 和 `backfill` 当前已经会自动调用因子、市场温度、行业热度、趋势状态和策略信号计算；手动 `recalc-factors` 主要用于补算或重算个股因子。
+注意：`backfill` 当前只拉原始数据，不会自动调用因子、市场温度、行业热度、趋势状态和策略信号计算；手动 `recalc-factors` 主要用于补算或重算个股因子。`daily` 仍保留完整日更流水线。
 
 ### 重算市场温度
 
@@ -443,7 +494,7 @@ python -m app.cli recalc-sectors --start 2026-08-25 --end 2026-08-25
 - 修改了 `config/strategy.yaml` 中 `sector` 或 `benchmark` 参数。
 - 修复行业热度或生命周期算法后，需要回填历史行业热度。
 
-注意：行业热度依赖 `sector`、`sector_member` 和 `stock_factor_daily`。如果行业表没有数据，先执行一次 `daily` 或 `backfill` 让系统同步行业元数据和成分。
+注意：行业热度依赖 `sector`、`sector_member` 和 `stock_factor_daily`。如果行业表没有数据，先执行一次 `python -m app.cli sync-basic` 或在页面点击“同步基础信息”，让系统同步行业元数据和成分。
 
 ### 重算趋势状态和策略信号
 
@@ -498,8 +549,10 @@ GET /api/v1/research/signals/stats?signal_type=RIGHT_SIDE_NEW&algo_version=v1.0
 GET /api/v1/research/signals/buckets?signal_type=RIGHT_SIDE_NEW&bucket_field=opportunity_score
 GET /api/v1/jobs?status=success&job_type=daily&limit=20&offset=0
 POST /api/v1/jobs/daily
+POST /api/v1/jobs/sync-basic
 POST /api/v1/jobs/backfill
 POST /api/v1/jobs/recalculate
+POST /api/v1/jobs/validate-data
 ```
 
 `/api/v1/system/data-coverage` 用来查看已经拉取了哪些交易日，以及每个交易日在核心数据表里的行数。前端“数据”页面的“数据覆盖”面板已经接入这个接口。
@@ -508,7 +561,7 @@ POST /api/v1/jobs/recalculate
 前端已经改为带目录的页面切换结构，左侧目录包含：
 
 - `总览`：市场核心指标、市场分布图、行业热度图、信号后验统计。
-- `数据`：数据覆盖、日期范围拉取、当前任务、最近任务和覆盖明细表。
+- `数据`：基础信息同步、原始行情拉取、分析补算、当前任务、最近任务、覆盖日历和覆盖明细表。
 - `长线`：右侧池、趋势池和行业热度列表。
 - `短线`：衰退/风险池、策略信号计数和行业短线动量。
 
@@ -516,7 +569,10 @@ POST /api/v1/jobs/recalculate
 
 如果页面出现目录按钮像浏览器默认按钮、内容从最左侧裸排的情况，通常是 Vite 开发服务仍在返回旧的 `frontend/src/style.css`。处理方式：在前端终端按 `Ctrl+C` 停掉 `npm run dev`，重新执行 `npm run dev -- --host 127.0.0.1 --port 5173`，然后浏览器强制刷新页面。
 
-“数据”页面右上角可以直接选择开始日期和结束日期，点击“拉取数据”。这会调用后端 `POST /api/v1/jobs/backfill` 创建后台任务，不需要再去终端执行 `python -m app.cli backfill ...`。
+“数据”页面的“拉取数据与任务”面板分成两个入口：
+
+- 点击“同步基础信息”：调用 `POST /api/v1/jobs/sync-basic`，只同步 `stock_basic`、`sector`、`sector_member`，不计算因子和股票池。
+- 选择开始日期和结束日期后点击“拉取原始数据”：调用 `POST /api/v1/jobs/backfill`，只同步交易日历、日线、复权因子、每日指标和指数日线，不计算因子和股票池。
 
 “数据”页面里的“补算因子与股票池”“拉取数据与任务”“数据覆盖日历”三个面板支持点击标题收起/展开。收起后只保留标题行和右侧操作区，方便减少页面纵向占用。
 
@@ -529,6 +585,8 @@ POST /api/v1/jobs/recalculate
 - 可选 `signal_forward_eval`：信号后验评估。
 
 补算任务的因子阶段会按自然月拆分执行。页面任务状态会显示当前分块范围、累计写入行数和进度百分比；行数会在当前因子分块完成并写库后更新，所以单个分块计算中可能短时间保持 0。
+
+推荐使用顺序：先“同步基础信息”，再“拉取原始数据”，最后按同一日期范围执行“开始补算”。如果只是 Tushare 基础资料接口失败，只需要重试“同步基础信息”，不会占用时间去计算因子。
 
 “数据覆盖日历”会按月份显示数据覆盖情况：
 
@@ -553,12 +611,26 @@ data_quality:
   daily:
     warning_coverage_rate: 0.98
     error_coverage_rate: 0.95
+  cross_table:
+    adj_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.95
+    basic_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.95
+    factor_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.90
+    state_vs_factor:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.90
 ```
 
 达到 WARNING 时可以继续入库；低于 ERROR 时会记录 `data_quality_daily` 并阻止后续因子、市场、行业、状态和信号计算。
+跨表校验中，`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 不允许标记 SUCCESS。`backfill` 现在只负责原始数据拉取，只在原始日线覆盖率 ERROR 时失败。
 
 - `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 启用 NULL upsert 保护。新数据字段为 NULL 时不会清空数据库已有非空值。
-- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。
+- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。repair 失败后 dirty range 会恢复为 `OPEN`，并记录 `retry_count`、`last_error`、`last_failed_at`，下一次可以继续重试。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 新增 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，用于追溯这条衍生数据由哪个配置和哪次任务算出。
 
 Dirty repair API 请求示例：
@@ -574,9 +646,27 @@ Dirty repair API 请求示例：
 
 `dirty_repair` 模式下后端会自动使用 `data_dirty_range` 的最早 OPEN 日期作为开始日期，并以最新 `stock_daily` 日期作为结束日期；请求里的 `start/end` 只是为了保持接口兼容。
 
-如果勾选“评估信号”，回填完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。
+如果在“补算因子与股票池”里勾选“评估信号”，补算完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。“拉取原始数据”不会触发信号评估。
 
-同一时间只允许一个 `daily`、`backfill` 或 `recalculate` 任务处于 `QUEUED/RUNNING` 状态，避免重复点击造成多个长任务同时跑。任务进度可以通过 `GET /api/v1/jobs?limit=20` 查看。
+同一时间只允许一个 `daily`、`sync_basic`、`backfill`、`recalculate` 或 `validate_data` 任务处于 `QUEUED/RUNNING` 状态，避免重复点击造成多个长任务同时跑。任务进度可以通过 `GET /api/v1/jobs?limit=30` 查看。
+
+存量历史 Raw 数据质量补校验：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli validate-data --start 2020-01-01 --end 2026-08-31
+```
+
+也可以调用 API：
+
+```http
+POST /api/v1/jobs/validate-data
+Content-Type: application/json
+
+{"start":"2020-01-01","end":"2026-08-31"}
+```
+
+`validate-data` 不访问 Tushare，不重新下载历史数据，只基于数据库中已有的 `stock_daily`、交易日历和 Point-in-Time 股票池补写 `data_quality_daily`，并同步记录跨表质量。旧数据库升级后建议先执行 `validate-data`，再执行 backfill / recalculate。
 
 数据覆盖面板中间会显示“当前任务”和“最近任务”：
 
@@ -662,6 +752,7 @@ npm run build
 - 失败任务的错误信息会占用独立的第二行并撑开当前任务行，不会覆盖下一条任务。
 - `30 拉取交易日数据` 阶段会显示当前正在拉取的交易日。
 - backfill 失败后可以重跑同一日期范围；系统会跳过日线、每日指标、复权因子、指数日线都已存在且质量不是 ERROR 的交易日，避免重复请求 Tushare。
+- 旧历史数据如果 `quality_status=None`，backfill 不会直接当作已验证；系统会先用库内已有数据补做一次质量校验，PASS/WARNING 才跳过，ERROR 会重新拉取。
 - `90 计算个股因子` 阶段按自然月分块显示，行数会在当前分块完成写库后更新。
 - `100/110/120` 分别表示计算市场温度、行业热度、趋势状态与策略信号；这些批量计算阶段可能在完成后才更新处理行数。
 - `stock_basic required statuses missing` 会同时展示 Tushare 对应状态的原始错误，例如限频、代理 SSL 或接口返回异常，便于判断真实失败原因。
@@ -676,8 +767,9 @@ npm run build
 5. 执行 `python -m pip install -r requirements-dev.txt`。
 6. 如果使用 Docker 本地数据库，执行 `docker compose up -d postgres`；如果使用云数据库或已有本机数据库，跳过。
 7. 执行 `python -m alembic upgrade head`。
-8. 执行 `python -m pytest` 确认环境正确。
-9. 进入 `frontend`，执行 `npm install` 和 `npm run build` 确认前端环境正确。
+8. 旧数据库升级后执行 `python -m app.cli validate-data --start 历史最早日期 --end 当前最新raw日期`。
+9. 执行 `python -m pytest` 确认环境正确。
+10. 进入 `frontend`，执行 `npm install` 和 `npm run build` 确认前端环境正确。
 
 ## 给 Codex 的继续开发约束
 

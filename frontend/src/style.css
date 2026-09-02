@@ -466,6 +466,14 @@ button {
   gap: 8px;
 }
 
+.coverage-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
 .coverage-actions label {
   display: inline-flex;
   align-items: center;
@@ -499,21 +507,37 @@ button {
   height: 16px;
 }
 
-.primary-button {
+.primary-button,
+.secondary-button {
   min-width: 86px;
   height: 34px;
-  border: 1px solid #111827;
   border-radius: 7px;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 1px solid #111827;
   background: #111827;
   color: #ffffff;
-  cursor: pointer;
+}
+
+.secondary-button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
 }
 
 .primary-button:hover:not(:disabled) {
   background: #0f172a;
 }
 
-.primary-button:disabled {
+.secondary-button:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
   cursor: wait;
   opacity: 0.68;
 }
@@ -1571,7 +1595,8 @@ td:nth-child(6) {
     flex-direction: column;
   }
 
-  .coverage-actions {
+  .coverage-actions,
+  .coverage-actions-group {
     width: 100%;
     justify-content: flex-start;
   }

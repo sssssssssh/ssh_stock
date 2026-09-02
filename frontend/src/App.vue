@@ -13,6 +13,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
+  enqueueSyncBasicJob,
   fetchDashboardSummary,
   fetchDataCalendar,
   fetchDataCoverage,
@@ -55,6 +56,7 @@ use([
 ]);
 
 const loading = ref(true);
+const submittingBasicInfo = ref(false);
 const submittingIngestion = ref(false);
 const submittingRecalculation = ref(false);
 const errorMessage = ref("");
@@ -70,7 +72,6 @@ const backfillStart = ref(daysAgoIso(30));
 const backfillEnd = ref(todayIso());
 const recalcStart = ref(daysAgoIso(180));
 const recalcEnd = ref(todayIso());
-const evaluateSignals = ref(false);
 const recalcEvaluateSignals = ref(true);
 const calendarMonth = ref(todayIso().slice(0, 7));
 const selectedCalendarDate = ref("");
@@ -304,8 +305,7 @@ async function submitBackfill() {
   try {
     const job = await enqueueBackfillJob({
       start: backfillStart.value,
-      end: backfillEnd.value,
-      evaluate_signals: evaluateSignals.value
+      end: backfillEnd.value
     });
     jobMessage.value = jobMessageText(job);
     await refreshJobStatus();
@@ -314,6 +314,21 @@ async function submitBackfill() {
     errorMessage.value = error instanceof Error ? error.message : "任务提交失败";
   } finally {
     submittingIngestion.value = false;
+  }
+}
+
+async function submitBasicInfo() {
+  errorMessage.value = "";
+  jobMessage.value = "";
+  submittingBasicInfo.value = true;
+  try {
+    const job = await enqueueSyncBasicJob();
+    jobMessage.value = jobMessageText(job);
+    await refreshJobStatus();
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "基础信息同步任务提交失败";
+  } finally {
+    submittingBasicInfo.value = false;
   }
 }
 
@@ -740,7 +755,11 @@ function jobStageText(job: JobRun) {
     starting: "准备任务",
     calendar: "同步交易日历",
     metadata: "同步基础资料",
+    stock_basic: "同步股票基础信息",
+    sector_metadata: "同步行业分类",
+    sector_members: "同步行业成分",
     daily: "拉取交易日数据",
+    validate_data: "校验存量数据",
     factors: "计算个股因子",
     market: "计算市场温度",
     sectors: "计算行业热度",
@@ -753,7 +772,9 @@ function jobStageText(job: JobRun) {
 
 function jobStepText(job: JobRun) {
   const step = job.step || "--";
+  if (step.startsWith("00 start sync basic info")) return "00 准备同步基础信息";
   if (step.startsWith("00 start backfill")) return "00 准备拉取任务";
+  if (step.startsWith("00 start validate data")) return "00 准备校验存量数据";
   if (step.startsWith("10 sync trade_calendar")) return "10 同步交易日历";
   if (step.startsWith("20 sync stock_basic")) return "20 同步股票基础信息";
   if (step.startsWith("25 sync sector metadata")) return "25 同步行业分类";
@@ -762,22 +783,28 @@ function jobStepText(job: JobRun) {
     return `30 跳过已完整交易日 ${step.replace("30 skip existing raw", "").trim()}`;
   }
   if (step.startsWith("30 sync daily")) return `30 拉取交易日数据 ${step.replace("30 sync daily", "").trim()}`;
+  if (step.startsWith("70 validate raw data")) {
+    return `70 校验存量原始数据 ${step.replace("70 validate raw data", "").trim()}`;
+  }
   if (step.startsWith("90 factors done")) return "90 个股因子分块完成";
   if (step.startsWith("90 factors")) return "90 计算个股因子分块";
   if (step.startsWith("90 calculate stock factors")) return "90 计算个股因子";
   if (step.startsWith("100 calculate market score")) return "100 计算市场温度";
   if (step.startsWith("110 calculate sector heat")) return "110 计算行业热度";
   if (step.startsWith("120 calculate trend states")) return "120 计算趋势状态与策略信号";
-  if (step.startsWith("180 mark SUCCESS")) return "180 拉取任务完成";
+  if (step.startsWith("180 sync basic info complete")) return "180 基础信息同步完成";
+  if (step.startsWith("180 raw sync complete")) return "180 原始数据拉取完成";
+  if (step.startsWith("180 mark SUCCESS")) return "180 任务完成";
   if (step.startsWith("190 evaluate signals")) return "190 评估信号后验";
   if (step.startsWith("200 signal eval complete")) return "200 信号后验完成";
   if (step.startsWith("200 recalculation complete")) return "200 重算完成";
+  if (step.startsWith("200 validate data complete")) return "200 存量数据校验完成";
   return step;
 }
 
 function jobTooltip(job: JobRun) {
   const parts = [
-    `类型：${job.job_type}`,
+    `类型：${jobTypeText(job.job_type)}`,
     `状态：${statusLabel(job.status)}`,
     `步骤：${jobStepText(job)}`,
     `原始步骤：${job.step || "--"}`,
@@ -788,6 +815,17 @@ function jobTooltip(job: JobRun) {
     parts.push(`错误：${job.error_message}`);
   }
   return parts.join("\n");
+}
+
+function jobTypeText(jobType: string) {
+  const map: Record<string, string> = {
+    sync_basic: "基础信息",
+    backfill: "原始数据",
+    recalculate: "补算",
+    validate_data: "校验",
+    daily: "日更"
+  };
+  return map[jobType] || jobType;
 }
 
 function rowCountHint(job: JobRun) {
@@ -998,25 +1036,31 @@ function statusLabel(status: string) {
                   <span>拉取数据与任务</span>
                 </button>
               </h2>
-              <span>最近 {{ dataCoverage.length }} 个交易日</span>
+              <span>先同步基础信息，再按日期拉取原始行情；计算请用上方补算入口</span>
             </div>
-            <form class="coverage-actions" @submit.prevent="submitBackfill">
-              <label>
-                <span>开始</span>
-                <input v-model="backfillStart" type="date" />
-              </label>
-              <label>
-                <span>结束</span>
-                <input v-model="backfillEnd" type="date" />
-              </label>
-              <label class="checkbox-label">
-                <input v-model="evaluateSignals" type="checkbox" />
-                <span>评估信号</span>
-              </label>
-              <button class="primary-button" type="submit" :disabled="submittingIngestion">
-                {{ submittingIngestion ? "提交中" : "拉取数据" }}
+            <div class="coverage-actions-group">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="submittingBasicInfo"
+                @click="submitBasicInfo"
+              >
+                {{ submittingBasicInfo ? "提交中" : "同步基础信息" }}
               </button>
-            </form>
+              <form class="coverage-actions" @submit.prevent="submitBackfill">
+                <label>
+                  <span>开始</span>
+                  <input v-model="backfillStart" type="date" />
+                </label>
+                <label>
+                  <span>结束</span>
+                  <input v-model="backfillEnd" type="date" />
+                </label>
+                <button class="primary-button" type="submit" :disabled="submittingIngestion">
+                  {{ submittingIngestion ? "提交中" : "拉取原始数据" }}
+                </button>
+              </form>
+            </div>
           </div>
           <div v-show="!collapsedDataPanels.tasks" class="job-status-grid panel-collapsible">
             <section class="job-current" :class="activeJob?.status.toLowerCase() || 'idle'">
@@ -1061,7 +1105,7 @@ function statusLabel(status: string) {
                 :class="{ 'has-error': Boolean(job.error_message) }"
                 :title="jobTooltip(job)"
               >
-                <span class="job-type" :title="job.job_type">{{ job.job_type }}</span>
+                <span class="job-type" :title="job.job_type">{{ jobTypeText(job.job_type) }}</span>
                 <span
                   class="job-status"
                   :class="job.status.toLowerCase()"

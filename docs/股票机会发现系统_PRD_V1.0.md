@@ -886,23 +886,23 @@ V1 验证指标：
 - 已实现 `MarketDataProvider` 抽象与 `TushareProvider`。
 - 已实现 `stock_basic`、`trade_calendar`、`stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 原始数据表。
 - 已实现 `job_run` 和 `provider_api_log` 运行日志表。
-- 已实现 daily / backfill / scheduler CLI。
+- 已实现 daily / sync-basic / backfill / scheduler CLI；其中 `sync-basic` 只同步股票与行业基础信息，`backfill` 只同步历史原始行情。
 - 已补充 `check-config` 和 `check-tushare`，用于脱敏检查配置与 Tushare token 可用性。
 - 已按代理版 Tushare 要求调整 SDK 初始化方式：`ts.set_token(...)`、无参数 `ts.pro_api()`、设置 `_DataApi__http_url` 为 `TUSHARE_HTTP_URL`。
 - 已实现 `stock_factor_daily` 因子表和 Alembic 迁移 `0002_stock_factor_daily`。
 - 已实现 Factor Engine：复权 OHLC、MA、收益率、斜率、ATR、突破、higher-low、回撤、趋势效率、Eligible Universe、RPS，并补充 `return1` / `return3` 支撑行业短周期收益。
-- 已实现 `recalc-factors` CLI，并接入 daily / backfill 任务链路。
+- 已实现 `recalc-factors` CLI，并接入 daily / recalculate 任务链路。
 - 已实现 `market_daily` 市场温度表和 Alembic 迁移 `0003_market_sector`。
 - 已实现 Market Score V1：指数趋势、市场宽度、涨跌家数、新高新低、成交额活跃度，并输出 Regime。
 - 已实现 `sector`、`sector_member`、`sector_factor_daily` 行业表和申万行业元数据/成分同步。
 - 已实现 Sector Heat V1：行业收益、超额收益、宽度、RPS、成交活跃度、Heat Momentum、Heat Rank、Lifecycle。
-- 已实现 `recalc-market` / `recalc-sectors` CLI，并接入 daily / backfill 任务链路。
+- 已实现 `recalc-market` / `recalc-sectors` CLI，并接入 daily / recalculate 任务链路。
 - 已修复 PostgreSQL 单条 SQL 参数上限问题，`upsert_rows` 会按参数数量自动分批写入，避免 `number of parameters must be between 0 and 65535`。
 - 已兼容代理接口的申万行业口径：行业分类使用 `SW2021`，行业成员使用 `SW` 返回的 `l1_code` 映射到一级行业。
 - 已实现 `stock_state_daily` 状态表和 `strategy_signal` 信号表，新增 Alembic 迁移 `0005_trend_state_signal`。
 - 已实现 RightSideScore V1、TrendScore V1、S0-S6 状态机、OpportunityScore。
 - 已实现 RIGHT_SIDE_NEW、TREND_ENTER、MAIN_UP_ENTER、TREND_DECAY、LEADER_BREAKOUT 信号生成。
-- 已实现 `recalc-states` CLI，并接入 daily / backfill 任务链路。
+- 已实现 `recalc-states` CLI，并接入 daily / recalculate 任务链路。
 - 已实现原始日线数据的基础质量检查。
 - 已实现 pytest 单元测试与 API health 导入测试。
 
@@ -930,7 +930,7 @@ V1 验证指标：
 - 不把策略阈值硬编码进业务代码。
 - 服务层不得直接 import `tushare`。
 - token 和密码只来自 `.env` 或环境变量，不写入代码和日志。
-- 每次功能推进后同步更新 README、PROJECT_RULES、本 PRD Markdown 和对应 DOCX。
+- 每次功能推进后同步更新 README、PROJECT_RULES、本 PRD Markdown 和系统设计 Markdown；对应 DOCX 仅在用户明确要求或正式导出时更新。
 
 ---
 
@@ -945,7 +945,7 @@ V1 验证指标：
 - 已新增行业 API：`GET /api/v1/sectors/heat`、`GET /api/v1/sectors/{sector_id}`、`GET /api/v1/sectors/{sector_id}/history`。
 - 已新增股票 API：`GET /api/v1/stocks/right-side`、`GET /api/v1/stocks/trends`、`GET /api/v1/stocks/decay`、`GET /api/v1/stocks/{ts_code}/overview`、`GET /api/v1/stocks/{ts_code}/history`、`GET /api/v1/stocks/{ts_code}/factors`。
 - 已增强任务 API：`GET /api/v1/jobs` 支持 `status`、`job_type`、`limit`、`offset`。
-- 已新增任务触发 API：`POST /api/v1/jobs/daily` 和 `POST /api/v1/jobs/backfill`，用于从页面发起单日同步或历史回填。
+- 已新增任务触发 API：`POST /api/v1/jobs/daily`、`POST /api/v1/jobs/sync-basic` 和 `POST /api/v1/jobs/backfill`，用于从页面发起单日完整日更、基础信息同步或历史原始行情回填。
 - 已新增后验评估表 `signal_forward_eval` 和 Alembic 迁移 `0006_signal_forward_eval`。
 - 已实现 `evaluate-signals` CLI，计算信号后 5/10/20/60 个交易日收益、MFE20、MAE20。
 - 已新增研究接口：`GET /api/v1/research/signals/stats` 和 `GET /api/v1/research/signals/buckets`。
@@ -961,7 +961,7 @@ V1 验证指标：
 - 前端“数据”页面已新增“数据覆盖”面板，用于查看已经拉取了哪些交易日。
 - 前端“数据覆盖”明细表已改为分页展示，默认每页 20 条，可切换 10 / 20 / 50 / 100 条，避免页面无限下拉。
 - 数据覆盖明细默认加载数据库中全部已拉取交易日，不再固定限制为最近 120 条。
-- “数据覆盖”面板已新增日期范围输入和“拉取数据”按钮，点击后创建后台 `backfill` 任务，无需手动进入终端执行 CLI。
+- “数据覆盖”面板已新增“同步基础信息”按钮，以及日期范围输入和“拉取原始数据”按钮。基础信息调用 `sync_basic`，原始行情调用 `backfill`，两者都不会触发因子和股票池计算。
 - “数据覆盖”面板已新增任务状态展示，轮询 `GET /api/v1/jobs` 显示当前任务、最近任务、进度条、当前步骤、当前交易日、已处理交易日数量和已写入行数。
 - 补算因子任务已按自然月分块执行，任务状态会显示当前分块范围、累计写入行数和进度百分比，避免大区间补算时页面长时间停留在同一个步骤。
 - 因子补算的已写入/处理行数在当前分块完成写库后更新；分块计算期间页面会提示“当前因子分块完成后更新行数”。
@@ -1025,8 +1025,18 @@ V1 验证指标：
 - 最近任务列表默认展示最近 30 条，列表内部滚动；步骤、日期范围、耗时和错误信息支持鼠标悬停查看完整文本。
 - 最近任务的错误信息改为独立整行展示，并撑开当前任务行，避免错误文本挤在步骤列、日期列下方或覆盖下一条任务。
 - 前端将后端 `job_run.step` 的英文内部步骤映射为中文可读阶段，并在悬停提示中保留原始步骤。
-- backfill 的因子计算阶段改为按自然月分块上报进度，显示当前分块序号、总分块数和分块日期范围。
+- recalculate 的因子计算阶段改为按自然月分块上报进度，显示当前分块序号、总分块数和分块日期范围；backfill 只负责原始行情拉取。
 - 市场温度、行业热度、趋势状态与策略信号等批量计算阶段不再展示日线拉取阶段遗留的“当前交易日”；页面改为展示当前计算阶段和覆盖交易日数量。
 - 长时间批量计算期间，前端会提示行数可能在当前阶段或分块完成后更新，避免把行数暂时不变误判为任务卡住。
 - backfill 失败后重跑同一日期范围时，系统会跳过已完整写入的交易日原始数据，页面显示累计跳过数量；不完整或质量 ERROR 的日期仍会重新拉取。
 - 股票基础信息同步失败时，任务错误会展示缺失的 `L/D` 核心状态以及 Tushare 原始报错，帮助区分限频、代理异常和真实空数据。
+
+### 25.2 收尾修复（2026-09-02）
+
+- Dirty Repair 失败后不再把 dirty range 固定为不可选的 FAILED；失败会恢复为 `OPEN`，记录 `retry_count`、`last_error`、`last_failed_at`，下次可继续重试。
+- 新增 `validate-data` 存量校验任务和 CLI，用数据库已有历史 raw 数据补写 `data_quality_daily`，不重新下载 Tushare 数据。
+- backfill 遇到旧历史数据 `quality_status=None` 时，会先执行库内质量补校验；PASS/WARNING 才跳过，ERROR 会重新拉取。
+- 新增 `sync-basic` 独立基础信息任务，页面按钮为“同步基础信息”，只同步 `stock_basic`、`sector`、`sector_member`。
+- `backfill` 拆为只拉原始行情，不再同步股票基础信息，也不再触发因子、市场、行业、状态、信号或后验计算。
+- 跨表质量校验增加 ERROR 阈值；`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 严重缺失时，`daily` / `recalculate` 不允许标记成功。`backfill` 只在原始日线覆盖率 ERROR 时失败。
+- 数据日历继续使用 `差` 展示质量 ERROR 日期，便于先修复数据再做策略判断。

@@ -38,6 +38,22 @@ class CoverageResult:
         return len(self.missing_codes)
 
 
+@dataclass(frozen=True)
+class CrossTableQualityResult:
+    trade_date: date
+    counts: dict[str, int]
+    results: dict[str, str]
+    error_datasets: list[str]
+
+    @property
+    def has_error(self) -> bool:
+        return bool(self.error_datasets)
+
+
+class DataQualityError(RuntimeError):
+    pass
+
+
 def expected_stock_codes(db: Session, trade_date: date) -> set[str]:
     rows = db.execute(
         select(StockBasic.ts_code, StockBasic.list_date, StockBasic.delist_date)
@@ -140,7 +156,8 @@ def record_cross_table_quality(
     trade_date: date,
     *,
     job_id: uuid.UUID | None = None,
-) -> dict[str, int]:
+    strategy: dict[str, Any] | None = None,
+) -> CrossTableQualityResult:
     counts = {
         "stock_daily": _count_date(db, StockDaily, StockDaily.trade_date, trade_date),
         "stock_adj_factor": _count_date(db, StockAdjFactor, StockAdjFactor.trade_date, trade_date),
@@ -158,47 +175,77 @@ def record_cross_table_quality(
         ),
     }
     expected = expected_stock_codes(db, trade_date)
-    _persist_simple(
+    results = {}
+    results["stock_daily_vs_expected"] = _persist_simple(
         db,
         trade_date,
         "stock_daily_vs_expected",
         len(expected),
         counts["stock_daily"],
         job_id,
+        warning_coverage_rate=_daily_threshold(strategy, "warning", 0.98),
+        error_coverage_rate=_daily_threshold(strategy, "error", 0.95),
     )
-    _persist_simple(
+    results["adj_vs_daily"] = _persist_simple(
         db,
         trade_date,
         "adj_vs_daily",
         counts["stock_daily"],
         counts["stock_adj_factor"],
         job_id,
+        warning_coverage_rate=_cross_table_threshold(strategy, "adj_vs_daily", "warning", 0.98),
+        error_coverage_rate=_cross_table_threshold(strategy, "adj_vs_daily", "error", 0.95),
     )
-    _persist_simple(
+    results["basic_vs_daily"] = _persist_simple(
         db,
         trade_date,
         "basic_vs_daily",
         counts["stock_daily"],
         counts["stock_daily_basic"],
         job_id,
+        warning_coverage_rate=_cross_table_threshold(strategy, "basic_vs_daily", "warning", 0.98),
+        error_coverage_rate=_cross_table_threshold(strategy, "basic_vs_daily", "error", 0.95),
     )
-    _persist_simple(
+    results["factor_vs_daily"] = _persist_simple(
         db,
         trade_date,
         "factor_vs_daily",
         counts["stock_daily"],
         counts["stock_factor_daily"],
         job_id,
+        warning_coverage_rate=_cross_table_threshold(strategy, "factor_vs_daily", "warning", 0.98),
+        error_coverage_rate=_cross_table_threshold(strategy, "factor_vs_daily", "error", 0.90),
     )
-    _persist_simple(
+    results["state_vs_factor"] = _persist_simple(
         db,
         trade_date,
         "state_vs_factor",
         counts["stock_factor_daily"],
         counts["stock_state_daily"],
         job_id,
+        warning_coverage_rate=_cross_table_threshold(
+            strategy, "state_vs_factor", "warning", 0.98
+        ),
+        error_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "error", 0.90),
     )
-    return counts
+    return CrossTableQualityResult(
+        trade_date=trade_date,
+        counts=counts,
+        results=results,
+        error_datasets=[
+            dataset
+            for dataset, status in results.items()
+            if status == "ERROR"
+            and dataset
+            in {
+                "stock_daily_vs_expected",
+                "adj_vs_daily",
+                "basic_vs_daily",
+                "factor_vs_daily",
+                "state_vs_factor",
+            }
+        ],
+    )
 
 
 def _persist_simple(
@@ -208,7 +255,10 @@ def _persist_simple(
     expected_rows: int,
     actual_rows: int,
     job_id: uuid.UUID | None,
-) -> None:
+    *,
+    warning_coverage_rate: float,
+    error_coverage_rate: float,
+) -> str:
     if expected_rows <= 0:
         coverage_rate = None
         status = "WARNING"
@@ -216,9 +266,18 @@ def _persist_simple(
         error_count = 0
     else:
         coverage_rate = min(actual_rows / expected_rows, 1.0)
-        status = "PASS" if actual_rows >= expected_rows else "WARNING"
-        warning_count = 0 if status == "PASS" else 1
-        error_count = 0
+        if coverage_rate < error_coverage_rate:
+            status = "ERROR"
+            warning_count = 0
+            error_count = 1
+        elif coverage_rate < warning_coverage_rate:
+            status = "WARNING"
+            warning_count = 1
+            error_count = 0
+        else:
+            status = "PASS"
+            warning_count = 0
+            error_count = 0
     upsert_rows(
         db,
         DataQualityDaily,
@@ -235,15 +294,46 @@ def _persist_simple(
                 "warning_count": warning_count,
                 "error_count": error_count,
                 "status": status,
-                "issue_codes": {},
+                "issue_codes": {
+                    "coverage_rate": coverage_rate,
+                    "warning_coverage_rate": warning_coverage_rate,
+                    "error_coverage_rate": error_coverage_rate,
+                },
                 "job_id": job_id,
             }
         ],
         ["trade_date", "dataset"],
     )
+    return status
 
 
 def _count_date(db: Session, model: type, column: Any, trade_date: date) -> int:
     return int(
         db.execute(select(func.count()).select_from(model).where(column == trade_date)).scalar_one()
     )
+
+
+def _daily_threshold(
+    strategy: dict[str, Any] | None,
+    severity: str,
+    default: float,
+) -> float:
+    daily = (strategy or {}).get("data_quality", {}).get("daily", {})
+    value = daily.get(f"{severity}_coverage_rate", default) if isinstance(daily, dict) else default
+    return float(value)
+
+
+def _cross_table_threshold(
+    strategy: dict[str, Any] | None,
+    dataset: str,
+    severity: str,
+    default: float,
+) -> float:
+    cross_table = (strategy or {}).get("data_quality", {}).get("cross_table", {})
+    dataset_config = cross_table.get(dataset, {}) if isinstance(cross_table, dict) else {}
+    value = (
+        dataset_config.get(f"{severity}_coverage_rate", default)
+        if isinstance(dataset_config, dict)
+        else default
+    )
+    return float(value)

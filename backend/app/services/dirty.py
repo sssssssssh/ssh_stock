@@ -102,13 +102,22 @@ def mark_dirty_ranges_resolved(db: Session, ranges: list[DataDirtyRange]) -> Non
     for row in ranges:
         row.status = "RESOLVED"
         row.resolved_at = resolved_at
+        row.last_error = None
         db.add(row)
     db.commit()
 
 
-def mark_dirty_ranges_failed(db: Session, ranges: list[DataDirtyRange]) -> None:
+def mark_dirty_ranges_failed(
+    db: Session,
+    ranges: list[DataDirtyRange],
+    error_message: str | None = None,
+) -> None:
+    failed_at = datetime.now(UTC)
     for row in ranges:
-        row.status = "FAILED"
+        row.status = "OPEN"
+        row.retry_count = int(row.retry_count or 0) + 1
+        row.last_error = error_message[:4096] if error_message else None
+        row.last_failed_at = failed_at
         db.add(row)
     db.commit()
 

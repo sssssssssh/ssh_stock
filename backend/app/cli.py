@@ -6,12 +6,14 @@ from app.core.config import ROOT_DIR, get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging
 from app.jobs.backfill_job import BackfillJob
+from app.jobs.basic_info_job import BasicInfoJob
 from app.jobs.daily_job import DailyJob
 from app.jobs.scheduler import run_scheduler
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
 from app.services.market import MarketService
+from app.services.quality.history_quality import HistoricalDataQualityService
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.trend import TrendService
@@ -81,6 +83,13 @@ def daily(trade_date: str | None = typer.Option(None, "--trade-date")) -> None:
         DailyJob(db, _provider(db)).run(target)
 
 
+@cli.command("sync-basic")
+def sync_basic() -> None:
+    configure_logging()
+    with SessionLocal() as db:
+        BasicInfoJob(db, _provider(db)).run()
+
+
 @cli.command()
 def backfill(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
     configure_logging()
@@ -88,6 +97,20 @@ def backfill(start: str = typer.Option(...), end: str = typer.Option(...)) -> No
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
         BackfillJob(db, _provider(db)).run(start_date, end_date)
+
+
+@cli.command("validate-data")
+def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
+    configure_logging()
+    settings = get_settings()
+    start_date = _parse_date(start, "start")
+    end_date = _parse_date(end, "end")
+    with SessionLocal() as db:
+        summary = HistoricalDataQualityService(db, settings.strategy).validate(start_date, end_date)
+    typer.echo(f"total_days={summary.total_days}")
+    typer.echo(f"pass_days={summary.pass_days}")
+    typer.echo(f"warning_days={summary.warning_days}")
+    typer.echo(f"error_days={summary.error_days}")
 
 
 @cli.command("recalc-factors")

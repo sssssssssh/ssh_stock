@@ -44,3 +44,16 @@ data_quality:
   daily:
     warning_coverage_rate: 0.98
     error_coverage_rate: 0.95
+  cross_table:
+    adj_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.95
+    basic_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.95
+    factor_vs_daily:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.90
+    state_vs_factor:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.90

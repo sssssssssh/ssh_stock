@@ -11,6 +11,7 @@ from app.api.v1.common import clamp_limit, clamp_offset, envelope, scalar_count
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_db
 from app.jobs.backfill_job import BackfillJob
+from app.jobs.basic_info_job import BasicInfoJob
 from app.jobs.daily_job import DailyJob
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
@@ -27,6 +28,10 @@ from app.services.dirty import (
 )
 from app.services.factors import FactorService
 from app.services.market import MarketService
+from app.services.quality.history_quality import (
+    HistoricalDataQualityService,
+    HistoricalQualitySummary,
+)
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.trend import TrendService
@@ -49,6 +54,11 @@ class RecalculateJobRequest(BaseModel):
     end: date
     evaluate_signals: bool = Field(default=True)
     mode: str = Field(default="manual", pattern="^(manual|dirty_repair)$")
+
+
+class ValidateDataJobRequest(BaseModel):
+    start: date
+    end: date
 
 
 @router.get("")
@@ -107,6 +117,24 @@ def enqueue_daily_job(
     return envelope(_job_payload(job), {"accepted": True})
 
 
+@router.post("/sync-basic")
+def enqueue_sync_basic_job(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _reject_if_active_ingestion_job(db)
+    job = start_job(
+        db,
+        "sync_basic",
+        None,
+        status="QUEUED",
+        step="queued from api",
+        metadata={"source": "api", "stage": "queued", "progress_pct": 0},
+    )
+    background_tasks.add_task(_run_sync_basic_job, job.id)
+    return envelope(_job_payload(job), {"accepted": True})
+
+
 @router.post("/backfill")
 def enqueue_backfill_job(
     payload: BackfillJobRequest,
@@ -127,6 +155,7 @@ def enqueue_backfill_job(
             "start": payload.start.isoformat(),
             "end": payload.end.isoformat(),
             "evaluate_signals": payload.evaluate_signals,
+            "calculate": False,
         },
     )
     background_tasks.add_task(
@@ -193,11 +222,40 @@ def enqueue_recalculate_job(
     return envelope(_job_payload(job), {"accepted": True})
 
 
+@router.post("/validate-data")
+def enqueue_validate_data_job(
+    payload: ValidateDataJobRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if payload.end < payload.start:
+        raise HTTPException(status_code=400, detail="end must be greater than or equal to start")
+    _reject_if_active_ingestion_job(db)
+    job = start_job(
+        db,
+        "validate_data",
+        payload.end,
+        status="QUEUED",
+        step="queued from api",
+        metadata={
+            "source": "api",
+            "start": payload.start.isoformat(),
+            "end": payload.end.isoformat(),
+            "stage": "queued",
+            "progress_pct": 0,
+        },
+    )
+    background_tasks.add_task(_run_validate_data_job, job.id, payload.start, payload.end)
+    return envelope(_job_payload(job), {"accepted": True})
+
+
 def _reject_if_active_ingestion_job(db: Session) -> None:
     active = db.execute(
         select(JobRun.id)
         .where(
-            JobRun.job_type.in_(["daily", "backfill", "recalculate"]),
+            JobRun.job_type.in_(
+                ["daily", "sync_basic", "backfill", "recalculate", "validate_data"]
+            ),
             JobRun.status.in_(["QUEUED", "RUNNING"]),
         )
         .limit(1)
@@ -217,11 +275,22 @@ def _run_daily_job(job_id: uuid.UUID, trade_date: date) -> None:
             _mark_background_failed(db, job_id, exc)
 
 
+def _run_sync_basic_job(job_id: uuid.UUID) -> None:
+    with SessionLocal() as db:
+        job = db.get(JobRun, job_id)
+        if not job:
+            return
+        try:
+            BasicInfoJob(db, _provider(db)).run(job=job)
+        except Exception as exc:
+            _mark_background_failed(db, job_id, exc)
+
+
 def _run_backfill_job(
     job_id: uuid.UUID,
     start: date,
     end: date,
-    evaluate_signals: bool,
+    _evaluate_signals: bool,
 ) -> None:
     with SessionLocal() as db:
         job = db.get(JobRun, job_id)
@@ -229,20 +298,83 @@ def _run_backfill_job(
             return
         try:
             BackfillJob(db, _provider(db)).run(start, end, job=job)
-            if evaluate_signals:
-                update_job(db, job, step="190 evaluate signals")
-                from app.services.research import SignalEvaluationService
+        except Exception as exc:
+            _mark_background_failed(db, job_id, exc)
 
-                rows = SignalEvaluationService(db).evaluate()
-                metadata = dict(job.job_metadata or {})
-                metadata["signal_eval"] = rows
+
+def _run_validate_data_job(job_id: uuid.UUID, start: date, end: date) -> None:
+    with SessionLocal() as db:
+        job = db.get(JobRun, job_id)
+        if not job:
+            return
+        metadata: dict[str, Any] = {
+            "source": "api",
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "stage": "validate_data",
+            "progress_pct": 0,
+            "total_trade_days": 0,
+            "completed_trade_days": 0,
+            "pass_days": 0,
+            "warning_days": 0,
+            "error_days": 0,
+        }
+        total_rows = 0
+        try:
+            update_job(
+                db,
+                job,
+                status="RUNNING",
+                step="00 start validate data",
+                row_count=total_rows,
+                metadata=metadata,
+            )
+
+            def progress(
+                summary: HistoricalQualitySummary,
+                trade_date: date,
+                _result: object,
+            ) -> None:
+                nonlocal total_rows
+                total_rows = summary.completed_days
+                progress_pct = (
+                    round(summary.completed_days / summary.total_days * 100, 1)
+                    if summary.total_days
+                    else 100
+                )
                 update_job(
                     db,
                     job,
-                    status="SUCCESS",
-                    step="200 signal eval complete",
-                    metadata=metadata,
+                    status="RUNNING",
+                    step=f"70 validate raw data {trade_date}",
+                    row_count=total_rows,
+                    metadata={
+                        **metadata,
+                        **summary.as_dict(),
+                        "current_trade_date": trade_date.isoformat(),
+                        "progress_pct": progress_pct,
+                    },
                 )
+
+            summary = HistoricalDataQualityService(db, get_settings().strategy).validate(
+                start,
+                end,
+                job_id=job_id,
+                progress_callback=progress,
+            )
+            update_job(
+                db,
+                job,
+                status="SUCCESS",
+                step="200 validate data complete",
+                row_count=summary.completed_days,
+                metadata={
+                    **metadata,
+                    **summary.as_dict(),
+                    "stage": "success",
+                    "progress_pct": 100,
+                },
+            )
         except Exception as exc:
             _mark_background_failed(db, job_id, exc)
 
@@ -370,7 +502,7 @@ def _run_recalculate_job(
                 mark_dirty_ranges_resolved(db, dirty_ranges)
         except Exception as exc:
             if dirty_ranges:
-                mark_dirty_ranges_failed(db, dirty_ranges)
+                mark_dirty_ranges_failed(db, dirty_ranges, str(exc))
             _mark_background_failed(db, job_id, exc)
 
 

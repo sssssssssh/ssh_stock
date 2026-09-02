@@ -3,13 +3,14 @@ from datetime import date, timedelta
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.job import JobRun
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.market import MarketService
-from app.services.quality.daily_quality import record_cross_table_quality
+from app.services.quality.daily_quality import DataQualityError, record_cross_table_quality
 from app.services.sector import SectorService
 from app.services.trend import TrendService
 
@@ -135,7 +136,17 @@ class DailyJob:
             )
             trend_rows = TrendService(self.db).recalc(trade_date, trade_date)
             total_rows += trend_rows["states"] + trend_rows["signals"]
-            record_cross_table_quality(self.db, trade_date, job_id=job.id)
+            quality = record_cross_table_quality(
+                self.db,
+                trade_date,
+                job_id=job.id,
+                strategy=get_settings().strategy,
+            )
+            if quality.has_error:
+                raise DataQualityError(
+                    "cross table quality failed: "
+                    f"trade_date={trade_date} datasets={quality.error_datasets}"
+                )
 
             update_job(
                 self.db,

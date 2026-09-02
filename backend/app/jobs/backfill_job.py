@@ -1,9 +1,11 @@
-from datetime import date, timedelta
+import uuid
+from datetime import date
 
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.job import JobRun
 from app.models.market_data import (
     DataQualityDaily,
@@ -16,13 +18,9 @@ from app.models.market_data import (
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
-from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
-from app.services.market import MarketService
-from app.services.quality.daily_quality import record_cross_table_quality
-from app.services.sector import SectorService
-from app.services.trend import TrendService
+from app.services.quality.history_quality import HistoricalDataQualityService
 
 
 class BackfillJob:
@@ -62,41 +60,14 @@ class BackfillJob:
                 **metadata,
                 "open_days": len(open_dates),
                 "completed_open_days": 0,
-                "stage": "metadata",
+                "stage": "daily",
                 "progress_pct": 10,
             }
-
-            update_job(
-                self.db,
-                job,
-                step="20 sync stock_basic",
-                row_count=total_rows,
-                metadata=metadata,
-            )
-            total_rows += self.ingestion.sync_stock_basic()
-
-            update_job(
-                self.db,
-                job,
-                step="25 sync sector metadata",
-                row_count=total_rows,
-                metadata={**metadata, "progress_pct": 13},
-            )
-            total_rows += self.ingestion.sync_sector_metadata()
-
-            update_job(
-                self.db,
-                job,
-                step="26 sync sector members",
-                row_count=total_rows,
-                metadata={**metadata, "progress_pct": 16},
-            )
-            total_rows += self.ingestion.sync_sector_members()
 
             skipped_raw_days = 0
             for index, current in enumerate(open_dates, 1):
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
-                if _raw_data_complete(self.db, current):
+                if _raw_data_complete(self.db, current, job_id=job.id):
                     skipped_raw_days += 1
                     update_job(
                         self.db,
@@ -131,74 +102,11 @@ class BackfillJob:
                 "current_open_day_index": len(open_dates),
             })
 
-            factor_chunks = _month_chunks(start, end)
-            factor_service = FactorService(self.db)
-            for chunk_index, (chunk_start, chunk_end) in enumerate(factor_chunks, 1):
-                start_progress = round(75 + ((chunk_index - 1) / len(factor_chunks)) * 8, 1)
-                chunk_metadata = {
-                    **metadata,
-                    "stage": "factors",
-                    "progress_pct": start_progress,
-                    "factor_chunk_index": chunk_index,
-                    "factor_chunk_count": len(factor_chunks),
-                    "factor_chunk_start": chunk_start.isoformat(),
-                    "factor_chunk_end": chunk_end.isoformat(),
-                }
-                update_job(
-                    self.db,
-                    job,
-                    step=f"90 factors {chunk_start}..{chunk_end}",
-                    row_count=total_rows,
-                    metadata=chunk_metadata,
-                )
-                total_rows += factor_service.recalc(chunk_start, chunk_end, calc_run_id=job.id)
-                metadata = {
-                    **chunk_metadata,
-                    "progress_pct": round(75 + (chunk_index / len(factor_chunks)) * 8, 1),
-                }
-                update_job(
-                    self.db,
-                    job,
-                    step=f"90 factors done {chunk_end}",
-                    row_count=total_rows,
-                    metadata=metadata,
-                )
-
-            update_job(
-                self.db,
-                job,
-                step="100 calculate market score",
-                row_count=total_rows,
-                metadata={**metadata, "stage": "market", "progress_pct": 83},
-            )
-            total_rows += MarketService(self.db).recalc(start, end, calc_run_id=job.id)
-
-            update_job(
-                self.db,
-                job,
-                step="110 calculate sector heat",
-                row_count=total_rows,
-                metadata={**metadata, "stage": "sectors", "progress_pct": 90},
-            )
-            total_rows += SectorService(self.db).recalc(start, end, calc_run_id=job.id)
-
-            update_job(
-                self.db,
-                job,
-                step="120 calculate trend states",
-                row_count=total_rows,
-                metadata={**metadata, "stage": "states", "progress_pct": 96},
-            )
-            trend_rows = TrendService(self.db).recalc(start, end)
-            total_rows += trend_rows["states"] + trend_rows["signals"]
-            for current in open_dates:
-                record_cross_table_quality(self.db, current, job_id=job.id)
-
             update_job(
                 self.db,
                 job,
                 status="SUCCESS",
-                step="180 mark SUCCESS",
+                step="180 raw sync complete",
                 row_count=total_rows,
                 metadata={
                     **metadata,
@@ -242,7 +150,12 @@ def _clear_daily_progress(metadata: dict[str, object]) -> dict[str, object]:
     return cleaned
 
 
-def _raw_data_complete(db: Session, trade_date: date) -> bool:
+def _raw_data_complete(
+    db: Session,
+    trade_date: date,
+    *,
+    job_id: uuid.UUID | None = None,
+) -> bool:
     table_counts = [
         _date_row_count(db, StockDaily.trade_date, trade_date),
         _date_row_count(db, StockAdjFactor.trade_date, trade_date),
@@ -259,7 +172,17 @@ def _raw_data_complete(db: Session, trade_date: date) -> bool:
         .order_by(DataQualityDaily.checked_at.desc())
         .limit(1)
     ).scalar_one_or_none()
-    return quality_status != "ERROR"
+    if quality_status in {"PASS", "WARNING"}:
+        return True
+    if quality_status == "ERROR":
+        return False
+
+    result = HistoricalDataQualityService(db, get_settings().strategy).validate_trade_date(
+        trade_date,
+        job_id=job_id,
+        include_cross_table=False,
+    )
+    return result.status in {"PASS", "WARNING"}
 
 
 def _date_row_count(db: Session, column: object, trade_date: date) -> int:
@@ -269,17 +192,3 @@ def _date_row_count(db: Session, column: object, trade_date: date) -> int:
             select(func.count()).select_from(table).where(column == trade_date)
         ).scalar_one()
     )
-
-
-def _month_chunks(start: date, end: date) -> list[tuple[date, date]]:
-    chunks: list[tuple[date, date]] = []
-    current = start
-    while current <= end:
-        if current.month == 12:
-            next_month = date(current.year + 1, 1, 1)
-        else:
-            next_month = date(current.year, current.month + 1, 1)
-        chunk_end = min(end, next_month - timedelta(days=1))
-        chunks.append((current, chunk_end))
-        current = chunk_end + timedelta(days=1)
-    return chunks

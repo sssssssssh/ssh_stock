@@ -11,7 +11,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 7：
+当前已完成 Milestone 0 到 Milestone 8：
 
 - 工程骨架
 - 数据库与迁移
@@ -26,16 +26,16 @@
 - 行业元数据表 `sector`、行业成分表 `sector_member`
 - 行业热度表 `sector_factor_daily`
 - Market Score、Regime、Sector Heat、Heat Momentum、Lifecycle
-- `recalc-market` / `recalc-sectors` CLI，并接入 daily/backfill
+- `recalc-market` / `recalc-sectors` CLI，并接入 daily/recalculate
 - 状态表 `stock_state_daily`
 - 策略信号表 `strategy_signal`
 - RightSideScore / TrendScore
 - S0-S6 状态机
 - RIGHT_SIDE_NEW / TREND_ENTER / MAIN_UP_ENTER / TREND_DECAY / LEADER_BREAKOUT 信号生成
-- `recalc-states` CLI，并接入 daily/backfill
+- `recalc-states` CLI，并接入 daily/recalculate
 - 完整 REST API：dashboard / stocks / sectors / jobs / research
 - 数据覆盖率接口：`GET /api/v1/system/data-coverage`
-- 前端数据拉取按钮：通过 `POST /api/v1/jobs/backfill` 创建后台回填任务
+- 前端数据任务入口：通过 `POST /api/v1/jobs/sync-basic` 同步基础信息，通过 `POST /api/v1/jobs/backfill` 创建原始行情回填任务
 - 前端任务状态面板：轮询 `GET /api/v1/jobs` 展示当前任务、最近任务、进度条、步骤和行数
 - 后验评估表 `signal_forward_eval`
 - `evaluate-signals` CLI
@@ -64,33 +64,39 @@
 - `stock_basic` 必须同步 `L`、`D`、`P` 状态；历史股票池必须使用 `list_date/delist_date/trade_date` 判断，不得只依赖当前 `list_status == L`。
 - `daily` 原始数据质量不得使用固定 `min_rows=1`；必须按当日 Point-in-Time 股票池计算 expected_count，并按 `config/strategy.yaml` 的 `data_quality.daily` 阈值判定 PASS/WARNING/ERROR。
 - `data_quality_daily` 记录日线覆盖率和跨表完整性；`data-calendar` 状态支持 `DEGRADED`，表示有原始数据但质量 ERROR。
+- 跨表质量必须支持 ERROR 阈值；`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 必须失败，不得标记 SUCCESS。`backfill` 只负责原始行情同步，只在原始日线覆盖率 ERROR 时失败。`sector_factor_daily` 与股票粒度不同，本阶段不得直接按股票行数阻断。
 - `sector_member` 历史计算必须使用 `valid_from/valid_to`，`is_latest` 只可用于当前展示，不得参与历史回测过滤。
 - 原始事实表启用 NULL upsert 保护时，新 NULL 不得覆盖已有非空值；历史原始非空值发生修订时必须记录 `data_dirty_range`。
-- `recalculate` 支持 `manual` 和 `dirty_repair` 两种模式；`dirty_repair` 从最早 OPEN dirty date 重算到最新已拉取交易日，完成后标记 RESOLVED。
+- `recalculate` 支持 `manual` 和 `dirty_repair` 两种模式；`dirty_repair` 从最早 OPEN dirty date 重算到最新已拉取交易日，完成后标记 RESOLVED。失败后 dirty range 必须恢复 `OPEN`，累加 `retry_count`，并写入 `last_error`、`last_failed_at`。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 必须写入 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`。
 - 后验收益只能写入 `signal_forward_eval`，不得反写当日因子、状态或信号表。
 - 前端 API 地址用 `frontend/.env` 的 `VITE_API_BASE_URL` / `VITE_API_PROXY_TARGET` 控制，不在源码里写死云端地址。
 - 网页用户可见名称和浏览器标题统一使用“空间”，不要显示“股票机会发现系统”。
-- 前端一级目录固定为 `总览`、`数据`、`长线`、`短线`。补算因子入口、数据拉取入口、任务状态、数据覆盖日历和数据覆盖表必须放在 `数据` 页面；长线股票池和行业热度放在 `长线` 页面；短线风险池、信号计数和短线动量放在 `短线` 页面。
+- 前端一级目录固定为 `总览`、`数据`、`长线`、`短线`。基础信息同步入口、原始行情拉取入口、补算因子入口、任务状态、数据覆盖日历和数据覆盖表必须放在 `数据` 页面；长线股票池和行业热度放在 `长线` 页面；短线风险池、信号计数和短线动量放在 `短线` 页面。
 - 数据页面的主要面板必须支持点击标题收起/展开；收起时只保留标题行和右侧操作区，不卸载任务轮询和数据状态。
 - 股票池中的股票代码必须可点击查看实时 K 线；实时 K 线使用 `GET /api/v1/stocks/{ts_code}/realtime-kline?days=180`，只从 Tushare 查询并返回前端绘图，不写入本地数据库。默认展示 180 个自然日，并支持 90 / 180 / 365 日切换。
+- 后端必须提供 `POST /api/v1/jobs/sync-basic` 作为页面基础信息同步入口，只同步 `stock_basic`、`sector`、`sector_member`，不得触发因子、市场、行业热度、状态、信号或后验计算。
+- 后端必须提供 `POST /api/v1/jobs/backfill` 作为页面原始行情拉取入口，只同步交易日历、`stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不得触发因子、市场、行业热度、状态、信号或后验计算。
 - 后端必须提供 `POST /api/v1/jobs/recalculate` 作为页面补算入口，按因子、市场、行业、状态、信号评估的顺序运行；因子阶段必须按自然月分块执行，并持续更新 `job_run.step`、`row_count`、`job_metadata.progress_pct`、`factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start` 和 `factor_chunk_end`。
 - `recalculate` 的 `row_count` 在因子分块完成写库后更新；前端在分块计算中必须提示“当前因子分块完成后更新行数”，避免把 0 行误解为卡死。
 - 数据覆盖日历使用 `GET /api/v1/system/data-calendar`，状态含义固定为 `CLOSED` 休市、`MISSING` 未拉取、`RAW_ONLY` 已拉未算、`ANALYZED` 基础分析完成、`COMPLETE` 行业热度也完成。
 - 前端数据覆盖明细表必须分页展示，默认每页 20 条，支持 10 / 20 / 50 / 100 条切换；不得直接全量渲染成长页面。
 - `GET /api/v1/system/data-coverage` 不传 `limit` 时必须返回全部已拉取交易日；可选 `limit` 不设置后端最大上限，前端默认不得写死最近 120 条。
 - 修改 `frontend/src/style.css` 或页面主布局后，必须重启 Vite 开发服务并用浏览器检查 `.workspace-shell`、`.nav-button` 等关键样式是否命中，避免新模板加载旧 CSS。
-- API 触发数据拉取或补算时必须创建 `job_run` 记录；同一时间只允许一个 `daily/backfill/recalculate` 任务处于 `QUEUED/RUNNING`。
+- API 触发基础信息同步、数据拉取、补算或存量校验时必须创建 `job_run` 记录；同一时间只允许一个 `daily/sync_basic/backfill/recalculate/validate_data` 任务处于 `QUEUED/RUNNING`。
 - 长任务必须持续更新 `job_run.step`、`row_count` 和 `job_metadata.progress_pct`，前端不得只显示“已提交”。
 - 前端任务面板必须根据 `job_run.started_at/finished_at` 展示耗时；运行中任务显示实时已耗时，完成/失败任务显示总耗时。
 - 前端任务列表必须展示 `error_message`，不能只显示“失败”。
 - 前端任务列表默认请求最近 30 条任务，列表内部滚动展示；步骤、日期范围、耗时和错误信息必须提供完整 `title`，方便鼠标悬停查看完整文本。
 - 前端任务列表的错误信息必须跨整行展示，并占用独立网格行撑开当前任务行，不能挤在步骤/日期列下面，也不能覆盖下一条任务。
 - 前端必须把 `job_run.step` 的英文内部步骤映射成中文可读步骤，同时在 `title` 中保留原始步骤便于排查。
-- backfill 在拉取日线后的因子阶段必须按自然月分块更新进度，写入 `factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start`、`factor_chunk_end`；进入市场、行业、趋势和信号阶段前必须清理上一交易日拉取阶段的 `current_trade_date`，避免前端展示过期日期。
+- backfill 仅负责原始行情拉取；补算任务 `recalculate` 在因子阶段必须按自然月分块更新进度，写入 `factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start`、`factor_chunk_end`；进入市场、行业、趋势和信号阶段前必须清理上一交易日拉取阶段的 `current_trade_date`，避免前端展示过期日期。
 - `row_count` 在长时间批量计算阶段可能只在阶段或分块完成后更新，前端必须给出“当前计算阶段完成后更新行数”的提示。
 - backfill 重跑同一日期范围时必须跳过原始数据已完整的交易日；完整条件为 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 当日都有记录，且 `data_quality_daily(stock_daily)` 不是 `ERROR`。
+- backfill 遇到 `data_quality_daily(stock_daily)` 缺失的旧历史数据时，必须先用库内已有数据补做质量校验；只有 PASS/WARNING 才能跳过原始数据下载，ERROR 必须重新拉取。
 - backfill 跳过完整交易日时必须更新任务步骤为 `30 skip existing raw {date}`，并在 `job_metadata.skipped_raw_days` 记录累计跳过数量。
+- 后端必须提供 `POST /api/v1/jobs/validate-data` 和 `python -m app.cli validate-data`，用于不访问 Tushare 的存量历史 Raw 质量补校验；任务元数据必须包含 `total_trade_days`、`completed_trade_days`、`pass_days`、`warning_days`、`error_days` 和 `progress_pct`。
+- stale `PROCESSING` dirty range 自动恢复暂未实现；后续如需要应按“超过 6 小时恢复 OPEN”的规则补充。
 - `TushareProvider.get_stock_basic()` 如果核心状态 `L/D` 缺失，最终异常必须包含缺失状态和对应 Tushare 原始错误；不得只返回 `required statuses missing` 这类聚合错误。
 - Tushare 代理请求的 `requests` 网络异常必须自动重试；重试耗尽后再写入 FAILED。
 - 本地开发时如果后端端口从 8000 改为 9034，必须同步修改 `frontend/.env` 的 `VITE_API_PROXY_TARGET`，否则前端会继续请求旧端口。

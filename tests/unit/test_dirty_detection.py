@@ -2,7 +2,7 @@ from datetime import date
 from types import SimpleNamespace
 
 from app.models.market_data import StockDaily
-from app.services.dirty import changed_trade_dates
+from app.services.dirty import changed_trade_dates, mark_dirty_ranges_failed
 
 
 class _FakeResult:
@@ -52,3 +52,22 @@ def test_changed_trade_dates_tracks_real_value_change() -> None:
     )
 
     assert dirty == {date(2026, 8, 31)}
+
+
+def test_mark_dirty_ranges_failed_reopens_for_retry() -> None:
+    dirty_range = SimpleNamespace(
+        status="PROCESSING",
+        retry_count=1,
+        last_error=None,
+        last_failed_at=None,
+    )
+    added = []
+    db = SimpleNamespace(add=added.append, commit=lambda: None)
+
+    mark_dirty_ranges_failed(db, [dirty_range], "factor failed")
+
+    assert dirty_range.status == "OPEN"
+    assert dirty_range.retry_count == 2
+    assert dirty_range.last_error == "factor failed"
+    assert dirty_range.last_failed_at is not None
+    assert added == [dirty_range]

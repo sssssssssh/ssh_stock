@@ -84,6 +84,13 @@ export function enqueueBackfillJob(payload: {
   });
 }
 
+export function enqueueSyncBasicJob(): Promise<JobRun> {
+  return request<JobRun>("/jobs/sync-basic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
 export function enqueueRecalculateJob(payload: {
   start: string;
   end: string;
