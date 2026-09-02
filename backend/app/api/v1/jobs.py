@@ -329,7 +329,7 @@ def _run_validate_data_job(job_id: uuid.UUID, start: date, end: date) -> None:
             def progress(
                 summary: HistoricalQualitySummary,
                 trade_date: date,
-                _result: object,
+                result: object,
             ) -> None:
                 nonlocal total_rows
                 total_rows = summary.completed_days
@@ -338,6 +338,7 @@ def _run_validate_data_job(job_id: uuid.UUID, start: date, end: date) -> None:
                     if summary.total_days
                     else 100
                 )
+                raw_metadata = result.as_metadata() if hasattr(result, "as_metadata") else {}
                 update_job(
                     db,
                     job,
@@ -347,6 +348,7 @@ def _run_validate_data_job(job_id: uuid.UUID, start: date, end: date) -> None:
                     metadata={
                         **metadata,
                         **summary.as_dict(),
+                        **raw_metadata,
                         "current_trade_date": trade_date.isoformat(),
                         "progress_pct": progress_pct,
                     },

@@ -3,18 +3,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.market_data import StockDaily, TradeCalendar
-from app.services.quality.daily_quality import (
-    CoverageResult,
-    check_daily_coverage,
-    expected_stock_codes,
-    persist_coverage_result,
-    record_cross_table_quality,
+from app.models.market_data import TradeCalendar
+from app.services.quality.daily_quality import record_cross_table_quality
+from app.services.quality.raw_completeness import (
+    RawCompletenessResult,
+    check_raw_completeness,
+    ensure_stock_basic_ready,
 )
-from app.services.quality.raw_completeness import ensure_stock_basic_ready
 
 
 @dataclass(frozen=True)
@@ -35,7 +33,7 @@ class HistoricalQualitySummary:
         }
 
 
-ProgressCallback = Callable[[HistoricalQualitySummary, date, CoverageResult], None]
+ProgressCallback = Callable[[HistoricalQualitySummary, date, RawCompletenessResult], None]
 
 
 class HistoricalDataQualityService:
@@ -64,11 +62,11 @@ class HistoricalDataQualityService:
                 job_id=job_id,
                 include_cross_table=True,
             )
-            if result.status == "PASS":
+            if result.overall_status == "PASS":
                 pass_days += 1
-            elif result.status == "WARNING":
+            elif result.overall_status == "WARNING":
                 warning_days += 1
-            elif result.status == "ERROR":
+            elif result.overall_status == "ERROR":
                 error_days += 1
             summary = HistoricalQualitySummary(
                 total_days=total_days,
@@ -87,22 +85,13 @@ class HistoricalDataQualityService:
         *,
         job_id: uuid.UUID | None = None,
         include_cross_table: bool = True,
-    ) -> CoverageResult:
-        expected_codes = self._expected_stock_codes(trade_date)
-        actual_codes = self._stock_daily_codes(trade_date)
-        result = check_daily_coverage(
-            trade_date=trade_date,
-            actual_codes=actual_codes,
-            expected_codes=expected_codes,
-            warning_coverage_rate=_daily_threshold(self.strategy, "warning", 0.98),
-            error_coverage_rate=_daily_threshold(self.strategy, "error", 0.95),
-            dataset="stock_daily",
-        )
-        persist_coverage_result(
+    ) -> RawCompletenessResult:
+        result = check_raw_completeness(
             self.db,
-            result,
-            duplicate_count=self._stock_daily_duplicate_count(trade_date),
+            trade_date,
+            strategy=self.strategy,
             job_id=job_id,
+            persist=True,
         )
         if include_cross_table:
             record_cross_table_quality(
@@ -127,41 +116,3 @@ class HistoricalDataQualityService:
             .scalars()
             .all()
         )
-
-    def _expected_stock_codes(self, trade_date: date) -> set[str]:
-        return expected_stock_codes(self.db, trade_date)
-
-    def _stock_daily_codes(self, trade_date: date) -> set[str]:
-        return set(
-            self.db.execute(
-                select(StockDaily.ts_code).where(StockDaily.trade_date == trade_date)
-            )
-            .scalars()
-            .all()
-        )
-
-    def _stock_daily_duplicate_count(self, trade_date: date) -> int:
-        duplicate_rows = (
-            self.db.execute(
-                select(func.count())
-                .select_from(
-                    select(StockDaily.ts_code)
-                    .where(StockDaily.trade_date == trade_date)
-                    .group_by(StockDaily.ts_code)
-                    .having(func.count() > 1)
-                    .subquery()
-                )
-            ).scalar_one()
-            or 0
-        )
-        return int(duplicate_rows)
-
-
-def _daily_threshold(
-    strategy: dict,
-    severity: str,
-    default: float,
-) -> float:
-    daily = strategy.get("data_quality", {}).get("daily", {})
-    value = daily.get(f"{severity}_coverage_rate", default) if isinstance(daily, dict) else default
-    return float(value)

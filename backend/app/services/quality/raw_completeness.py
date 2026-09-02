@@ -1,9 +1,9 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.models.market_data import (
@@ -33,6 +33,8 @@ class RawDatasetCompleteness:
     coverage_rate: float | None
     missing_codes: list[str]
     extra_codes: list[str]
+    invalid_count: int = 0
+    invalid_codes: list[str] = field(default_factory=list)
 
     @property
     def is_acceptable(self) -> bool:
@@ -72,6 +74,20 @@ class RawCompletenessResult:
             and self.index_daily.status == "PASS"
         )
 
+    @property
+    def overall_status(self) -> str:
+        datasets = [
+            self.stock_daily,
+            self.adj_factor,
+            self.daily_basic,
+            self.index_daily,
+        ]
+        if any(dataset.status == "ERROR" for dataset in datasets):
+            return "ERROR"
+        if any(dataset.status == "WARNING" for dataset in datasets):
+            return "WARNING"
+        return "PASS"
+
     def dataset(self, name: str) -> RawDatasetCompleteness:
         return {
             "stock_daily": self.stock_daily,
@@ -91,6 +107,13 @@ class RawCompletenessResult:
                 "adj_factor": self.adj_factor_status,
                 "daily_basic": self.daily_basic_status,
                 "index_daily": self.index_daily_status,
+            },
+            "current_day_status": self.overall_status,
+            "current_day_invalid_counts": {
+                "stock_daily": self.stock_daily.invalid_count,
+                "adj_factor": self.adj_factor.invalid_count,
+                "daily_basic": self.daily_basic.invalid_count,
+                "index_daily": self.index_daily.invalid_count,
             },
             "error_dataset_count": sum(
                 1
@@ -145,11 +168,31 @@ def check_raw_completeness(
 ) -> RawCompletenessResult:
     strategy = strategy or {}
     stock_daily_codes = _codes_for_date(db, StockDaily, StockDaily.trade_date, trade_date)
-    adj_factor_codes = _codes_for_date(db, StockAdjFactor, StockAdjFactor.trade_date, trade_date)
-    daily_basic_codes = _codes_for_date(
-        db, StockDailyBasic, StockDailyBasic.trade_date, trade_date
+    adj_factor_codes, invalid_adj_factor_codes = _valid_codes_for_date(
+        db,
+        StockAdjFactor,
+        StockAdjFactor.trade_date,
+        trade_date,
+        positive_columns=[StockAdjFactor.adj_factor],
     )
-    index_daily_codes = _codes_for_date(db, IndexDaily, IndexDaily.trade_date, trade_date)
+    daily_basic_codes, invalid_daily_basic_codes = _valid_codes_for_date(
+        db,
+        StockDailyBasic,
+        StockDailyBasic.trade_date,
+        trade_date,
+        required_columns=[
+            StockDailyBasic.close,
+            StockDailyBasic.total_mv,
+            StockDailyBasic.circ_mv,
+        ],
+    )
+    index_daily_codes, invalid_index_daily_codes = _valid_codes_for_date(
+        db,
+        IndexDaily,
+        IndexDaily.trade_date,
+        trade_date,
+        positive_columns=[IndexDaily.close, IndexDaily.pre_close],
+    )
 
     # Current expected universe does not subtract suspended stocks yet. Milestone 9 should
     # introduce suspension data and use active stocks minus suspended stocks here.
@@ -174,6 +217,7 @@ def check_raw_completeness(
         error_coverage_rate=_raw_threshold(strategy, "adj_factor", "error", 0.95),
         job_id=job_id,
         persist=persist,
+        invalid_codes=invalid_adj_factor_codes,
     )
     daily_basic = _coverage_dataset(
         db,
@@ -185,12 +229,14 @@ def check_raw_completeness(
         error_coverage_rate=_raw_threshold(strategy, "daily_basic", "error", 0.95),
         job_id=job_id,
         persist=persist,
+        invalid_codes=invalid_daily_basic_codes,
     )
     index_daily = _index_daily_dataset(
         db,
         trade_date,
         _benchmark_indices(strategy),
         index_daily_codes,
+        invalid_codes=invalid_index_daily_codes,
         job_id=job_id,
         persist=persist,
     )
@@ -214,7 +260,9 @@ def _coverage_dataset(
     error_coverage_rate: float,
     job_id: uuid.UUID | None,
     persist: bool,
+    invalid_codes: set[str] | None = None,
 ) -> RawDatasetCompleteness:
+    invalid_codes = invalid_codes or set()
     result = check_daily_coverage(
         trade_date=trade_date,
         actual_codes=actual_codes,
@@ -224,7 +272,12 @@ def _coverage_dataset(
         dataset=dataset,
     )
     if persist:
-        persist_coverage_result(db, result, job_id=job_id)
+        persist_coverage_result(
+            db,
+            result,
+            job_id=job_id,
+            extra_issue_codes=_invalid_issue_codes(invalid_codes),
+        )
     return RawDatasetCompleteness(
         dataset=dataset,
         status=result.status,
@@ -233,6 +286,8 @@ def _coverage_dataset(
         coverage_rate=result.coverage_rate,
         missing_codes=result.missing_codes,
         extra_codes=result.extra_codes,
+        invalid_count=len(invalid_codes),
+        invalid_codes=_top_invalid_codes(invalid_codes),
     )
 
 
@@ -241,10 +296,12 @@ def _index_daily_dataset(
     trade_date: date,
     expected_codes: set[str],
     actual_codes: set[str],
+    invalid_codes: set[str] | None = None,
     *,
     job_id: uuid.UUID | None,
     persist: bool,
 ) -> RawDatasetCompleteness:
+    invalid_codes = invalid_codes or set()
     status = "PASS" if expected_codes and expected_codes <= actual_codes else "ERROR"
     coverage_rate = (
         len(expected_codes & actual_codes) / len(expected_codes) if expected_codes else None
@@ -270,7 +327,12 @@ def _index_daily_dataset(
         error_count=0 if status == "PASS" else 1,
     )
     if persist:
-        persist_coverage_result(db, result, job_id=job_id)
+        persist_coverage_result(
+            db,
+            result,
+            job_id=job_id,
+            extra_issue_codes=_invalid_issue_codes(invalid_codes),
+        )
     return RawDatasetCompleteness(
         dataset="index_daily",
         status=status,
@@ -279,6 +341,8 @@ def _index_daily_dataset(
         coverage_rate=coverage_rate,
         missing_codes=sorted(expected_codes - actual_codes),
         extra_codes=sorted(actual_codes - expected_codes),
+        invalid_count=len(invalid_codes),
+        invalid_codes=_top_invalid_codes(invalid_codes),
     )
 
 
@@ -288,6 +352,51 @@ def _codes_for_date(db: Session, model: type, column: Any, trade_date: date) -> 
         .scalars()
         .all()
     )
+
+
+def _valid_codes_for_date(
+    db: Session,
+    model: type,
+    column: Any,
+    trade_date: date,
+    *,
+    required_columns: list[Any] | None = None,
+    positive_columns: list[Any] | None = None,
+) -> tuple[set[str], set[str]]:
+    required_columns = required_columns or []
+    positive_columns = positive_columns or []
+    validity_checks = [field.is_not(None) for field in required_columns]
+    validity_checks.extend(field.is_not(None) for field in positive_columns)
+    validity_checks.extend(field > 0 for field in positive_columns)
+    if not validity_checks:
+        codes = _codes_for_date(db, model, column, trade_date)
+        return codes, set()
+
+    validity = and_(*validity_checks)
+    valid_codes = set(
+        db.execute(select(model.ts_code).where(column == trade_date, validity))
+        .scalars()
+        .all()
+    )
+    invalid_codes = set(
+        db.execute(select(model.ts_code).where(column == trade_date, ~validity))
+        .scalars()
+        .all()
+    )
+    return valid_codes, invalid_codes
+
+
+def _invalid_issue_codes(invalid_codes: set[str]) -> dict[str, Any]:
+    if not invalid_codes:
+        return {}
+    return {
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": _top_invalid_codes(invalid_codes),
+    }
+
+
+def _top_invalid_codes(invalid_codes: set[str]) -> list[str]:
+    return sorted(invalid_codes)[:100]
 
 
 def _benchmark_indices(strategy: dict[str, Any]) -> set[str]:

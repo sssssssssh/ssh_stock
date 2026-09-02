@@ -685,7 +685,17 @@ Content-Type: application/json
 {"start":"2020-01-01","end":"2026-08-31"}
 ```
 
-`validate-data` 不访问 Tushare，不重新下载历史数据，只基于数据库中已有的 `stock_daily`、交易日历和 Point-in-Time 股票池补写 `data_quality_daily`，并同步记录跨表质量。旧数据库升级后建议先执行 `validate-data`，再执行 backfill / recalculate。
+`validate-data` 不访问 Tushare，不重新下载历史数据，只基于数据库中已有的 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`、交易日历和 Point-in-Time 股票池补写 `data_quality_daily`，并同步记录跨表质量。旧数据库升级后建议先执行 `validate-data`，再执行 backfill / recalculate。
+
+Raw 数据层最终收尾已完成：
+
+- `validate-data` 与 `backfill` 共用 `check_raw_completeness()`，按 Raw 四类数据集统一判断 PASS / WARNING / ERROR。
+- `validate-data` 汇总的 `pass_days`、`warning_days`、`error_days` 根据 `RawCompletenessResult.overall_status` 统计，不再只看 `stock_daily`。
+- API 进度元数据会返回 `current_day_datasets`、`current_day_status` 和 `current_day_invalid_counts`。
+- CLI `validate-data` 在成功后显式 `commit()`，异常时显式 `rollback()`。
+- Raw 核心字段有效性已纳入完整性：`adj_factor` 必须非空且大于 0，`index_daily.close/pre_close` 必须非空且大于 0，`daily_basic` 只检查 `close/total_mv/circ_mv`。
+- `sector_member` 当前成员批次 `is_new=Y` 返回空结果会失败并提示 L1 行业代码；历史批次 `is_new=N` 允许为空。
+- Raw 数据层按当前 Milestone 8 范围封版；后续可交易性数据进入 Milestone 9。
 
 数据覆盖面板中间会显示“当前任务”和“最近任务”：
 

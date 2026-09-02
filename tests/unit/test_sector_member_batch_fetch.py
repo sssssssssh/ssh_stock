@@ -81,3 +81,37 @@ def test_sector_member_batch_failure_mentions_l1_code() -> None:
 
     with pytest.raises(RuntimeError, match="801010.SI/Y"):
         provider.get_sector_members()
+
+
+def test_sector_member_current_batch_empty_fails_with_l1_code() -> None:
+    classification = pd.DataFrame([{"index_code": "801010.SI", "name": "农林牧渔", "level": "L1"}])
+    responses = {
+        ("index_classify", None, None): classification,
+        ("index_member_all", "801010.SI", "Y"): pd.DataFrame(),
+        ("index_member_all", "801010.SI", "N"): pd.DataFrame(),
+    }
+    provider = _provider_with_fake_call(responses)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        provider.get_sector_members()
+
+    message = str(exc_info.value)
+    assert "sector_member current batch empty" in message
+    assert "l1_code=801010.SI" in message
+
+
+def test_sector_member_history_batch_empty_is_allowed() -> None:
+    classification = pd.DataFrame([{"index_code": "801010.SI", "name": "农林牧渔", "level": "L1"}])
+    responses = {
+        ("index_classify", None, None): classification,
+        ("index_member_all", "801010.SI", "Y"): pd.DataFrame(
+            [{"l1_code": "801010.SI", "con_code": "000001.SZ", "in_date": "20200101"}]
+        ),
+        ("index_member_all", "801010.SI", "N"): pd.DataFrame(),
+    }
+    provider = _provider_with_fake_call(responses)
+
+    df = provider.get_sector_members()
+
+    assert len(df.index) == 1
+    assert df.iloc[0]["con_code"] == "000001.SZ"

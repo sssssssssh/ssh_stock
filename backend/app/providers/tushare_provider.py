@@ -217,6 +217,12 @@ class TushareProvider:
                 except Exception as exc:
                     errors.append(f"{l1_code}/{is_new}: {_compact_error(exc)}")
                     continue
+                if df.empty and is_new == "Y":
+                    errors.append(
+                        "sector_member current batch empty: "
+                        f"l1_code={l1_code} is_new={is_new}"
+                    )
+                    continue
                 if not df.empty:
                     if "l1_code" not in df.columns:
                         df = df.copy()

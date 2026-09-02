@@ -126,11 +126,14 @@ def persist_coverage_result(
     duplicate_count: int = 0,
     null_count: int = 0,
     job_id: uuid.UUID | None = None,
+    extra_issue_codes: dict[str, Any] | None = None,
 ) -> None:
     issue_codes: dict[str, Any] = {
         "missing_codes": result.missing_codes,
         "extra_codes": result.extra_codes,
     }
+    if extra_issue_codes:
+        issue_codes.update(extra_issue_codes)
     if result.expected_rows == 0:
         issue_codes["warnings"] = ["NO_EXPECTED_UNIVERSE"]
     rows = [

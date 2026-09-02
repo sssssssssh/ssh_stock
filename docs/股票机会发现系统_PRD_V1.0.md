@@ -1050,3 +1050,14 @@ V1 验证指标：
 - `daily` 不再同步申万行业分类和行业成分；行业基础信息只由 `sync-basic` 独立维护。
 - `backfill` API 去掉 `evaluate_signals` 含义，拉取原始数据和信号评估彻底分离。
 - 当前 Raw 完整性检查尚未扣除停牌股票，expected 股票池按上市/退市日期判断；停牌数据留到 Milestone 9 以后扩展。
+
+### 25.4 Raw 数据层最终收尾与封版（2026-09-02）
+
+- `validate-data` 改为复用 `check_raw_completeness()`，与 `backfill` 使用同一套 Raw 完整性定义。
+- `pass_days`、`warning_days`、`error_days` 按 `RawCompletenessResult.overall_status` 汇总：任一 Raw 数据集 ERROR 则当日 ERROR；无 ERROR 但任一 WARNING 则当日 WARNING；全部 PASS 才是 PASS。
+- `validate-data` API 进度增加当前四类 Raw 数据集状态和当日整体状态，方便定位是哪张 Raw 表导致异常。
+- CLI `validate-data` 成功后显式提交质量结果，异常时回滚。
+- Raw 核心字段质量已纳入有效行判断：复权因子必须非空且大于 0，指数收盘/昨收必须非空且大于 0，每日指标只要求 close、total_mv、circ_mv 三个核心字段。
+- 字段无效记录会写入 `data_quality_daily.issue_codes.invalid_count/invalid_codes`，无效代码最多保留 100 个。
+- 申万行业成分当前批次 `is_new=Y` 空结果直接失败并携带 L1 行业代码；历史批次 `is_new=N` 空结果允许。
+- Raw 数据层在 Milestone 8 范围内封版，后续进入 Milestone 9 可交易性数据，不继续扩展本轮数据拉取架构。

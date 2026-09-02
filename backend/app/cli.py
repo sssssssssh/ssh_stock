@@ -106,7 +106,15 @@ def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) 
     start_date = _parse_date(start, "start")
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
-        summary = HistoricalDataQualityService(db, settings.strategy).validate(start_date, end_date)
+        try:
+            summary = HistoricalDataQualityService(db, settings.strategy).validate(
+                start_date,
+                end_date,
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
     typer.echo(f"total_days={summary.total_days}")
     typer.echo(f"pass_days={summary.pass_days}")
     typer.echo(f"warning_days={summary.warning_days}")

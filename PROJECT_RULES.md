@@ -106,6 +106,12 @@
 - `provider_api_log` 必须使用独立数据库 Session 写入；Provider 日志成功或失败不得提前提交业务 Session。
 - `config/strategy.yaml` 的 `provider.tushare.safe_limits` 用于标记疑似截断的 Tushare 响应；达到安全行数时 Provider 日志应记录 WARNING。
 - 当前 Raw 完整性检查不扣除停牌股票，expected 股票池按上市/退市日期判断；停牌数据纳入 Milestone 9 以后再扩展。
+- `validate-data` 必须调用 `check_raw_completeness()`，并用 `RawCompletenessResult.overall_status` 汇总 `pass_days/warning_days/error_days`，不得单独按 `stock_daily` 覆盖率统计。
+- `validate-data` API 进度必须包含当前四类 Raw 数据集状态；CLI 成功后必须显式 `commit()`，异常时必须 `rollback()`。
+- Raw 完整性必须只把有效字段计入 actual：`stock_adj_factor.adj_factor` 非空且大于 0；`index_daily.close/pre_close` 非空且大于 0；`stock_daily_basic` 只检查 `close/total_mv/circ_mv` 非空。
+- Raw 字段无效记录必须写入 `data_quality_daily.issue_codes.invalid_count/invalid_codes`，`invalid_codes` 最多保留 100 个。
+- `sector_member` 当前成员批次 `is_new=Y` 返回空结果必须失败，历史批次 `is_new=N` 返回空结果允许；错误信息必须包含 L1 code。
+- Raw 数据层按 Milestone 8 当前范围封版；下一阶段只在 Milestone 9 接入可交易性数据，不继续重构当前数据拉取架构。
 - 本地开发时如果后端端口从 8000 改为 9034，必须同步修改 `frontend/.env` 的 `VITE_API_PROXY_TARGET`，否则前端会继续请求旧端口。
 
 ## 安全规则
