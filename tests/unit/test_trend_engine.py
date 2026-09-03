@@ -121,3 +121,59 @@ def test_fast_transition_from_s0_is_limited_to_s3() -> None:
     assert row["state"] == "S3"
     assert bool(row["fast_transition"]) is True
     assert "FAST_TRANSITION_LIMITED_TO_S3" in row["reason_codes"]
+
+
+def test_calculate_stock_states_keeps_one_row_with_historical_sector_memberships() -> None:
+    target = date(2026, 8, 26)
+    factor = _base_factor(target, "000007.SZ")
+    sector_members = pd.DataFrame(
+        [
+            {
+                "sector_id": 1,
+                "ts_code": "000007.SZ",
+                "valid_from": date(2025, 1, 1),
+                "valid_to": date(2025, 12, 31),
+                "is_latest": False,
+            },
+            {
+                "sector_id": 2,
+                "ts_code": "000007.SZ",
+                "valid_from": date(2026, 1, 1),
+                "valid_to": None,
+                "is_latest": True,
+            },
+            {
+                "sector_id": 3,
+                "ts_code": "000007.SZ",
+                "valid_from": date(2027, 1, 1),
+                "valid_to": None,
+                "is_latest": False,
+            },
+        ]
+    )
+    sector_factors = pd.DataFrame(
+        [
+            {
+                "trade_date": target,
+                "sector_id": 2,
+                "heat_score": 88.0,
+                "heat_momentum3": 6.0,
+            }
+        ]
+    )
+
+    states = calculate_stock_states(
+        factors=pd.DataFrame([factor]),
+        market=pd.DataFrame(),
+        sector_members=sector_members,
+        sector_factors=sector_factors,
+        previous_states=pd.DataFrame(),
+        start=target,
+        end=target,
+        config=TrendConfig(),
+    )
+
+    assert len(states) == 1
+    assert states.iloc[0]["ts_code"] == "000007.SZ"
+    assert states.iloc[0]["primary_sector_id"] == 2
+    assert states.iloc[0]["sector_heat"] == 88.0

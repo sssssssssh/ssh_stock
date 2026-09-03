@@ -460,16 +460,8 @@ def _merge_context(
         result["market_score"] = np.nan
 
     if not sector_members.empty:
-        members = sector_members.copy()
-        members["valid_from"] = pd.to_datetime(members["valid_from"]).dt.date
-        members["valid_to"] = pd.to_datetime(members["valid_to"]).dt.date
-        result = result.merge(members, on="ts_code", how="left")
-        valid_to = result["valid_to"].fillna(date(9999, 12, 31))
-        valid_member = (result["trade_date"] >= result["valid_from"]) & (
-            result["trade_date"] <= valid_to
-        )
-        result.loc[~valid_member, "sector_id"] = np.nan
-        result = result.rename(columns={"sector_id": "primary_sector_id"})
+        primary_sector = _primary_sector_context(result, sector_members)
+        result = result.merge(primary_sector, on=["trade_date", "ts_code"], how="left")
     else:
         result["primary_sector_id"] = np.nan
 
@@ -489,6 +481,34 @@ def _merge_context(
         result["sector_heat"] = np.nan
         result["sector_heat_momentum3"] = np.nan
     return result
+
+
+def _primary_sector_context(df: pd.DataFrame, sector_members: pd.DataFrame) -> pd.DataFrame:
+    keys = df[["trade_date", "ts_code"]].drop_duplicates().copy()
+    members = sector_members.copy()
+    members["valid_from"] = pd.to_datetime(members["valid_from"]).dt.date
+    members["valid_to"] = pd.to_datetime(members["valid_to"]).dt.date
+    if "is_latest" not in members.columns:
+        members["is_latest"] = False
+
+    merged = keys.merge(members, on="ts_code", how="left")
+    valid_to = merged["valid_to"].fillna(date(9999, 12, 31))
+    valid_member = (merged["trade_date"] >= merged["valid_from"]) & (
+        merged["trade_date"] <= valid_to
+    )
+    valid = merged[valid_member].copy()
+    if valid.empty:
+        keys["primary_sector_id"] = np.nan
+        return keys
+
+    valid = valid.sort_values(
+        ["trade_date", "ts_code", "is_latest", "valid_from", "sector_id"],
+        ascending=[True, True, False, False, True],
+    )
+    primary = valid.drop_duplicates(["trade_date", "ts_code"], keep="first")[
+        ["trade_date", "ts_code", "sector_id"]
+    ].rename(columns={"sector_id": "primary_sector_id"})
+    return keys.merge(primary, on=["trade_date", "ts_code"], how="left")
 
 
 def calculate_stock_states(

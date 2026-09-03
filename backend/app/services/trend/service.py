@@ -49,6 +49,7 @@ class TrendService:
             config=config,
         )
         state_rows = [_clean_row(row) for row in states.to_dict("records")]
+        _ensure_unique_rows(state_rows, ["trade_date", "ts_code", "algo_version"])
         state_count = upsert_rows(
             self.db,
             StockStateDaily,
@@ -173,3 +174,19 @@ def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
         else:
             cleaned[key] = value
     return cleaned
+
+
+def _ensure_unique_rows(rows: list[dict[str, Any]], key_columns: list[str]) -> None:
+    seen: set[tuple[Any, ...]] = set()
+    duplicates: list[tuple[Any, ...]] = []
+    for row in rows:
+        key = tuple(row.get(column) for column in key_columns)
+        if key in seen:
+            duplicates.append(key)
+        seen.add(key)
+    if duplicates:
+        sample = ", ".join(str(key) for key in duplicates[:5])
+        raise ValueError(
+            "duplicate stock_state_daily rows generated for "
+            f"{key_columns}: {sample}; check sector membership context"
+        )
