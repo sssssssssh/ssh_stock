@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import typer
 
@@ -12,6 +13,7 @@ from app.jobs.scheduler import run_scheduler
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
+from app.services.job_guard import ActiveIngestionJobError, reject_if_active_ingestion_job
 from app.services.market import MarketService
 from app.services.quality.history_quality import HistoricalDataQualityService
 from app.services.research import SignalEvaluationService
@@ -30,6 +32,18 @@ def _parse_date(value: str, name: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise typer.BadParameter(f"{name} must use YYYY-MM-DD format") from exc
+
+
+def _today() -> date:
+    return datetime.now(ZoneInfo(get_settings().app_timezone)).date()
+
+
+def _guard_cli_task(db) -> None:
+    try:
+        reject_if_active_ingestion_job(db)
+    except ActiveIngestionJobError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
 
 
 def _mask_token(token: str | None) -> str | None:
@@ -78,8 +92,9 @@ def check_tushare() -> None:
 @cli.command()
 def daily(trade_date: str | None = typer.Option(None, "--trade-date")) -> None:
     configure_logging()
-    target = _parse_date(trade_date, "trade_date") if trade_date else date.today()
+    target = _parse_date(trade_date, "trade_date") if trade_date else _today()
     with SessionLocal() as db:
+        _guard_cli_task(db)
         DailyJob(db, _provider(db)).run(target)
 
 
@@ -87,6 +102,7 @@ def daily(trade_date: str | None = typer.Option(None, "--trade-date")) -> None:
 def sync_basic() -> None:
     configure_logging()
     with SessionLocal() as db:
+        _guard_cli_task(db)
         BasicInfoJob(db, _provider(db)).run()
 
 
@@ -96,6 +112,7 @@ def backfill(start: str = typer.Option(...), end: str = typer.Option(...)) -> No
     start_date = _parse_date(start, "start")
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
+        _guard_cli_task(db)
         BackfillJob(db, _provider(db)).run(start_date, end_date)
 
 
@@ -106,6 +123,7 @@ def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) 
     start_date = _parse_date(start, "start")
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
+        _guard_cli_task(db)
         try:
             summary = HistoricalDataQualityService(db, settings.strategy).validate(
                 start_date,

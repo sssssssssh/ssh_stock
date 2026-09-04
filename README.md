@@ -788,6 +788,28 @@ npm run build
 - `stock_basic required statuses missing` 会同时展示 Tushare 对应状态的原始错误，例如限频、代理 SSL 或接口返回异常，便于判断真实失败原因。
 - 如果后端正在执行旧进程中的任务，修改后的后端进度展示规则要等该任务结束并重启后端后，才会作用于新任务。
 
+## 自动运行与可靠性
+
+本地或 Docker worker 启动：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli scheduler
+```
+
+Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前默认 `10 18 * * 1-5`，会按 `Asia/Shanghai` 时区解析为周一到周五 18:10。
+
+当前自动运行规则：
+
+- Scheduler 每次触发时先恢复超时的 `QUEUED/RUNNING` 数据任务，默认超过 `stale_job_hours=24` 小时会标记为 `FAILED`。
+- API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 共用任务互斥 Guard，同一时间只允许一个数据任务运行。
+- Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
+- Scheduler 不再只跑当天，而是执行 Catch-up：发现最近少量缺失交易日或 Raw 不完整交易日后，逐日复用 `DailyJob` 补齐 Raw 和计算。
+- 自动补漏受 `max_catchup_trade_days=20` 保护，缺口超过阈值时不会自动大规模回填，需要手动执行 `backfill` 和 `recalculate`。
+- Catch-up 完成后会按 `refresh_recent_trade_days=5` 重新跑最近交易日，便于发现 Tushare 历史修订并触发 dirty range。
+- `DailyJob` 在 Raw 四表同步后会先执行 RawCompleteness Gate。Raw ERROR 时禁止进入因子、市场、行业、趋势和信号计算；Raw WARNING 暂允许继续。
+- `BackfillJob` 的 `index_daily` 区间预拉取失败时会记录 warning，然后降级为逐日 `index_daily` 拉取，最终仍由 RawCompleteness 判断是否成功。
+
 ## 换电脑继续开发
 
 1. 安装 Python 3.12、Docker Desktop、Git、Node.js 22 LTS。

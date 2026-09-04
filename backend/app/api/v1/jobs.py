@@ -27,6 +27,7 @@ from app.services.dirty import (
     open_dirty_ranges,
 )
 from app.services.factors import FactorService
+from app.services.job_guard import ActiveIngestionJobError, reject_if_active_ingestion_job
 from app.services.market import MarketService
 from app.services.quality.history_quality import (
     HistoricalDataQualityService,
@@ -247,18 +248,10 @@ def enqueue_validate_data_job(
 
 
 def _reject_if_active_ingestion_job(db: Session) -> None:
-    active = db.execute(
-        select(JobRun.id)
-        .where(
-            JobRun.job_type.in_(
-                ["daily", "sync_basic", "backfill", "recalculate", "validate_data"]
-            ),
-            JobRun.status.in_(["QUEUED", "RUNNING"]),
-        )
-        .limit(1)
-    ).scalar_one_or_none()
-    if active:
-        raise HTTPException(status_code=409, detail=f"active ingestion job exists: {active}")
+    try:
+        reject_if_active_ingestion_job(db)
+    except ActiveIngestionJobError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 def _run_daily_job(job_id: uuid.UUID, trade_date: date) -> None:

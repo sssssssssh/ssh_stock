@@ -71,6 +71,7 @@ def test_cli_validate_data_commits_quality_result(monkeypatch) -> None:
     session_local = _FakeSessionLocal()
     monkeypatch.setattr(cli_module, "SessionLocal", session_local)
     monkeypatch.setattr(cli_module, "get_settings", lambda: SimpleNamespace(strategy={}))
+    monkeypatch.setattr(cli_module, "_guard_cli_task", lambda db: None)
     monkeypatch.setattr(
         cli_module,
         "HistoricalDataQualityService",
@@ -93,6 +94,7 @@ def test_cli_validate_data_rolls_back_on_error(monkeypatch) -> None:
     session_local = _FakeSessionLocal()
     monkeypatch.setattr(cli_module, "SessionLocal", session_local)
     monkeypatch.setattr(cli_module, "get_settings", lambda: SimpleNamespace(strategy={}))
+    monkeypatch.setattr(cli_module, "_guard_cli_task", lambda db: None)
     monkeypatch.setattr(
         cli_module,
         "HistoricalDataQualityService",

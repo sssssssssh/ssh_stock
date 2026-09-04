@@ -116,22 +116,64 @@ def _cross_pass(*args, **kwargs):
     return SimpleNamespace(has_error=False, error_datasets=[])
 
 
-def _raw_complete(index_status: str = "PASS", is_complete: bool = True):
-    dataset = SimpleNamespace(status="PASS", is_acceptable=True)
-    index = SimpleNamespace(status=index_status, is_acceptable=index_status == "PASS")
+def _raw_complete(
+    index_status: str = "PASS",
+    is_complete: bool = True,
+    overall_status: str = "PASS",
+    adj_factor_status: str = "PASS",
+    daily_basic_status: str = "PASS",
+):
+    stock_daily = SimpleNamespace(
+        status="PASS",
+        is_acceptable=True,
+        missing_codes=[],
+        invalid_count=0,
+    )
+    adj_factor = SimpleNamespace(
+        status=adj_factor_status,
+        is_acceptable=adj_factor_status in {"PASS", "WARNING"},
+        missing_codes=["000001.SZ"] if adj_factor_status == "ERROR" else [],
+        invalid_count=0,
+    )
+    daily_basic = SimpleNamespace(
+        status=daily_basic_status,
+        is_acceptable=daily_basic_status in {"PASS", "WARNING"},
+        missing_codes=[],
+        invalid_count=0,
+    )
+    index = SimpleNamespace(
+        status=index_status,
+        is_acceptable=index_status == "PASS",
+        missing_codes=[],
+        invalid_count=0,
+    )
     return SimpleNamespace(
         is_complete=is_complete,
-        stock_daily=dataset,
-        adj_factor=dataset,
-        daily_basic=dataset,
+        overall_status=overall_status,
+        trade_date=date(2026, 1, 5),
+        stock_daily=stock_daily,
+        adj_factor=adj_factor,
+        daily_basic=daily_basic,
         index_daily=index,
-        dataset=lambda name: index if name == "index_daily" else dataset,
+        dataset=lambda name: {
+            "stock_daily": stock_daily,
+            "adj_factor": adj_factor,
+            "daily_basic": daily_basic,
+            "index_daily": index,
+        }[name],
         as_metadata=lambda: {
             "current_day_datasets": {
                 "stock_daily": "PASS",
-                "adj_factor": "PASS",
-                "daily_basic": "PASS",
+                "adj_factor": adj_factor_status,
+                "daily_basic": daily_basic_status,
                 "index_daily": index_status,
+            },
+            "current_day_status": overall_status,
+            "current_day_invalid_counts": {
+                "stock_daily": 0,
+                "adj_factor": 0,
+                "daily_basic": 0,
+                "index_daily": 0,
             },
             "error_dataset_count": 0 if index_status == "PASS" else 1,
         },
@@ -145,6 +187,11 @@ def test_daily_job_fails_on_cross_table_error(monkeypatch) -> None:
     monkeypatch.setattr(daily_job_module, "MarketService", _FakeScalarService)
     monkeypatch.setattr(daily_job_module, "SectorService", _FakeScalarService)
     monkeypatch.setattr(daily_job_module, "TrendService", _FakeTrendService)
+    monkeypatch.setattr(
+        daily_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _raw_complete(),
+    )
     monkeypatch.setattr(daily_job_module, "record_cross_table_quality", _cross_error)
     job = _job()
 
@@ -162,6 +209,11 @@ def test_daily_job_does_not_sync_sector_base_tables(monkeypatch) -> None:
     monkeypatch.setattr(daily_job_module, "MarketService", _FakeScalarService)
     monkeypatch.setattr(daily_job_module, "SectorService", _FakeScalarService)
     monkeypatch.setattr(daily_job_module, "TrendService", _FakeTrendService)
+    monkeypatch.setattr(
+        daily_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _raw_complete(),
+    )
     monkeypatch.setattr(daily_job_module, "record_cross_table_quality", _cross_pass)
     provider = SimpleNamespace(calls=[])
     job = _job()
@@ -183,6 +235,63 @@ def test_daily_job_noops_on_closed_trade_date(monkeypatch) -> None:
     assert job.status == "SUCCESS"
     assert job.step == "180 no trading day"
     assert job.job_metadata["noop"] is True
+
+
+def test_daily_raw_gate_error_blocks_calculation(monkeypatch) -> None:
+    monkeypatch.setattr(daily_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(daily_job_module, "trade_calendar_open_status", lambda *args: True)
+    monkeypatch.setattr(
+        daily_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _raw_complete(
+            is_complete=False,
+            overall_status="ERROR",
+            adj_factor_status="ERROR",
+        ),
+    )
+    calls = []
+
+    class FailingFactorService:
+        def __init__(self, db):
+            self.db = db
+
+        def recalc(self, *args, **kwargs):
+            calls.append("factor")
+            return 1
+
+    monkeypatch.setattr(daily_job_module, "FactorService", FailingFactorService)
+    job = _job()
+
+    with pytest.raises(DataQualityError, match="raw completeness gate failed"):
+        DailyJob(_FakeDb(), object()).run(date(2026, 1, 5), job=job)
+
+    assert calls == []
+    assert job.status == "FAILED"
+
+
+def test_daily_raw_gate_warning_allows_calculation(monkeypatch) -> None:
+    monkeypatch.setattr(daily_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(daily_job_module, "trade_calendar_open_status", lambda *args: True)
+    monkeypatch.setattr(
+        daily_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _raw_complete(
+            is_complete=True,
+            overall_status="WARNING",
+            daily_basic_status="WARNING",
+        ),
+    )
+    monkeypatch.setattr(daily_job_module, "FactorService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "MarketService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "SectorService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "TrendService", _FakeTrendService)
+    monkeypatch.setattr(daily_job_module, "record_cross_table_quality", _cross_pass)
+    job = _job()
+
+    DailyJob(_FakeDb(), object()).run(date(2026, 1, 5), job=job)
+
+    assert job.status == "SUCCESS"
+    assert job.job_metadata["current_day_status"] == "WARNING"
 
 
 def test_backfill_job_only_syncs_raw_data(monkeypatch) -> None:
@@ -221,6 +330,37 @@ def test_backfill_prefetches_index_daily_by_range_when_missing(monkeypatch) -> N
 
     assert job.status == "SUCCESS"
     assert provider.calls == ["index_daily_range"]
+
+
+def test_backfill_falls_back_to_daily_index_when_range_fails(monkeypatch) -> None:
+    states = iter([
+        _raw_complete("ERROR", False),
+        _raw_complete("ERROR", False),
+        _raw_complete(),
+    ])
+
+    class FallbackIngestion(_FakeIngestion):
+        def sync_index_daily_range(self, start, end, job_id=None):
+            self._record("index_daily_range")
+            raise RuntimeError("range unavailable")
+
+    monkeypatch.setattr(backfill_job_module, "upsert_rows", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(backfill_job_module, "IngestionService", FallbackIngestion)
+    monkeypatch.setattr(backfill_job_module, "ensure_stock_basic_ready", lambda *args: None)
+    monkeypatch.setattr(
+        backfill_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: next(states),
+    )
+    provider = _FakeProvider()
+    provider.calls = []
+    job = _job("backfill")
+
+    BackfillJob(_FakeDb(), provider).run(date(2026, 1, 5), date(2026, 1, 5), job=job)
+
+    assert job.status == "SUCCESS"
+    assert provider.calls == ["index_daily_range", "index_daily"]
+    assert job.job_metadata["index_daily_range_status"] == "WARNING"
 
 
 def test_backfill_job_requires_stock_basic(monkeypatch) -> None:

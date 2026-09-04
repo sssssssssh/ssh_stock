@@ -114,6 +114,13 @@
 - `sector_member` 当前成员批次 `is_new=Y` 返回空结果必须失败，历史批次 `is_new=N` 返回空结果允许；错误信息必须包含 L1 code。
 - Raw 数据层按 Milestone 8 当前范围封版；下一阶段只在 Milestone 9 接入可交易性数据，不继续重构当前数据拉取架构。
 - 本地开发时如果后端端口从 8000 改为 9034，必须同步修改 `frontend/.env` 的 `VITE_API_PROXY_TARGET`，否则前端会继续请求旧端口。
+- `DailyJob` 在 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 四类 Raw 同步后必须执行 `check_raw_completeness(..., persist=True)` 作为计算前 Gate；ERROR 禁止进入因子、市场、行业、趋势和信号计算，WARNING 当前允许继续。
+- API、Scheduler 和 CLI 数据任务入口必须共用 `app.services.job_guard`；创建新 `daily/sync_basic/backfill/recalculate/validate_data/catchup` 前必须恢复 stale 任务并拒绝活跃任务。
+- stale `QUEUED/RUNNING` 数据任务默认超过 `app.scheduler.stale_job_hours` 后自动标记 `FAILED`，错误信息固定说明为进程重启后的 stale recovery。
+- Scheduler 必须按 `app.timezone` 计算当前日期，不得直接使用系统默认 `date.today()`；`daily_cron` 的工作日字段必须正确传给 APScheduler。
+- Scheduler 触发时执行 Catch-up，而不是只跑当天；少量缺失交易日自动补齐，超过 `max_catchup_trade_days` 时跳过并提示手动 backfill。
+- Scheduler 自动 refresh 最近 `refresh_recent_trade_days` 个交易日 Raw，用现有 dirty range 机制发现历史修订；不得因此扩展 Raw 表或接入 Milestone 9 数据。
+- `index_daily` 区间预拉取只是性能优化，失败时必须降级为逐日拉取，并最终由 RawCompleteness 判断成败。
 
 ## 安全规则
 

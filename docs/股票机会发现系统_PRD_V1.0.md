@@ -1062,3 +1062,19 @@ V1 验证指标：
 - 字段无效记录会写入 `data_quality_daily.issue_codes.invalid_count/invalid_codes`，无效代码最多保留 100 个。
 - 申万行业成分当前批次 `is_new=Y` 空结果直接失败并携带 L1 行业代码；历史批次 `is_new=N` 空结果允许。
 - Raw 数据层在 Milestone 8 范围内封版，后续进入 Milestone 9 可交易性数据，不继续扩展本轮数据拉取架构。
+
+### 25.5 自动运行与可靠性优化（2026-09-04）
+
+本轮按《ssh_stock 数据自动运行与可靠性优化任务书》完成 P0/P1，目标是让已有 daily/scheduler 从“能定时跑”增强为“能长期无人值守并自动补漏”。
+
+- `DailyJob` 新增 RawCompleteness Gate：四类 Raw 表同步后先检查 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 完整性，并把各 dataset 状态写入 `job_run.job_metadata`。
+- Raw Gate 遇到 ERROR 时，`DailyJob` 直接失败并禁止进入因子、市场、行业、趋势和信号计算；WARNING 当前允许继续，以兼容 Milestone 9 前尚未扣除停牌股票的口径。
+- 新增统一任务互斥 Guard，API、Scheduler 和 CLI 的核心数据任务入口共用，避免 `daily`、`sync_basic`、`backfill`、`recalculate`、`validate_data` 并发。
+- 新增 stale job recovery：超时的 `QUEUED/RUNNING` 任务会自动标记为 `FAILED`，避免断电或进程崩溃后永久阻塞新任务。
+- Scheduler 改为按 `app.timezone` 取当前日期，并正确解析 `daily_cron` 的工作日字段，默认周一到周五 18:10 触发。
+- Scheduler 触发后执行 Catch-up：发现最近少量漏跑交易日或 Raw 不完整交易日后，逐日复用 `DailyJob` 补齐 Raw 和计算。
+- Catch-up 受 `max_catchup_trade_days` 保护，缺口过大时不自动大规模回填，提示用户手动执行 `backfill` 和 `recalculate`。
+- Scheduler 会 refresh 最近 `refresh_recent_trade_days` 个交易日，用现有 NULL 保护和 dirty range 机制识别 Tushare 历史修订。
+- `BackfillJob` 的 `index_daily` 区间拉取失败时不再直接拖垮任务，而是记录 warning 并降级为逐日指数拉取。
+
+本轮没有修改 Raw 表结构，没有新增 Alembic migration，没有扩展 suspend、涨跌停、历史 ST 等 Milestone 9 数据。

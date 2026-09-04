@@ -4,3 +4,6 @@ app:
   algo_version: v1.0
   scheduler:
     daily_cron: "10 18 * * 1-5"
+    max_catchup_trade_days: 20
+    stale_job_hours: 24
+    refresh_recent_trade_days: 5

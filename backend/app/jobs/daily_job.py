@@ -11,7 +11,11 @@ from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.market import MarketService
 from app.services.quality.daily_quality import DataQualityError, record_cross_table_quality
-from app.services.quality.raw_completeness import trade_calendar_open_status
+from app.services.quality.raw_completeness import (
+    RawCompletenessResult,
+    check_raw_completeness,
+    trade_calendar_open_status,
+)
 from app.services.sector import SectorService
 from app.services.trend import TrendService
 
@@ -23,7 +27,7 @@ class DailyJob:
 
     def run(self, trade_date: date, job: JobRun | None = None) -> None:
         job = job or start_job(self.db, "daily", trade_date)
-        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 10}
+        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 11}
         update_job(
             self.db,
             job,
@@ -100,36 +104,54 @@ class DailyJob:
             update_job(
                 self.db,
                 job,
-                step="70 calculate stock factors",
+                step="70 raw completeness gate",
                 row_count=total_rows,
                 metadata=_progress(metadata, 7),
+            )
+            raw_quality = check_raw_completeness(
+                self.db,
+                trade_date,
+                strategy=get_settings().strategy,
+                job_id=job.id,
+                persist=True,
+            )
+            metadata = {**metadata, **raw_quality.as_metadata()}
+            if raw_quality.overall_status == "ERROR":
+                raise DataQualityError(_raw_quality_error(raw_quality))
+
+            update_job(
+                self.db,
+                job,
+                step="80 calculate stock factors",
+                row_count=total_rows,
+                metadata=_progress(metadata, 8),
             )
             total_rows += FactorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="80 calculate market score",
+                step="90 calculate market score",
                 row_count=total_rows,
-                metadata=_progress(metadata, 8),
+                metadata=_progress(metadata, 9),
             )
             total_rows += MarketService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="90 calculate sector heat",
+                step="100 calculate sector heat",
                 row_count=total_rows,
-                metadata=_progress(metadata, 9),
+                metadata=_progress(metadata, 10),
             )
             total_rows += SectorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="100 calculate trend states",
+                step="110 calculate trend states",
                 row_count=total_rows,
-                metadata=_progress(metadata, 10),
+                metadata=_progress(metadata, 11),
             )
             trend_rows = TrendService(self.db).recalc(trade_date, trade_date)
             total_rows += trend_rows["states"] + trend_rows["signals"]
@@ -151,7 +173,7 @@ class DailyJob:
                 status="SUCCESS",
                 step="180 mark SUCCESS",
                 row_count=total_rows,
-                metadata={**metadata, "stage_index": 10, "progress_pct": 100},
+                metadata={**metadata, "stage_index": 11, "progress_pct": 100},
             )
             logger.info("daily job success trade_date={} rows={}", trade_date, total_rows)
         except Exception as exc:
@@ -174,3 +196,25 @@ def _progress(metadata: dict[str, object], stage_index: int) -> dict[str, object
         "stage_index": stage_index,
         "progress_pct": round(stage_index / stage_total * 100, 1),
     }
+
+
+def _raw_quality_error(raw_quality: RawCompletenessResult) -> str:
+    dataset_summary = {
+        name: {
+            "status": dataset.status,
+            "missing_count": len(dataset.missing_codes),
+            "invalid_count": dataset.invalid_count,
+        }
+        for name, dataset in {
+            "stock_daily": raw_quality.stock_daily,
+            "adj_factor": raw_quality.adj_factor,
+            "daily_basic": raw_quality.daily_basic,
+            "index_daily": raw_quality.index_daily,
+        }.items()
+    }
+    return (
+        "raw completeness gate failed: "
+        f"trade_date={raw_quality.trade_date} "
+        f"overall_status={raw_quality.overall_status} "
+        f"datasets={dataset_summary}"
+    )

@@ -78,7 +78,29 @@ class BackfillJob:
                     row_count=total_rows,
                     metadata={**metadata, "stage": "index_daily_range", "progress_pct": 14},
                 )
-                total_rows += self.ingestion.sync_index_daily_range(start, end, job_id=job.id)
+                try:
+                    total_rows += self.ingestion.sync_index_daily_range(start, end, job_id=job.id)
+                except Exception as exc:
+                    self.db.rollback()
+                    logger.warning(
+                        "index_daily range sync failed; "
+                        "falling back to daily sync start={} end={} error={}",
+                        start,
+                        end,
+                        exc,
+                    )
+                    metadata = {
+                        **metadata,
+                        "index_daily_range_status": "WARNING",
+                        "index_daily_range_error": str(exc)[:512],
+                    }
+                    update_job(
+                        self.db,
+                        job,
+                        step="60 index_daily range fallback",
+                        row_count=total_rows,
+                        metadata=metadata,
+                    )
 
             skipped_raw_days = 0
             synced_dataset_count = 0
