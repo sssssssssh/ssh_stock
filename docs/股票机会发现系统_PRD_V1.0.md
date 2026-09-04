@@ -1032,7 +1032,7 @@ V1 验证指标：
 
 ### 25.2 收尾修复（2026-09-02）
 
-- Dirty Repair 失败后不再把 dirty range 固定为不可选的 FAILED；失败会恢复为 `OPEN`，记录 `retry_count`、`last_error`、`last_failed_at`，下次可继续重试。
+- Dirty Repair 失败后 dirty range 标记为 `FAILED`，记录 `retry_count`、`last_error`、`last_failed_at`；后续如需重试，应由用户或后续明确流程重新打开。
 - 新增 `validate-data` 存量校验任务和 CLI，用数据库已有历史 raw 数据补写 `data_quality_daily`，不重新下载 Tushare 数据。
 - backfill 遇到旧历史数据 `quality_status=None` 时，会先执行库内质量补校验；PASS/WARNING 才跳过，ERROR 会重新拉取。
 - 新增 `sync-basic` 独立基础信息任务，页面按钮为“同步基础信息”，只同步 `stock_basic`、`sector`、`sector_member`。
@@ -1078,3 +1078,15 @@ V1 验证指标：
 - `BackfillJob` 的 `index_daily` 区间拉取失败时不再直接拖垮任务，而是记录 warning 并降级为逐日指数拉取。
 
 本轮没有修改 Raw 表结构，没有新增 Alembic migration，没有扩展 suspend、涨跌停、历史 ST 等 Milestone 9 数据。
+
+### 25.6 自动运行最终收尾与封版（2026-09-04）
+
+本轮只完成《ssh_stock 数据自动运行最终收尾任务书》的 3 个 P0 收尾项，不扩展 advisory lock、heartbeat、startup catchup，也不进入 Milestone 9。
+
+- RawCompleteness Gate 和跨表质量 Gate 在判定 ERROR 后，会先提交 `data_quality_daily` 证据，再把任务置为 FAILED，确保页面和排查脚本能看到 ERROR 明细。
+- Catch-up 不再只用最新 `stock_state_daily` 日期判断是否已完成，会区分 `raw_required_dates`、`analysis_required_dates` 和 `refresh_dates`。Raw 完整但分析缺失时只计算，不重新访问 Tushare；Raw 缺失时才补 Raw 并继续计算。
+- 分析完整性至少要求 `stock_factor_daily`、`market_daily`、`sector_factor_daily` 和当前 `algo_version` 的 `stock_state_daily` 同日存在。
+- 最近交易日 refresh 改为 Raw-only，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不重复同步 `stock_basic`，不复用完整 `DailyJob`。
+- Raw-only refresh 后如果发现 OPEN dirty range，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
+
+Milestone 8 Raw 数据层和自动运行层按当前范围正式封版；后续需求进入 Milestone 9。

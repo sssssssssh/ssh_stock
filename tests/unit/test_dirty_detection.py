@@ -54,7 +54,7 @@ def test_changed_trade_dates_tracks_real_value_change() -> None:
     assert dirty == {date(2026, 8, 31)}
 
 
-def test_mark_dirty_ranges_failed_reopens_for_retry() -> None:
+def test_mark_dirty_ranges_failed_marks_failed() -> None:
     dirty_range = SimpleNamespace(
         status="PROCESSING",
         retry_count=1,
@@ -66,7 +66,7 @@ def test_mark_dirty_ranges_failed_reopens_for_retry() -> None:
 
     mark_dirty_ranges_failed(db, [dirty_range], "factor failed")
 
-    assert dirty_range.status == "OPEN"
+    assert dirty_range.status == "FAILED"
     assert dirty_range.retry_count == 2
     assert dirty_range.last_error == "factor failed"
     assert dirty_range.last_failed_at is not None

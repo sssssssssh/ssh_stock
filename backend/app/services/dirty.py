@@ -114,7 +114,7 @@ def mark_dirty_ranges_failed(
 ) -> None:
     failed_at = datetime.now(UTC)
     for row in ranges:
-        row.status = "OPEN"
+        row.status = "FAILED"
         row.retry_count = int(row.retry_count or 0) + 1
         row.last_error = error_message[:4096] if error_message else None
         row.last_failed_at = failed_at

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import app.api.v1.jobs as jobs_module
+import app.services.recalculation as recalculation_module
 
 
 class _FakeSession:
@@ -104,20 +105,22 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
         resolved_at=None,
     )
     db = _FakeSession(job)
-    monkeypatch.setattr(jobs_module, "SessionLocal", _FakeSessionLocal(db))
-    monkeypatch.setattr(jobs_module, "_load_dirty_ranges", lambda db, ids: [dirty_range])
-    monkeypatch.setattr(jobs_module, "FactorService", _FailingFactorService)
+    monkeypatch.setattr(recalculation_module, "FactorService", _FailingFactorService)
 
-    jobs_module._run_recalculate_job(
-        job_id,
-        date(2026, 1, 3),
-        date(2026, 1, 5),
-        False,
-        mode="dirty_repair",
-        dirty_range_ids=[1],
-    )
+    try:
+        recalculation_module.run_recalculation(
+            db,
+            job,
+            date(2026, 1, 3),
+            date(2026, 1, 5),
+            evaluate_signals=False,
+            mode="dirty_repair",
+            dirty_ranges=[dirty_range],
+        )
+    except RuntimeError:
+        jobs_module._mark_background_failed(db, job_id, RuntimeError("factor boom"))
 
-    assert dirty_range.status == "OPEN"
+    assert dirty_range.status == "FAILED"
     assert dirty_range.retry_count == 1
     assert dirty_range.last_error == "factor boom"
     assert dirty_range.last_failed_at is not None
@@ -126,20 +129,22 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
     job.status = "QUEUED"
     job.finished_at = None
     job.error_message = None
+    dirty_range.status = "OPEN"
     _SuccessfulFactorService.calls = []
     _SuccessfulFactorService.factor_values = {"2026-01-04": 10.0}
-    monkeypatch.setattr(jobs_module, "FactorService", _SuccessfulFactorService)
-    monkeypatch.setattr(jobs_module, "MarketService", _SuccessfulScalarService)
-    monkeypatch.setattr(jobs_module, "SectorService", _SuccessfulScalarService)
-    monkeypatch.setattr(jobs_module, "TrendService", _SuccessfulTrendService)
+    monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
+    monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)
+    monkeypatch.setattr(recalculation_module, "SectorService", _SuccessfulScalarService)
+    monkeypatch.setattr(recalculation_module, "TrendService", _SuccessfulTrendService)
 
-    jobs_module._run_recalculate_job(
-        job_id,
+    recalculation_module.run_recalculation(
+        db,
+        job,
         date(2026, 1, 3),
         date(2026, 1, 5),
-        False,
+        evaluate_signals=False,
         mode="dirty_repair",
-        dirty_range_ids=[1],
+        dirty_ranges=[dirty_range],
     )
 
     assert dirty_range.status == "RESOLVED"

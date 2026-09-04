@@ -115,6 +115,7 @@ class DailyJob:
                 job_id=job.id,
                 persist=True,
             )
+            self.db.commit()
             metadata = {**metadata, **raw_quality.as_metadata()}
             if raw_quality.overall_status == "ERROR":
                 raise DataQualityError(_raw_quality_error(raw_quality))
@@ -161,6 +162,7 @@ class DailyJob:
                 job_id=job.id,
                 strategy=get_settings().strategy,
             )
+            self.db.commit()
             if quality.has_error:
                 raise DataQualityError(
                     "cross table quality failed: "

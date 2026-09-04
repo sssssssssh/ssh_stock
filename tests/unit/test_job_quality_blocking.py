@@ -25,6 +25,21 @@ class _FakeDb:
         return None
 
 
+class _QualityEvidenceDb(_FakeDb):
+    def __init__(self) -> None:
+        self.pending: list[tuple[str, str]] = []
+        self.committed: list[tuple[str, str]] = []
+        self.rollbacks = 0
+
+    def commit(self):
+        self.committed.extend(self.pending)
+        self.pending.clear()
+
+    def rollback(self):
+        self.rollbacks += 1
+        self.pending.clear()
+
+
 class _FakeIngestion:
     def __init__(self, db, provider):
         self.db = db
@@ -269,6 +284,30 @@ def test_daily_raw_gate_error_blocks_calculation(monkeypatch) -> None:
     assert job.status == "FAILED"
 
 
+def test_daily_raw_error_quality_evidence_survives_failed_job(monkeypatch) -> None:
+    db = _QualityEvidenceDb()
+
+    def raw_error(db, *args, **kwargs):
+        db.pending.append(("stock_adj_factor", "ERROR"))
+        return _raw_complete(
+            is_complete=False,
+            overall_status="ERROR",
+            adj_factor_status="ERROR",
+        )
+
+    monkeypatch.setattr(daily_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(daily_job_module, "trade_calendar_open_status", lambda *args: True)
+    monkeypatch.setattr(daily_job_module, "check_raw_completeness", raw_error)
+    job = _job()
+
+    with pytest.raises(DataQualityError, match="raw completeness gate failed"):
+        DailyJob(db, object()).run(date(2026, 1, 5), job=job)
+
+    assert ("stock_adj_factor", "ERROR") in db.committed
+    assert job.status == "FAILED"
+    assert db.rollbacks >= 1
+
+
 def test_daily_raw_gate_warning_allows_calculation(monkeypatch) -> None:
     monkeypatch.setattr(daily_job_module, "IngestionService", _FakeIngestion)
     monkeypatch.setattr(daily_job_module, "trade_calendar_open_status", lambda *args: True)
@@ -292,6 +331,35 @@ def test_daily_raw_gate_warning_allows_calculation(monkeypatch) -> None:
 
     assert job.status == "SUCCESS"
     assert job.job_metadata["current_day_status"] == "WARNING"
+
+
+def test_daily_cross_table_error_quality_evidence_survives_failed_job(monkeypatch) -> None:
+    db = _QualityEvidenceDb()
+
+    def cross_error(db, *args, **kwargs):
+        db.pending.append(("factor_vs_daily", "ERROR"))
+        return _cross_error()
+
+    monkeypatch.setattr(daily_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(daily_job_module, "trade_calendar_open_status", lambda *args: True)
+    monkeypatch.setattr(
+        daily_job_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: _raw_complete(),
+    )
+    monkeypatch.setattr(daily_job_module, "FactorService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "MarketService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "SectorService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "TrendService", _FakeTrendService)
+    monkeypatch.setattr(daily_job_module, "record_cross_table_quality", cross_error)
+    job = _job()
+
+    with pytest.raises(DataQualityError, match="cross table quality failed"):
+        DailyJob(db, object()).run(date(2026, 1, 5), job=job)
+
+    assert ("factor_vs_daily", "ERROR") in db.committed
+    assert job.status == "FAILED"
+    assert db.rollbacks >= 1
 
 
 def test_backfill_job_only_syncs_raw_data(monkeypatch) -> None:

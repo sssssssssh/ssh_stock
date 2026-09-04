@@ -643,7 +643,7 @@ provider:
 跨表校验中，`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 不允许标记 SUCCESS。`backfill` 现在只负责原始数据拉取，并按 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 四个 Raw 数据集逐项判断完整性；完整数据集会跳过，不完整数据集才重新请求 Tushare。
 
 - `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 启用 NULL upsert 保护。新数据字段为 NULL 时不会清空数据库已有非空值。
-- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。repair 失败后 dirty range 会恢复为 `OPEN`，并记录 `retry_count`、`last_error`、`last_failed_at`，下一次可以继续重试。
+- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。repair 失败后 dirty range 会标记为 `FAILED`，并记录 `retry_count`、`last_error`、`last_failed_at`。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 新增 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，用于追溯这条衍生数据由哪个配置和哪次任务算出。
 - `backfill` 和 `validate-data` 启动前会检查 `stock_basic` 是否同时具备 `L` 和 `D` 状态；缺失时会失败并提示 `stock_basic is missing or incomplete, run sync-basic first`。
 - 申万行业成分同步按一级行业 `L1` 分批请求 `is_new=Y/N`，同时保存当前和历史成分，不再只按股票代码去重。
@@ -806,9 +806,14 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 - Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
 - Scheduler 不再只跑当天，而是执行 Catch-up：发现最近少量缺失交易日或 Raw 不完整交易日后，逐日复用 `DailyJob` 补齐 Raw 和计算。
 - 自动补漏受 `max_catchup_trade_days=20` 保护，缺口超过阈值时不会自动大规模回填，需要手动执行 `backfill` 和 `recalculate`。
-- Catch-up 完成后会按 `refresh_recent_trade_days=5` 重新跑最近交易日，便于发现 Tushare 历史修订并触发 dirty range。
-- `DailyJob` 在 Raw 四表同步后会先执行 RawCompleteness Gate。Raw ERROR 时禁止进入因子、市场、行业、趋势和信号计算；Raw WARNING 暂允许继续。
+- Catch-up 不再只用最新 `stock_state_daily` 日期判断是否完整，会同时检查 `stock_factor_daily`、`market_daily`、`sector_factor_daily` 和当前 `algo_version` 的 `stock_state_daily`。Raw 已完整但分析缺失时只执行计算，不重新访问 Tushare。
+- Catch-up 完成后会按 `refresh_recent_trade_days=5` 对最近交易日执行 Raw-only refresh，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不重复同步基础信息，也不按日复用完整 `DailyJob`。
+- Recent refresh 每日 RawCompleteness 写库后会先提交质量证据；ERROR 直接失败，WARNING 继续。refresh 发现 open dirty range 后，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
+- `DailyJob` 在 Raw 四表同步后会先执行 RawCompleteness Gate，并在 ERROR 失败前提交 `data_quality_daily` 证据。Raw ERROR 时禁止进入因子、市场、行业、趋势和信号计算；Raw WARNING 暂允许继续。
+- 跨表质量 Gate 写入 `data_quality_daily` 后也会在任务失败前提交证据，避免任务标记 FAILED 后页面查不到 ERROR 明细。
 - `BackfillJob` 的 `index_daily` 区间预拉取失败时会记录 warning，然后降级为逐日 `index_daily` 拉取，最终仍由 RawCompleteness 判断是否成功。
+
+本轮 3 个 P0 收尾完成后，Milestone 8 和自动运行层按当前范围封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw 或自动运行架构。
 
 ## 换电脑继续开发
 
