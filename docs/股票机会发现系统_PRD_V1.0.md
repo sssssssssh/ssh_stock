@@ -1002,7 +1002,7 @@ V1 验证指标：
 - 行业成分使用 `valid_from/valid_to` 做历史匹配，`is_latest` 只用于当前展示，不再参与历史计算过滤。
 - 原始核心表启用 NULL upsert 保护，避免接口偶发缺字段把数据库已有非空值清空。
 - 原始历史数据非空值发生修订时记录 `data_dirty_range`，支持后续从最早 dirty date 向后重算。
-- `recalculate` 任务新增 `manual` 和 `dirty_repair` 模式；`dirty_repair` 会从 OPEN dirty range 的最早日期重算到最新已拉取交易日。
+- `recalculate` 任务新增 `manual` 和 `dirty_repair` 模式；`dirty_repair` 会从可修复 dirty range 的最早日期重算到最新已拉取交易日。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 增加 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，便于解释某条结果由哪个配置和哪次计算任务产生。
 
 本轮用户可见变化：
@@ -1081,12 +1081,21 @@ V1 验证指标：
 
 ### 25.6 自动运行最终收尾与封版（2026-09-04）
 
-本轮只完成《ssh_stock 数据自动运行最终收尾任务书》的 3 个 P0 收尾项，不扩展 advisory lock、heartbeat、startup catchup，也不进入 Milestone 9。
+本轮完成《ssh_stock 数据自动运行最终收尾任务书》的自动运行收尾项；后续由 Milestone 8 最终封版任务补足 P1 retry 和 Analysis Complete 强校验。不扩展 advisory lock、heartbeat、startup catchup，也不进入 Milestone 9。
 
 - RawCompleteness Gate 和跨表质量 Gate 在判定 ERROR 后，会先提交 `data_quality_daily` 证据，再把任务置为 FAILED，确保页面和排查脚本能看到 ERROR 明细。
-- Catch-up 不再只用最新 `stock_state_daily` 日期判断是否已完成，会区分 `raw_required_dates`、`analysis_required_dates` 和 `refresh_dates`。Raw 完整但分析缺失时只计算，不重新访问 Tushare；Raw 缺失时才补 Raw 并继续计算。
+- Catch-up 不再只用最新 `stock_state_daily` 日期判断是否已完成，会区分 `raw_required_dates`、`analysis_required_dates` 和 `refresh_dates`。最终封版口径下，Raw / Analysis 使用同一候选窗口逐日分类；Raw 完整但分析缺失时只计算，不重新访问 Tushare，Raw 缺失时才补 Raw 并继续计算。
 - 分析完整性至少要求 `stock_factor_daily`、`market_daily`、`sector_factor_daily` 和当前 `algo_version` 的 `stock_state_daily` 同日存在。
 - 最近交易日 refresh 改为 Raw-only，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不重复同步 `stock_basic`，不复用完整 `DailyJob`。
-- Raw-only refresh 后如果发现 OPEN dirty range，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
+- Raw-only refresh 后如果发现可修复 dirty range，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
 
-Milestone 8 Raw 数据层和自动运行层按当前范围正式封版；后续需求进入 Milestone 9。
+### 25.7 Milestone 8 最终封版（2026-09-04）
+
+本轮按《ssh_stock Milestone 8 最终封版任务书》只完成 2 个 P0 和 2 个 P1，不继续扩展 Raw/Scheduler/Job 架构，不提前开发 Milestone 9。
+
+- `run_recalculation()` 在趋势状态计算后、信号评估前执行范围 Cross Table Quality Gate，覆盖 `start~end` 内所有交易日；任意 ERROR 会先提交 `data_quality_daily` 证据，再把任务置为 FAILED，并跳过 Signal Evaluation。
+- Catch-up 的 Raw / Analysis 判断改为同一候选窗口逐日分类，候选范围为最近 `max_catchup_trade_days` 个 open_date。Raw 不完整进入 `raw_required_dates`；只有 Raw 完整才允许进入 Analysis 判断；窗口外历史缺口不自动处理。
+- FAILED dirty range 在 `retry_count < dirty_max_retry_count` 时可被 Scheduler 和 API 的 dirty repair 再次拾取；超过上限保持 FAILED，并提示需要人工介入。Retry 成功后标记 `RESOLVED`。
+- Analysis Complete 增加当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version` 和 `factor_vs_daily` / `state_vs_factor` 覆盖率 PASS 校验，不再以单表存在行作为完成依据。
+
+Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；后续需求进入 Milestone 9。

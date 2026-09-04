@@ -643,7 +643,7 @@ provider:
 跨表校验中，`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 出现 ERROR 时，`daily` / `recalculate` 不允许标记 SUCCESS。`backfill` 现在只负责原始数据拉取，并按 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 四个 Raw 数据集逐项判断完整性；完整数据集会跳过，不完整数据集才重新请求 Tushare。
 
 - `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 启用 NULL upsert 保护。新数据字段为 NULL 时不会清空数据库已有非空值。
-- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早 dirty date 重算到最新已拉取交易日。repair 失败后 dirty range 会标记为 `FAILED`，并记录 `retry_count`、`last_error`、`last_failed_at`。
+- 如果已有原始数据被新的非空值修订，系统会记录 `data_dirty_range`。后续可以用 `POST /api/v1/jobs/recalculate` 的 `mode=dirty_repair` 从最早可修复 dirty date 重算到最新已拉取交易日。可修复范围为 `OPEN` 或 `FAILED` 且 `retry_count < dirty_max_retry_count`；repair 失败后 dirty range 会标记为 `FAILED`，并记录 `retry_count`、`last_error`、`last_failed_at`。
 - `stock_factor_daily`、`market_daily`、`sector_factor_daily` 新增 `calc_version`、`config_hash`、`calc_run_id`、`calculated_at`，用于追溯这条衍生数据由哪个配置和哪次任务算出。
 - `backfill` 和 `validate-data` 启动前会检查 `stock_basic` 是否同时具备 `L` 和 `D` 状态；缺失时会失败并提示 `stock_basic is missing or incomplete, run sync-basic first`。
 - 申万行业成分同步按一级行业 `L1` 分批请求 `is_new=Y/N`，同时保存当前和历史成分，不再只按股票代码去重。
@@ -663,7 +663,7 @@ Dirty repair API 请求示例：
 }
 ```
 
-`dirty_repair` 模式下后端会自动使用 `data_dirty_range` 的最早 OPEN 日期作为开始日期，并以最新 `stock_daily` 日期作为结束日期；请求里的 `start/end` 只是为了保持接口兼容。
+`dirty_repair` 模式下后端会自动使用 `data_dirty_range` 的最早可修复日期作为开始日期，并以最新 `stock_daily` 日期作为结束日期；请求里的 `start/end` 只是为了保持接口兼容。FAILED dirty range 在未超过 `dirty_max_retry_count` 时可以被 API 或 Scheduler 再次拾取；超过上限后需要人工介入。
 
 如果在“补算因子与股票池”里勾选“评估信号”，补算完成后会继续执行一次 `evaluate-signals`，把已有信号的后验收益写入 `signal_forward_eval`。“拉取原始数据”不会触发信号评估。
 
@@ -804,16 +804,27 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 - Scheduler 每次触发时先恢复超时的 `QUEUED/RUNNING` 数据任务，默认超过 `stale_job_hours=24` 小时会标记为 `FAILED`。
 - API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 共用任务互斥 Guard，同一时间只允许一个数据任务运行。
 - Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
-- Scheduler 不再只跑当天，而是执行 Catch-up：发现最近少量缺失交易日或 Raw 不完整交易日后，逐日复用 `DailyJob` 补齐 Raw 和计算。
-- 自动补漏受 `max_catchup_trade_days=20` 保护，缺口超过阈值时不会自动大规模回填，需要手动执行 `backfill` 和 `recalculate`。
-- Catch-up 不再只用最新 `stock_state_daily` 日期判断是否完整，会同时检查 `stock_factor_daily`、`market_daily`、`sector_factor_daily` 和当前 `algo_version` 的 `stock_state_daily`。Raw 已完整但分析缺失时只执行计算，不重新访问 Tushare。
+- Scheduler 不再只跑当天，而是执行 Catch-up：只在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis，窗口外历史缺口需要手动 `validate-data`、`backfill`、`recalculate`。
+- Catch-up 先判断 Raw 完整性，Raw 不完整进入 `raw_required_dates`；只有 Raw 完整才继续判断 Analysis，避免把窗口外未检查 Raw 的历史日期误归为只计算。
+- Analysis Complete 要求当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily`、`state_vs_factor` 达到现有跨表质量 PASS 阈值。Raw 已完整但分析缺失时只执行计算，不重新访问 Tushare。
 - Catch-up 完成后会按 `refresh_recent_trade_days=5` 对最近交易日执行 Raw-only refresh，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不重复同步基础信息，也不按日复用完整 `DailyJob`。
-- Recent refresh 每日 RawCompleteness 写库后会先提交质量证据；ERROR 直接失败，WARNING 继续。refresh 发现 open dirty range 后，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
+- Recent refresh 每日 RawCompleteness 写库后会先提交质量证据；ERROR 直接失败，WARNING 继续。refresh 发现可修复 dirty range 后，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
 - `DailyJob` 在 Raw 四表同步后会先执行 RawCompleteness Gate，并在 ERROR 失败前提交 `data_quality_daily` 证据。Raw ERROR 时禁止进入因子、市场、行业、趋势和信号计算；Raw WARNING 暂允许继续。
 - 跨表质量 Gate 写入 `data_quality_daily` 后也会在任务失败前提交证据，避免任务标记 FAILED 后页面查不到 ERROR 明细。
+- `run_recalculation()` 会在趋势状态计算后、信号评估前检查 `start~end` 范围内所有交易日的 Cross Table Quality；任意 ERROR 会先提交质量证据，再失败任务，并跳过 Signal Evaluation。
 - `BackfillJob` 的 `index_daily` 区间预拉取失败时会记录 warning，然后降级为逐日 `index_daily` 拉取，最终仍由 RawCompleteness 判断是否成功。
 
-本轮 3 个 P0 收尾完成后，Milestone 8 和自动运行层按当前范围封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw 或自动运行架构。
+配置项：
+
+```yaml
+app:
+  scheduler:
+    max_catchup_trade_days: 20
+    refresh_recent_trade_days: 5
+    dirty_max_retry_count: 3
+```
+
+本轮 2 个 P0 和 2 个 P1 收尾完成后，Milestone 8、Raw 数据层、数据拉取层和自动运行层按当前范围封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw/Scheduler/Job 架构。
 
 ## 换电脑继续开发
 

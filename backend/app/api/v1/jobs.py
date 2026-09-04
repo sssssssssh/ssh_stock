@@ -21,9 +21,14 @@ from app.repositories.job_run import start_job, update_job
 from app.services.calc_metadata import config_hash
 from app.services.dirty import (
     latest_raw_trade_date,
-    open_dirty_ranges,
+    repairable_dirty_ranges,
+    unresolved_dirty_ranges,
 )
-from app.services.job_guard import ActiveIngestionJobError, reject_if_active_ingestion_job
+from app.services.job_guard import (
+    ActiveIngestionJobError,
+    reject_if_active_ingestion_job,
+    scheduler_setting,
+)
 from app.services.quality.history_quality import (
     HistoricalDataQualityService,
     HistoricalQualitySummary,
@@ -172,9 +177,17 @@ def enqueue_recalculate_job(
     end = payload.end
     dirty_range_ids: list[int] = []
     if payload.mode == "dirty_repair":
-        dirty_ranges = open_dirty_ranges(db)
+        dirty_ranges = repairable_dirty_ranges(
+            db,
+            max_retry_count=int(scheduler_setting("dirty_max_retry_count", 3)),
+        )
         if not dirty_ranges:
-            raise HTTPException(status_code=404, detail="no open dirty ranges")
+            if unresolved_dirty_ranges(db):
+                raise HTTPException(
+                    status_code=422,
+                    detail="no repairable dirty ranges; manual intervention required",
+                )
+            raise HTTPException(status_code=404, detail="no repairable dirty ranges")
         latest = latest_raw_trade_date(db)
         if latest is None:
             raise HTTPException(status_code=422, detail="no stock_daily data available")

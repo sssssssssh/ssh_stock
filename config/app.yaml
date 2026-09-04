@@ -7,3 +7,4 @@ app:
     max_catchup_trade_days: 20
     stale_job_hours: 24
     refresh_recent_trade_days: 5
+    dirty_max_retry_count: 3

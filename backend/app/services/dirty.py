@@ -86,6 +86,37 @@ def open_dirty_ranges(db: Session) -> list[DataDirtyRange]:
     )
 
 
+def repairable_dirty_ranges(
+    db: Session,
+    *,
+    max_retry_count: int = 3,
+) -> list[DataDirtyRange]:
+    return list(
+        db.execute(
+            select(DataDirtyRange)
+            .where(
+                DataDirtyRange.status.in_(("OPEN", "FAILED")),
+                DataDirtyRange.retry_count < max_retry_count,
+            )
+            .order_by(DataDirtyRange.dirty_start_date)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def unresolved_dirty_ranges(db: Session) -> list[DataDirtyRange]:
+    return list(
+        db.execute(
+            select(DataDirtyRange)
+            .where(DataDirtyRange.status.in_(("OPEN", "FAILED")))
+            .order_by(DataDirtyRange.dirty_start_date)
+        )
+        .scalars()
+        .all()
+    )
+
+
 def latest_raw_trade_date(db: Session) -> date | None:
     return db.execute(select(func.max(StockDaily.trade_date))).scalar_one_or_none()
 

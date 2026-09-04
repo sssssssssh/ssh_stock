@@ -10,7 +10,10 @@ from app.models.market_data import (
     StockStateDaily,
 )
 from app.services.quality import daily_quality
-from app.services.quality.daily_quality import record_cross_table_quality
+from app.services.quality.daily_quality import (
+    record_cross_table_quality,
+    validate_cross_table_range,
+)
 
 
 def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> None:
@@ -76,3 +79,52 @@ def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> N
     factor_row = next(row for row in persisted if row["dataset"] == "factor_vs_daily")
     assert factor_row["status"] == "ERROR"
     assert factor_row["error_count"] == 1
+
+
+def test_validate_cross_table_range_commits_error_evidence(monkeypatch) -> None:
+    class FakeDb:
+        def __init__(self):
+            self.commits = 0
+            self.persisted = []
+
+        def commit(self):
+            self.commits += 1
+
+    def fake_record(db, trade_date, **kwargs):
+        if trade_date == date(2026, 9, 2):
+            db.persisted.append((trade_date, "factor_vs_daily", "ERROR"))
+            return daily_quality.CrossTableQualityResult(
+                trade_date=trade_date,
+                counts={},
+                results={"factor_vs_daily": "ERROR"},
+                error_datasets=["factor_vs_daily"],
+            )
+        db.persisted.append((trade_date, "factor_vs_daily", "PASS"))
+        return daily_quality.CrossTableQualityResult(
+            trade_date=trade_date,
+            counts={},
+            results={"factor_vs_daily": "PASS"},
+            error_datasets=[],
+        )
+
+    db = FakeDb()
+    monkeypatch.setattr(
+        daily_quality,
+        "_open_trade_dates",
+        lambda db, start, end: [date(2026, 9, 1), date(2026, 9, 2)],
+    )
+    monkeypatch.setattr(daily_quality, "record_cross_table_quality", fake_record)
+
+    result = validate_cross_table_range(
+        db,
+        date(2026, 9, 1),
+        date(2026, 9, 2),
+        strategy={},
+    )
+
+    assert result.checked_days == 2
+    assert result.error_days == 1
+    assert result.error_dates == [date(2026, 9, 2)]
+    assert result.error_datasets == {"2026-09-02": ["factor_vs_daily"]}
+    assert (date(2026, 9, 2), "factor_vs_daily", "ERROR") in db.persisted
+    assert db.commits == 1

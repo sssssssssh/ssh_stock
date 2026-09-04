@@ -129,13 +129,25 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
     job.status = "QUEUED"
     job.finished_at = None
     job.error_message = None
-    dirty_range.status = "OPEN"
     _SuccessfulFactorService.calls = []
     _SuccessfulFactorService.factor_values = {"2026-01-04": 10.0}
     monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "SectorService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "TrendService", _SuccessfulTrendService)
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_cross_table_range",
+        lambda *args, **kwargs: SimpleNamespace(
+            has_error=False,
+            as_metadata=lambda: {
+                "cross_table_checked_days": 1,
+                "cross_table_error_days": 0,
+                "cross_table_error_dates": [],
+                "cross_table_error_datasets": {},
+            },
+        ),
+    )
 
     recalculation_module.run_recalculation(
         db,

@@ -15,6 +15,7 @@ from app.models.market_data import (
     StockDailyBasic,
     StockFactorDaily,
     StockStateDaily,
+    TradeCalendar,
 )
 from app.repositories.upsert import upsert_rows
 from app.services.universe import is_stock_active_on
@@ -48,6 +49,29 @@ class CrossTableQualityResult:
     @property
     def has_error(self) -> bool:
         return bool(self.error_datasets)
+
+
+@dataclass(frozen=True)
+class CrossTableRangeResult:
+    checked_days: int
+    error_days: int
+    error_dates: list[date]
+    error_datasets: dict[str, list[str]]
+
+    @property
+    def has_error(self) -> bool:
+        return bool(self.error_dates)
+
+    def as_metadata(self) -> dict[str, Any]:
+        return {
+            "cross_table_checked_days": self.checked_days,
+            "cross_table_error_days": self.error_days,
+            "cross_table_error_dates": [day.isoformat() for day in self.error_dates[:100]],
+            "cross_table_error_datasets": {
+                day: datasets
+                for day, datasets in list(self.error_datasets.items())[:100]
+            },
+        }
 
 
 class DataQualityError(RuntimeError):
@@ -273,6 +297,58 @@ def record_cross_table_quality(
     )
 
 
+def validate_cross_table_range(
+    db: Session,
+    start: date,
+    end: date,
+    *,
+    job_id: uuid.UUID | None = None,
+    strategy: dict[str, Any] | None = None,
+) -> CrossTableRangeResult:
+    error_dates: list[date] = []
+    error_datasets: dict[str, list[str]] = {}
+    checked_days = 0
+    for trade_date in _open_trade_dates(db, start, end):
+        checked_days += 1
+        quality = record_cross_table_quality(
+            db,
+            trade_date,
+            job_id=job_id,
+            strategy=strategy,
+        )
+        if quality.has_error:
+            error_dates.append(trade_date)
+            error_datasets[trade_date.isoformat()] = quality.error_datasets
+    db.commit()
+    return CrossTableRangeResult(
+        checked_days=checked_days,
+        error_days=len(error_dates),
+        error_dates=error_dates,
+        error_datasets=error_datasets,
+    )
+
+
+def cross_table_coverage_status(
+    strategy: dict[str, Any] | None,
+    dataset: str,
+    expected_rows: int,
+    actual_rows: int,
+    *,
+    warning_default: float = 0.98,
+    error_default: float = 0.90,
+) -> str:
+    if expected_rows <= 0:
+        return "WARNING"
+    coverage_rate = min(actual_rows / expected_rows, 1.0)
+    warning_rate = _cross_table_threshold(strategy, dataset, "warning", warning_default)
+    error_rate = _cross_table_threshold(strategy, dataset, "error", error_default)
+    if coverage_rate < error_rate:
+        return "ERROR"
+    if coverage_rate < warning_rate:
+        return "WARNING"
+    return "PASS"
+
+
 def _persist_simple(
     db: Session,
     trade_date: date,
@@ -291,16 +367,21 @@ def _persist_simple(
         error_count = 0
     else:
         coverage_rate = min(actual_rows / expected_rows, 1.0)
-        if coverage_rate < error_coverage_rate:
-            status = "ERROR"
+        status = cross_table_coverage_status(
+            None,
+            dataset,
+            expected_rows,
+            actual_rows,
+            warning_default=warning_coverage_rate,
+            error_default=error_coverage_rate,
+        )
+        if status == "ERROR":
             warning_count = 0
             error_count = 1
-        elif coverage_rate < warning_coverage_rate:
-            status = "WARNING"
+        elif status == "WARNING":
             warning_count = 1
             error_count = 0
         else:
-            status = "PASS"
             warning_count = 0
             error_count = 0
     upsert_rows(
@@ -335,6 +416,22 @@ def _persist_simple(
 def _count_date(db: Session, model: type, column: Any, trade_date: date) -> int:
     return int(
         db.execute(select(func.count()).select_from(model).where(column == trade_date)).scalar_one()
+    )
+
+
+def _open_trade_dates(db: Session, start: date, end: date) -> list[date]:
+    return list(
+        db.execute(
+            select(TradeCalendar.cal_date)
+            .where(
+                TradeCalendar.cal_date >= start,
+                TradeCalendar.cal_date <= end,
+                TradeCalendar.is_open.is_(True),
+            )
+            .order_by(TradeCalendar.cal_date)
+        )
+        .scalars()
+        .all()
     )
 
 

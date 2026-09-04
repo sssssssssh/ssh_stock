@@ -2,7 +2,11 @@ from datetime import date
 from types import SimpleNamespace
 
 from app.models.market_data import StockDaily
-from app.services.dirty import changed_trade_dates, mark_dirty_ranges_failed
+from app.services.dirty import (
+    changed_trade_dates,
+    mark_dirty_ranges_failed,
+    repairable_dirty_ranges,
+)
 
 
 class _FakeResult:
@@ -14,6 +18,9 @@ class _FakeResult:
 
     def all(self) -> list[dict]:
         return self._rows
+
+    def scalars(self) -> "_FakeResult":
+        return self
 
 
 def test_changed_trade_dates_ignores_protected_null_overwrite() -> None:
@@ -71,3 +78,19 @@ def test_mark_dirty_ranges_failed_marks_failed() -> None:
     assert dirty_range.last_error == "factor failed"
     assert dirty_range.last_failed_at is not None
     assert added == [dirty_range]
+
+
+def test_repairable_dirty_ranges_allows_failed_below_retry_limit() -> None:
+    rows = [
+        SimpleNamespace(status="FAILED", retry_count=1, dirty_start_date=date(2026, 9, 1)),
+    ]
+    statements = []
+    db = SimpleNamespace(
+        execute=lambda stmt: statements.append(str(stmt.compile())) or _FakeResult(rows)
+    )
+
+    result = repairable_dirty_ranges(db, max_retry_count=3)
+
+    assert result == rows
+    assert "data_dirty_range.retry_count <" in statements[0]
+    assert "data_dirty_range.status IN" in statements[0]

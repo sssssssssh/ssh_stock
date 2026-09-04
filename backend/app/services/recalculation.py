@@ -16,6 +16,7 @@ from app.services.dirty import (
 )
 from app.services.factors import FactorService
 from app.services.market import MarketService
+from app.services.quality.daily_quality import DataQualityError, validate_cross_table_range
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.trend import TrendService
@@ -117,6 +118,28 @@ def run_recalculation(
         )
         trend_rows = TrendService(db).recalc(start, end)
         total_rows += trend_rows["states"] + trend_rows["signals"]
+
+        update_job(
+            db,
+            job,
+            step="180 validate cross table quality",
+            row_count=total_rows,
+            metadata={**metadata, "stage": "cross_table_quality", "progress_pct": 94},
+        )
+        cross_table_quality = validate_cross_table_range(
+            db,
+            start,
+            end,
+            job_id=job.id,
+            strategy=settings.strategy,
+        )
+        metadata = {**metadata, **cross_table_quality.as_metadata()}
+        if cross_table_quality.has_error:
+            raise DataQualityError(
+                "cross table quality failed: "
+                f"dates={cross_table_quality.error_dates[:100]} "
+                f"datasets={cross_table_quality.error_datasets}"
+            )
 
         if evaluate_signals:
             update_job(

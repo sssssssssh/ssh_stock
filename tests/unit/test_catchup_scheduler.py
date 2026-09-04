@@ -3,8 +3,21 @@ from types import SimpleNamespace
 
 import app.jobs.catchup_job as catchup_module
 import app.jobs.scheduler as scheduler_module
-from app.jobs.catchup_job import CatchUpJob, analysis_complete_dates, build_catchup_plan
+from app.jobs.catchup_job import (
+    CatchUpJob,
+    analysis_complete_dates,
+    build_catchup_plan,
+    classify_catchup_dates,
+    is_analysis_complete,
+)
 from app.jobs.scheduler import cron_trigger_kwargs, run_scheduled_catchup
+from app.models.market_data import (
+    MarketDaily,
+    SectorFactorDaily,
+    StockDaily,
+    StockFactorDaily,
+    StockStateDaily,
+)
 
 
 def test_catchup_plan_runs_missing_and_recent_refresh_dates() -> None:
@@ -88,38 +101,177 @@ def test_catchup_plan_skips_when_missing_exceeds_limit() -> None:
 
 
 def test_analysis_complete_dates_require_current_algo_version(monkeypatch) -> None:
-    lookup = {
-        "StockFactorDaily": {date(2026, 9, 2)},
-        "MarketDaily": {date(2026, 9, 2)},
-        "SectorFactorDaily": {date(2026, 9, 2)},
-    }
-
     monkeypatch.setattr(
         catchup_module,
-        "_dates_with_rows",
-        lambda db, model, column, start, end: lookup[model.__name__],
+        "_open_trade_dates",
+        lambda db, start, end: [date(2026, 9, 1), date(2026, 9, 2)],
     )
-
-    class FakeResult:
-        def scalars(self):
-            return self
-
-        def all(self):
-            return [date(2026, 9, 1)]
-
-    class FakeDb:
-        def execute(self, stmt):
-            assert "v1.0" in str(stmt.compile(compile_kwargs={"literal_binds": True}))
-            return FakeResult()
-
+    monkeypatch.setattr(
+        catchup_module,
+        "is_analysis_complete",
+        lambda db, trade_date, **kwargs: trade_date == date(2026, 9, 2)
+        and kwargs["algo_version"] == "v1.0",
+    )
     completed = analysis_complete_dates(
-        FakeDb(),
+        object(),
         date(2026, 9, 1),
         date(2026, 9, 3),
         algo_version="v1.0",
     )
 
-    assert completed == set()
+    assert completed == {date(2026, 9, 2)}
+
+
+def test_classify_catchup_raw_error_does_not_enter_analysis(monkeypatch) -> None:
+    raw = {
+        date(2026, 9, 1): SimpleNamespace(is_complete=False),
+        date(2026, 9, 2): SimpleNamespace(is_complete=True),
+    }
+    analysis_calls = []
+
+    monkeypatch.setattr(
+        catchup_module,
+        "check_raw_completeness",
+        lambda db, trade_date, **kwargs: raw[trade_date],
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "is_analysis_complete",
+        lambda db, trade_date, **kwargs: analysis_calls.append(trade_date) or False,
+    )
+
+    raw_required, analysis_required = classify_catchup_dates(
+        object(),
+        [date(2026, 9, 1), date(2026, 9, 2)],
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert raw_required == [date(2026, 9, 1)]
+    assert analysis_required == [date(2026, 9, 2)]
+    assert analysis_calls == [date(2026, 9, 2)]
+
+
+def test_classify_catchup_raw_pass_analysis_complete_skips(monkeypatch) -> None:
+    monkeypatch.setattr(
+        catchup_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: SimpleNamespace(is_complete=True),
+    )
+    monkeypatch.setattr(catchup_module, "is_analysis_complete", lambda *args, **kwargs: True)
+
+    raw_required, analysis_required = classify_catchup_dates(
+        object(),
+        [date(2026, 9, 1)],
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert raw_required == []
+    assert analysis_required == []
+
+
+def test_catchup_candidate_window_ignores_older_history(monkeypatch) -> None:
+    open_dates = [date(2026, 8, day) for day in range(1, 26)]
+    checked_dates = []
+
+    monkeypatch.setattr(
+        catchup_module,
+        "check_raw_completeness",
+        lambda db, trade_date, **kwargs: checked_dates.append(trade_date)
+        or SimpleNamespace(is_complete=True),
+    )
+    monkeypatch.setattr(catchup_module, "is_analysis_complete", lambda *args, **kwargs: True)
+
+    classify_catchup_dates(
+        object(),
+        catchup_module._candidate_catchup_dates(open_dates, max_trade_days=20),
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert checked_dates == open_dates[-20:]
+    assert date(2026, 8, 1) not in checked_dates
+
+
+def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
+    calls = {}
+    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+
+    def count_matching(db, model, *criteria):
+        text = " ".join(
+            str(criterion.compile(compile_kwargs={"literal_binds": True}))
+            for criterion in criteria
+        )
+        calls[model.__name__] = text
+        if model is StockDaily:
+            return 100
+        if model is StockFactorDaily:
+            return 0
+        return 1
+
+    monkeypatch.setattr(catchup_module, "_count_matching", count_matching)
+
+    complete = is_analysis_complete(
+        object(),
+        date(2026, 9, 1),
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert complete is False
+    assert "factor_v1" in calls["StockFactorDaily"]
+    assert "current_hash" in calls["StockFactorDaily"]
+
+
+def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypatch) -> None:
+    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+    counts = {
+        StockDaily: 100,
+        StockFactorDaily: 100,
+        MarketDaily: 1,
+        SectorFactorDaily: 3,
+        StockStateDaily: 100,
+    }
+    monkeypatch.setattr(
+        catchup_module,
+        "_count_matching",
+        lambda db, model, *criteria: counts[model],
+    )
+
+    complete = is_analysis_complete(
+        object(),
+        date(2026, 9, 1),
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert complete is True
+
+
+def test_is_analysis_complete_rejects_low_factor_or_state_coverage(monkeypatch) -> None:
+    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+    counts = {
+        StockDaily: 100,
+        StockFactorDaily: 10,
+        MarketDaily: 1,
+        SectorFactorDaily: 3,
+        StockStateDaily: 10,
+    }
+    monkeypatch.setattr(
+        catchup_module,
+        "_count_matching",
+        lambda db, model, *criteria: counts[model],
+    )
+
+    complete = is_analysis_complete(
+        object(),
+        date(2026, 9, 1),
+        strategy={},
+        algo_version="v1.0",
+    )
+
+    assert complete is False
 
 
 def test_scheduler_cron_converts_crontab_weekdays_to_apscheduler_names() -> None:
@@ -227,7 +379,8 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
 
 def test_dirty_repair_not_run_without_open_dirty_ranges(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(catchup_module, "open_dirty_ranges", lambda db: [])
+    monkeypatch.setattr(catchup_module, "repairable_dirty_ranges", lambda *args, **kwargs: [])
+    monkeypatch.setattr(catchup_module, "unresolved_dirty_ranges", lambda db: [])
     monkeypatch.setattr(
         catchup_module,
         "run_recalculation",
@@ -243,12 +396,16 @@ def test_dirty_repair_not_run_without_open_dirty_ranges(monkeypatch) -> None:
 
 def test_dirty_repair_runs_from_earliest_dirty_to_latest_raw(monkeypatch) -> None:
     dirty_ranges = [
-        SimpleNamespace(id=1, dirty_start_date=date(2026, 9, 2)),
-        SimpleNamespace(id=2, dirty_start_date=date(2026, 9, 1)),
+        SimpleNamespace(id=1, status="FAILED", retry_count=1, dirty_start_date=date(2026, 9, 2)),
+        SimpleNamespace(id=2, status="OPEN", retry_count=0, dirty_start_date=date(2026, 9, 1)),
     ]
     created_jobs = []
     recalc_calls = []
-    monkeypatch.setattr(catchup_module, "open_dirty_ranges", lambda db: dirty_ranges)
+    monkeypatch.setattr(
+        catchup_module,
+        "repairable_dirty_ranges",
+        lambda *args, **kwargs: dirty_ranges,
+    )
     monkeypatch.setattr(catchup_module, "latest_raw_trade_date", lambda db: date(2026, 9, 4))
 
     def fake_start_job(db, *args, **kwargs):
@@ -273,3 +430,31 @@ def test_dirty_repair_runs_from_earliest_dirty_to_latest_raw(monkeypatch) -> Non
     assert args[3] == date(2026, 9, 4)
     assert kwargs["mode"] == "dirty_repair"
     assert kwargs["dirty_ranges"] == dirty_ranges
+
+
+def test_dirty_repair_does_not_retry_failed_at_limit(monkeypatch) -> None:
+    recalc_calls = []
+    monkeypatch.setattr(catchup_module, "repairable_dirty_ranges", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        catchup_module,
+        "unresolved_dirty_ranges",
+        lambda db: [
+            SimpleNamespace(
+                id=1,
+                status="FAILED",
+                retry_count=3,
+                dirty_start_date=date(2026, 9, 1),
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "run_recalculation",
+        lambda *args, **kwargs: recalc_calls.append((args, kwargs)),
+    )
+    job = CatchUpJob.__new__(CatchUpJob)
+    job.db = object()
+
+    job._run_dirty_repair_if_needed()
+
+    assert recalc_calls == []

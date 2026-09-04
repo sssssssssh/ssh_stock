@@ -2,23 +2,29 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import (
     MarketDaily,
     SectorFactorDaily,
+    StockDaily,
     StockFactorDaily,
     StockStateDaily,
     TradeCalendar,
 )
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job
-from app.services.dirty import latest_raw_trade_date, open_dirty_ranges
+from app.services.calc_metadata import config_hash
+from app.services.dirty import (
+    latest_raw_trade_date,
+    repairable_dirty_ranges,
+    unresolved_dirty_ranges,
+)
 from app.services.ingestion import IngestionService
 from app.services.job_guard import scheduler_setting
-from app.services.quality.daily_quality import DataQualityError
+from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
 from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.recalculation import run_recalculation
 
@@ -49,23 +55,16 @@ class CatchUpJob:
         calendar_start = target_date - timedelta(days=max(90, max_trade_days * 4))
         self.ingestion.sync_trade_calendar(calendar_start, target_date)
         open_dates = _open_trade_dates(self.db, calendar_start, target_date)
-        raw_required_dates = _recent_raw_incomplete_dates(
-            self.db,
+        candidate_dates = _candidate_catchup_dates(
             open_dates,
             max_trade_days=max_trade_days,
         )
-        analysis_complete = analysis_complete_dates(
+        raw_required_dates, analysis_required_dates = classify_catchup_dates(
             self.db,
-            calendar_start,
-            target_date,
+            candidate_dates,
+            strategy=self.settings.strategy,
             algo_version=self.settings.algo_version,
         )
-        raw_required_set = set(raw_required_dates)
-        analysis_required_dates = [
-            current
-            for current in open_dates
-            if current not in raw_required_set and current not in analysis_complete
-        ]
         plan = build_catchup_plan(
             open_dates=open_dates,
             raw_required_dates=raw_required_dates,
@@ -152,11 +151,21 @@ class CatchUpJob:
             raise DataQualityError(
                 "raw refresh completeness failed: "
                 f"trade_date={trade_date} statuses={statuses}"
-            )
+        )
 
     def _run_dirty_repair_if_needed(self) -> None:
-        dirty_ranges = open_dirty_ranges(self.db)
+        dirty_ranges = repairable_dirty_ranges(
+            self.db,
+            max_retry_count=int(scheduler_setting("dirty_max_retry_count", 3)),
+        )
         if not dirty_ranges:
+            unresolved = unresolved_dirty_ranges(self.db)
+            if unresolved:
+                logger.warning(
+                    "dirty repair skipped because retry limit was reached; "
+                    "manual intervention required count={}",
+                    len(unresolved),
+                )
             return
         latest = latest_raw_trade_date(self.db)
         if latest is None:
@@ -246,61 +255,125 @@ def analysis_complete_dates(
     end: date,
     *,
     algo_version: str,
+    strategy: dict | None = None,
 ) -> set[date]:
-    factor_dates = _dates_with_rows(db, StockFactorDaily, StockFactorDaily.trade_date, start, end)
-    market_dates = _dates_with_rows(db, MarketDaily, MarketDaily.trade_date, start, end)
-    sector_dates = _dates_with_rows(db, SectorFactorDaily, SectorFactorDaily.trade_date, start, end)
-    state_dates = set(
-        db.execute(
-            select(StockStateDaily.trade_date)
-            .where(
-                StockStateDaily.trade_date >= start,
-                StockStateDaily.trade_date <= end,
-                StockStateDaily.algo_version == algo_version,
-            )
-            .distinct()
+    resolved_strategy = strategy if strategy is not None else get_settings().strategy
+    return {
+        trade_date
+        for trade_date in _open_trade_dates(db, start, end)
+        if is_analysis_complete(
+            db,
+            trade_date,
+            strategy=resolved_strategy,
+            algo_version=algo_version,
         )
-        .scalars()
-        .all()
-    )
-    return factor_dates & market_dates & sector_dates & state_dates
+    }
 
 
-def _dates_with_rows(
+def classify_catchup_dates(
     db: Session,
-    model: type,
-    column,
-    start: date,
-    end: date,
-) -> set[date]:
-    return set(
-        db.execute(
-            select(column)
-            .select_from(model)
-            .where(column >= start, column <= end)
-            .distinct()
+    candidate_dates: list[date],
+    *,
+    strategy: dict,
+    algo_version: str,
+) -> tuple[list[date], list[date]]:
+    raw_required_dates: list[date] = []
+    analysis_required_dates: list[date] = []
+    for trade_date in candidate_dates:
+        raw = check_raw_completeness(
+            db,
+            trade_date,
+            strategy=strategy,
+            persist=False,
         )
-        .scalars()
-        .all()
+        if not raw.is_complete:
+            raw_required_dates.append(trade_date)
+            continue
+        if not is_analysis_complete(
+            db,
+            trade_date,
+            strategy=strategy,
+            algo_version=algo_version,
+        ):
+            analysis_required_dates.append(trade_date)
+    return raw_required_dates, analysis_required_dates
+
+
+def is_analysis_complete(
+    db: Session,
+    trade_date: date,
+    *,
+    strategy: dict,
+    algo_version: str,
+) -> bool:
+    current_config_hash = config_hash(strategy)
+    stock_daily_count = _count_matching(db, StockDaily, StockDaily.trade_date == trade_date)
+    factor_count = _count_matching(
+        db,
+        StockFactorDaily,
+        StockFactorDaily.trade_date == trade_date,
+        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.config_hash == current_config_hash,
+    )
+    if (
+        cross_table_coverage_status(
+            strategy,
+            "factor_vs_daily",
+            stock_daily_count,
+            factor_count,
+            error_default=0.90,
+        )
+        != "PASS"
+    ):
+        return False
+
+    market_count = _count_matching(
+        db,
+        MarketDaily,
+        MarketDaily.trade_date == trade_date,
+        MarketDaily.calc_version == "market_v1",
+        MarketDaily.config_hash == current_config_hash,
+    )
+    if market_count < 1:
+        return False
+
+    sector_count = _count_matching(
+        db,
+        SectorFactorDaily,
+        SectorFactorDaily.trade_date == trade_date,
+        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.config_hash == current_config_hash,
+    )
+    if sector_count < 1:
+        return False
+
+    state_count = _count_matching(
+        db,
+        StockStateDaily,
+        StockStateDaily.trade_date == trade_date,
+        StockStateDaily.algo_version == algo_version,
+    )
+    return (
+        cross_table_coverage_status(
+            strategy,
+            "state_vs_factor",
+            factor_count,
+            state_count,
+            error_default=0.90,
+        )
+        == "PASS"
     )
 
 
-def _recent_raw_incomplete_dates(
-    db: Session,
+def _candidate_catchup_dates(
     open_dates: list[date],
     *,
     max_trade_days: int,
 ) -> list[date]:
-    strategy = get_settings().strategy
-    recent = open_dates[-max_trade_days:] if max_trade_days > 0 else []
-    incomplete: list[date] = []
-    for current in recent:
-        result = check_raw_completeness(
-            db,
-            current,
-            strategy=strategy,
-            persist=False,
-        )
-        if not result.is_complete:
-            incomplete.append(current)
-    return incomplete
+    return open_dates[-max_trade_days:] if max_trade_days > 0 else []
+
+
+def _count_matching(db: Session, model: type, *criteria) -> int:
+    return int(
+        db.execute(select(func.count()).select_from(model).where(*criteria)).scalar_one()
+    )
