@@ -50,7 +50,7 @@ def _job(status: str, started_at: datetime):
 
 
 def test_reject_if_active_ingestion_job_raises_for_running_job() -> None:
-    now = datetime(2026, 9, 4, tzinfo=UTC)
+    now = datetime.now(UTC)
     job = _job("RUNNING", now - timedelta(hours=1))
     db = _FakeDb([job])
 
@@ -77,7 +77,7 @@ def test_recover_stale_running_and_queued_jobs() -> None:
 
 
 def test_find_active_job_ignores_recovered_stale_jobs() -> None:
-    now = datetime(2026, 9, 4, tzinfo=UTC)
+    now = datetime.now(UTC)
     stale = _job("RUNNING", now - timedelta(hours=25))
     db = _FakeDb([stale])
 

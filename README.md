@@ -807,7 +807,9 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 - Scheduler 不再只跑当天，而是执行 Catch-up：只在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis，窗口外历史缺口需要手动 `validate-data`、`backfill`、`recalculate`。
 - Catch-up 先判断 Raw 完整性，Raw 不完整进入 `raw_required_dates`；只有 Raw 完整才继续判断 Analysis，避免把窗口外未检查 Raw 的历史日期误归为只计算。
 - Analysis Complete 要求当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily`、`state_vs_factor` 达到现有跨表质量 PASS 阈值。Raw 已完整但分析缺失时只执行计算，不重新访问 Tushare。
-- Catch-up 完成后会按 `refresh_recent_trade_days=5` 对最近交易日执行 Raw-only refresh，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不重复同步基础信息，也不按日复用完整 `DailyJob`。
+- Catch-up 对每个 Raw 缺口只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 并执行 RawCompleteness；不会运行完整 `DailyJob`。任意 Raw ERROR 都会先提交质量证据并阻止补算。
+- 所有 Raw 缺口修复后，Catch-up 合并 Raw 与 Analysis 缺口，从最早缺口到数据库的 `latest_raw_trade_date` 统一且只执行一次 `run_recalculation()`。因此补回历史新行即使没有产生 Dirty Range，也会修复其后所有受历史依赖影响的计算结果。
+- 统一重算完成后，再按 `refresh_recent_trade_days=5` 执行 Recent Raw-only refresh；本轮刚修复的 Raw 日期会被排除，避免立即重复请求 Tushare。
 - Recent refresh 每日 RawCompleteness 写库后会先提交质量证据；ERROR 直接失败，WARNING 继续。refresh 发现可修复 dirty range 后，会自动从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`。
 - `DailyJob` 在 Raw 四表同步后会先执行 RawCompleteness Gate，并在 ERROR 失败前提交 `data_quality_daily` 证据。Raw ERROR 时禁止进入因子、市场、行业、趋势和信号计算；Raw WARNING 暂允许继续。
 - 跨表质量 Gate 写入 `data_quality_daily` 后也会在任务失败前提交证据，避免任务标记 FAILED 后页面查不到 ERROR 明细。
@@ -824,7 +826,7 @@ app:
     dirty_max_retry_count: 3
 ```
 
-本轮 2 个 P0 和 2 个 P1 收尾完成后，Milestone 8、Raw 数据层、数据拉取层和自动运行层按当前范围封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw/Scheduler/Job 架构。
+最后一项历史一致性修复完成后，Milestone 8、Raw 数据层、数据拉取层、Catch-up 和自动运行层按当前范围正式封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw/Scheduler/Job 架构。
 
 ## 换电脑继续开发
 

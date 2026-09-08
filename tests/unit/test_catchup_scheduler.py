@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import app.jobs.catchup_job as catchup_module
 import app.jobs.scheduler as scheduler_module
+import pytest
 from app.jobs.catchup_job import (
     CatchUpJob,
     analysis_complete_dates,
@@ -62,6 +63,24 @@ def test_catchup_plan_includes_recent_raw_error_before_latest_complete() -> None
     assert plan.required_dates == [date(2026, 9, 2)]
     assert plan.raw_required_dates == [date(2026, 9, 2)]
     assert plan.analysis_required_dates == []
+
+
+def test_catchup_plan_excludes_repaired_raw_dates_from_recent_refresh() -> None:
+    open_dates = [
+        date(2026, 9, 6),
+        date(2026, 9, 7),
+        date(2026, 9, 8),
+    ]
+
+    plan = build_catchup_plan(
+        open_dates=open_dates,
+        raw_required_dates=[date(2026, 9, 8)],
+        analysis_required_dates=[],
+        max_catchup_trade_days=20,
+        refresh_recent_trade_days=2,
+    )
+
+    assert plan.refresh_dates == [date(2026, 9, 7)]
 
 
 def test_catchup_plan_identifies_middle_analysis_gap() -> None:
@@ -224,6 +243,192 @@ def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
     assert "current_hash" in calls["StockFactorDaily"]
 
 
+def _configured_catchup_job(
+    monkeypatch,
+    *,
+    open_dates: list[date],
+    raw_required_dates: list[date],
+    analysis_required_dates: list[date],
+    latest: date | None,
+    refresh_recent_trade_days: int = 0,
+):
+    events = []
+    scheduler_values = {
+        "max_catchup_trade_days": 20,
+        "refresh_recent_trade_days": refresh_recent_trade_days,
+    }
+    monkeypatch.setattr(
+        catchup_module,
+        "scheduler_setting",
+        lambda key, default: scheduler_values.get(key, default),
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "_open_trade_dates",
+        lambda db, start, end: open_dates,
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "classify_catchup_dates",
+        lambda *args, **kwargs: (raw_required_dates, analysis_required_dates),
+    )
+    monkeypatch.setattr(catchup_module, "latest_raw_trade_date", lambda db: latest)
+
+    job = CatchUpJob.__new__(CatchUpJob)
+    job.db = SimpleNamespace(commit=lambda: events.append(("quality_commit",)))
+    job.provider = object()
+    job.settings = SimpleNamespace(strategy={}, algo_version="v1.0")
+    job.ingestion = SimpleNamespace(
+        sync_trade_calendar=lambda start, end: events.append(("calendar", start, end))
+    )
+    job._sync_and_validate_raw_date = lambda current: events.append(("raw", current))
+    job._run_analysis_repair = lambda start, end, mode: events.append(
+        ("recalculate", start, end, mode)
+    )
+    job._refresh_raw_only = lambda current: events.append(("refresh", current))
+    job._run_dirty_repair_if_needed = lambda: events.append(("dirty_repair",))
+    return job, events
+
+
+def test_catchup_historical_raw_gap_repairs_raw_then_recalculates_to_latest(
+    monkeypatch,
+) -> None:
+    open_dates = [date(2026, 9, day) for day in range(1, 5)]
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=open_dates,
+        raw_required_dates=[date(2026, 9, 2)],
+        analysis_required_dates=[],
+        latest=date(2026, 9, 4),
+    )
+
+    job.run(date(2026, 9, 4))
+
+    assert ("raw", date(2026, 9, 2)) in events
+    assert ("recalculate", date(2026, 9, 2), date(2026, 9, 4), "catchup_analysis") in events
+    assert events.index(("raw", date(2026, 9, 2))) < events.index(
+        ("recalculate", date(2026, 9, 2), date(2026, 9, 4), "catchup_analysis")
+    )
+
+
+def test_catchup_raw_and_analysis_gaps_use_one_unified_recalculation(monkeypatch) -> None:
+    open_dates = [date(2026, 9, day) for day in range(1, 9)]
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=open_dates,
+        raw_required_dates=[date(2026, 9, 2)],
+        analysis_required_dates=[date(2026, 9, 5)],
+        latest=date(2026, 9, 8),
+        refresh_recent_trade_days=2,
+    )
+
+    job.run(date(2026, 9, 8))
+
+    recalculate_events = [event for event in events if event[0] == "recalculate"]
+    assert recalculate_events == [
+        ("recalculate", date(2026, 9, 2), date(2026, 9, 8), "catchup_analysis")
+    ]
+    assert events.index(recalculate_events[0]) < events.index(("refresh", date(2026, 9, 7)))
+    assert events[-1] == ("dirty_repair",)
+
+
+def test_catchup_analysis_gap_does_not_access_tushare_raw(monkeypatch) -> None:
+    open_dates = [date(2026, 9, day) for day in range(1, 9)]
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=open_dates,
+        raw_required_dates=[],
+        analysis_required_dates=[date(2026, 9, 5)],
+        latest=date(2026, 9, 8),
+    )
+
+    job.run(date(2026, 9, 8))
+
+    assert not [event for event in events if event[0] == "raw"]
+    assert ("recalculate", date(2026, 9, 5), date(2026, 9, 8), "catchup_analysis") in events
+
+
+def test_catchup_raw_error_commits_evidence_and_blocks_recalculation(monkeypatch) -> None:
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[date(2026, 9, day) for day in range(1, 5)],
+        raw_required_dates=[date(2026, 9, 2)],
+        analysis_required_dates=[],
+        latest=date(2026, 9, 4),
+    )
+
+    def fail_raw_repair(current):
+        job.db.commit()
+        raise catchup_module.DataQualityError(f"raw completeness failed: {current}")
+
+    job._sync_and_validate_raw_date = fail_raw_repair
+
+    with pytest.raises(catchup_module.DataQualityError, match="raw completeness failed"):
+        job.run(date(2026, 9, 4))
+
+    assert ("quality_commit",) in events
+    assert not [event for event in events if event[0] == "recalculate"]
+
+
+def test_new_raw_insert_without_dirty_range_still_recalculates_forward(monkeypatch) -> None:
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[date(2026, 9, day) for day in range(1, 5)],
+        raw_required_dates=[date(2026, 9, 2)],
+        analysis_required_dates=[],
+        latest=date(2026, 9, 4),
+    )
+    inserted_rows = set()
+
+    class InsertOnlyIngestion:
+        def sync_trade_calendar(self, start, end):
+            events.append(("calendar", start, end))
+
+        def sync_daily(self, trade_date):
+            inserted_rows.add((trade_date, "000003.SZ"))
+
+        def sync_adj_factor(self, trade_date):
+            return 1
+
+        def sync_daily_basic(self, trade_date):
+            return 1
+
+        def sync_index_daily(self, trade_date):
+            return 1
+
+    monkeypatch.setattr(
+        catchup_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: SimpleNamespace(
+            overall_status="PASS",
+            as_metadata=lambda: {"current_day_datasets": {}},
+        ),
+    )
+    job.ingestion = InsertOnlyIngestion()
+    job._sync_and_validate_raw_date = CatchUpJob._sync_and_validate_raw_date.__get__(job)
+
+    job.run(date(2026, 9, 4))
+
+    assert inserted_rows == {(date(2026, 9, 2), "000003.SZ")}
+    assert ("recalculate", date(2026, 9, 2), date(2026, 9, 4), "catchup_analysis") in events
+    assert events[-1] == ("dirty_repair",)
+
+
+def test_catchup_recalculation_fails_when_latest_raw_date_is_missing(monkeypatch) -> None:
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[date(2026, 9, 2)],
+        raw_required_dates=[],
+        analysis_required_dates=[date(2026, 9, 2)],
+        latest=None,
+    )
+
+    with pytest.raises(RuntimeError, match="no stock_daily data available"):
+        job.run(date(2026, 9, 2))
+
+    assert not [event for event in events if event[0] == "recalculate"]
+
+
 def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypatch) -> None:
     monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
     counts = {
@@ -374,6 +579,50 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
         ("daily_basic", date(2026, 9, 4)),
         ("index_daily", date(2026, 9, 4)),
     ]
+    assert db.commits == 1
+
+
+def test_raw_sync_quality_error_commits_before_raise(monkeypatch) -> None:
+    calls = []
+    quality_calls = []
+
+    class FakeIngestion:
+        def sync_daily(self, trade_date):
+            calls.append(("daily", trade_date))
+
+        def sync_adj_factor(self, trade_date):
+            calls.append(("adj_factor", trade_date))
+
+        def sync_daily_basic(self, trade_date):
+            calls.append(("daily_basic", trade_date))
+
+        def sync_index_daily(self, trade_date):
+            calls.append(("index_daily", trade_date))
+
+    def raw_quality(db, trade_date, **kwargs):
+        quality_calls.append((trade_date, kwargs["persist"]))
+        return SimpleNamespace(
+            overall_status="ERROR",
+            as_metadata=lambda: {"current_day_datasets": {"stock_daily": "ERROR"}},
+        )
+
+    monkeypatch.setattr(catchup_module, "check_raw_completeness", raw_quality)
+    db = SimpleNamespace(commits=0, commit=lambda: setattr(db, "commits", db.commits + 1))
+    job = CatchUpJob.__new__(CatchUpJob)
+    job.db = db
+    job.ingestion = FakeIngestion()
+    job.settings = SimpleNamespace(strategy={})
+
+    with pytest.raises(catchup_module.DataQualityError, match="raw completeness failed"):
+        job._sync_and_validate_raw_date(date(2026, 9, 2))
+
+    assert calls == [
+        ("daily", date(2026, 9, 2)),
+        ("adj_factor", date(2026, 9, 2)),
+        ("daily_basic", date(2026, 9, 2)),
+        ("index_daily", date(2026, 9, 2)),
+    ]
+    assert quality_calls == [(date(2026, 9, 2), True)]
     assert db.commits == 1
 
 

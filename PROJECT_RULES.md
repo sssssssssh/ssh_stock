@@ -122,8 +122,10 @@
 - Scheduler 必须按 `app.timezone` 计算当前日期，不得直接使用系统默认 `date.today()`；`daily_cron` 的工作日字段必须正确传给 APScheduler。
 - Scheduler 触发时执行 Catch-up，而不是只跑当天；Raw/Analysis 必须使用最近 `max_catchup_trade_days` 个 open_date 作为同一候选窗口逐日分类，先判断 Raw，只有 Raw 完整才判断 Analysis，不得把窗口外未检查 Raw 的历史日期误归为 analysis-only。
 - Analysis Complete 必须同时满足当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily` 与 `state_vs_factor` 覆盖率达到现有跨表质量 PASS 阈值；不得只用 `MAX(stock_state_daily.trade_date)` 或单表存在 1 行判断完整。
-- Catch-up 中 Raw 已完整但分析缺失的交易日只能触发计算修复，不得重新访问 Tushare；Raw 缺失或 Raw ERROR 的交易日才补 Raw 并计算。少量缺失交易日自动补齐，超过 `max_catchup_trade_days` 时跳过并提示手动 backfill。
+- Catch-up 中 Raw 缺口只能执行 Raw-only 修复：同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 并执行 RawCompleteness，不得按缺口日期运行完整 `DailyJob`，也不得重复同步 `stock_basic`。任一 Raw ERROR 必须先提交质量证据并阻止后续重算。
+- Catch-up 的 Raw 缺口全部修复后，必须合并 `raw_required_dates` 与 `analysis_required_dates`，从最早日期到 `latest_raw_trade_date` 统一且只调用一次 `run_recalculation()`；历史 Raw 新插入行即使未产生 Dirty Range，也必须触发该向后重算。只有 Analysis 缺口时不得访问 Tushare Raw。
 - Scheduler 自动 refresh 最近 `refresh_recent_trade_days` 个交易日 Raw 时必须是 Raw-only，只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`，不得重复同步 `stock_basic`，不得按日复用完整 `DailyJob`。
+- Recent refresh 必须在 Catch-up 统一重算后执行，并跳过本轮刚完成 Raw-only 修复的日期；之后继续按现有逻辑执行 Dirty Repair。
 - Recent refresh 后如存在可修复 dirty range，Scheduler 必须自动执行 Dirty Repair，从最早 dirty start 重算到最新 Raw 交易日；成功标记 `RESOLVED`，失败标记 `FAILED`，超过 `dirty_max_retry_count` 的 FAILED dirty range 不再自动重试并提示人工介入。
 - `index_daily` 区间预拉取只是性能优化，失败时必须降级为逐日拉取，并最终由 RawCompleteness 判断成败。
 - Milestone 8、Raw 数据层、数据拉取层和自动运行层按最终封版范围封版；不得继续扩展 advisory lock、heartbeat、startup catchup、Raw/Scheduler/Job 架构或 Milestone 9 数据。

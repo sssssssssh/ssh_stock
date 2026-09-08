@@ -1072,7 +1072,7 @@ V1 验证指标：
 - 新增统一任务互斥 Guard，API、Scheduler 和 CLI 的核心数据任务入口共用，避免 `daily`、`sync_basic`、`backfill`、`recalculate`、`validate_data` 并发。
 - 新增 stale job recovery：超时的 `QUEUED/RUNNING` 任务会自动标记为 `FAILED`，避免断电或进程崩溃后永久阻塞新任务。
 - Scheduler 改为按 `app.timezone` 取当前日期，并正确解析 `daily_cron` 的工作日字段，默认周一到周五 18:10 触发。
-- Scheduler 触发后执行 Catch-up：发现最近少量漏跑交易日或 Raw 不完整交易日后，逐日复用 `DailyJob` 补齐 Raw 和计算。
+- Scheduler 触发后执行 Catch-up：发现最近少量漏跑交易日或 Raw 不完整交易日后，先逐日执行 Raw-only 修复，再统一向后补算；不对 Raw 缺口逐日复用完整 `DailyJob`。
 - Catch-up 受 `max_catchup_trade_days` 保护，缺口过大时不自动大规模回填，提示用户手动执行 `backfill` 和 `recalculate`。
 - Scheduler 会 refresh 最近 `refresh_recent_trade_days` 个交易日，用现有 NULL 保护和 dirty range 机制识别 Tushare 历史修订。
 - `BackfillJob` 的 `index_daily` 区间拉取失败时不再直接拖垮任务，而是记录 warning 并降级为逐日指数拉取。
@@ -1099,3 +1099,14 @@ V1 验证指标：
 - Analysis Complete 增加当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version` 和 `factor_vs_daily` / `state_vs_factor` 覆盖率 PASS 校验，不再以单表存在行作为完成依据。
 
 Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；后续需求进入 Milestone 9。
+
+### 25.8 Milestone 8 最后一项历史一致性封版（2026-09-08）
+
+本轮只修复历史 Raw 缺口补回后的向后计算一致性，不扩展 Raw、Scheduler、Job 架构，也不提前开发 Milestone 9。
+
+- Catch-up 对 `raw_required_dates` 逐日执行 Raw-only 同步和 RawCompleteness Gate，不运行完整 `DailyJob`；任意 ERROR 先提交质量证据，再终止本次 Catch-up。
+- 全部 Raw 缺口通过后，合并 `raw_required_dates` 与 `analysis_required_dates`，以最早修复日期为 `recalc_start`、数据库最新 Raw 交易日为 `recalc_end`，统一且只执行一次 `run_recalculation()`。
+- 向后重算直接由 Catch-up 分类结果触发，不依赖补回的新 Raw 行是否生成 Dirty Range。
+- Recent Refresh 在统一重算之后执行，并排除本轮刚完成 Raw 修复的日期；Refresh 后的 Dirty Repair 保持原有逻辑。
+
+至此 Milestone 8、Raw 数据层、数据拉取层、Catch-up 和自动运行层正式 DONE；后续开发进入 Milestone 9 可交易性数据。

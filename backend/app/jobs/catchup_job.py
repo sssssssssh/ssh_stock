@@ -81,16 +81,20 @@ class CatchUpJob:
             )
             return plan
 
-        from app.jobs.daily_job import DailyJob
-
         for current in plan.raw_required_dates:
-            logger.info("catch-up running daily for raw gap trade_date={}", current)
-            DailyJob(self.db, self.provider).run(current)
+            logger.info("catch-up raw-only repair trade_date={}", current)
+            self._sync_and_validate_raw_date(current)
 
-        if plan.analysis_required_dates:
+        recalc_dates = plan.required_dates
+        if recalc_dates:
+            latest = latest_raw_trade_date(self.db)
+            if latest is None:
+                raise RuntimeError(
+                    "catch-up recalculation requested but no stock_daily data available"
+                )
             self._run_analysis_repair(
-                min(plan.analysis_required_dates),
-                max(open_dates),
+                min(recalc_dates),
+                latest,
                 mode="catchup_analysis",
             )
 
@@ -134,7 +138,7 @@ class CatchUpJob:
             mode=mode,
         )
 
-    def _refresh_raw_only(self, trade_date: date) -> None:
+    def _sync_and_validate_raw_date(self, trade_date: date) -> None:
         self.ingestion.sync_daily(trade_date)
         self.ingestion.sync_adj_factor(trade_date)
         self.ingestion.sync_daily_basic(trade_date)
@@ -149,9 +153,12 @@ class CatchUpJob:
         if raw_quality.overall_status == "ERROR":
             statuses = raw_quality.as_metadata()["current_day_datasets"]
             raise DataQualityError(
-                "raw refresh completeness failed: "
+                "raw completeness failed: "
                 f"trade_date={trade_date} statuses={statuses}"
-        )
+            )
+
+    def _refresh_raw_only(self, trade_date: date) -> None:
+        self._sync_and_validate_raw_date(trade_date)
 
     def _run_dirty_repair_if_needed(self) -> None:
         dirty_ranges = repairable_dirty_ranges(
@@ -225,6 +232,7 @@ def build_catchup_plan(
     refresh_dates = (
         ordered_open_dates[-refresh_recent_trade_days:] if refresh_recent_trade_days > 0 else []
     )
+    refresh_dates = [trade_date for trade_date in refresh_dates if trade_date not in raw_required]
     return CatchUpPlan(
         raw_required_dates=raw_required,
         analysis_required_dates=analysis_required,
