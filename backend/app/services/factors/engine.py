@@ -59,10 +59,25 @@ def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
     listed_days = df.groupby("ts_code").cumcount() + 1
     reasons: list[list[str]] = [[] for _ in range(len(df.index))]
 
-    if config.exclude_st and "name" in df.columns:
-        st_mask = df["name"].fillna("").str.contains("ST", case=False)
+    if config.exclude_st and "is_st" in df.columns:
+        st_mask = df["is_st"].eq(True)
         for idx in np.flatnonzero(st_mask.to_numpy()):
             reasons[idx].append("ST")
+
+    if "is_suspended" in df.columns:
+        suspended_mask = df["is_suspended"].eq(True)
+        for idx in np.flatnonzero(suspended_mask.to_numpy()):
+            reasons[idx].append("SUSPENDED")
+
+    if "st_status_unknown" in df.columns:
+        unknown_mask = df["st_status_unknown"].eq(True)
+        for idx in np.flatnonzero(unknown_mask.to_numpy()):
+            reasons[idx].append("ST_STATUS_UNKNOWN")
+
+    if config.exclude_st and "trade_status_present" in df.columns:
+        missing_status_mask = ~df["trade_status_present"]
+        for idx in np.flatnonzero(missing_status_mask.to_numpy()):
+            reasons[idx].append("TRADE_STATUS_MISSING")
 
     active_mask = df.apply(
         lambda row: is_stock_active_on(
@@ -72,7 +87,9 @@ def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
         ),
         axis=1,
     )
-    inactive_mask = ~active_mask
+    if "is_active" in df.columns:
+        active_mask = df["is_active"].where(df["trade_status_present"], active_mask)
+    inactive_mask = ~active_mask.astype(bool)
     for idx in np.flatnonzero(inactive_mask.to_numpy()):
         reasons[idx].append("NOT_ACTIVE_ON_DATE")
 
@@ -105,6 +122,7 @@ def calculate_stock_factors(
     start: date,
     end: date,
     config: FactorConfig,
+    trade_status: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if daily.empty:
         return pd.DataFrame()
@@ -115,16 +133,41 @@ def calculate_stock_factors(
         stock_basic["list_date"] = pd.to_datetime(stock_basic["list_date"]).dt.date
         stock_basic["delist_date"] = pd.to_datetime(stock_basic["delist_date"]).dt.date
         df = df.merge(
-            stock_basic[["ts_code", "name", "list_date", "delist_date"]],
+            stock_basic[["ts_code", "list_date", "delist_date"]],
             on="ts_code",
             how="left",
         )
     else:
-        df["name"] = None
         df["list_date"] = None
         df["delist_date"] = None
 
     df["trade_date"] = pd.to_datetime(df["trade_date"]).dt.date
+    if trade_status is not None and not trade_status.empty:
+        status = trade_status.copy()
+        status["trade_date"] = pd.to_datetime(status["trade_date"]).dt.date
+        status["trade_status_present"] = True
+        df = df.merge(
+            status[
+                [
+                    "trade_date",
+                    "ts_code",
+                    "is_active",
+                    "is_suspended",
+                    "is_st",
+                    "st_status_unknown",
+                    "trade_status_present",
+                ]
+            ],
+            on=["trade_date", "ts_code"],
+            how="left",
+        )
+        df["trade_status_present"] = df["trade_status_present"].fillna(False)
+    else:
+        df["is_active"] = None
+        df["is_suspended"] = None
+        df["is_st"] = None
+        df["st_status_unknown"] = None
+        df["trade_status_present"] = False
     df = df.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
 
     for col in ["open", "high", "low", "close"]:

@@ -10,6 +10,12 @@ import { init, use, type EChartsType } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
+import DashboardView from "./components/DashboardView.vue";
+import DataQuality from "./components/DataQuality.vue";
+import JobCenter from "./components/JobCenter.vue";
+import ResearchSummary from "./components/ResearchSummary.vue";
+import SectorHeatPanel from "./components/SectorHeat.vue";
+import StockPool from "./components/StockPool.vue";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -915,65 +921,22 @@ function statusLabel(status: string) {
       <div v-if="jobMessage" class="success-strip">{{ jobMessage }}</div>
 
       <section v-show="activeView === 'overview'" class="view-stack">
-        <section class="metric-grid">
-          <article
-            v-for="metric in metrics"
-            :key="metric.label"
-            class="metric-card"
-            :class="metric.tone"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
-            <small>{{ metric.sub || "" }}</small>
-          </article>
-        </section>
-
-        <section class="dashboard-grid overview-grid">
-          <article class="panel">
-            <div class="panel-title">
-              <h2>市场分布</h2>
-              <span>{{ summary?.market?.regime || "NO_DATA" }}</span>
-            </div>
+        <DashboardView
+          :metrics="metrics"
+          :market-regime="summary?.market?.regime || 'NO_DATA'"
+          :sector-count="sectorHeat.length"
+        >
+          <template #market>
             <div ref="marketChartRef" class="chart"></div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-title">
-              <h2>行业热度</h2>
-              <span>{{ sectorHeat.length }} 个行业</span>
-            </div>
+          </template>
+          <template #sector>
             <div v-if="sectorHeat.length" ref="sectorChartRef" class="chart"></div>
             <div v-else class="empty-chart">暂无行业热度数据</div>
-          </article>
-
-          <article class="panel">
-            <div class="panel-title">
-              <h2>信号后验</h2>
-              <span>{{ researchStats?.latest_evaluated_until_date || "--" }}</span>
-            </div>
-            <div class="stats-stack">
-              <div>
-                <span>5日均值</span>
-                <strong>{{ formatPercent(researchStats?.avg_ret5) }}</strong>
-              </div>
-              <div>
-                <span>20日均值</span>
-                <strong>{{ formatPercent(researchStats?.avg_ret20) }}</strong>
-              </div>
-              <div>
-                <span>20日胜率</span>
-                <strong>{{ formatPercent(researchStats?.win_rate20) }}</strong>
-              </div>
-              <div>
-                <span>MFE20 / MAE20</span>
-                <strong>
-                  {{ formatPercent(researchStats?.avg_mfe20) }} /
-                  {{ formatPercent(researchStats?.avg_mae20) }}
-                </strong>
-              </div>
-            </div>
-          </article>
-        </section>
+          </template>
+          <template #research>
+            <ResearchSummary :stats="researchStats" :format-percent="formatPercent" />
+          </template>
+        </DashboardView>
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">
@@ -1022,283 +985,61 @@ function statusLabel(status: string) {
           </div>
         </article>
 
-        <article class="panel" :class="{ collapsed: collapsedDataPanels.tasks }">
-          <div class="panel-title coverage-title">
-            <div>
-              <h2>
-                <button
-                  class="panel-title-button"
-                  type="button"
-                  :aria-expanded="!collapsedDataPanels.tasks"
-                  @click="toggleDataPanel('tasks')"
-                >
-                  <span class="collapse-icon" aria-hidden="true"></span>
-                  <span>拉取数据与任务</span>
-                </button>
-              </h2>
-              <span>先同步基础信息，再按日期拉取原始行情；计算请用上方补算入口</span>
-            </div>
-            <div class="coverage-actions-group">
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="submittingBasicInfo"
-                @click="submitBasicInfo"
-              >
-                {{ submittingBasicInfo ? "提交中" : "同步基础信息" }}
-              </button>
-              <form class="coverage-actions" @submit.prevent="submitBackfill">
-                <label>
-                  <span>开始</span>
-                  <input v-model="backfillStart" type="date" />
-                </label>
-                <label>
-                  <span>结束</span>
-                  <input v-model="backfillEnd" type="date" />
-                </label>
-                <button class="primary-button" type="submit" :disabled="submittingIngestion">
-                  {{ submittingIngestion ? "提交中" : "拉取原始数据" }}
-                </button>
-              </form>
-            </div>
-          </div>
-          <div v-show="!collapsedDataPanels.tasks" class="job-status-grid panel-collapsible">
-            <section class="job-current" :class="activeJob?.status.toLowerCase() || 'idle'">
-              <div class="job-current-head">
-                <span>当前任务</span>
-                <strong>{{ activeJob ? statusLabel(activeJob.status) : "无运行任务" }}</strong>
-              </div>
-              <template v-if="activeJob">
-                <div class="job-progress-track">
-                  <i :style="{ width: `${progressPct(activeJob)}%` }"></i>
-                </div>
-                <div class="job-progress-meta">
-                  <span>{{ formatNumber(progressPct(activeJob), 1) }}%</span>
-                  <span :title="activeJob.step || '--'">{{ jobStepText(activeJob) }}</span>
-                </div>
-                <p>{{ metadataText(activeJob) }}</p>
-                <div class="job-time-row">
-                  <span>已耗时</span>
-                  <strong>{{ formatJobElapsed(activeJob) }}</strong>
-                </div>
-                <p v-if="activeJob.error_message" class="job-error">
-                  {{ activeJob.error_message }}
-                </p>
-                <small>
-                  已写入/处理行数：{{ activeJob.row_count }}
-                  <template v-if="rowCountHint(activeJob)"> / {{ rowCountHint(activeJob) }}</template>
-                </small>
-              </template>
-              <template v-else>
-                <p>最近状态会每 5 秒自动刷新</p>
-              </template>
-            </section>
-            <section class="job-list">
-              <div class="job-list-head">
-                <span>最近任务</span>
-                <strong>{{ latestJobs.length }} 条</strong>
-              </div>
-              <div
-                v-for="job in latestJobs"
-                :key="job.id"
-                class="job-row"
-                :class="{ 'has-error': Boolean(job.error_message) }"
-                :title="jobTooltip(job)"
-              >
-                <span class="job-type" :title="job.job_type">{{ jobTypeText(job.job_type) }}</span>
-                <span
-                  class="job-status"
-                  :class="job.status.toLowerCase()"
-                  :title="statusLabel(job.status)"
-                >
-                  {{ statusLabel(job.status) }}
-                </span>
-                <span class="job-step" :title="job.step || '--'">{{ jobStepText(job) }}</span>
-                <span class="job-date" :title="metadataText(job)">{{ metadataText(job) }}</span>
-                <span class="job-duration" :title="formatJobElapsed(job)">
-                  {{ formatJobElapsed(job) }}
-                </span>
-                <span v-if="job.error_message" class="job-error-line" :title="job.error_message">
-                  {{ job.error_message }}
-                </span>
-              </div>
-              <div v-if="!latestJobs.length" class="empty-block compact-empty">暂无任务记录</div>
-            </section>
-          </div>
-        </article>
+        <JobCenter
+          v-model:backfill-start="backfillStart"
+          v-model:backfill-end="backfillEnd"
+          :collapsed="collapsedDataPanels.tasks"
+          :submitting-basic-info="submittingBasicInfo"
+          :submitting-ingestion="submittingIngestion"
+          :active-job="activeJob"
+          :jobs="latestJobs"
+          :status-label="statusLabel"
+          :progress-pct="progressPct"
+          :job-step-text="jobStepText"
+          :metadata-text="metadataText"
+          :format-job-elapsed="formatJobElapsed"
+          :row-count-hint="rowCountHint"
+          :job-tooltip="jobTooltip"
+          :job-type-text="jobTypeText"
+          @toggle="toggleDataPanel('tasks')"
+          @sync-basic="submitBasicInfo"
+          @submit-backfill="submitBackfill"
+        />
 
-        <article class="panel" :class="{ collapsed: collapsedDataPanels.coverage }">
-          <div class="panel-title coverage-title">
-            <div>
-              <h2>
-                <button
-                  class="panel-title-button"
-                  type="button"
-                  :aria-expanded="!collapsedDataPanels.coverage"
-                  @click="toggleDataPanel('coverage')"
-                >
-                  <span class="collapse-icon" aria-hidden="true"></span>
-                  <span>数据覆盖日历</span>
-                </button>
-              </h2>
-              <span>
-                已拉 {{ calendarSummary.pulled }} / 开市 {{ calendarSummary.open }}，
-                已算 {{ calendarSummary.analyzed }}
-              </span>
-            </div>
-            <div class="calendar-controls">
-              <button type="button" @click="shiftCalendarMonth(-1)">上月</button>
-              <strong>{{ calendarMonthTitle }}</strong>
-              <button type="button" @click="shiftCalendarMonth(1)">下月</button>
-            </div>
-          </div>
-          <div v-show="!collapsedDataPanels.coverage" class="panel-collapsible">
-            <div class="calendar-legend">
-              <span class="analyzed">算 已算基础</span>
-              <span class="complete">全 行业完成</span>
-              <span class="raw-only">原 已拉未算</span>
-              <span class="degraded">差 质量异常</span>
-              <span class="missing">缺 未拉取</span>
-              <span class="closed">休 休市</span>
-            </div>
-            <div class="coverage-calendar-layout">
-              <section class="coverage-calendar">
-                <div class="calendar-week">一</div>
-                <div class="calendar-week">二</div>
-                <div class="calendar-week">三</div>
-                <div class="calendar-week">四</div>
-                <div class="calendar-week">五</div>
-                <div class="calendar-week">六</div>
-                <div class="calendar-week">日</div>
-                <button
-                  v-for="cell in calendarCells"
-                  :key="cell.key"
-                  class="calendar-day"
-                  :class="[
-                    cell.row?.coverage_status.toLowerCase(),
-                    { blank: !cell.row, selected: selectedCalendarDate === cell.row?.date }
-                  ]"
-                  type="button"
-                  :disabled="!cell.row"
-                  :title="cell.row ? `${cell.row.date} ${calendarStatusLabel(cell.row.coverage_status)}` : ''"
-                  @click="selectCalendarDay(cell.row)"
-                >
-                  <span>{{ cell.day || "" }}</span>
-                  <strong v-if="cell.row">{{ calendarStatusLabel(cell.row.coverage_status) }}</strong>
-                </button>
-              </section>
-              <aside class="calendar-detail">
-                <template v-if="selectedCalendarRow">
-                  <span>{{ selectedCalendarRow.date }}</span>
-                  <strong>{{ calendarStatusLabel(selectedCalendarRow.coverage_status) }}</strong>
-                  <dl>
-                    <div>
-                      <dt>日线</dt>
-                      <dd>{{ selectedCalendarRow.stock_daily_rows }}</dd>
-                    </div>
-                    <div>
-                      <dt>因子</dt>
-                      <dd>{{ selectedCalendarRow.factor_rows }}</dd>
-                    </div>
-                    <div>
-                      <dt>行业</dt>
-                      <dd>{{ selectedCalendarRow.sector_factor_rows }}</dd>
-                    </div>
-                    <div>
-                      <dt>状态</dt>
-                      <dd>{{ selectedCalendarRow.state_rows }}</dd>
-                    </div>
-                    <div>
-                      <dt>信号</dt>
-                      <dd>{{ selectedCalendarRow.signal_rows }}</dd>
-                    </div>
-                    <div>
-                      <dt>后验</dt>
-                      <dd>{{ selectedCalendarRow.signal_eval_rows }}</dd>
-                    </div>
-                  </dl>
-                </template>
-                <template v-else>
-                  <span>日期明细</span>
-                  <strong>点击日历查看</strong>
-                </template>
-              </aside>
-            </div>
-            <div class="coverage-table-toolbar">
-              <span>
-                覆盖明细 {{ coveragePageStart }}-{{ coveragePageEnd }} / {{ dataCoverage.length }}
-              </span>
-              <div class="pagination-controls">
-                <label>
-                  <span>每页</span>
-                  <select v-model.number="coveragePageSize" aria-label="覆盖明细每页条数">
-                    <option v-for="size in coveragePageSizeOptions" :key="size" :value="size">
-                      {{ size }}
-                    </option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  :disabled="coveragePage <= 1"
-                  @click="setCoveragePage(coveragePage - 1)"
-                >
-                  上一页
-                </button>
-                <strong>{{ coveragePage }} / {{ coverageTotalPages }}</strong>
-                <button
-                  type="button"
-                  :disabled="coveragePage >= coverageTotalPages"
-                  @click="setCoveragePage(coveragePage + 1)"
-                >
-                  下一页
-                </button>
-              </div>
-            </div>
-            <div class="table-wrap compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>日期</th>
-                    <th>日线</th>
-                    <th>指标</th>
-                    <th>复权</th>
-                    <th>指数</th>
-                    <th>因子</th>
-                    <th>市场</th>
-                    <th>行业</th>
-                    <th>状态</th>
-                    <th>信号</th>
-                    <th>后验</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in pagedDataCoverage" :key="row.trade_date">
-                    <td>{{ row.trade_date }}</td>
-                    <td>{{ row.stock_daily_rows }}</td>
-                    <td>{{ row.daily_basic_rows }}</td>
-                    <td>{{ row.adj_factor_rows }}</td>
-                    <td>{{ row.index_daily_rows }}</td>
-                    <td>{{ row.factor_rows }}</td>
-                    <td>{{ row.market_rows }}</td>
-                    <td>{{ row.sector_factor_rows }}</td>
-                    <td>{{ row.state_rows }}</td>
-                    <td>{{ row.signal_rows }}</td>
-                    <td>{{ row.signal_eval_rows }}</td>
-                  </tr>
-                  <tr v-if="!dataCoverage.length">
-                    <td colspan="11" class="empty-cell">暂无已拉取交易日</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </article>
+        <DataQuality
+          v-model:page-size="coveragePageSize"
+          :collapsed="collapsedDataPanels.coverage"
+          :summary="calendarSummary"
+          :month-title="calendarMonthTitle"
+          :cells="calendarCells"
+          :selected-date="selectedCalendarDate"
+          :selected-row="selectedCalendarRow"
+          :page-rows="pagedDataCoverage"
+          :total-rows="dataCoverage.length"
+          :page="coveragePage"
+          :page-sizes="coveragePageSizeOptions"
+          :total-pages="coverageTotalPages"
+          :page-start="coveragePageStart"
+          :page-end="coveragePageEnd"
+          :status-label="calendarStatusLabel"
+          @toggle="toggleDataPanel('coverage')"
+          @previous-month="shiftCalendarMonth(-1)"
+          @next-month="shiftCalendarMonth(1)"
+          @select-date="selectCalendarDay"
+          @set-page="setCoveragePage"
+        />
       </section>
 
       <section v-show="activeView === 'long'" class="view-stack">
-        <article class="panel">
-          <div class="panel-title">
-            <h2>长线股票池</h2>
+        <StockPool
+          title="长线股票池"
+          :rows="currentPool"
+          empty-text="暂无符合条件的股票"
+          :format-number="formatNumber"
+          :reason-text="reasonText"
+          @select="openRealtimeKline"
+        >
+          <template #actions>
             <div class="segmented">
               <button :class="{ active: activePool === 'right' }" @click="activePool = 'right'">
                 右侧
@@ -1307,107 +1048,28 @@ function statusLabel(status: string) {
                 趋势
               </button>
             </div>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>代码</th>
-                  <th>名称</th>
-                  <th>状态</th>
-                  <th>机会</th>
-                  <th>右侧</th>
-                  <th>趋势</th>
-                  <th>行业</th>
-                  <th>原因</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in currentPool" :key="`${row.ts_code}-${row.trade_date}`">
-                  <td>
-                    <button class="stock-code-button" type="button" @click="openRealtimeKline(row)">
-                      {{ row.ts_code }}
-                    </button>
-                  </td>
-                  <td>{{ row.name || "--" }}</td>
-                  <td><span class="state-pill">{{ row.state }}</span></td>
-                  <td>{{ formatNumber(row.opportunity_score, 1) }}</td>
-                  <td>{{ formatNumber(row.right_side_score, 1) }}</td>
-                  <td>{{ formatNumber(row.trend_score, 1) }}</td>
-                  <td>{{ row.sector_name || row.industry || "--" }}</td>
-                  <td class="reason-cell">{{ reasonText(row.reason_codes) }}</td>
-                </tr>
-                <tr v-if="!currentPool.length">
-                  <td colspan="8" class="empty-cell">暂无符合条件的股票</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-title">
-            <h2>长线行业</h2>
-            <span>按热度排序</span>
-          </div>
-          <div class="sector-list">
-            <div v-for="row in sectorHeat.slice(0, 20)" :key="row.sector_id" class="sector-row">
-              <span class="sector-rank">{{ row.heat_rank ?? "--" }}</span>
-              <span class="sector-name">{{ row.name || row.sector_name || row.sector_id }}</span>
-              <div class="heat-track">
-                <i :style="{ width: `${Math.max(0, Math.min(row.heat_score ?? 0, 100))}%` }"></i>
-              </div>
-              <strong>{{ formatNumber(row.heat_score, 1) }}</strong>
-              <small>{{ row.lifecycle || "--" }}</small>
-            </div>
-            <div v-if="!sectorHeat.length" class="empty-block">暂无行业热度数据</div>
-          </div>
-        </article>
+          </template>
+        </StockPool>
+        <SectorHeatPanel
+          title="长线行业"
+          subtitle="按热度排序"
+          :rows="sectorHeat.slice(0, 20)"
+          :format-number="formatNumber"
+        />
       </section>
 
       <section v-show="activeView === 'short'" class="view-stack">
         <section class="dashboard-grid short-grid">
-          <article class="panel wide">
-            <div class="panel-title">
-              <h2>短线风险池</h2>
-              <span>衰退 / 破位观察</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>代码</th>
-                    <th>名称</th>
-                    <th>状态</th>
-                    <th>机会</th>
-                    <th>右侧</th>
-                    <th>趋势</th>
-                    <th>行业</th>
-                    <th>原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="row in decayPool" :key="`${row.ts_code}-${row.trade_date}`">
-                    <td>
-                      <button class="stock-code-button" type="button" @click="openRealtimeKline(row)">
-                        {{ row.ts_code }}
-                      </button>
-                    </td>
-                    <td>{{ row.name || "--" }}</td>
-                    <td><span class="state-pill warning">{{ row.state }}</span></td>
-                    <td>{{ formatNumber(row.opportunity_score, 1) }}</td>
-                    <td>{{ formatNumber(row.right_side_score, 1) }}</td>
-                    <td>{{ formatNumber(row.trend_score, 1) }}</td>
-                    <td>{{ row.sector_name || row.industry || "--" }}</td>
-                    <td class="reason-cell">{{ reasonText(row.reason_codes) }}</td>
-                  </tr>
-                  <tr v-if="!decayPool.length">
-                    <td colspan="8" class="empty-cell">暂无短线风险股票</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </article>
+          <StockPool
+            title="短线风险池"
+            subtitle="衰退 / 破位观察"
+            :rows="decayPool"
+            warning
+            empty-text="暂无短线风险股票"
+            :format-number="formatNumber"
+            :reason-text="reasonText"
+            @select="openRealtimeKline"
+          />
 
           <article class="panel">
             <div class="panel-title">
@@ -1425,24 +1087,13 @@ function statusLabel(status: string) {
             </div>
           </article>
 
-          <article class="panel wide">
-            <div class="panel-title">
-              <h2>短线行业动量</h2>
-              <span>按 Heat Momentum 3 排序</span>
-            </div>
-            <div class="sector-list">
-              <div v-for="row in shortSectorRows" :key="row.sector_id" class="sector-row">
-                <span class="sector-rank">{{ row.heat_rank ?? "--" }}</span>
-                <span class="sector-name">{{ row.name || row.sector_name || row.sector_id }}</span>
-                <div class="heat-track">
-                  <i :style="{ width: `${Math.max(0, Math.min(row.heat_score ?? 0, 100))}%` }"></i>
-                </div>
-                <strong>{{ formatNumber(row.heat_momentum3, 1) }}</strong>
-                <small>{{ row.lifecycle || "--" }}</small>
-              </div>
-              <div v-if="!shortSectorRows.length" class="empty-block">暂无行业动量数据</div>
-            </div>
-          </article>
+          <SectorHeatPanel
+            title="短线行业动量"
+            subtitle="按 Heat Momentum 3 排序"
+            :rows="shortSectorRows"
+            momentum
+            :format-number="formatNumber"
+          />
         </section>
       </section>
     </section>

@@ -19,6 +19,7 @@ from app.services.market import MarketService
 from app.services.quality.daily_quality import DataQualityError, validate_cross_table_range
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
+from app.services.trade_status import TradeStatusService
 from app.services.trend import TrendService
 
 
@@ -56,6 +57,15 @@ def run_recalculation(
     try:
         if dirty_ranges:
             mark_dirty_ranges_processing(db, dirty_ranges)
+        update_job(
+            db,
+            job,
+            status="RUNNING",
+            step="80 calculate trade status",
+            row_count=total_rows,
+            metadata={**metadata, "stage": "trade_status", "progress_pct": 4},
+        )
+        total_rows += TradeStatusService(db).recalc(start, end, calc_run_id=job.id)
         factor_chunks = _month_chunks(start, end)
         factor_service = FactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
@@ -116,7 +126,7 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "states", "progress_pct": 90},
         )
-        trend_rows = TrendService(db).recalc(start, end)
+        trend_rows = TrendService(db).recalc(start, end, calc_run_id=job.id)
         total_rows += trend_rows["states"] + trend_rows["signals"]
 
         update_job(

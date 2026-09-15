@@ -21,8 +21,11 @@ def iso(value: Any) -> Any:
     return value.isoformat() if hasattr(value, "isoformat") else value
 
 
-def latest_date(db: Session, column: Any) -> date | None:
-    return db.execute(select(func.max(column))).scalar_one_or_none()
+def latest_date(db: Session, column: Any, *criteria: Any) -> date | None:
+    stmt = select(func.max(column))
+    if criteria:
+        stmt = stmt.where(*criteria)
+    return db.execute(stmt).scalar_one_or_none()
 
 
 def scalar_count(db: Session, stmt: Select[tuple[Any]]) -> int:

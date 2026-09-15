@@ -6,8 +6,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.market_data import (
     DataQualityDaily,
+    MarketDaily,
     SectorFactorDaily,
     StockAdjFactor,
     StockBasic,
@@ -15,9 +17,11 @@ from app.models.market_data import (
     StockDailyBasic,
     StockFactorDaily,
     StockStateDaily,
+    StockSuspendDaily,
     TradeCalendar,
 )
 from app.repositories.upsert import upsert_rows
+from app.services.calc_metadata import config_hash
 from app.services.universe import is_stock_active_on
 
 
@@ -207,6 +211,10 @@ def record_cross_table_quality(
     job_id: uuid.UUID | None = None,
     strategy: dict[str, Any] | None = None,
 ) -> CrossTableQualityResult:
+    settings = get_settings()
+    strategy = strategy or settings.strategy
+    hash_value = config_hash(strategy)
+    algo_version = settings.algo_version
     counts = {
         "stock_daily": _count_date(db, StockDaily, StockDaily.trade_date, trade_date),
         "stock_adj_factor": _count_date(db, StockAdjFactor, StockAdjFactor.trade_date, trade_date),
@@ -214,16 +222,38 @@ def record_cross_table_quality(
             db, StockDailyBasic, StockDailyBasic.trade_date, trade_date
         ),
         "stock_factor_daily": _count_date(
-            db, StockFactorDaily, StockFactorDaily.trade_date, trade_date
+            db,
+            StockFactorDaily,
+            StockFactorDaily.trade_date,
+            trade_date,
+            StockFactorDaily.calc_version == "factor_v1",
+            StockFactorDaily.config_hash == hash_value,
         ),
         "stock_state_daily": _count_date(
-            db, StockStateDaily, StockStateDaily.trade_date, trade_date
+            db,
+            StockStateDaily,
+            StockStateDaily.trade_date,
+            trade_date,
+            StockStateDaily.algo_version == algo_version,
         ),
         "sector_factor_daily": _count_date(
-            db, SectorFactorDaily, SectorFactorDaily.trade_date, trade_date
+            db,
+            SectorFactorDaily,
+            SectorFactorDaily.trade_date,
+            trade_date,
+            SectorFactorDaily.calc_version == "sector_v1",
+            SectorFactorDaily.config_hash == hash_value,
+        ),
+        "market_daily": _count_date(
+            db,
+            MarketDaily,
+            MarketDaily.trade_date,
+            trade_date,
+            MarketDaily.calc_version == "market_v1",
+            MarketDaily.config_hash == hash_value,
         ),
     }
-    expected = expected_stock_codes(db, trade_date)
+    expected = expected_stock_codes(db, trade_date) - _suspended_codes(db, trade_date)
     results = {}
     results["stock_daily_vs_expected"] = _persist_simple(
         db,
@@ -413,9 +443,32 @@ def _persist_simple(
     return status
 
 
-def _count_date(db: Session, model: type, column: Any, trade_date: date) -> int:
+def _count_date(
+    db: Session,
+    model: type,
+    column: Any,
+    trade_date: date,
+    *criteria: Any,
+) -> int:
     return int(
-        db.execute(select(func.count()).select_from(model).where(column == trade_date)).scalar_one()
+        db.execute(
+            select(func.count())
+            .select_from(model)
+            .where(column == trade_date, *criteria)
+        ).scalar_one()
+    )
+
+
+def _suspended_codes(db: Session, trade_date: date) -> set[str]:
+    return set(
+        db.execute(
+            select(StockSuspendDaily.ts_code).where(
+                StockSuspendDaily.trade_date == trade_date,
+                StockSuspendDaily.suspend_type == "S",
+            )
+        )
+        .scalars()
+        .all()
     )
 
 

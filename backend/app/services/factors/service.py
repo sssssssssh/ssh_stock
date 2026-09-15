@@ -14,8 +14,9 @@ from app.models.market_data import (
     StockBasic,
     StockDaily,
     StockFactorDaily,
+    StockTradeStatusDaily,
 )
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows
 from app.services.calc_metadata import calculation_metadata
 from app.services.factors.engine import FactorConfig, calculate_stock_factors
 
@@ -30,6 +31,7 @@ class FactorService:
         daily = self._read_daily(lookback_start, end)
         adj_factor = self._read_adj_factor(lookback_start, end)
         stock_basic = self._read_stock_basic()
+        trade_status = self._read_trade_status(lookback_start, end)
         index_daily = self._read_index_daily(lookback_start, end)
 
         benchmark = self.settings.strategy.get("benchmark", {}).get("primary", "000300.SH")
@@ -43,6 +45,7 @@ class FactorService:
             start=start,
             end=end,
             config=config,
+            trade_status=trade_status,
         )
         metadata = calculation_metadata(
             config=self.settings.strategy,
@@ -50,7 +53,16 @@ class FactorService:
             calc_run_id=calc_run_id,
         )
         rows = [{**_clean_row(row), **metadata} for row in factors.to_dict("records")]
-        count = upsert_rows(self.db, StockFactorDaily, rows, ["trade_date", "ts_code"])
+        count = replace_slice_rows(
+            self.db,
+            StockFactorDaily,
+            rows,
+            scope_filters=[
+                StockFactorDaily.trade_date >= start,
+                StockFactorDaily.trade_date <= end,
+            ],
+            key_columns=["trade_date", "ts_code"],
+        )
         self.db.commit()
         logger.info("recalculated stock_factor_daily start={} end={} rows={}", start, end, count)
         return count
@@ -83,9 +95,22 @@ class FactorService:
     def _read_stock_basic(self) -> pd.DataFrame:
         stmt = select(
             StockBasic.ts_code,
-            StockBasic.name,
             StockBasic.list_date,
             StockBasic.delist_date,
+        )
+        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+
+    def _read_trade_status(self, start: date, end: date) -> pd.DataFrame:
+        stmt = select(
+            StockTradeStatusDaily.trade_date,
+            StockTradeStatusDaily.ts_code,
+            StockTradeStatusDaily.is_active,
+            StockTradeStatusDaily.is_suspended,
+            StockTradeStatusDaily.is_st,
+            StockTradeStatusDaily.st_status_unknown,
+        ).where(
+            StockTradeStatusDaily.trade_date >= start,
+            StockTradeStatusDaily.trade_date <= end,
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 

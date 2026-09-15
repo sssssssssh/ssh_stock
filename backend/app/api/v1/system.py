@@ -6,6 +6,7 @@ from sqlalchemy import Select, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.common import envelope
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.market_data import (
     DataQualityDaily,
@@ -21,6 +22,7 @@ from app.models.market_data import (
     StrategySignal,
     TradeCalendar,
 )
+from app.services.calc_metadata import config_hash
 
 router = APIRouter()
 
@@ -32,6 +34,9 @@ def _latest_date(db: Session, stmt: Select[tuple[Any]]) -> str | None:
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)) -> dict[str, Any]:
+    settings = get_settings()
+    version = settings.algo_version
+    hash_value = config_hash(settings.strategy)
     return {
         "code": 0,
         "message": "ok",
@@ -45,18 +50,47 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
                 db, select(func.max(StockDailyBasic.trade_date))
             ),
             "latest_index_date": _latest_date(db, select(func.max(IndexDaily.trade_date))),
-            "latest_factor_date": _latest_date(db, select(func.max(StockFactorDaily.trade_date))),
-            "latest_market_date": _latest_date(db, select(func.max(MarketDaily.trade_date))),
-            "latest_sector_factor_date": _latest_date(
-                db, select(func.max(SectorFactorDaily.trade_date))
+            "latest_factor_date": _latest_date(
+                db,
+                select(func.max(StockFactorDaily.trade_date)).where(
+                    StockFactorDaily.calc_version == "factor_v1",
+                    StockFactorDaily.config_hash == hash_value,
+                ),
             ),
-            "latest_state_date": _latest_date(db, select(func.max(StockStateDaily.trade_date))),
-            "latest_signal_date": _latest_date(db, select(func.max(StrategySignal.trade_date))),
+            "latest_market_date": _latest_date(
+                db,
+                select(func.max(MarketDaily.trade_date)).where(
+                    MarketDaily.calc_version == "market_v1",
+                    MarketDaily.config_hash == hash_value,
+                ),
+            ),
+            "latest_sector_factor_date": _latest_date(
+                db,
+                select(func.max(SectorFactorDaily.trade_date)).where(
+                    SectorFactorDaily.calc_version == "sector_v1",
+                    SectorFactorDaily.config_hash == hash_value,
+                ),
+            ),
+            "latest_state_date": _latest_date(
+                db,
+                select(func.max(StockStateDaily.trade_date)).where(
+                    StockStateDaily.algo_version == version
+                ),
+            ),
+            "latest_signal_date": _latest_date(
+                db,
+                select(func.max(StrategySignal.trade_date)).where(
+                    StrategySignal.algo_version == version
+                ),
+            ),
             "latest_signal_eval_date": _latest_date(
-                db, select(func.max(SignalForwardEval.trade_date))
+                db,
+                select(func.max(SignalForwardEval.trade_date)).where(
+                    SignalForwardEval.algo_version == version
+                ),
             ),
         },
-        "meta": {},
+        "meta": {"algo_version": version, "config_hash": hash_value},
     }
 
 
@@ -67,6 +101,9 @@ def data_coverage(
     limit: int | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    settings = get_settings()
+    version = settings.algo_version
+    hash_value = config_hash(settings.strategy)
     date_stmt = select(StockDaily.trade_date).distinct().order_by(desc(StockDaily.trade_date))
     if start:
         date_stmt = date_stmt.where(StockDaily.trade_date >= start)
@@ -83,6 +120,8 @@ def data_coverage(
                 "end": end.isoformat() if end else None,
                 "limit": limit,
                 "total": 0,
+                "algo_version": version,
+                "config_hash": hash_value,
             },
         )
 
@@ -94,13 +133,50 @@ def data_coverage(
     )
     adj_factor_counts = _counts_by_date(db, StockAdjFactor.trade_date, coverage_start, coverage_end)
     index_daily_counts = _counts_by_date(db, IndexDaily.trade_date, coverage_start, coverage_end)
-    factor_counts = _counts_by_date(db, StockFactorDaily.trade_date, coverage_start, coverage_end)
-    market_counts = _counts_by_date(db, MarketDaily.trade_date, coverage_start, coverage_end)
-    sector_counts = _counts_by_date(db, SectorFactorDaily.trade_date, coverage_start, coverage_end)
-    state_counts = _counts_by_date(db, StockStateDaily.trade_date, coverage_start, coverage_end)
-    signal_counts = _counts_by_date(db, StrategySignal.trade_date, coverage_start, coverage_end)
+    factor_counts = _counts_by_date(
+        db,
+        StockFactorDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.config_hash == hash_value,
+    )
+    market_counts = _counts_by_date(
+        db,
+        MarketDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        MarketDaily.calc_version == "market_v1",
+        MarketDaily.config_hash == hash_value,
+    )
+    sector_counts = _counts_by_date(
+        db,
+        SectorFactorDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.config_hash == hash_value,
+    )
+    state_counts = _counts_by_date(
+        db,
+        StockStateDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        StockStateDaily.algo_version == version,
+    )
+    signal_counts = _counts_by_date(
+        db,
+        StrategySignal.trade_date,
+        coverage_start,
+        coverage_end,
+        StrategySignal.algo_version == version,
+    )
     signal_eval_counts = _counts_by_date(
-        db, SignalForwardEval.trade_date, coverage_start, coverage_end
+        db,
+        SignalForwardEval.trade_date,
+        coverage_start,
+        coverage_end,
+        SignalForwardEval.algo_version == version,
     )
     quality_status = _quality_status_by_date(db, coverage_start, coverage_end)
 
@@ -119,6 +195,13 @@ def data_coverage(
                 "state_rows": state_counts.get(trade_date, 0),
                 "signal_rows": signal_counts.get(trade_date, 0),
                 "signal_eval_rows": signal_eval_counts.get(trade_date, 0),
+                "current_version_rows": {
+                    "factor": factor_counts.get(trade_date, 0),
+                    "market": market_counts.get(trade_date, 0),
+                    "sector_factor": sector_counts.get(trade_date, 0),
+                    "state": state_counts.get(trade_date, 0),
+                    "signal": signal_counts.get(trade_date, 0),
+                },
                 "quality_status": quality_status.get(trade_date),
             }
         )
@@ -130,6 +213,8 @@ def data_coverage(
             "end": end.isoformat() if end else None,
             "limit": limit,
             "total": len(rows),
+            "algo_version": version,
+            "config_hash": hash_value,
         },
     )
 
@@ -140,8 +225,19 @@ def data_calendar(
     end: date,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    settings = get_settings()
+    version = settings.algo_version
+    hash_value = config_hash(settings.strategy)
     if end < start:
-        return envelope([], {"start": start.isoformat(), "end": end.isoformat()})
+        return envelope(
+            [],
+            {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "algo_version": version,
+                "config_hash": hash_value,
+            },
+        )
 
     calendar_rows = (
         db.execute(
@@ -157,12 +253,51 @@ def data_calendar(
     daily_basic_counts = _counts_by_date(db, StockDailyBasic.trade_date, start, end)
     adj_factor_counts = _counts_by_date(db, StockAdjFactor.trade_date, start, end)
     index_daily_counts = _counts_by_date(db, IndexDaily.trade_date, start, end)
-    factor_counts = _counts_by_date(db, StockFactorDaily.trade_date, start, end)
-    market_counts = _counts_by_date(db, MarketDaily.trade_date, start, end)
-    sector_counts = _counts_by_date(db, SectorFactorDaily.trade_date, start, end)
-    state_counts = _counts_by_date(db, StockStateDaily.trade_date, start, end)
-    signal_counts = _counts_by_date(db, StrategySignal.trade_date, start, end)
-    signal_eval_counts = _counts_by_date(db, SignalForwardEval.trade_date, start, end)
+    factor_counts = _counts_by_date(
+        db,
+        StockFactorDaily.trade_date,
+        start,
+        end,
+        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.config_hash == hash_value,
+    )
+    market_counts = _counts_by_date(
+        db,
+        MarketDaily.trade_date,
+        start,
+        end,
+        MarketDaily.calc_version == "market_v1",
+        MarketDaily.config_hash == hash_value,
+    )
+    sector_counts = _counts_by_date(
+        db,
+        SectorFactorDaily.trade_date,
+        start,
+        end,
+        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.config_hash == hash_value,
+    )
+    state_counts = _counts_by_date(
+        db,
+        StockStateDaily.trade_date,
+        start,
+        end,
+        StockStateDaily.algo_version == version,
+    )
+    signal_counts = _counts_by_date(
+        db,
+        StrategySignal.trade_date,
+        start,
+        end,
+        StrategySignal.algo_version == version,
+    )
+    signal_eval_counts = _counts_by_date(
+        db,
+        SignalForwardEval.trade_date,
+        start,
+        end,
+        SignalForwardEval.algo_version == version,
+    )
     quality_status = _quality_status_by_date(db, start, end)
 
     rows = []
@@ -205,21 +340,42 @@ def data_calendar(
                 "state_rows": state_rows,
                 "signal_rows": signal_counts.get(current, 0),
                 "signal_eval_rows": signal_eval_counts.get(current, 0),
+                "current_version_rows": {
+                    "factor": factor_rows,
+                    "market": market_rows,
+                    "sector_factor": sector_rows,
+                    "state": state_rows,
+                    "signal": signal_counts.get(current, 0),
+                },
                 "quality_status": day_quality_status,
             }
         )
         current += timedelta(days=1)
 
-    return envelope(rows, {"start": start.isoformat(), "end": end.isoformat()})
+    return envelope(
+        rows,
+        {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "algo_version": version,
+            "config_hash": hash_value,
+        },
+    )
 
 
-def _counts_by_date(db: Session, column: Any, start: date, end: date) -> dict[date, int]:
+def _counts_by_date(
+    db: Session,
+    column: Any,
+    start: date,
+    end: date,
+    *criteria: Any,
+) -> dict[date, int]:
     table = column.class_
     rows = (
         db.execute(
             select(column.label("trade_date"), func.count().label("rows"))
             .select_from(table)
-            .where(column >= start, column <= end)
+            .where(column >= start, column <= end, *criteria)
             .group_by(column)
         )
         .mappings()

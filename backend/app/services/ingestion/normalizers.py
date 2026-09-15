@@ -119,6 +119,55 @@ def normalize_index_daily(df: pd.DataFrame) -> list[dict[str, Any]]:
     return [row for row in rows if row["trade_date"] and row["ts_code"]]
 
 
+def normalize_stock_st(df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "trade_date": parse_tushare_date(item.get("trade_date")),
+            "ts_code": item.get("ts_code"),
+            "name": item.get("name"),
+            "st_type": item.get("st_type") or item.get("type"),
+            "st_type_name": item.get("st_type_name") or item.get("type_name"),
+        }
+        for item in df.to_dict("records")
+    ]
+    return [row for row in rows if row["trade_date"] and row["ts_code"]]
+
+
+def normalize_stock_suspend(df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "trade_date": parse_tushare_date(
+                item.get("trade_date") or item.get("suspend_date")
+            ),
+            "ts_code": item.get("ts_code"),
+            "suspend_type": item.get("suspend_type") or "S",
+            "suspend_timing": item.get("suspend_timing"),
+        }
+        for item in df.to_dict("records")
+    ]
+    return [
+        row
+        for row in rows
+        if row["trade_date"] and row["ts_code"] and row["suspend_type"]
+    ]
+
+
+def normalize_stock_limit(df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "trade_date": parse_tushare_date(item.get("trade_date")),
+            "ts_code": item.get("ts_code"),
+            "pre_close": clean_float(item.get("pre_close")),
+            "up_limit": clean_float(item.get("up_limit")),
+            "down_limit": clean_float(item.get("down_limit")),
+            "asset_type": item.get("asset_type"),
+            "exchange": item.get("exchange"),
+        }
+        for item in df.to_dict("records")
+    ]
+    return [row for row in rows if row["trade_date"] and row["ts_code"]]
+
+
 def normalize_sectors(df: pd.DataFrame, source: str = "SW") -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for item in df.to_dict("records"):
@@ -145,22 +194,19 @@ def normalize_sector_members(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     level_code_column = f"{sector_level.lower()}_code"
-    stock_list_dates = stock_list_dates or {}
     for item in df.to_dict("records"):
         sector_code = (
             item.get(level_code_column) or item.get("index_code") or item.get("industry_code")
         )
         ts_code = item.get("con_code") or item.get("ts_code")
         valid_from = parse_tushare_date(item.get("in_date"))
-        if valid_from is None and ts_code:
-            valid_from = stock_list_dates.get(str(ts_code))
         if valid_from is None:
             logger.warning(
-                "sector member missing in_date sector_code={} ts_code={}",
+                "sector member PIT_INVALID missing in_date sector_code={} ts_code={}",
                 sector_code,
                 ts_code,
             )
-            valid_from = date(1900, 1, 1)
+            continue
         valid_to = parse_tushare_date(item.get("out_date"))
         sector_id = sector_code_to_id.get(str(sector_code))
         rows.append(
@@ -173,3 +219,17 @@ def normalize_sector_members(
             }
         )
     return [row for row in rows if row["sector_id"] and row["ts_code"]]
+
+
+def current_sector_members_missing_in_date(df: pd.DataFrame) -> list[str]:
+    if df.empty:
+        return []
+    missing: list[str] = []
+    for item in df.to_dict("records"):
+        if str(item.get("is_new", "")).upper() != "Y":
+            continue
+        if parse_tushare_date(item.get("in_date")) is not None:
+            continue
+        code = item.get("con_code") or item.get("ts_code") or "UNKNOWN"
+        missing.append(str(code))
+    return sorted(set(missing))

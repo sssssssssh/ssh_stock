@@ -2,7 +2,9 @@ from datetime import date
 
 import app.services.ingestion.service as ingestion_module
 import pandas as pd
+import pytest
 from app.services.ingestion.service import IngestionService
+from app.services.quality.raw_checks import QualityIssue
 
 
 class _FakeDb:
@@ -76,3 +78,33 @@ def test_sync_daily_initial_quality_write_records_detail_counts(monkeypatch) -> 
     assert persisted[0]["duplicate_count"] == 1
     assert persisted[0]["null_count"] == 2
     assert "preserve_existing_detail_counts" not in persisted[0]
+
+
+def test_sync_daily_persists_duplicate_evidence_before_failing(monkeypatch) -> None:
+    persisted = []
+    monkeypatch.setattr(
+        ingestion_module,
+        "check_raw_daily",
+        lambda *args, **kwargs: [QualityIssue("DAILY_DUPLICATED_PK", "duplicated=1")],
+    )
+    monkeypatch.setattr(
+        ingestion_module,
+        "expected_stock_codes",
+        lambda *args, **kwargs: {"000001.SZ"},
+    )
+    monkeypatch.setattr(
+        ingestion_module,
+        "persist_coverage_result",
+        lambda db, result, **kwargs: persisted.append((result, kwargs)),
+    )
+    db = _FakeDb()
+
+    with pytest.raises(ValueError, match="DAILY_DUPLICATED_PK"):
+        IngestionService(db, _FakeProvider()).sync_daily(date(2026, 8, 31))
+
+    assert db.commits == 1
+    assert persisted[0][0].status == "ERROR"
+    assert persisted[0][1]["duplicate_count"] == 1
+    assert persisted[0][1]["extra_issue_codes"] == {
+        "raw_issues": ["DAILY_DUPLICATED_PK"]
+    }

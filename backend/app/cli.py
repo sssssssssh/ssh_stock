@@ -13,9 +13,14 @@ from app.jobs.scheduler import run_scheduler
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
-from app.services.job_guard import ActiveIngestionJobError, reject_if_active_ingestion_job
+from app.services.job_guard import (
+    ActiveIngestionJobError,
+    create_queued_ingestion_job,
+    reject_if_active_ingestion_job,
+)
+from app.services.job_worker import run_validate_data_job, run_worker
 from app.services.market import MarketService
-from app.services.quality.history_quality import HistoricalDataQualityService
+from app.services.provider_smoke import run_provider_smoke_test
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.trend import TrendService
@@ -41,6 +46,20 @@ def _today() -> date:
 def _guard_cli_task(db) -> None:
     try:
         reject_if_active_ingestion_job(db)
+    except ActiveIngestionJobError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+
+def _queue_cli_job(db, job_type, target_trade_date, metadata):
+    try:
+        return create_queued_ingestion_job(
+            db,
+            job_type,
+            target_trade_date,
+            step="queued from cli",
+            metadata={"source": "cli", **metadata},
+        )
     except ActiveIngestionJobError as exc:
         typer.echo(str(exc))
         raise typer.Exit(code=1) from exc
@@ -89,21 +108,45 @@ def check_tushare() -> None:
     typer.echo(f"tushare_ok=true rows={len(df.index)}")
 
 
+@cli.command("provider-smoke-test")
+def provider_smoke_test(
+    trade_date: str | None = typer.Option(None, "--trade-date"),
+) -> None:
+    configure_logging()
+    target = _parse_date(trade_date, "trade_date") if trade_date else _today()
+    settings = get_settings()
+    index_codes = settings.strategy.get("benchmark", {}).get(
+        "market_indices", ["000300.SH"]
+    )
+    try:
+        results = run_provider_smoke_test(
+            TushareProvider(),
+            target,
+            index_codes=list(index_codes),
+        )
+    except Exception as exc:
+        typer.echo(f"provider_smoke_ok=false error={type(exc).__name__}: {exc}")
+        raise typer.Exit(code=1) from exc
+    for result in results:
+        typer.echo(f"{result.api_name}: rows={result.rows} status=PASS")
+    typer.echo("provider_smoke_ok=true")
+
+
 @cli.command()
 def daily(trade_date: str | None = typer.Option(None, "--trade-date")) -> None:
     configure_logging()
     target = _parse_date(trade_date, "trade_date") if trade_date else _today()
     with SessionLocal() as db:
-        _guard_cli_task(db)
-        DailyJob(db, _provider(db)).run(target)
+        job = _queue_cli_job(db, "daily", target, {"trade_date": target.isoformat()})
+        DailyJob(db, _provider(db)).run(target, job=job)
 
 
 @cli.command("sync-basic")
 def sync_basic() -> None:
     configure_logging()
     with SessionLocal() as db:
-        _guard_cli_task(db)
-        BasicInfoJob(db, _provider(db)).run()
+        job = _queue_cli_job(db, "sync_basic", None, {"stage": "queued"})
+        BasicInfoJob(db, _provider(db)).run(job=job, source="cli")
 
 
 @cli.command()
@@ -112,31 +155,38 @@ def backfill(start: str = typer.Option(...), end: str = typer.Option(...)) -> No
     start_date = _parse_date(start, "start")
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
-        _guard_cli_task(db)
-        BackfillJob(db, _provider(db)).run(start_date, end_date)
+        job = _queue_cli_job(
+            db,
+            "backfill",
+            end_date,
+            {"start": start_date.isoformat(), "end": end_date.isoformat()},
+        )
+        BackfillJob(db, _provider(db)).run(start_date, end_date, job=job)
 
 
 @cli.command("validate-data")
 def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
     configure_logging()
-    settings = get_settings()
     start_date = _parse_date(start, "start")
     end_date = _parse_date(end, "end")
     with SessionLocal() as db:
-        _guard_cli_task(db)
+        metadata = {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat(),
+            "stage": "queued",
+            "progress_pct": 0,
+        }
+        job = _queue_cli_job(db, "validate_data", end_date, metadata)
         try:
-            summary = HistoricalDataQualityService(db, settings.strategy).validate(
-                start_date,
-                end_date,
-            )
-            db.commit()
+            run_validate_data_job(db, job, {"source": "cli", **metadata})
         except Exception:
             db.rollback()
             raise
-    typer.echo(f"total_days={summary.total_days}")
-    typer.echo(f"pass_days={summary.pass_days}")
-    typer.echo(f"warning_days={summary.warning_days}")
-    typer.echo(f"error_days={summary.error_days}")
+    result = job.job_metadata
+    typer.echo(f"total_days={result.get('total_days', 0)}")
+    typer.echo(f"pass_days={result.get('pass_days', 0)}")
+    typer.echo(f"warning_days={result.get('warning_days', 0)}")
+    typer.echo(f"error_days={result.get('error_days', 0)}")
 
 
 @cli.command("recalc-factors")
@@ -191,6 +241,8 @@ def evaluate_signals(
     start: str | None = typer.Option(None, "--start"),
     end: str | None = typer.Option(None, "--end"),
     limit: int | None = typer.Option(None, "--limit"),
+    eval_version: str = typer.Option("eval_v2", "--eval-version"),
+    entry_basis: str = typer.Option("NEXT_OPEN", "--entry-basis"),
 ) -> None:
     configure_logging()
     start_date = _parse_date(start, "start") if start else None
@@ -202,6 +254,8 @@ def evaluate_signals(
             start=start_date,
             end=end_date,
             limit=limit,
+            eval_version=eval_version,
+            entry_basis=entry_basis,
         )
     typer.echo(f"strategy_signal rows={rows['signals']}")
     typer.echo(f"signal_forward_eval rows={rows['evaluated']}")
@@ -211,6 +265,12 @@ def evaluate_signals(
 def scheduler() -> None:
     configure_logging()
     run_scheduler()
+
+
+@cli.command()
+def worker() -> None:
+    configure_logging()
+    run_worker()
 
 
 if __name__ == "__main__":

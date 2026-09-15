@@ -1,12 +1,13 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
+from app.repositories.job_run import start_job
 
 INGESTION_JOB_TYPES = (
     "daily",
@@ -17,6 +18,7 @@ INGESTION_JOB_TYPES = (
     "catchup",
 )
 ACTIVE_JOB_STATUSES = ("QUEUED", "RUNNING")
+INGESTION_ADVISORY_LOCK_KEY = 7_307_202_609_15
 
 
 @dataclass(frozen=True)
@@ -64,7 +66,11 @@ def recover_stale_ingestion_jobs(
     cutoff = current - timedelta(hours=hours)
     recovered = 0
     for job in active_ingestion_jobs(db):
-        started_at = job.started_at
+        started_at = (
+            getattr(job, "heartbeat_at", None)
+            if job.status == "RUNNING"
+            else job.started_at
+        ) or job.started_at
         if started_at is None:
             continue
         if started_at.tzinfo is None:
@@ -100,3 +106,39 @@ def reject_if_active_ingestion_job(db: Session) -> None:
             job_type=active.job_type,
             status=active.status,
         )
+
+
+def create_queued_ingestion_job(
+    db: Session,
+    job_type: str,
+    target_trade_date: date | None,
+    *,
+    step: str,
+    metadata: dict[str, Any],
+) -> JobRun:
+    recover_stale_ingestion_jobs(db)
+    _acquire_ingestion_advisory_lock(db)
+    active = find_active_ingestion_job(db, recover_stale=False)
+    if active:
+        raise ActiveIngestionJobError(
+            job_id=str(active.id),
+            job_type=active.job_type,
+            status=active.status,
+        )
+    return start_job(
+        db,
+        job_type,
+        target_trade_date,
+        status="QUEUED",
+        step=step,
+        metadata=metadata,
+    )
+
+
+def _acquire_ingestion_advisory_lock(db: Session) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    db.execute(
+        select(func.pg_advisory_xact_lock(INGESTION_ADVISORY_LOCK_KEY))
+    ).scalar_one()

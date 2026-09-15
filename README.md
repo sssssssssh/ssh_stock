@@ -11,6 +11,8 @@
 
 当前网页显示名称为“空间”。
 
+2026-09-15 开始按全量优化规划分 Phase 推进。Phase 1 已将因子、市场、行业、状态和信号范围重算改为 authoritative replace-slice：重算范围内不再成立的旧结果会删除，仍成立的信号保留原 `signal_id`，删除信号时级联清理后验评价。
+
 ## 已实现
 
 - Python 3.12 + FastAPI 后端骨架
@@ -841,7 +843,7 @@ app:
 9. 执行 `python -m pytest` 确认环境正确。
 10. 进入 `frontend`，执行 `npm install` 和 `npm run build` 确认前端环境正确。
 
-## 给 Codex 的继续开发约束
+## 给智能体的继续开发约束
 
 - 先完成当前 Milestone 的验收标准，再进入下一个 Milestone。
 - 不要把阈值硬编码进业务代码，必须从 `config/strategy.yaml` 或配置对象读取。
@@ -849,3 +851,121 @@ app:
 - 不要把 token、密码、数据库 dump、缓存数据提交进项目。
 - 所有信号和后验统计必须避免未来函数。
 - 每次修改后同步更新 README、PROJECT_RULES 和 `docs/` 下两份 Markdown 的“实现进度”。
+
+## Milestone 9 PIT 可交易性（Phase 2，2026-09-15）
+
+- 新增三类按交易日同步的 Tushare Raw 数据：`stock_st_daily`、`stock_suspend_daily`、`stock_limit_daily`；重复回填使用自然键幂等写入。
+- 新增 `stock_trade_status_daily`，按交易日生成 `is_active/is_suspended/is_st`、涨跌停收盘标志、`tradable` 和 `strategy_eligible`，并记录计算版本、配置哈希和运行 ID。
+- `tradable` 只表示当日上市且未停牌；ST 股票仍可交易，但在 `exclude_st=true` 时不进入策略池。2000-01-01 前的 ST 状态标记为未知，不做猜测。
+- 因子资格不再读取当前 `stock_basic.name` 判断 ST，只连接同日 PIT 交易状态。`stock_daily` 完整性预期集合改为当日有效股票减当日停牌股票。
+- Daily、Backfill、Catch-up 均纳入七类 Raw 完整性检查；事件型接口空结果只有在存在成功同步质量证据时才可跳过。
+
+升级现有数据库后执行：
+
+```powershell
+python -m alembic upgrade head
+```
+
+之后需要重新拉取目标历史区间的三类 PIT Raw 数据并重新补算该区间，旧的四类 Raw 行情不需要因此重拉。
+
+## Provider 与基础信息加固（Phase 3，2026-09-15）
+
+- `stock_basic` 现在按三种状态和三家交易所执行 9 分片聚合，L/D 分片必须全部成功，P 为可选状态；分片截断 warning 不会在 concat 时丢失。
+- 申万成员接口不再发送代理未文档化的 `src`，L1 结果达到 1900 行安全阈值时改按 L2/L3 拆分，截断的原批次不会入库。
+- 行业成员缺 `in_date` 不再使用股票上市日或 1900 年占位；当前成员缺日期会令 `sync-basic` 失败，历史异常记录跳过。已从源中消失的行业只标记 inactive，不删除历史元数据。
+- Scheduler 新增 `basic_info_cron: "30 9 * * 6"`，默认每周六 09:30 运行 `BasicInfoJob`，并与其他数据任务共用互斥检查。
+- 所有主要行情接口已使用显式 fields。可执行以下只读检查验证当前 Tushare/代理契约，不会写数据库：
+
+```powershell
+cd backend
+python -m app.cli provider-smoke-test --trade-date 2026-09-15
+```
+
+真实代理验收已验证 11 个接口；其中 `suspend_d` 必须使用 `trade_date` 参数，不能使用会被当前代理忽略的 `suspend_date`。
+
+## 版本口径一致性（Phase 4，2026-09-15）
+
+- State/Signal API 未指定日期时，只在请求的 `algo_version` 内选择最新日期；旧算法版本的更晚数据不会令当前页面显示空结果。
+- `/api/v1/system/status`、`data-coverage`、`data-calendar` 返回当前 `algo_version/config_hash`。因子、市场、行业按当前配置和固定计算版本统计，状态、信号及后验按当前算法版本统计。
+- `stock_state_daily` 与 `strategy_signal` 新增 `calc_version/config_hash/calc_run_id/calculated_at`。同一补算任务生成的状态和信号可通过同一 job UUID 追踪。
+- 修改状态机逻辑或信号定义时必须升级 `config/app.yaml` 的 `algo_version`；只修改参数时无需升级算法版本，配置哈希会触发分析完整性重算。
+
+## DB Worker 与故障恢复（Phase 5，2026-09-15）
+
+- 页面提交 daily、sync-basic、backfill、recalculate、validate-data 后只创建 QUEUED 任务并立即返回，FastAPI 不再在自身进程运行长任务。
+- 单独启动 Worker：
+
+```powershell
+cd backend
+python -m app.cli worker
+```
+
+- Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 领取任务，写入 `worker_id/heartbeat_at`；启动时恢复 heartbeat 超时的 RUNNING 任务和超时的 Dirty PROCESSING。
+- API、CLI 和 Scheduler 使用同一个 PostgreSQL advisory lock 原子创建任务，避免并发请求同时通过 active 检查。`worker_poll_seconds`、`stale_job_hours` 位于 `config/app.yaml`。
+- Scheduler 仍使用 `python -m app.cli scheduler`，保留 Raw Gap、Analysis Gap、Historical Repair、Recent Refresh、Dirty Repair；它和 Worker 是两个独立进程。
+
+## Signal 研究评价 v2（Phase 6，2026-09-15）
+
+- `evaluate-signals` 默认按下一交易日开盘入场，并以市场第 5/10/20/60 个交易日为固定 horizon；个股停牌不会把目标日顺延到下一条行情。
+- 支持 `SIGNAL_CLOSE`、`NEXT_OPEN`、`NEXT_CLOSE`；停牌、涨停无法买入或跌停无法卖出时记录不可执行原因，价格和对应收益为 NULL。
+- MFE/MAE 使用复权 high/low，不再用未来 close 近似。研究 API 支持 `eval_version`、`entry_basis`、`executable_only`，返回可执行数量以及 ret20 的中位数、P25、P75。
+
+```powershell
+cd backend
+python -m app.cli evaluate-signals --eval-version eval_v2 --entry-basis NEXT_OPEN
+```
+
+旧 eval_v1 记录与 eval_v2 可同时存在；迁移后需要重新执行评价命令生成 v2 数据。
+## Docker 一键部署（Phase 7）
+
+容器模式不要求宿主机安装 Python、Conda、Node.js 或 PostgreSQL，只需要 Docker Engine 和 Docker Compose。先复制并填写环境变量：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+至少填写 `TUSHARE_TOKEN`。默认 Docker 数据库账号为 `stock/stock`；如果修改 `POSTGRES_PASSWORD`，必须同时把 `DOCKER_DATABASE_URL` 填成使用同一密码、主机名为 `postgres` 的连接串。
+
+完整启动：
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+启动顺序为 `postgres healthy -> migration 完成 -> backend/worker/scheduler`。`migration` 容器只执行一次 `python -m alembic upgrade head`，它只升级表结构，不会重新拉取或重新计算数据。后端健康检查会访问 `/health` 并执行数据库 `SELECT 1`。
+
+常用检查：
+
+```powershell
+docker compose logs -f migration
+docker compose logs -f backend worker scheduler
+curl http://127.0.0.1:8000/health
+```
+
+正常健康响应包含 `{"status":"ok","database":"ok"}`。如果使用云端 PostgreSQL，不需要启动本地 `postgres` 服务；应在 `.env` 中填写可从容器访问的 `DOCKER_DATABASE_URL`，再按部署环境调整 Compose 服务。
+
+本地非 Docker 开发仍可使用 `requirements-dev.txt`；可复现部署和 CI 使用固定版本的 `requirements.lock`。GitHub Actions 会在 PostgreSQL 17 service 中执行实际迁移、完整 pytest、ruff，以及 `frontend` 的 `npm ci` 和 `npm run build`。
+
+## Phase 7 部署加固进度（2026-09-15）
+
+- PostgreSQL 镜像升级为 17，并增加 `pg_isready` 健康检查。
+- 增加一次性 migration 服务、独立 DB worker 和独立 scheduler，业务进程不会在旧 schema 上启动。
+- `/health` 已覆盖 API 与数据库连通性；数据库不可用返回 503。
+- 新增 `.github/workflows/ci.yml` 和 `requirements.lock`，当前锁定 `tushare==1.4.29`。
+- Tushare 代理私有字段配置已封装；SDK 结构不兼容时启动即明确报错。
+## Phase 8 性能与维护优化（2026-09-15）
+
+个股 K 线接口 `GET /api/v1/stocks/{ts_code}/realtime-kline?days=180` 现在先读取本地 `stock_daily`：
+
+- `source=local`：交易日历范围已被本地数据完整覆盖，不访问 Tushare。
+- `source=tushare`：本地没有可用数据，实时从 Provider 返回，但不写数据库。
+- `source=mixed`：本地存在部分数据，Provider 补充缺口后按交易日合并，仍不写数据库。
+
+默认展示 180 个自然日窗口，可切换 90/180/365 日。业务“今天”统一按 `.env` 的 `APP_TIMEZONE=Asia/Shanghai` 计算。
+
+历史 Backfill 的指数区间同步按 730 天分块，区间接口失败仍自动退回逐交易日同步。全区间指数缺口预检改为单次 SQL，减少长区间启动阶段的重复质量查询。Provider 只重试网络瞬时错误；token 无效、权限不足、参数错误和积分不足会立即返回原始错误。
+
+日线源出现重复自然键时，任务仍会失败且不会写入重复行情，但失败前会先提交 `data_quality_daily.duplicate_count/null_count/issue_codes`，页面能够保留真实质量证据。
+
+前端已把总览、股票池、行业热度、数据质量、任务中心和研究评价拆到 `frontend/src/components/`，`App.vue` 只保留跨页面状态、请求编排和 K 线交互。

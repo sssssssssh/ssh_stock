@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
@@ -122,8 +122,10 @@ def latest_raw_trade_date(db: Session) -> date | None:
 
 
 def mark_dirty_ranges_processing(db: Session, ranges: list[DataDirtyRange]) -> None:
+    processing_started_at = datetime.now(UTC)
     for row in ranges:
         row.status = "PROCESSING"
+        row.processing_started_at = processing_started_at
         db.add(row)
     db.commit()
 
@@ -134,6 +136,7 @@ def mark_dirty_ranges_resolved(db: Session, ranges: list[DataDirtyRange]) -> Non
         row.status = "RESOLVED"
         row.resolved_at = resolved_at
         row.last_error = None
+        row.processing_started_at = None
         db.add(row)
     db.commit()
 
@@ -149,8 +152,42 @@ def mark_dirty_ranges_failed(
         row.retry_count = int(row.retry_count or 0) + 1
         row.last_error = error_message[:4096] if error_message else None
         row.last_failed_at = failed_at
+        row.processing_started_at = None
         db.add(row)
     db.commit()
+
+
+def recover_stale_processing_ranges(
+    db: Session,
+    *,
+    stale_hours: float,
+    now: datetime | None = None,
+) -> int:
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    cutoff = current - timedelta(hours=stale_hours)
+    rows = list(
+        db.execute(
+            select(DataDirtyRange).where(
+                DataDirtyRange.status == "PROCESSING",
+                DataDirtyRange.processing_started_at.is_not(None),
+                DataDirtyRange.processing_started_at <= cutoff,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in rows:
+        row.status = "FAILED"
+        row.retry_count = int(row.retry_count or 0) + 1
+        row.last_error = "stale processing recovered"
+        row.last_failed_at = current
+        row.processing_started_at = None
+        db.add(row)
+    if rows:
+        db.commit()
+    return len(rows)
 
 
 def _changed(old_value: Any, new_value: Any) -> bool:

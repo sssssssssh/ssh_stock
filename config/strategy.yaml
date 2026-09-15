@@ -65,6 +65,9 @@ raw_quality:
   daily_basic:
     warning_coverage_rate: 0.98
     error_coverage_rate: 0.95
+  stk_limit:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.95
 
 provider:
   tushare:
@@ -72,3 +75,6 @@ provider:
       stock_basic: 5800
       daily: 5800
       daily_basic: 5800
+      stock_st: 1000
+      stk_limit: 5800
+      index_member_all: 1900

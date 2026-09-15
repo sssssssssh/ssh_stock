@@ -27,6 +27,7 @@ from app.services.job_guard import scheduler_setting
 from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
 from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.recalculation import run_recalculation
+from app.services.trade_status import TradeStatusService
 
 
 @dataclass(frozen=True)
@@ -143,6 +144,9 @@ class CatchUpJob:
         self.ingestion.sync_adj_factor(trade_date)
         self.ingestion.sync_daily_basic(trade_date)
         self.ingestion.sync_index_daily(trade_date)
+        self.ingestion.sync_stock_st(trade_date)
+        self.ingestion.sync_suspend_daily(trade_date)
+        self.ingestion.sync_stock_limit(trade_date)
         raw_quality = check_raw_completeness(
             self.db,
             trade_date,
@@ -156,6 +160,7 @@ class CatchUpJob:
                 "raw completeness failed: "
                 f"trade_date={trade_date} statuses={statuses}"
             )
+        TradeStatusService(self.db).recalc(trade_date, trade_date)
 
     def _refresh_raw_only(self, trade_date: date) -> None:
         self._sync_and_validate_raw_date(trade_date)

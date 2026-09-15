@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import IndexDaily, MarketDaily, StockDaily, StockFactorDaily
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows
 from app.services.calc_metadata import calculation_metadata
 from app.services.market.engine import MarketConfig, calculate_market_daily
 
@@ -40,7 +40,13 @@ class MarketService:
             calc_run_id=calc_run_id,
         )
         rows = [{**_clean_row(row), **metadata} for row in market.to_dict("records")]
-        count = upsert_rows(self.db, MarketDaily, rows, ["trade_date"])
+        count = replace_slice_rows(
+            self.db,
+            MarketDaily,
+            rows,
+            scope_filters=[MarketDaily.trade_date >= start, MarketDaily.trade_date <= end],
+            key_columns=["trade_date"],
+        )
         self.db.commit()
         logger.info("recalculated market_daily start={} end={} rows={}", start, end, count)
         return count

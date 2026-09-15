@@ -7,12 +7,40 @@ from fastapi.testclient import TestClient
 
 
 def test_health() -> None:
-    client = TestClient(app)
+    class FakeSession:
+        def execute(self, _stmt: Any) -> None:
+            return None
 
-    response = client.get("/health")
+    def fake_get_db() -> Generator[FakeSession, None, None]:
+        yield FakeSession()
+
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        response = TestClient(app).get("/health")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    assert response.json()["database"] == "ok"
+
+
+def test_health_reports_database_failure() -> None:
+    class FakeSession:
+        def execute(self, _stmt: Any) -> None:
+            raise RuntimeError("database unavailable")
+
+    def fake_get_db() -> Generator[FakeSession, None, None]:
+        yield FakeSession()
+
+    app.dependency_overrides[get_db] = fake_get_db
+    try:
+        response = TestClient(app).get("/health")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["database"] == "unavailable"
 
 
 def test_dashboard_summary_returns_empty_payload_without_state_date() -> None:

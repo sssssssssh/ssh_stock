@@ -6,13 +6,12 @@ ENV PYTHONPATH=/app/backend
 
 WORKDIR /app
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml requirements.lock README.md ./
 COPY backend ./backend
 COPY config ./config
 COPY migrations ./migrations
 COPY alembic.ini ./
 
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -r requirements.lock
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

@@ -2,10 +2,29 @@ from datetime import date
 
 import app.services.quality.daily_quality as daily_quality_module
 import app.services.quality.raw_completeness as raw_module
+import pytest
 from app.models.market_data import IndexDaily, StockAdjFactor, StockDailyBasic
-from app.services.quality.raw_completeness import check_raw_completeness
+from app.services.quality.raw_completeness import RawDatasetCompleteness, check_raw_completeness
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+
+
+@pytest.fixture(autouse=True)
+def _m9_raw_quality(monkeypatch):
+    monkeypatch.setattr(raw_module, "_suspended_codes_for_date", lambda *args: set())
+    monkeypatch.setattr(
+        raw_module,
+        "_event_quality_dataset",
+        lambda db, trade_date, dataset, model, **kwargs: RawDatasetCompleteness(
+            dataset=dataset,
+            status="PASS",
+            expected_rows=0,
+            actual_rows=0,
+            coverage_rate=1.0,
+            missing_codes=[],
+            extra_codes=[],
+        ),
+    )
 
 
 def test_raw_completeness_requires_dataset_coverage(monkeypatch) -> None:
@@ -28,6 +47,7 @@ def test_raw_completeness_requires_dataset_coverage(monkeypatch) -> None:
             "stock_adj_factor": (adj_factor, set()),
             "stock_daily_basic": (daily_basic, set()),
             "index_daily": (index_daily, set()),
+            "stock_limit_daily": (stock_daily, set()),
         }[model.__tablename__],
     )
 
@@ -96,6 +116,7 @@ def test_adj_factor_invalid_values_do_not_count_as_actual(monkeypatch) -> None:
             "stock_adj_factor": ({"000001.SZ"}, {"000002.SZ", "000003.SZ"}),
             "stock_daily_basic": (expected_stocks, set()),
             "index_daily": ({"000300.SH"}, set()),
+            "stock_limit_daily": (expected_stocks, set()),
         }[model.__tablename__],
     )
     monkeypatch.setattr(
@@ -245,6 +266,42 @@ def test_raw_completeness_overall_status_prioritizes_error_over_warning() -> Non
 
     assert warning_result.overall_status == "WARNING"
     assert error_result.overall_status == "ERROR"
+
+
+def test_stock_daily_expected_universe_excludes_suspended_stocks(monkeypatch) -> None:
+    active = {"000001.SZ", "000002.SZ", "000003.SZ"}
+    daily = {"000001.SZ", "000003.SZ"}
+    monkeypatch.setattr(raw_module, "expected_stock_codes", lambda *args: active)
+    monkeypatch.setattr(
+        raw_module,
+        "_suspended_codes_for_date",
+        lambda *args: {"000002.SZ"},
+    )
+    monkeypatch.setattr(
+        raw_module,
+        "_codes_for_date",
+        lambda db, model, column, trade_date: daily,
+    )
+    monkeypatch.setattr(
+        raw_module,
+        "_valid_codes_for_date",
+        lambda db, model, column, trade_date, **kwargs: {
+            "stock_adj_factor": (daily, set()),
+            "stock_daily_basic": (daily, set()),
+            "index_daily": ({"000300.SH"}, set()),
+            "stock_limit_daily": (active, set()),
+        }[model.__tablename__],
+    )
+
+    result = check_raw_completeness(
+        object(),
+        date(2026, 8, 31),
+        strategy={"benchmark": {"market_indices": ["000300.SH"]}},
+    )
+
+    assert result.stock_daily.status == "PASS"
+    assert result.stock_daily.expected_rows == 2
+    assert result.stock_daily.missing_codes == []
 
 
 def test_valid_adj_factor_codes_exclude_null_and_non_positive_values() -> None:

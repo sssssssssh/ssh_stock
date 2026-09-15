@@ -45,7 +45,7 @@ class _SuccessfulTrendService:
     def __init__(self, db):
         self.db = db
 
-    def recalc(self, start, end):
+    def recalc(self, start, end, calc_run_id=None):
         return {"states": 10, "signals": 2}
 
 
@@ -62,6 +62,7 @@ def _job():
 
 
 def _patch_successful_calculators(monkeypatch):
+    monkeypatch.setattr(recalculation_module, "TradeStatusService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "SectorService", _SuccessfulScalarService)

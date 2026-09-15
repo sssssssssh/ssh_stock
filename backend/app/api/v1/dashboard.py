@@ -29,7 +29,11 @@ def summary(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    target = trade_date or latest_date(db, StockStateDaily.trade_date)
+    target = trade_date or latest_date(
+        db,
+        StockStateDaily.trade_date,
+        StockStateDaily.algo_version == version,
+    )
     if not target:
         return envelope(
             {

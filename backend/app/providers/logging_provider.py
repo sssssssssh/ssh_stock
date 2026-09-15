@@ -101,6 +101,19 @@ class LoggingMarketDataProvider:
             end,
         )
 
+    def get_stock_st(self, trade_date: date) -> pd.DataFrame:
+        return self._logged("stock_st", trade_date, self.inner.get_stock_st, trade_date)
+
+    def get_suspend_daily(self, trade_date: date) -> pd.DataFrame:
+        return self._logged(
+            "suspend_d", trade_date, self.inner.get_suspend_daily, trade_date
+        )
+
+    def get_stock_limit(self, trade_date: date) -> pd.DataFrame:
+        return self._logged(
+            "stk_limit", trade_date, self.inner.get_stock_limit, trade_date
+        )
+
     def get_sector_classification(self) -> pd.DataFrame:
         return self._logged("index_classify", None, self.inner.get_sector_classification)
 

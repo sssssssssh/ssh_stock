@@ -10,7 +10,11 @@ from app.jobs.catchup_job import CatchUpJob
 from app.providers.base import MarketDataProvider
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
-from app.services.job_guard import find_active_ingestion_job, recover_stale_ingestion_jobs
+from app.repositories.job_run import update_job
+from app.services.job_guard import (
+    ActiveIngestionJobError,
+    create_queued_ingestion_job,
+)
 
 
 def run_scheduler() -> None:
@@ -23,28 +27,84 @@ def run_scheduler() -> None:
             provider = LoggingMarketDataProvider(db, TushareProvider())
             run_scheduled_catchup(db, provider, _scheduler_today(timezone))
 
+    def run_basic_info() -> None:
+        with SessionLocal() as db:
+            provider = LoggingMarketDataProvider(db, TushareProvider())
+            run_scheduled_basic_info(db, provider)
+
     cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
         "daily_cron", "10 18 * * 1-5"
     )
     scheduler.add_job(run_daily, "cron", id="daily_job", **cron_trigger_kwargs(cron))
-    logger.info("scheduler started cron={}", cron)
+    basic_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
+        "basic_info_cron", "30 9 * * 6"
+    )
+    scheduler.add_job(
+        run_basic_info,
+        "cron",
+        id="weekly_basic_refresh",
+        **cron_trigger_kwargs(basic_cron),
+    )
+    logger.info("scheduler started daily_cron={} basic_info_cron={}", cron, basic_cron)
     scheduler.start()
 
 
 def run_scheduled_catchup(db, provider: MarketDataProvider, target_date: date) -> bool:
-    recovered = recover_stale_ingestion_jobs(db)
-    if recovered:
-        logger.warning("scheduler recovered stale ingestion jobs count={}", recovered)
-    active = find_active_ingestion_job(db, recover_stale=False)
-    if active:
+    try:
+        job = create_queued_ingestion_job(
+            db,
+            "catchup",
+            target_date,
+            step="queued from scheduler",
+            metadata={"source": "scheduler", "trade_date": target_date.isoformat()},
+        )
+    except ActiveIngestionJobError as active:
         logger.warning(
             "scheduler daily skipped because active job exists id={} type={} status={}",
-            active.id,
+            active.job_id,
             active.job_type,
             active.status,
         )
         return False
-    CatchUpJob(db, provider).run(target_date)
+    update_job(db, job, status="RUNNING", step="catchup running")
+    try:
+        plan = CatchUpJob(db, provider).run(target_date)
+        update_job(
+            db,
+            job,
+            status="SUCCESS",
+            step="catchup complete",
+            metadata={
+                **(job.job_metadata or {}),
+                "raw_required_days": len(plan.raw_required_dates),
+                "analysis_required_days": len(plan.analysis_required_dates),
+                "refresh_days": len(plan.refresh_dates),
+                "skipped": plan.skipped,
+            },
+        )
+    except Exception as exc:
+        update_job(db, job, status="FAILED", error_message=str(exc))
+        raise
+    return True
+
+
+def run_scheduled_basic_info(db, provider: MarketDataProvider) -> bool:
+    try:
+        create_queued_ingestion_job(
+            db,
+            "sync_basic",
+            None,
+            step="queued from weekly scheduler",
+            metadata={"source": "scheduler", "stage": "queued", "progress_pct": 0},
+        )
+    except ActiveIngestionJobError as active:
+        logger.warning(
+            "scheduler basic info skipped because active job exists id={} type={} status={}",
+            active.job_id,
+            active.job_type,
+            active.status,
+        )
+        return False
     return True
 
 

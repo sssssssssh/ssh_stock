@@ -1,7 +1,7 @@
 from datetime import date, timedelta
 
 import pytest
-from app.services.research import evaluate_forward_returns
+from app.services.research import evaluate_forward_returns, evaluate_forward_returns_v2
 
 
 def test_evaluate_forward_returns_calculates_closed_horizons() -> None:
@@ -28,3 +28,115 @@ def test_evaluate_forward_returns_requires_exact_signal_date_close() -> None:
     rows = [{"trade_date": base + timedelta(days=1), "adj_close": 101.0}]
 
     assert evaluate_forward_returns(base, rows) is None
+
+
+def test_eval_v2_uses_next_open_market_horizons_and_adjusted_high_low() -> None:
+    base = date(2026, 1, 1)
+    dates = [base + timedelta(days=offset) for offset in range(0, 22)]
+    rows = [
+        {
+            "trade_date": current,
+            "adj_open": 100 + offset,
+            "adj_high": 102 + offset,
+            "adj_low": 98 + offset,
+            "adj_close": 100 + offset,
+            "raw_open": 10 + offset,
+            "up_limit": 20 + offset,
+            "tradable": True,
+            "is_suspended": False,
+            "is_limit_up_close": False,
+            "is_limit_down_close": False,
+        }
+        for offset, current in enumerate(dates)
+    ]
+
+    result = evaluate_forward_returns_v2(base, dates, rows, entry_basis="NEXT_OPEN")
+
+    assert result is not None
+    assert result["entry_trade_date"] == dates[1]
+    assert result["entry_price"] == 101
+    assert result["ret5"] == pytest.approx(105 / 101 - 1)
+    assert result["mfe20"] == pytest.approx(122 / 101 - 1)
+    assert result["mae20"] == pytest.approx(99 / 101 - 1)
+    assert result["horizon_basis"] == "MARKET_TRADING_DAY"
+
+
+def test_eval_v2_does_not_shift_missing_stock_horizon() -> None:
+    base = date(2026, 1, 1)
+    dates = [base + timedelta(days=offset) for offset in range(0, 12)]
+    rows = [
+        {
+            "trade_date": current,
+            "adj_open": 100,
+            "adj_high": 101,
+            "adj_low": 99,
+            "adj_close": 100 + offset,
+            "raw_open": 10,
+            "up_limit": 11,
+            "tradable": True,
+            "is_suspended": False,
+            "is_limit_up_close": False,
+            "is_limit_down_close": False,
+        }
+        for offset, current in enumerate(dates)
+        if offset != 5
+    ]
+
+    result = evaluate_forward_returns_v2(base, dates, rows, entry_basis="SIGNAL_CLOSE")
+
+    assert result is not None
+    assert result["ret5"] is None
+    assert result["ret10"] == pytest.approx(0.10)
+
+
+def test_eval_v2_never_fabricates_suspended_or_limit_up_entry_price() -> None:
+    base = date(2026, 1, 1)
+    dates = [base, base + timedelta(days=1)]
+    suspended = {
+        "trade_date": dates[1],
+        "adj_open": 101,
+        "raw_open": 11,
+        "up_limit": 11,
+        "tradable": False,
+        "is_suspended": True,
+    }
+
+    result = evaluate_forward_returns_v2(
+        base,
+        dates,
+        [suspended],
+        entry_basis="NEXT_OPEN",
+    )
+
+    assert result is not None
+    assert result["entry_executable"] is False
+    assert result["entry_price"] is None
+    assert result["non_executable_reason"] == "SUSPENDED"
+
+
+def test_eval_v2_marks_limit_down_horizon_exit_non_executable() -> None:
+    base = date(2026, 1, 1)
+    dates = [base + timedelta(days=offset) for offset in range(0, 22)]
+    rows = [
+        {
+            "trade_date": current,
+            "adj_open": 100,
+            "adj_high": 101,
+            "adj_low": 99,
+            "adj_close": 100,
+            "raw_open": 10,
+            "up_limit": 11,
+            "tradable": True,
+            "is_suspended": False,
+            "is_limit_up_close": False,
+            "is_limit_down_close": offset == 20,
+        }
+        for offset, current in enumerate(dates)
+    ]
+
+    result = evaluate_forward_returns_v2(base, dates, rows, entry_basis="SIGNAL_CLOSE")
+
+    assert result is not None
+    assert result["ret20"] is None
+    assert result["exit_executable"] is False
+    assert result["non_executable_reason"] == "HORIZON20_LIMIT_DOWN"

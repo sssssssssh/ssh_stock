@@ -2,11 +2,12 @@ import uuid
 from datetime import date
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.models.market_data import TradeCalendar
+from app.models.market_data import IndexDaily, TradeCalendar
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
@@ -24,6 +25,9 @@ RAW_DATASET_STEPS = {
     "adj_factor": ("40 sync adj_factor", "sync_adj_factor"),
     "daily_basic": ("50 sync daily_basic", "sync_daily_basic"),
     "index_daily": ("60 sync index_daily", "sync_index_daily"),
+    "stock_st": ("62 sync stock_st", "sync_stock_st"),
+    "suspend_d": ("64 sync suspend_d", "sync_suspend_daily"),
+    "stk_limit": ("66 sync stk_limit", "sync_stock_limit"),
 }
 
 
@@ -251,7 +255,12 @@ def _raw_data_complete(
 def _dataset_is_skippable(completeness: RawCompletenessResult, dataset: str) -> bool:
     if dataset == "index_daily":
         return completeness.index_daily.status == "PASS"
-    return completeness.dataset(dataset).is_acceptable
+    detail = completeness.dataset(dataset)
+    if detail is None:
+        return True
+    if dataset in {"stock_st", "suspend_d"}:
+        return detail.status == "PASS"
+    return detail.is_acceptable
 
 
 def _refresh_after_stock_daily_if_needed(
@@ -280,13 +289,24 @@ def _raw_incomplete_error(completeness: RawCompletenessResult) -> str:
 
 
 def _any_index_daily_incomplete(db: Session, open_dates: list[date]) -> bool:
-    return any(
-        check_raw_completeness(
-            db,
-            trade_date,
-            strategy=get_settings().strategy,
-            persist=False,
-        ).index_daily.status
-        != "PASS"
-        for trade_date in open_dates
+    if not open_dates:
+        return False
+    expected = set(
+        get_settings().strategy.get("benchmark", {}).get(
+            "market_indices", ["000300.SH"]
+        )
     )
+    existing: dict[date, set[str]] = {trade_date: set() for trade_date in open_dates}
+    rows = db.execute(
+        select(IndexDaily.trade_date, IndexDaily.ts_code).where(
+            IndexDaily.trade_date.in_(open_dates),
+            IndexDaily.ts_code.in_(expected),
+            IndexDaily.close.is_not(None),
+            IndexDaily.close > 0,
+            IndexDaily.pre_close.is_not(None),
+            IndexDaily.pre_close > 0,
+        )
+    ).all()
+    for trade_date, ts_code in rows:
+        existing[trade_date].add(ts_code)
+    return any(not expected <= existing[trade_date] for trade_date in open_dates)

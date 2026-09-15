@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import IndexDaily, SectorFactorDaily, SectorMember, StockFactorDaily
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows
 from app.services.calc_metadata import calculation_metadata
 from app.services.sector.engine import SectorConfig, calculate_sector_factors
 
@@ -40,7 +40,16 @@ class SectorService:
             calc_run_id=calc_run_id,
         )
         rows = [{**_clean_row(row), **metadata} for row in sector_factors.to_dict("records")]
-        count = upsert_rows(self.db, SectorFactorDaily, rows, ["trade_date", "sector_id"])
+        count = replace_slice_rows(
+            self.db,
+            SectorFactorDaily,
+            rows,
+            scope_filters=[
+                SectorFactorDaily.trade_date >= start,
+                SectorFactorDaily.trade_date <= end,
+            ],
+            key_columns=["trade_date", "sector_id"],
+        )
         self.db.commit()
         logger.info("recalculated sector_factor_daily start={} end={} rows={}", start, end, count)
         return count

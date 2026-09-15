@@ -61,10 +61,10 @@ def test_sector_member_batch_fetches_l1_current_and_history() -> None:
 
     assert provider.calls == [
         ("index_classify", {"src": "SW2021"}),
-        ("index_member_all", {"src": "SW", "l1_code": "801010.SI", "is_new": "Y"}),
-        ("index_member_all", {"src": "SW", "l1_code": "801010.SI", "is_new": "N"}),
-        ("index_member_all", {"src": "SW", "l1_code": "801030.SI", "is_new": "Y"}),
-        ("index_member_all", {"src": "SW", "l1_code": "801030.SI", "is_new": "N"}),
+        ("index_member_all", {"l1_code": "801010.SI", "is_new": "Y"}),
+        ("index_member_all", {"l1_code": "801010.SI", "is_new": "N"}),
+        ("index_member_all", {"l1_code": "801030.SI", "is_new": "Y"}),
+        ("index_member_all", {"l1_code": "801030.SI", "is_new": "N"}),
     ]
     assert len(df.index) == 4
     assert set(df["out_date"].dropna()) == {"20210101", "20210201"}
@@ -115,3 +115,36 @@ def test_sector_member_history_batch_empty_is_allowed() -> None:
 
     assert len(df.index) == 1
     assert df.iloc[0]["con_code"] == "000001.SZ"
+
+
+def test_sector_member_truncated_l1_is_replaced_by_l2_batches() -> None:
+    classification = pd.DataFrame(
+        [
+            {"index_code": "801010.SI", "level": "L1", "parent_code": "0"},
+            {"index_code": "801011.SI", "level": "L2", "parent_code": "801010.SI"},
+            {"index_code": "801012.SI", "level": "L2", "parent_code": "801010.SI"},
+        ]
+    )
+    provider = object.__new__(TushareProvider)
+    calls = []
+
+    def fake_call(api_name, **kwargs):
+        calls.append((api_name, kwargs))
+        if api_name == "index_classify":
+            return classification
+        if "l1_code" in kwargs:
+            frame = pd.DataFrame([{"con_code": "SHOULD_NOT_BE_USED"}])
+            frame.attrs["provider_warning"] = "POSSIBLE_TRUNCATION"
+            return frame
+        code = kwargs["l2_code"]
+        return pd.DataFrame(
+            [{"con_code": f"{code}.STOCK", "in_date": "20200101"}]
+        )
+
+    provider._call = fake_call
+
+    result = provider.get_sector_members()
+
+    assert "SHOULD_NOT_BE_USED" not in set(result["con_code"])
+    assert set(result["con_code"]) == {"801011.SI.STOCK", "801012.SI.STOCK"}
+    assert all("src" not in kwargs for api, kwargs in calls if api == "index_member_all")

@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -15,7 +16,8 @@ from app.models.market_data import (
     StockStateDaily,
     StrategySignal,
 )
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows
+from app.services.calc_metadata import calculation_metadata
 from app.services.trend.engine import (
     TrendConfig,
     calculate_stock_states,
@@ -28,8 +30,15 @@ class TrendService:
         self.db = db
         self.settings = get_settings()
 
-    def recalc(self, start: date, end: date, algo_version: str | None = None) -> dict[str, int]:
+    def recalc(
+        self,
+        start: date,
+        end: date,
+        algo_version: str | None = None,
+        calc_run_id: uuid.UUID | None = None,
+    ) -> dict[str, int]:
         version = algo_version or self.settings.algo_version
+        run_id = calc_run_id or uuid.uuid4()
         lookback_start = start - timedelta(days=180)
         factors = self._read_factors(lookback_start, end)
         market = self._read_market(lookback_start, end)
@@ -48,22 +57,62 @@ class TrendService:
             end=end,
             config=config,
         )
-        state_rows = [_clean_row(row) for row in states.to_dict("records")]
+        state_metadata = calculation_metadata(
+            config=self.settings.strategy,
+            calc_version="trend_v1",
+            calc_run_id=run_id,
+        )
+        state_rows = [
+            {**_clean_row(row), **state_metadata}
+            for row in states.to_dict("records")
+        ]
         _ensure_unique_rows(state_rows, ["trade_date", "ts_code", "algo_version"])
-        state_count = upsert_rows(
+        state_count = replace_slice_rows(
             self.db,
             StockStateDaily,
             state_rows,
-            ["trade_date", "ts_code", "algo_version"],
+            scope_filters=[
+                StockStateDaily.trade_date >= start,
+                StockStateDaily.trade_date <= end,
+                StockStateDaily.algo_version == version,
+            ],
+            key_columns=["trade_date", "ts_code", "algo_version"],
         )
 
         signals = generate_strategy_signals(states, config)
-        signal_rows = [_clean_row(row) for row in signals.to_dict("records")]
-        signal_count = upsert_rows(
+        signal_metadata = calculation_metadata(
+            config=self.settings.strategy,
+            calc_version="signal_v1",
+            calc_run_id=run_id,
+        )
+        signal_rows = [
+            {**_clean_row(row), **signal_metadata}
+            for row in signals.to_dict("records")
+        ]
+        _ensure_unique_rows(
+            signal_rows,
+            ["trade_date", "ts_code", "signal_type", "algo_version"],
+        )
+        signal_count = replace_slice_rows(
             self.db,
             StrategySignal,
             signal_rows,
-            ["trade_date", "ts_code", "signal_type", "algo_version"],
+            scope_filters=[
+                StrategySignal.trade_date >= start,
+                StrategySignal.trade_date <= end,
+                StrategySignal.algo_version == version,
+            ],
+            key_columns=["trade_date", "ts_code", "signal_type", "algo_version"],
+            update_columns=[
+                "score",
+                "opportunity_score",
+                "reason_codes",
+                "payload",
+                "calc_version",
+                "config_hash",
+                "calc_run_id",
+                "calculated_at",
+            ],
         )
         self.db.commit()
         logger.info(

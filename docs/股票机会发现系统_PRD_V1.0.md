@@ -1110,3 +1110,58 @@ Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；�
 - Recent Refresh 在统一重算之后执行，并排除本轮刚完成 Raw 修复的日期；Refresh 后的 Dirty Repair 保持原有逻辑。
 
 至此 Milestone 8、Raw 数据层、数据拉取层、Catch-up 和自动运行层正式 DONE；后续开发进入 Milestone 9 可交易性数据。
+
+### 25.9 全量优化 Phase 1：衍生结果一致性（2026-09-15）
+
+- 因子、市场、行业热度、当前算法版本的状态和信号范围重算采用 authoritative replace-slice，scope 内本次不再生成的旧结果会被删除。
+- 仍成立的信号通过自然键更新并保留原 `signal_id`；删除失效信号时，关联 `signal_forward_eval` 由数据库外键级联删除。
+- 禁止使用“整段先删除再全部插入”的实现，避免破坏仍有效信号的标识和研究数据引用。
+
+### 25.10 Milestone 9 Phase 2：PIT 可交易性（2026-09-15）
+
+- 产品新增历史 ST、停复牌、涨跌停价格三类按日 Raw 数据，并形成统一的 `stock_trade_status_daily`。
+- 长短线候选资格必须依据目标交易日的 PIT 状态；当前股票名称不得参与历史 ST 判断。
+- 可交易定义为当日有效上市且未停牌；ST 是策略资格过滤条件，不等同于不可交易。涨停/跌停收盘作为独立状态展示和后续策略输入。
+- 数据完整性日历和任务 Gate 扩展到七类 Raw 数据；`stock_daily` 的 expected universe 扣除当日停牌股票。
+- 2000-01-01 以前不具备官方 ST 历史覆盖，界面和数据层必须表达“未知”，不得显示为“非 ST”。
+
+### 25.11 Phase 3：Provider 与基础信息可靠性（2026-09-15）
+
+- 股票基础信息按状态和交易所分片，避免单次全市场响应截断；核心 L/D 数据不完整时任务失败并展示具体分片源错误。
+- 行业成员历史有效期禁止推测；当前关键记录缺生效日时基础信息任务失败，防止错误 PIT 数据进入后续计算。
+- 行业元数据采用停用而非删除，历史分析仍可引用旧行业。
+- 基础信息支持每周自动刷新；新增只读 Provider smoke-test，为代理参数、返回类型和字段契约提供上线前验收入口。
+
+### 25.12 Phase 4：版本口径一致性（2026-09-15）
+
+- 总览、股票池、个股概览和系统数据覆盖只展示当前算法版本/当前配置的有效结果，历史版本不得提高当前完成度。
+- 系统接口 meta 暴露 `algo_version/config_hash`，便于界面和问题排查确认当前口径。
+- 状态与信号结果具备计算版本、配置哈希、任务运行 ID 和计算时间，可从用户可见任务追踪到具体结果批次。
+
+### 25.13 Phase 5：自动运行与恢复（2026-09-15）
+
+- 长任务提交与执行解耦，API 接收成功仅表示任务已持久化排队；刷新页面或重启 API 不会丢失 QUEUED 任务。
+- 任务详情展示 Worker 标识和最近 heartbeat；Worker 中断后的超时任务会标记失败，可重新提交。
+- Dirty 补算处理中断后自动进入现有重试机制。所有任务入口使用数据库原子互斥，避免重复拉取或重复补算。
+
+### 25.14 Phase 6：研究评价 v2（2026-09-15）
+
+- 默认以信号下一交易日开盘作为研究入场价，收益周期按市场交易日固定，不因个股缺行情产生幸存偏差。
+- 研究结果区分可执行与不可执行样本，并保留停牌、涨停买入、跌停卖出等原因；不可执行样本不伪造价格。
+- MFE/MAE 使用复权最高/最低价。统计支持样本数、可执行数、均值、中位数、胜率、P25/P75、MFE/MAE，并可按评价版本和入场口径筛选。
+### 36.20 Phase 7：部署、CI 与依赖锁定（2026-09-15）
+
+- Docker 运行单元明确拆分为 PostgreSQL 17、一次性 migration、FastAPI backend、DB-backed worker 和 APScheduler。
+- PostgreSQL 通过 `pg_isready` 判定健康；migration 成功后才允许业务进程启动，避免旧 schema 运行。
+- `/health` 同时代表 API 可响应和数据库 `SELECT 1` 成功；数据库异常时返回 HTTP 503。
+- 容器服务启用自动重启，任务执行仍以 PostgreSQL `job_run` 为唯一队列，不引入 Redis、Celery 或 Kafka。
+- GitHub Actions 在 PostgreSQL 17 service 中执行真实 Alembic 升级、完整后端测试、Ruff 和前端构建。
+- 新增 `requirements.lock` 固定当前验证依赖，其中 Tushare 固定为 `1.4.29`；代理私有字段由单一 Provider 方法封装并进行 SDK 兼容性检查。
+### 36.21 Phase 8：性能与可维护性（2026-09-15）
+
+- 个股 realtime-kline 改为本地优先，并返回 `local/tushare/mixed` 来源；只有交易日历显示存在本地缺口时才访问 Provider，回退结果不入库。
+- 默认业务日期按 `Asia/Shanghai` 生成，不再依赖服务器本地时区的 `date.today()`。
+- Backfill 指数历史区间按两年分块；区间失败继续逐日兜底，指数全区间完整性使用单次批量 SQL 预检。
+- Provider 重试区分瞬时网络问题与永久业务错误，token、权限、参数和积分问题立即失败并保留原始异常。
+- 日线重复主键等 Raw ERROR 在任务失败前先持久化 `duplicate_count/null_count/issue_codes` 证据。
+- 前端拆分 Dashboard、StockPool、SectorHeat、DataQuality、JobCenter、Research 六类组件，保持原有页面行为和视觉样式。

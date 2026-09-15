@@ -12,10 +12,10 @@ class BasicInfoJob:
         self.db = db
         self.ingestion = IngestionService(db, provider)
 
-    def run(self, job: JobRun | None = None) -> None:
+    def run(self, job: JobRun | None = None, *, source: str = "manual") -> None:
         job = job or start_job(self.db, "sync_basic", None)
         metadata: dict[str, object] = {
-            "source": "manual",
+            "source": source,
             "stage": "starting",
             "progress_pct": 0,
         }

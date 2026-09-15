@@ -2,11 +2,15 @@ from datetime import date
 
 import pandas as pd
 from app.services.ingestion.normalizers import (
+    current_sector_members_missing_in_date,
     normalize_adj_factor,
     normalize_sector_members,
     normalize_sectors,
     normalize_stock_basic,
     normalize_stock_daily,
+    normalize_stock_limit,
+    normalize_stock_st,
+    normalize_stock_suspend,
     normalize_trade_calendar,
     parse_tushare_date,
 )
@@ -134,3 +138,79 @@ def test_normalize_sectors_and_sw2021_members() -> None:
     assert members[0]["is_latest"] is True
     assert members[1]["valid_to"] == date(2021, 12, 31)
     assert members[1]["is_latest"] is False
+
+
+def test_normalize_milestone9_trade_status_raw_rows() -> None:
+    target = date(2026, 9, 15)
+
+    st = normalize_stock_st(
+        pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260915",
+                    "ts_code": "000001.SZ",
+                    "name": "*ST示例",
+                    "type": "ST",
+                    "type_name": "特别处理",
+                }
+            ]
+        )
+    )
+    suspend = normalize_stock_suspend(
+        pd.DataFrame(
+            [
+                {
+                    "suspend_date": "20260915",
+                    "ts_code": "000002.SZ",
+                    "suspend_type": "S",
+                    "suspend_timing": "全天",
+                }
+            ]
+        )
+    )
+    limit_rows = normalize_stock_limit(
+        pd.DataFrame(
+            [
+                {
+                    "trade_date": "20260915",
+                    "ts_code": "000001.SZ",
+                    "pre_close": 10,
+                    "up_limit": 11,
+                    "down_limit": 9,
+                }
+            ]
+        )
+    )
+
+    assert st[0]["trade_date"] == target
+    assert st[0]["st_type"] == "ST"
+    assert suspend[0]["suspend_type"] == "S"
+    assert limit_rows[0]["up_limit"] == 11.0
+
+
+def test_sector_members_never_invent_missing_effective_dates() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "l1_code": "801010.SI",
+                "con_code": "000001.SZ",
+                "in_date": None,
+                "is_new": "Y",
+            },
+            {
+                "l1_code": "801010.SI",
+                "con_code": "000002.SZ",
+                "in_date": None,
+                "is_new": "N",
+            },
+        ]
+    )
+
+    rows = normalize_sector_members(
+        frame,
+        {"801010.SI": 1},
+        stock_list_dates={"000001.SZ": date(1991, 1, 1)},
+    )
+
+    assert rows == []
+    assert current_sector_members_missing_in_date(frame) == ["000001.SZ"]

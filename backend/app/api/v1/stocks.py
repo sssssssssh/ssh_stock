@@ -6,6 +6,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.common import clamp_limit, clamp_offset, envelope, iso, latest_date, scalar_count
+from app.core.clock import business_today
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.market_data import (
@@ -17,6 +18,7 @@ from app.models.market_data import (
     StrategySignal,
 )
 from app.providers.tushare_provider import TushareProvider
+from app.services.realtime_kline import load_realtime_kline
 
 router = APIRouter()
 
@@ -89,49 +91,35 @@ def realtime_kline(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     stock = db.get(StockBasic, ts_code)
-    target_end = end or date.today()
+    target_end = end or business_today()
     natural_days = max(30, min(days, 730))
     start = target_end - timedelta(days=natural_days)
 
     try:
-        daily = TushareProvider().get_daily_range(ts_code=ts_code, start=start, end=target_end)
+        result = load_realtime_kline(
+            db,
+            TushareProvider,
+            ts_code=ts_code,
+            start=start,
+            end=target_end,
+        )
     except Exception as exc:
         detail = f"tushare realtime kline failed: {exc}"
         raise HTTPException(status_code=502, detail=detail) from exc
 
-    rows = []
-    if daily is not None and not daily.empty:
-        frame = daily.copy()
-        frame["trade_date"] = frame["trade_date"].astype(str)
-        frame = frame.sort_values("trade_date")
-        for item in frame.to_dict("records"):
-            rows.append(
-                {
-                    "ts_code": item.get("ts_code") or ts_code,
-                    "trade_date": _format_tushare_trade_date(item.get("trade_date")),
-                    "open": _float_or_none(item.get("open")),
-                    "high": _float_or_none(item.get("high")),
-                    "low": _float_or_none(item.get("low")),
-                    "close": _float_or_none(item.get("close")),
-                    "pre_close": _float_or_none(item.get("pre_close")),
-                    "change": _float_or_none(item.get("change")),
-                    "pct_chg": _float_or_none(item.get("pct_chg")),
-                    "vol": _float_or_none(item.get("vol")),
-                    "amount": _float_or_none(item.get("amount")),
-                }
-            )
+    rows = [{**row, "trade_date": row["trade_date"].isoformat()} for row in result.rows]
 
     return envelope(
         {
             "stock": _stock_payload(stock) if stock else {"ts_code": ts_code, "name": None},
-            "source": "tushare",
+            "source": result.source,
             "stored": False,
             "days": natural_days,
             "start": start.isoformat(),
             "end": target_end.isoformat(),
             "rows": rows,
         },
-        {"source": "tushare", "stored": False, "rows": len(rows)},
+        {"source": result.source, "stored": False, "rows": len(rows)},
     )
 
 
@@ -144,7 +132,11 @@ def overview(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    target = trade_date or latest_date(db, StockStateDaily.trade_date)
+    target = trade_date or latest_date(
+        db,
+        StockStateDaily.trade_date,
+        StockStateDaily.algo_version == version,
+    )
     stock = db.get(StockBasic, ts_code)
     if not stock:
         raise HTTPException(status_code=404, detail="stock not found")
@@ -259,7 +251,11 @@ def _state_pool(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    target = trade_date or latest_date(db, StockStateDaily.trade_date)
+    target = trade_date or latest_date(
+        db,
+        StockStateDaily.trade_date,
+        StockStateDaily.algo_version == version,
+    )
     if not target:
         return envelope([], {"trade_date": None, "limit": limit, "offset": offset, "total": 0})
 
@@ -330,21 +326,3 @@ def _stock_payload(row: StockBasic) -> dict[str, Any]:
 
 def _sector_payload(row: Sector) -> dict[str, Any]:
     return _model_payload(row)
-
-
-def _format_tushare_trade_date(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value)
-    if len(text) == 8 and text.isdigit():
-        return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
-    return text
-
-
-def _float_or_none(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None

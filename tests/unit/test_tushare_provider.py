@@ -4,7 +4,13 @@ from types import ModuleType, SimpleNamespace
 import app.providers.tushare_provider as tushare_provider_module
 import pandas as pd
 import pytest
-from app.providers.tushare_provider import TushareProvider, _compact_error, to_tushare_date
+from app.providers.tushare_provider import (
+    TushareProvider,
+    _compact_error,
+    _configure_tushare_http_url,
+    _is_retryable_provider_error,
+    to_tushare_date,
+)
 
 
 def test_to_tushare_date() -> None:
@@ -37,6 +43,27 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
     assert calls == [("set_token", "test-token"), ("pro_api", None)]
     assert fake_pro._DataApi__http_url == "https://fastapic.stockai888.top"
     assert provider._min_interval_seconds == 2.5
+
+
+def test_tushare_proxy_configuration_rejects_incompatible_sdk() -> None:
+    with pytest.raises(RuntimeError, match="missing private attribute"):
+        _configure_tushare_http_url(SimpleNamespace(), "https://proxy.example")
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (TimeoutError("timed out"), True),
+        (RuntimeError("SSL UNEXPECTED_EOF_WHILE_READING"), True),
+        (RuntimeError("frequency limit exceeded"), True),
+        (RuntimeError("token invalid"), False),
+        (RuntimeError("permission denied"), False),
+        (RuntimeError("invalid parameter: trade_date"), False),
+        (RuntimeError("积分不足"), False),
+    ],
+)
+def test_provider_retry_only_accepts_transient_errors(error, expected) -> None:
+    assert _is_retryable_provider_error(error) is expected
 
 
 def test_tushare_provider_waits_between_calls(monkeypatch) -> None:
@@ -81,27 +108,31 @@ def test_tushare_provider_fetches_index_daily_range(monkeypatch) -> None:
     assert calls == [
         (
             "index_daily",
-            {
-                "ts_code": "000300.SH",
-                "start_date": "20260801",
-                "end_date": "20260831",
-            },
+                {
+                    "ts_code": "000300.SH",
+                    "start_date": "20260801",
+                    "end_date": "20260831",
+                    "fields": (
+                        "ts_code,trade_date,open,high,low,close,pre_close,"
+                        "pct_chg,vol,amount"
+                    ),
+                },
         )
     ]
     assert len(df.index) == 1
 
 
 def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:
-    requested_statuses = []
+    requested_shards = []
     fake_pro = SimpleNamespace(_DataApi__http_url=None)
 
     def stock_basic(**kwargs):
         status = kwargs["list_status"]
-        requested_statuses.append(status)
+        requested_shards.append((status, kwargs["exchange"]))
         return pd.DataFrame(
             [
                 {
-                    "ts_code": f"00000{len(requested_statuses)}.SZ",
+                    "ts_code": f"00000{len(requested_shards)}.SZ",
                     "list_status": status,
                 }
             ]
@@ -116,7 +147,11 @@ def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:
     provider = TushareProvider(token="test-token", min_interval_seconds=0)
     df = provider.get_stock_basic()
 
-    assert requested_statuses == ["L", "D", "P"]
+    assert requested_shards == [
+        (status, exchange)
+        for status in ("L", "D", "P")
+        for exchange in ("SSE", "SZSE", "BSE")
+    ]
     assert set(df["list_status"]) == {"L", "D", "P"}
 
 
@@ -142,10 +177,57 @@ def test_stock_basic_required_status_error_includes_source_error(monkeypatch) ->
 
     message = str(exc_info.value)
     assert "stock_basic required statuses missing: ['L']" in message
-    assert "stock_basic source errors: L: tushare frequency limit exceeded" in message
+    assert "L/SSE: tushare frequency limit exceeded" in message
+    assert "L/SZSE: tushare frequency limit exceeded" in message
+    assert "L/BSE: tushare frequency limit exceeded" in message
 
 
 def test_compact_error_limits_long_source_error() -> None:
     message = _compact_error(RuntimeError("x" * 1000), max_length=12)
 
     assert message == "x" * 12 + "..."
+
+
+def test_stock_basic_aggregates_shard_truncation_warning(monkeypatch) -> None:
+    provider = object.__new__(TushareProvider)
+
+    def fake_call(api_name, **kwargs):
+        frame = pd.DataFrame(
+            [
+                {
+                    "ts_code": f"{kwargs['list_status']}.{kwargs['exchange']}",
+                    "list_status": kwargs["list_status"],
+                }
+            ]
+        )
+        if kwargs["list_status"] == "L" and kwargs["exchange"] == "SZSE":
+            frame.attrs["provider_warning"] = "POSSIBLE_TRUNCATION"
+        return frame
+
+    monkeypatch.setattr(provider, "_call", fake_call)
+
+    result = provider.get_stock_basic()
+
+    assert result.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
+    assert "L/SZSE:POSSIBLE_TRUNCATION" in result.attrs["provider_warning_message"]
+
+
+def test_tushare_provider_fetches_milestone9_raw_datasets(monkeypatch) -> None:
+    provider = object.__new__(TushareProvider)
+    calls = []
+
+    def fake_call(api_name, **kwargs):
+        calls.append((api_name, kwargs))
+        return pd.DataFrame()
+
+    monkeypatch.setattr(provider, "_call", fake_call)
+    target = date(2026, 9, 15)
+
+    provider.get_stock_st(target)
+    provider.get_suspend_daily(target)
+    provider.get_stock_limit(target)
+
+    assert [call[0] for call in calls] == ["stock_st", "suspend_d", "stk_limit"]
+    assert calls[0][1]["trade_date"] == "20260915"
+    assert calls[1][1]["trade_date"] == "20260915"
+    assert calls[2][1]["trade_date"] == "20260915"

@@ -39,10 +39,13 @@ def update_job(
     error_message: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> JobRun:
+    now = datetime.now(UTC)
     if status is not None:
         job.status = status
         if status in {"SUCCESS", "PARTIAL", "FAILED"}:
-            job.finished_at = datetime.now(UTC)
+            job.finished_at = now
+    if status == "RUNNING" or (status is None and job.status == "RUNNING"):
+        job.heartbeat_at = now
     if step is not None:
         job.step = step
     if row_count is not None:

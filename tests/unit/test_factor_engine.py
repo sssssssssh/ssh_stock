@@ -67,6 +67,16 @@ def _fixture_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFr
     )
 
 
+def _trade_status(daily: pd.DataFrame, st_codes: set[str] | None = None) -> pd.DataFrame:
+    st_codes = st_codes or set()
+    return daily[["trade_date", "ts_code"]].assign(
+        is_active=True,
+        is_suspended=False,
+        is_st=lambda frame: frame["ts_code"].isin(st_codes),
+        st_status_unknown=False,
+    )
+
+
 def test_calculate_stock_factors_core_columns() -> None:
     daily, adj_factor, stock_basic, index_daily = _fixture_data()
     target = daily["trade_date"].max()
@@ -80,6 +90,7 @@ def test_calculate_stock_factors_core_columns() -> None:
         start=target,
         end=target,
         config=FactorConfig(),
+        trade_status=_trade_status(daily, {"000003.SZ"}),
     )
 
     row = result[result["ts_code"] == "000001.SZ"].iloc[0]
@@ -110,6 +121,7 @@ def test_rps_uses_only_eligible_universe() -> None:
         start=target,
         end=target,
         config=FactorConfig(),
+        trade_status=_trade_status(daily, {"000003.SZ"}),
     )
 
     rps_by_code = result.set_index("ts_code")["rps20"].to_dict()
@@ -163,7 +175,30 @@ def test_breakout_uses_previous_high_not_today_high() -> None:
         start=dates[-1],
         end=dates[-1],
         config=FactorConfig(min_listed_trading_days=1),
+        trade_status=_trade_status(daily),
     )
 
     assert result.iloc[0]["prev_high20"] == 11
     assert bool(result.iloc[0]["breakout20"]) is True
+
+
+def test_factor_eligibility_uses_point_in_time_st_status_not_current_name() -> None:
+    daily, adj_factor, stock_basic, index_daily = _fixture_data()
+    target = daily["trade_date"].max()
+    stock_basic.loc[stock_basic["ts_code"] == "000001.SZ", "name"] = "*ST未来名称"
+    status = _trade_status(daily, {"000003.SZ"})
+
+    result = calculate_stock_factors(
+        daily=daily,
+        adj_factor=adj_factor,
+        stock_basic=stock_basic,
+        index_daily=index_daily,
+        benchmark_code="000300.SH",
+        start=target,
+        end=target,
+        config=FactorConfig(),
+        trade_status=status,
+    ).set_index("ts_code")
+
+    assert bool(result.loc["000001.SZ", "eligible"]) is True
+    assert "ST" in result.loc["000003.SZ", "exclusion_reason"]

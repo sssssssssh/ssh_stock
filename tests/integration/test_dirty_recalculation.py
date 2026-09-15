@@ -2,7 +2,6 @@ from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
 
-import app.api.v1.jobs as jobs_module
 import app.services.recalculation as recalculation_module
 
 
@@ -75,7 +74,7 @@ class _SuccessfulTrendService:
     def __init__(self, db):
         self.db = db
 
-    def recalc(self, start, end):
+    def recalc(self, start, end, calc_run_id=None):
         return {"states": 1, "signals": 1}
 
 
@@ -105,6 +104,7 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
         resolved_at=None,
     )
     db = _FakeSession(job)
+    monkeypatch.setattr(recalculation_module, "TradeStatusService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "FactorService", _FailingFactorService)
 
     try:
@@ -118,7 +118,7 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
             dirty_ranges=[dirty_range],
         )
     except RuntimeError:
-        jobs_module._mark_background_failed(db, job_id, RuntimeError("factor boom"))
+        pass
 
     assert dirty_range.status == "FAILED"
     assert dirty_range.retry_count == 1

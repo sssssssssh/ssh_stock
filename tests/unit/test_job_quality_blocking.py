@@ -74,6 +74,18 @@ class _FakeIngestion:
         self._record("index_daily")
         return 1
 
+    def sync_stock_st(self, trade_date, job_id=None):
+        self._record("stock_st")
+        return 1
+
+    def sync_suspend_daily(self, trade_date, job_id=None):
+        self._record("suspend_d")
+        return 1
+
+    def sync_stock_limit(self, trade_date, job_id=None):
+        self._record("stk_limit")
+        return 1
+
     def sync_index_daily_range(self, start, end, job_id=None):
         self._record("index_daily_range")
         return 1
@@ -106,6 +118,11 @@ class _FakeTrendService:
 class _FakeProvider:
     def get_trade_calendar(self, start, end):
         return pd.DataFrame([{"cal_date": "20260105", "is_open": 1}])
+
+
+@pytest.fixture(autouse=True)
+def _patch_trade_status_service(monkeypatch):
+    monkeypatch.setattr(daily_job_module, "TradeStatusService", _FakeScalarService)
 
 
 def _job(job_type: str = "daily") -> SimpleNamespace:
@@ -162,6 +179,9 @@ def _raw_complete(
         missing_codes=[],
         invalid_count=0,
     )
+    stock_st = SimpleNamespace(status="PASS", is_acceptable=True, invalid_count=0)
+    suspend_d = SimpleNamespace(status="PASS", is_acceptable=True, invalid_count=0)
+    stk_limit = SimpleNamespace(status="PASS", is_acceptable=True, invalid_count=0)
     return SimpleNamespace(
         is_complete=is_complete,
         overall_status=overall_status,
@@ -170,11 +190,17 @@ def _raw_complete(
         adj_factor=adj_factor,
         daily_basic=daily_basic,
         index_daily=index,
+        stock_st=stock_st,
+        suspend_d=suspend_d,
+        stk_limit=stk_limit,
         dataset=lambda name: {
             "stock_daily": stock_daily,
             "adj_factor": adj_factor,
             "daily_basic": daily_basic,
             "index_daily": index,
+            "stock_st": stock_st,
+            "suspend_d": suspend_d,
+            "stk_limit": stk_limit,
         }[name],
         as_metadata=lambda: {
             "current_day_datasets": {
@@ -366,6 +392,7 @@ def test_backfill_job_only_syncs_raw_data(monkeypatch) -> None:
     monkeypatch.setattr(backfill_job_module, "upsert_rows", lambda *args, **kwargs: 1)
     monkeypatch.setattr(backfill_job_module, "IngestionService", _FakeIngestion)
     monkeypatch.setattr(backfill_job_module, "ensure_stock_basic_ready", lambda *args: None)
+    monkeypatch.setattr(backfill_job_module, "_any_index_daily_incomplete", lambda *args: False)
     monkeypatch.setattr(
         backfill_job_module,
         "check_raw_completeness",
@@ -381,10 +408,11 @@ def test_backfill_job_only_syncs_raw_data(monkeypatch) -> None:
 
 
 def test_backfill_prefetches_index_daily_by_range_when_missing(monkeypatch) -> None:
-    states = iter([_raw_complete("ERROR", False), _raw_complete()])
+    states = iter([_raw_complete()])
     monkeypatch.setattr(backfill_job_module, "upsert_rows", lambda *args, **kwargs: 1)
     monkeypatch.setattr(backfill_job_module, "IngestionService", _FakeIngestion)
     monkeypatch.setattr(backfill_job_module, "ensure_stock_basic_ready", lambda *args: None)
+    monkeypatch.setattr(backfill_job_module, "_any_index_daily_incomplete", lambda *args: True)
     monkeypatch.setattr(
         backfill_job_module,
         "check_raw_completeness",
@@ -403,7 +431,6 @@ def test_backfill_prefetches_index_daily_by_range_when_missing(monkeypatch) -> N
 def test_backfill_falls_back_to_daily_index_when_range_fails(monkeypatch) -> None:
     states = iter([
         _raw_complete("ERROR", False),
-        _raw_complete("ERROR", False),
         _raw_complete(),
     ])
 
@@ -415,6 +442,7 @@ def test_backfill_falls_back_to_daily_index_when_range_fails(monkeypatch) -> Non
     monkeypatch.setattr(backfill_job_module, "upsert_rows", lambda *args, **kwargs: 1)
     monkeypatch.setattr(backfill_job_module, "IngestionService", FallbackIngestion)
     monkeypatch.setattr(backfill_job_module, "ensure_stock_basic_ready", lambda *args: None)
+    monkeypatch.setattr(backfill_job_module, "_any_index_daily_incomplete", lambda *args: True)
     monkeypatch.setattr(
         backfill_job_module,
         "check_raw_completeness",

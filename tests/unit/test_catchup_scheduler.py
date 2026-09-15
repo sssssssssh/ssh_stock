@@ -11,7 +11,11 @@ from app.jobs.catchup_job import (
     classify_catchup_dates,
     is_analysis_complete,
 )
-from app.jobs.scheduler import cron_trigger_kwargs, run_scheduled_catchup
+from app.jobs.scheduler import (
+    cron_trigger_kwargs,
+    run_scheduled_basic_info,
+    run_scheduled_catchup,
+)
 from app.models.market_data import (
     MarketDaily,
     SectorFactorDaily,
@@ -396,6 +400,15 @@ def test_new_raw_insert_without_dirty_range_still_recalculates_forward(monkeypat
         def sync_index_daily(self, trade_date):
             return 1
 
+        def sync_stock_st(self, trade_date):
+            return 0
+
+        def sync_suspend_daily(self, trade_date):
+            return 0
+
+        def sync_stock_limit(self, trade_date):
+            return 1
+
     monkeypatch.setattr(
         catchup_module,
         "check_raw_completeness",
@@ -405,6 +418,11 @@ def test_new_raw_insert_without_dirty_range_still_recalculates_forward(monkeypat
         ),
     )
     job.ingestion = InsertOnlyIngestion()
+    monkeypatch.setattr(
+        catchup_module,
+        "TradeStatusService",
+        lambda db: SimpleNamespace(recalc=lambda *args: 1),
+    )
     job._sync_and_validate_raw_date = CatchUpJob._sync_and_validate_raw_date.__get__(job)
 
     job.run(date(2026, 9, 4))
@@ -489,14 +507,11 @@ def test_scheduler_cron_converts_crontab_weekdays_to_apscheduler_names() -> None
 
 def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(scheduler_module, "recover_stale_ingestion_jobs", lambda db: 0)
     monkeypatch.setattr(
         scheduler_module,
-        "find_active_ingestion_job",
-        lambda db, recover_stale=False: SimpleNamespace(
-            id="job-1",
-            job_type="backfill",
-            status="RUNNING",
+        "create_queued_ingestion_job",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            scheduler_module.ActiveIngestionJobError("job-1", "backfill", "RUNNING")
         ),
     )
 
@@ -518,12 +533,13 @@ def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
 
 def test_scheduler_runs_catchup_when_no_active_job(monkeypatch) -> None:
     calls = []
-    monkeypatch.setattr(scheduler_module, "recover_stale_ingestion_jobs", lambda db: 0)
+    job = SimpleNamespace(job_metadata={})
     monkeypatch.setattr(
         scheduler_module,
-        "find_active_ingestion_job",
-        lambda db, recover_stale=False: None,
+        "create_queued_ingestion_job",
+        lambda *args, **kwargs: job,
     )
+    monkeypatch.setattr(scheduler_module, "update_job", lambda *args, **kwargs: job)
 
     class FakeCatchUpJob:
         def __init__(self, db, provider):
@@ -532,6 +548,12 @@ def test_scheduler_runs_catchup_when_no_active_job(monkeypatch) -> None:
 
         def run(self, target_date):
             calls.append(target_date)
+            return SimpleNamespace(
+                raw_required_dates=[],
+                analysis_required_dates=[],
+                refresh_dates=[],
+                skipped=False,
+            )
 
     monkeypatch.setattr(scheduler_module, "CatchUpJob", FakeCatchUpJob)
 
@@ -539,6 +561,23 @@ def test_scheduler_runs_catchup_when_no_active_job(monkeypatch) -> None:
 
     assert executed is True
     assert calls == [date(2026, 9, 4)]
+
+
+def test_scheduler_runs_weekly_basic_refresh_with_existing_guard(monkeypatch) -> None:
+    calls = []
+
+    def fake_enqueue(db, job_type, target_trade_date, **kwargs):
+        calls.append((job_type, kwargs["metadata"]["source"]))
+        return object()
+
+    monkeypatch.setattr(
+        scheduler_module,
+        "create_queued_ingestion_job",
+        fake_enqueue,
+    )
+
+    assert run_scheduled_basic_info(object(), object()) is True
+    assert calls == [("sync_basic", "scheduler")]
 
 
 def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
@@ -557,6 +596,15 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
         def sync_index_daily(self, trade_date):
             calls.append(("index_daily", trade_date))
 
+        def sync_stock_st(self, trade_date):
+            calls.append(("stock_st", trade_date))
+
+        def sync_suspend_daily(self, trade_date):
+            calls.append(("suspend_d", trade_date))
+
+        def sync_stock_limit(self, trade_date):
+            calls.append(("stk_limit", trade_date))
+
     monkeypatch.setattr(
         catchup_module,
         "check_raw_completeness",
@@ -570,6 +618,13 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
     job.db = db
     job.ingestion = FakeIngestion()
     job.settings = SimpleNamespace(strategy={})
+    monkeypatch.setattr(
+        catchup_module,
+        "TradeStatusService",
+        lambda db: SimpleNamespace(
+            recalc=lambda start, end: calls.append(("trade_status", start)) or 1
+        ),
+    )
 
     job._refresh_raw_only(date(2026, 9, 4))
 
@@ -578,6 +633,10 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
         ("adj_factor", date(2026, 9, 4)),
         ("daily_basic", date(2026, 9, 4)),
         ("index_daily", date(2026, 9, 4)),
+        ("stock_st", date(2026, 9, 4)),
+        ("suspend_d", date(2026, 9, 4)),
+        ("stk_limit", date(2026, 9, 4)),
+        ("trade_status", date(2026, 9, 4)),
     ]
     assert db.commits == 1
 
@@ -598,6 +657,15 @@ def test_raw_sync_quality_error_commits_before_raise(monkeypatch) -> None:
 
         def sync_index_daily(self, trade_date):
             calls.append(("index_daily", trade_date))
+
+        def sync_stock_st(self, trade_date):
+            calls.append(("stock_st", trade_date))
+
+        def sync_suspend_daily(self, trade_date):
+            calls.append(("suspend_d", trade_date))
+
+        def sync_stock_limit(self, trade_date):
+            calls.append(("stk_limit", trade_date))
 
     def raw_quality(db, trade_date, **kwargs):
         quality_calls.append((trade_date, kwargs["persist"]))
@@ -621,6 +689,9 @@ def test_raw_sync_quality_error_commits_before_raise(monkeypatch) -> None:
         ("adj_factor", date(2026, 9, 2)),
         ("daily_basic", date(2026, 9, 2)),
         ("index_daily", date(2026, 9, 2)),
+        ("stock_st", date(2026, 9, 2)),
+        ("suspend_d", date(2026, 9, 2)),
+        ("stk_limit", date(2026, 9, 2)),
     ]
     assert quality_calls == [(date(2026, 9, 2), True)]
     assert db.commits == 1

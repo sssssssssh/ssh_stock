@@ -12,7 +12,11 @@ from app.models.market_data import (
     StockDaily,
     StockDailyBasic,
     StockFactorDaily,
+    StockLimitDaily,
     StockStateDaily,
+    StockStDaily,
+    StockSuspendDaily,
+    StockTradeStatusDaily,
     StrategySignal,
     TradeCalendar,
 )
@@ -32,7 +36,11 @@ __all__ = [
     "StockDaily",
     "StockDailyBasic",
     "StockFactorDaily",
+    "StockLimitDaily",
     "StockStateDaily",
+    "StockStDaily",
+    "StockSuspendDaily",
+    "StockTradeStatusDaily",
     "StrategySignal",
     "TradeCalendar",
 ]

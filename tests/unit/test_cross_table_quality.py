@@ -2,6 +2,7 @@ from datetime import date
 
 from app.models.market_data import (
     IndexDaily,
+    MarketDaily,
     SectorFactorDaily,
     StockAdjFactor,
     StockDaily,
@@ -25,6 +26,7 @@ def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> N
         StockStateDaily: 1000,
         SectorFactorDaily: 0,
         IndexDaily: 3,
+        MarketDaily: 1,
     }
     persisted = []
     strategy = {
@@ -57,13 +59,14 @@ def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> N
     monkeypatch.setattr(
         daily_quality,
         "_count_date",
-        lambda db, model, column, trade_date: counts[model],
+        lambda db, model, column, trade_date, *criteria: counts[model],
     )
     monkeypatch.setattr(
         daily_quality,
         "expected_stock_codes",
         lambda db, trade_date: {f"{idx:06d}.SZ" for idx in range(5000)},
     )
+    monkeypatch.setattr(daily_quality, "_suspended_codes", lambda db, trade_date: set())
 
     def capture_upsert(db, model, rows, conflict_columns):
         persisted.extend(rows)

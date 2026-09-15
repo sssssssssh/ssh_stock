@@ -70,13 +70,20 @@ def test_cli_validate_data_commits_quality_result(monkeypatch) -> None:
     runner = CliRunner()
     session_local = _FakeSessionLocal()
     monkeypatch.setattr(cli_module, "SessionLocal", session_local)
-    monkeypatch.setattr(cli_module, "get_settings", lambda: SimpleNamespace(strategy={}))
-    monkeypatch.setattr(cli_module, "_guard_cli_task", lambda db: None)
-    monkeypatch.setattr(
-        cli_module,
-        "HistoricalDataQualityService",
-        _SuccessfulHistoricalDataQualityService,
-    )
+    job = SimpleNamespace(job_metadata={})
+    monkeypatch.setattr(cli_module, "_queue_cli_job", lambda *args, **kwargs: job)
+
+    def run_validate(db, current_job, metadata):
+        db.pending.append("data_quality_daily")
+        db.commit()
+        current_job.job_metadata = {
+            "total_days": 1,
+            "pass_days": 1,
+            "warning_days": 0,
+            "error_days": 0,
+        }
+
+    monkeypatch.setattr(cli_module, "run_validate_data_job", run_validate)
 
     result = runner.invoke(
         cli_module.cli,
@@ -93,13 +100,14 @@ def test_cli_validate_data_rolls_back_on_error(monkeypatch) -> None:
     runner = CliRunner()
     session_local = _FakeSessionLocal()
     monkeypatch.setattr(cli_module, "SessionLocal", session_local)
-    monkeypatch.setattr(cli_module, "get_settings", lambda: SimpleNamespace(strategy={}))
-    monkeypatch.setattr(cli_module, "_guard_cli_task", lambda db: None)
-    monkeypatch.setattr(
-        cli_module,
-        "HistoricalDataQualityService",
-        _FailingHistoricalDataQualityService,
-    )
+    job = SimpleNamespace(job_metadata={})
+    monkeypatch.setattr(cli_module, "_queue_cli_job", lambda *args, **kwargs: job)
+
+    def fail_validate(db, current_job, metadata):
+        db.pending.append("data_quality_daily")
+        raise RuntimeError("validate failed")
+
+    monkeypatch.setattr(cli_module, "run_validate_data_job", fail_validate)
 
     result = runner.invoke(
         cli_module.cli,

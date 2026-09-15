@@ -128,6 +128,52 @@ class IndexDaily(Base):
     amount: Mapped[float | None] = mapped_column(Float)
 
 
+class StockStDaily(Base):
+    __tablename__ = "stock_st_daily"
+    __table_args__ = (PrimaryKeyConstraint("trade_date", "ts_code"),)
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    ts_code: Mapped[str] = mapped_column(String(16))
+    name: Mapped[str | None] = mapped_column(String(64))
+    st_type: Mapped[str | None] = mapped_column(String(32))
+    st_type_name: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class StockSuspendDaily(Base):
+    __tablename__ = "stock_suspend_daily"
+    __table_args__ = (PrimaryKeyConstraint("trade_date", "ts_code", "suspend_type"),)
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    ts_code: Mapped[str] = mapped_column(String(16))
+    suspend_type: Mapped[str] = mapped_column(String(8))
+    suspend_timing: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class StockLimitDaily(Base):
+    __tablename__ = "stock_limit_daily"
+    __table_args__ = (PrimaryKeyConstraint("trade_date", "ts_code"),)
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    ts_code: Mapped[str] = mapped_column(String(16))
+    pre_close: Mapped[float | None] = mapped_column(Float)
+    up_limit: Mapped[float | None] = mapped_column(Float)
+    down_limit: Mapped[float | None] = mapped_column(Float)
+    asset_type: Mapped[str | None] = mapped_column(String(16))
+    exchange: Mapped[str | None] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class StockFactorDaily(Base):
     __tablename__ = "stock_factor_daily"
     __table_args__ = (
@@ -328,8 +374,36 @@ class DataDirtyRange(Base):
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
     last_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StockTradeStatusDaily(Base):
+    __tablename__ = "stock_trade_status_daily"
+    __table_args__ = (
+        PrimaryKeyConstraint("trade_date", "ts_code"),
+        Index("idx_trade_status_date_tradable", "trade_date", "tradable"),
+        Index("idx_trade_status_date_eligible", "trade_date", "strategy_eligible"),
+    )
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    ts_code: Mapped[str] = mapped_column(String(16))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    is_suspended: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    is_st: Mapped[bool | None] = mapped_column(Boolean)
+    st_status_unknown: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    up_limit: Mapped[float | None] = mapped_column(Float)
+    down_limit: Mapped[float | None] = mapped_column(Float)
+    is_limit_up_close: Mapped[bool | None] = mapped_column(Boolean)
+    is_limit_down_close: Mapped[bool | None] = mapped_column(Boolean)
+    tradable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    strategy_eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    status_reason: Mapped[str | None] = mapped_column(String(256))
+    calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class StockStateDaily(Base):
@@ -355,6 +429,10 @@ class StockStateDaily(Base):
     market_score: Mapped[float | None] = mapped_column(Float)
     fast_transition: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reason_codes: Mapped[dict | None] = mapped_column(JSONB)
+    calc_version: Mapped[str | None] = mapped_column(String(32))
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StrategySignal(Base):
@@ -379,22 +457,43 @@ class StrategySignal(Base):
     reason_codes: Mapped[dict | None] = mapped_column(JSONB)
     payload: Mapped[dict | None] = mapped_column(JSONB)
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    calc_version: Mapped[str | None] = mapped_column(String(32))
+    config_hash: Mapped[str | None] = mapped_column(String(64))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class SignalForwardEval(Base):
     __tablename__ = "signal_forward_eval"
     __table_args__ = (
-        UniqueConstraint("signal_id", name="uq_signal_forward_eval_signal"),
+        UniqueConstraint(
+            "signal_id",
+            "eval_version",
+            "entry_basis",
+            name="uq_signal_forward_eval_version_basis",
+        ),
         Index("idx_signal_forward_eval_type_version", "signal_type", "algo_version"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    signal_id: Mapped[int] = mapped_column(ForeignKey("strategy_signal.id"), nullable=False)
+    signal_id: Mapped[int] = mapped_column(
+        ForeignKey("strategy_signal.id", ondelete="CASCADE"), nullable=False
+    )
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
     signal_type: Mapped[str] = mapped_column(String(32), nullable=False)
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    eval_version: Mapped[str] = mapped_column(String(16), nullable=False, default="eval_v2")
+    entry_basis: Mapped[str] = mapped_column(String(16), nullable=False, default="NEXT_OPEN")
+    horizon_basis: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="MARKET_TRADING_DAY"
+    )
+    entry_trade_date: Mapped[date | None] = mapped_column(Date)
+    entry_price: Mapped[float | None] = mapped_column(Float)
+    entry_executable: Mapped[bool | None] = mapped_column(Boolean)
+    exit_executable: Mapped[bool | None] = mapped_column(Boolean)
+    non_executable_reason: Mapped[str | None] = mapped_column(String(128))
     ret5: Mapped[float | None] = mapped_column(Float)
     ret10: Mapped[float | None] = mapped_column(Float)
     ret20: Mapped[float | None] = mapped_column(Float)
