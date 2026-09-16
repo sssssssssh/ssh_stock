@@ -502,7 +502,7 @@ python -m app.cli recalc-sectors --start 2026-08-25 --end 2026-08-25
 
 ```powershell
 $env:PYTHONPATH = "backend"
-python -m app.cli recalc-states --start 2026-08-25 --end 2026-08-25 --algo-version v1.0
+python -m app.cli recalc-states --start 2026-08-25 --end 2026-08-25
 ```
 
 作用：从数据库中的 `stock_factor_daily`、`market_daily`、`sector_member`、`sector_factor_daily` 和历史 `stock_state_daily` 读取数据，计算并写入 `stock_state_daily` 和 `strategy_signal`。
@@ -519,7 +519,7 @@ python -m app.cli recalc-states --start 2026-08-25 --end 2026-08-25 --algo-versi
 
 ```powershell
 $env:PYTHONPATH = "backend"
-python -m app.cli evaluate-signals --signal-type RIGHT_SIDE_NEW --algo-version v1.0
+python -m app.cli evaluate-signals --signal-type RIGHT_SIDE_NEW
 ```
 
 作用：读取 `strategy_signal` 和 `stock_factor_daily`，计算信号后 5/10/20/60 个交易日收益、MFE20、MAE20，并写入 `signal_forward_eval`。
@@ -547,7 +547,7 @@ GET /api/v1/stocks/{ts_code}/overview?trade_date=
 GET /api/v1/stocks/{ts_code}/history?start=&end=
 GET /api/v1/stocks/{ts_code}/factors?start=&end=
 GET /api/v1/stocks/{ts_code}/realtime-kline?days=180
-GET /api/v1/research/signals/stats?signal_type=RIGHT_SIDE_NEW&algo_version=v1.0
+GET /api/v1/research/signals/stats?signal_type=RIGHT_SIDE_NEW&algo_version=v1.1
 GET /api/v1/research/signals/buckets?signal_type=RIGHT_SIDE_NEW&bucket_field=opportunity_score
 GET /api/v1/jobs?status=success&job_type=daily&limit=20&offset=0
 POST /api/v1/jobs/daily
@@ -806,7 +806,7 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 - Worker 每 45 秒使用独立数据库 Session 刷新自己领取任务的 heartbeat，并约每 60 秒恢复 stale 任务：QUEUED 默认 24 小时、RUNNING heartbeat 默认 15 分钟、Dirty PROCESSING 默认 30 分钟。业务任务即使长时间不调用 `update_job()` 也不会因此失活。
 - API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 都只创建 QUEUED 任务；必须保持 `python -m app.cli worker` 运行，由 Worker 唯一领取执行。
 - Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
-- Scheduler 不再只跑当天，而是执行 Catch-up：只在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis，窗口外历史缺口需要手动 `validate-data`、`backfill`、`recalculate`。
+- Scheduler 不再只跑当天，而是执行 Catch-up：每次先同步交易日历，再刷新 `stock_basic`，之后才在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis。`stock_basic` 失败会令整个 CatchUp 失败，不会继续使用旧 universe 做分类或日线清理；行业元数据与成员仍由 weekly `sync-basic` 刷新。
 - Catch-up 先判断 Raw 完整性，Raw 不完整进入 `raw_required_dates`；只有 Raw 完整才继续判断 Analysis，避免把窗口外未检查 Raw 的历史日期误归为只计算。
 - Analysis Complete 要求当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily`、`state_vs_factor` 达到现有跨表质量 PASS 阈值。Raw 已完整但分析缺失时只执行计算，不重新访问 Tushare。
 - Catch-up 对每个 Raw 缺口只同步 `stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily` 并执行 RawCompleteness；不会运行完整 `DailyJob`。任意 Raw ERROR 都会先提交质量证据并阻止补算。
@@ -980,6 +980,8 @@ curl http://127.0.0.1:8000/health
 - `stock_st_daily`、`stock_suspend_daily`、`stock_limit_daily` 按交易日执行 authoritative snapshot 对账；接口成功返回 0 行代表当天无事件，会删除该日旧行并写入 PASS 质量证据。
 - `stock_daily` 唯一 expected universe 为当日 PIT 有效股票减去 `suspend_type=S` 的停牌股票；Daily、Backfill、CatchUp 都先同步 ST/停牌，再同步日线。日线同步只清理已确定不在该 universe 的旧行，Provider 暂时漏回的 expected 股票不会被删除，停牌 extra 也不会重新写回；清理前必须有完整 `stock_basic`、当日停牌 PASS 证据和非空 universe。
 - `recalculate` 在 TradeStatus 之前校验请求区间及预热区间内七类 Raw；缺少 ST、停牌或涨跌停证据时直接失败并提示先 backfill。TradeStatus、Factor、Market、Sector、Trend 会统一向前扩展最多 250 个开市日建立 current-config 状态链，Cross Table Gate 与 Signal Evaluation 仍只处理用户请求区间。
+- Trend 状态机已升级为 `algo_version=v1.1`：`S0/S1/S2` 遇到 raw `S4/S5` 时统一先进入 `S3` 并标记 fast transition，下一交易日才允许进入 `S4`，避免 S1/S2 被 transition block 长期卡住，同时保留右侧确认步骤。
+- 升级到 `v1.1` 不需要重新拉取 Raw；需要对目标历史区间重新提交一次补算，生成当前版本的状态、信号和评价结果。补算前 CatchUp 会先刷新 `stock_basic`，手动补算则应先确认基础信息已同步。
 - 当前分析结果统一按固定 `calc_version + current config_hash` 查询；状态和信号还必须匹配当前 `algo_version`。旧配置结果不会再被总览、股票池、系统日历或 CatchUp 当成当前完成结果。
 - `daily`、`sync-basic`、`backfill`、`validate-data` CLI 现在只入队并输出 `job_id`，不会在 CLI 进程同步执行。必须另开终端运行 `python -m app.cli worker`。
 - SW 行业成员在完整 Provider 快照成功后，仅对 active 行业按 `(sector_id, ts_code, valid_from)` 删除已消失旧成员；inactive 行业的历史成员保留。任一 Provider 分片失败时整次事务回滚，不执行删除。

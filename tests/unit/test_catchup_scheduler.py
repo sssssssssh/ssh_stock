@@ -271,19 +271,20 @@ def _configured_catchup_job(
         "_open_trade_dates",
         lambda db, start, end: open_dates,
     )
-    monkeypatch.setattr(
-        catchup_module,
-        "classify_catchup_dates",
-        lambda *args, **kwargs: (raw_required_dates, analysis_required_dates),
-    )
+    def classify(*args, **kwargs):
+        events.append(("classify",))
+        return raw_required_dates, analysis_required_dates
+
+    monkeypatch.setattr(catchup_module, "classify_catchup_dates", classify)
     monkeypatch.setattr(catchup_module, "latest_raw_trade_date", lambda db: latest)
 
     job = CatchUpJob.__new__(CatchUpJob)
     job.db = SimpleNamespace(commit=lambda: events.append(("quality_commit",)))
     job.provider = object()
-    job.settings = SimpleNamespace(strategy={}, algo_version="v1.0")
+    job.settings = SimpleNamespace(strategy={}, algo_version="v1.1")
     job.ingestion = SimpleNamespace(
-        sync_trade_calendar=lambda start, end: events.append(("calendar", start, end))
+        sync_trade_calendar=lambda start, end: events.append(("calendar", start, end)),
+        sync_stock_basic=lambda: events.append(("stock_basic",)),
     )
     job._sync_and_validate_raw_date = lambda current: events.append(("raw", current))
     job._run_analysis_repair = lambda start, end, mode: events.append(
@@ -292,6 +293,48 @@ def _configured_catchup_job(
     job._refresh_raw_only = lambda current: events.append(("refresh", current))
     job._run_dirty_repair_if_needed = lambda: events.append(("dirty_repair",))
     return job, events
+
+
+def test_catchup_refreshes_stock_basic_before_classifying_dates(monkeypatch) -> None:
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[date(2026, 9, 1)],
+        raw_required_dates=[],
+        analysis_required_dates=[],
+        latest=None,
+    )
+
+    job.run(date(2026, 9, 1))
+
+    assert [event[0] for event in events[:3]] == [
+        "calendar",
+        "stock_basic",
+        "classify",
+    ]
+
+
+def test_catchup_stock_basic_failure_blocks_classify_raw_and_recalculation(
+    monkeypatch,
+) -> None:
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[date(2026, 9, 1)],
+        raw_required_dates=[date(2026, 9, 1)],
+        analysis_required_dates=[date(2026, 9, 1)],
+        latest=date(2026, 9, 1),
+    )
+
+    def fail_stock_basic():
+        events.append(("stock_basic_failed",))
+        raise RuntimeError("stock_basic unavailable")
+
+    job.ingestion.sync_stock_basic = fail_stock_basic
+
+    with pytest.raises(RuntimeError, match="stock_basic unavailable"):
+        job.run(date(2026, 9, 1))
+
+    assert ("classify",) not in events
+    assert not [event for event in events if event[0] in {"raw", "recalculate"}]
 
 
 def test_catchup_historical_raw_gap_repairs_raw_then_recalculates_to_latest(
@@ -387,6 +430,9 @@ def test_new_raw_insert_without_dirty_range_still_recalculates_forward(monkeypat
     class InsertOnlyIngestion:
         def sync_trade_calendar(self, start, end):
             events.append(("calendar", start, end))
+
+        def sync_stock_basic(self):
+            events.append(("stock_basic",))
 
         def sync_daily(self, trade_date):
             inserted_rows.add((trade_date, "000003.SZ"))

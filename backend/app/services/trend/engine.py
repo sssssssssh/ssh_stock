@@ -18,7 +18,7 @@ ALLOWED_TRANSITIONS = {
 
 @dataclass(frozen=True)
 class TrendConfig:
-    algo_version: str = "v1.0"
+    algo_version: str = "v1.1"
     right_side_min_score: float = 70
     right_side_min_rps20: float = 70
     volume_ratio_confirm: float = 1.20
@@ -32,7 +32,7 @@ class TrendConfig:
     s5_max_drawdown60: float = -0.25
 
     @classmethod
-    def from_strategy(cls, strategy: dict[str, Any], algo_version: str = "v1.0") -> "TrendConfig":
+    def from_strategy(cls, strategy: dict[str, Any], algo_version: str = "v1.1") -> "TrendConfig":
         right_side = strategy.get("right_side", {})
         trend = strategy.get("trend", {})
         return cls(
@@ -405,7 +405,7 @@ def _apply_transition(
         return raw_state, raw_reasons, False
 
     fast_transition = False
-    if previous_state == "S0" and raw_state in {"S4", "S5"}:
+    if previous_state in {"S0", "S1", "S2"} and raw_state in {"S4", "S5"}:
         return "S3", raw_reasons + ["FAST_TRANSITION_LIMITED_TO_S3"], True
 
     if previous_state == "S3" and raw_state == "S3" and (previous_count or 0) >= config.s3_max_days:

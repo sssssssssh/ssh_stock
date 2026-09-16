@@ -142,6 +142,42 @@ def test_expected_daily_universe_excludes_suspended_stock() -> None:
         assert expected_stock_daily_codes(db, target) == {"A", "B"}
 
 
+def test_expected_daily_universe_reflects_new_listing_and_delisting() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    StockBasic.__table__.create(engine)
+    StockSuspendDaily.__table__.create(engine)
+    target = date(2026, 9, 10)
+    with Session(engine) as db:
+        db.add_all(
+            [
+                StockBasic(
+                    ts_code="ACTIVE",
+                    list_date=date(2020, 1, 1),
+                    list_status="L",
+                ),
+                StockBasic(
+                    ts_code="NEW",
+                    list_date=target,
+                    list_status="L",
+                ),
+                StockBasic(
+                    ts_code="DELISTED",
+                    list_date=date(2020, 1, 1),
+                    delist_date=target - timedelta(days=1),
+                    list_status="D",
+                ),
+            ]
+        )
+        db.commit()
+
+        expected = expected_stock_daily_codes(db, target)
+
+    provider_codes = {"ACTIVE", "NEW"}
+    authoritative_extra = provider_codes - expected
+    assert expected == {"ACTIVE", "NEW"}
+    assert "NEW" not in authoritative_extra
+
+
 def test_recalculation_raw_gate_reports_failed_date_and_datasets(monkeypatch) -> None:
     target = date(2026, 9, 10)
 

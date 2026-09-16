@@ -197,7 +197,7 @@ def recalc_sectors(start: str = typer.Option(...), end: str = typer.Option(...))
 def recalc_states(
     start: str = typer.Option(...),
     end: str = typer.Option(...),
-    algo_version: str = typer.Option("v1.0", "--algo-version"),
+    algo_version: str | None = typer.Option(None, "--algo-version"),
 ) -> None:
     configure_logging()
     start_date = _parse_date(start, "start")
@@ -211,7 +211,7 @@ def recalc_states(
 @cli.command("evaluate-signals")
 def evaluate_signals(
     signal_type: str = typer.Option("RIGHT_SIDE_NEW", "--signal-type"),
-    algo_version: str = typer.Option("v1.0", "--algo-version"),
+    algo_version: str | None = typer.Option(None, "--algo-version"),
     start: str | None = typer.Option(None, "--start"),
     end: str | None = typer.Option(None, "--end"),
     limit: int | None = typer.Option(None, "--limit"),

@@ -1,6 +1,8 @@
 from datetime import date
 
+import app.services.trend.engine as trend_engine
 import pandas as pd
+import pytest
 from app.services.trend import TrendConfig, calculate_stock_states, generate_strategy_signals
 
 
@@ -121,6 +123,64 @@ def test_fast_transition_from_s0_is_limited_to_s3() -> None:
     assert row["state"] == "S3"
     assert bool(row["fast_transition"]) is True
     assert "FAST_TRANSITION_LIMITED_TO_S3" in row["reason_codes"]
+
+
+@pytest.mark.parametrize("previous_state", ["S1", "S2"])
+@pytest.mark.parametrize("raw_state", ["S4", "S5"])
+def test_fast_transition_from_early_state_is_limited_to_s3(
+    previous_state: str,
+    raw_state: str,
+) -> None:
+    state, reasons, fast_transition = trend_engine._apply_transition(
+        raw_state,
+        ["RAW_TREND"],
+        previous_state,
+        5,
+        TrendConfig(),
+    )
+
+    assert state == "S3"
+    assert fast_transition is True
+    assert reasons == ["RAW_TREND", "FAST_TRANSITION_LIMITED_TO_S3"]
+
+
+def test_fast_transition_progresses_s2_to_s3_to_s4_with_correct_day_count(
+    monkeypatch,
+) -> None:
+    dates = [date(2026, 8, day) for day in (26, 27, 28)]
+    factors = pd.DataFrame([_base_factor(current, "000004.SZ") for current in dates])
+    previous = pd.DataFrame(
+        [
+            {
+                "trade_date": date(2026, 8, 25),
+                "ts_code": "000004.SZ",
+                "state": "S2",
+                "state_day_count": 8,
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        trend_engine,
+        "_raw_state",
+        lambda row, config: ("S4", ["RAW_TREND"]),
+    )
+
+    states = calculate_stock_states(
+        factors=factors,
+        market=pd.DataFrame(),
+        sector_members=pd.DataFrame(),
+        sector_factors=pd.DataFrame(),
+        previous_states=previous,
+        start=dates[0],
+        end=dates[-1],
+        config=TrendConfig(),
+    )
+
+    assert states["previous_state"].tolist() == ["S2", "S3", "S4"]
+    assert states["state"].tolist() == ["S3", "S4", "S4"]
+    assert states["state_day_count"].tolist() == [1, 1, 2]
+    assert states["is_new_state"].tolist() == [True, True, False]
+    assert states["fast_transition"].tolist() == [True, False, False]
 
 
 def test_calculate_stock_states_keeps_one_row_with_historical_sector_memberships() -> None:

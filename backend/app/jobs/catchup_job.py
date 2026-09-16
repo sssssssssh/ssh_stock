@@ -56,6 +56,7 @@ class CatchUpJob:
         refresh_recent_days = int(scheduler_setting("refresh_recent_trade_days", 5))
         calendar_start = target_date - timedelta(days=max(90, max_trade_days * 4))
         self.ingestion.sync_trade_calendar(calendar_start, target_date)
+        self.ingestion.sync_stock_basic()
         open_dates = _open_trade_dates(self.db, calendar_start, target_date)
         candidate_dates = _candidate_catchup_dates(
             open_dates,

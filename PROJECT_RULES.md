@@ -122,9 +122,9 @@
 - API、Scheduler 和 CLI 数据任务入口必须共用 `app.services.job_guard`；创建新 `daily/sync_basic/backfill/recalculate/validate_data/catchup` 前必须恢复 stale 任务并拒绝活跃任务。
 - stale recovery 必须区分 `queued_stale_hours`、`running_heartbeat_timeout_minutes` 和 `dirty_processing_timeout_minutes`；Worker 约每 60 秒检查一次，不得只在启动时恢复。
 - Scheduler 必须按 `app.timezone` 计算当前日期，不得直接使用系统默认 `date.today()`；`daily_cron` 的工作日字段必须正确传给 APScheduler。
-- Scheduler 触发时执行 Catch-up，而不是只跑当天；Raw/Analysis 必须使用最近 `max_catchup_trade_days` 个 open_date 作为同一候选窗口逐日分类，先判断 Raw，只有 Raw 完整才判断 Analysis，不得把窗口外未检查 Raw 的历史日期误归为 analysis-only。
+- Scheduler 触发时执行 Catch-up，而不是只跑当天；CatchUp 每次必须按 `sync_trade_calendar -> sync_stock_basic -> classify` 顺序执行，`stock_basic` 失败时禁止继续分类、Raw repair 或 Recalculate。Raw/Analysis 必须使用最近 `max_catchup_trade_days` 个 open_date 作为同一候选窗口逐日分类，先判断 Raw，只有 Raw 完整才判断 Analysis，不得把窗口外未检查 Raw 的历史日期误归为 analysis-only。
 - Analysis Complete 必须同时满足当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily` 与 `state_vs_factor` 覆盖率达到现有跨表质量 PASS 阈值；不得只用 `MAX(stock_state_daily.trade_date)` 或单表存在 1 行判断完整。
-- Catch-up 中 Raw 缺口只能执行 Raw-only 修复：同步七类 Raw 并执行 RawCompleteness，不得按缺口日期运行完整 `DailyJob`，也不得重复同步 `stock_basic`。任一 Raw ERROR 必须先提交质量证据并阻止后续重算；通过后先生成 PIT 交易状态再计算因子。
+- Catch-up 中 Raw 缺口只能执行 Raw-only 修复：每日 CatchUp 开头统一刷新一次 `stock_basic`，逐缺口修复时不得重复同步；同步七类 Raw 并执行 RawCompleteness，不得按缺口日期运行完整 `DailyJob`。任一 Raw ERROR 必须先提交质量证据并阻止后续重算；通过后先生成 PIT 交易状态再计算因子。
 - Catch-up 的 Raw 缺口全部修复后，必须合并 `raw_required_dates` 与 `analysis_required_dates`，从最早日期到 `latest_raw_trade_date` 统一且只调用一次 `run_recalculation()`；历史 Raw 新插入行即使未产生 Dirty Range，也必须触发该向后重算。只有 Analysis 缺口时不得访问 Tushare Raw。
 - Scheduler 自动 refresh 最近 `refresh_recent_trade_days` 个交易日 Raw 时必须是 Raw-only，只同步七类 Raw，不得重复同步 `stock_basic`，不得按日复用完整 `DailyJob`。
 - Recent refresh 必须在 Catch-up 统一重算后执行，并跳过本轮刚完成 Raw-only 修复的日期；之后继续按现有逻辑执行 Dirty Repair。
@@ -142,6 +142,7 @@
 - 因子、市场和行业当前结果的统计口径固定为各自 `factor_v1/market_v1/sector_v1 + current config_hash`；状态和信号按 current `algo_version`。API meta 必须返回当前 `algo_version/config_hash`。
 - `stock_state_daily` 和 `strategy_signal` 必须写入 `calc_version/config_hash/calc_run_id/calculated_at`；同一次趋势计算的状态与信号共用一个 `calc_run_id`。
 - 状态机逻辑或信号定义变化必须 bump `algo_version`；普通参数变化通过 `config_hash` 区分，不得混用旧配置结果。
+- Trend 状态机中 `S0/S1/S2` 遇到 raw `S4/S5` 必须先限制到 `S3`，设置 `fast_transition=true` 并记录 `FAST_TRANSITION_LIMITED_TO_S3`；下一交易日才能从 `S3` 进入 `S4`，禁止跳过右侧确认。该修复对应当前 `algo_version=v1.1`。
 - API、Scheduler 与 `daily/sync-basic/backfill/validate-data` CLI 只允许原子创建 `JobRun(status=QUEUED)` 并立即返回；`daily/sync_basic/backfill/recalculate/validate_data/catchup` 只能由 DB Worker 领取。CatchUp 内同步执行的 Recalculate 子任务必须直接以 `RUNNING` 创建并标记 `execution_owner=catchup`。
 - DB Worker 必须使用 `SELECT ... FOR UPDATE SKIP LOCKED` 领取任务，并写入 `worker_id/heartbeat_at`；领取后由使用独立 `SessionLocal` 的后台线程按 `job_id + RUNNING + worker_id` 所有权条件周期刷新 heartbeat，任务结束必须停止，不能依赖业务 `update_job()` 保活。
 - “检查 active -> 创建任务”必须在 PostgreSQL transaction advisory lock 内完成，API、Scheduler 和 CLI 共用 `create_queued_ingestion_job()`；禁止引入 Redis/Celery/Kafka。

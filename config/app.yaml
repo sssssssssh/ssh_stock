@@ -1,7 +1,7 @@
 app:
   name: 空间
   timezone: Asia/Shanghai
-  algo_version: v1.0
+  algo_version: v1.1
   scheduler:
     daily_cron: "10 18 * * 1-5"
     basic_info_cron: "30 9 * * 6"
