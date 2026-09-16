@@ -2,11 +2,12 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.models.market_data import DataDirtyRange
+from app.models.market_data import DataDirtyRange, TradeCalendar
 from app.repositories.job_run import update_job
 from app.services.calc_metadata import config_hash
 from app.services.dirty import (
@@ -17,6 +18,7 @@ from app.services.dirty import (
 from app.services.factors import FactorService
 from app.services.market import MarketService
 from app.services.quality.daily_quality import DataQualityError, validate_cross_table_range
+from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.trade_status import TradeStatusService
@@ -55,6 +57,14 @@ def run_recalculation(
     }
     total_rows = 0
     try:
+        factor_start = _factor_warmup_start(db, start)
+        metadata["factor_warmup_start"] = factor_start.isoformat()
+        validate_recalculation_raw_prerequisites(
+            db,
+            factor_start,
+            end,
+            strategy=settings.strategy,
+        )
         if dirty_ranges:
             mark_dirty_ranges_processing(db, dirty_ranges)
         update_job(
@@ -65,8 +75,12 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "trade_status", "progress_pct": 4},
         )
-        total_rows += TradeStatusService(db).recalc(start, end, calc_run_id=job.id)
-        factor_chunks = _month_chunks(start, end)
+        total_rows += TradeStatusService(db).recalc(
+            factor_start,
+            end,
+            calc_run_id=job.id,
+        )
+        factor_chunks = _month_chunks(factor_start, end)
         factor_service = FactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
             start_progress = round(8 + ((index - 1) / len(factor_chunks)) * 52, 1)
@@ -186,6 +200,81 @@ def run_recalculation(
             metadata={**metadata, "stage": "failed"},
         )
         raise
+
+
+def validate_recalculation_raw_prerequisites(
+    db: Session,
+    start: date,
+    end: date,
+    *,
+    strategy: dict[str, Any] | None = None,
+) -> None:
+    open_dates = list(
+        db.execute(
+            select(TradeCalendar.cal_date)
+            .where(
+                TradeCalendar.cal_date >= start,
+                TradeCalendar.cal_date <= end,
+                TradeCalendar.is_open.is_(True),
+            )
+            .order_by(TradeCalendar.cal_date)
+        )
+        .scalars()
+        .all()
+    )
+    failures: list[str] = []
+    for trade_date in open_dates:
+        result = check_raw_completeness(
+            db,
+            trade_date,
+            strategy=strategy,
+            persist=False,
+        )
+        if not result.is_complete:
+            statuses = result.as_metadata()["current_day_datasets"]
+            failed = {
+                dataset: status
+                for dataset, status in statuses.items()
+                if (
+                    (dataset in {"index_daily", "stock_st", "suspend_d"} and status != "PASS")
+                    or (
+                        dataset
+                        not in {"index_daily", "stock_st", "suspend_d"}
+                        and status not in {"PASS", "WARNING"}
+                    )
+                )
+            }
+            failures.append(
+                f"trade_date={trade_date} failed_datasets={failed} statuses={statuses}"
+            )
+    if failures:
+        detail = "; ".join(failures[:20])
+        raise DataQualityError(
+            "recalculation raw prerequisites failed; run backfill first. "
+            f"dates/datasets/statuses={detail}"
+        )
+
+
+def _factor_warmup_start(
+    db: Session,
+    start: date,
+    *,
+    trading_days: int = 250,
+) -> date:
+    dates = list(
+        db.execute(
+            select(TradeCalendar.cal_date)
+            .where(
+                TradeCalendar.cal_date <= start,
+                TradeCalendar.is_open.is_(True),
+            )
+            .order_by(TradeCalendar.cal_date.desc())
+            .limit(trading_days + 1)
+        )
+        .scalars()
+        .all()
+    )
+    return min(dates) if dates else start
 
 
 def _month_chunks(start: date, end: date) -> list[tuple[date, date]]:

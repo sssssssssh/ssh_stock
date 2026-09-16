@@ -6,7 +6,10 @@ app:
     daily_cron: "10 18 * * 1-5"
     basic_info_cron: "30 9 * * 6"
     max_catchup_trade_days: 20
-    stale_job_hours: 24
+    queued_stale_hours: 24
+    running_heartbeat_timeout_minutes: 15
+    dirty_processing_timeout_minutes: 30
+    stale_recovery_interval_seconds: 60
     refresh_recent_trade_days: 5
     dirty_max_retry_count: 3
     worker_poll_seconds: 2

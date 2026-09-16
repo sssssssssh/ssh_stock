@@ -21,7 +21,7 @@ from app.models.market_data import (
 from app.services.quality.daily_quality import (
     CoverageResult,
     check_daily_coverage,
-    expected_stock_codes,
+    expected_stock_daily_codes,
     persist_coverage_result,
 )
 
@@ -208,8 +208,7 @@ def check_raw_completeness(
 ) -> RawCompletenessResult:
     strategy = strategy or {}
     stock_daily_codes = _codes_for_date(db, StockDaily, StockDaily.trade_date, trade_date)
-    active_codes = expected_stock_codes(db, trade_date)
-    suspended_codes = _suspended_codes_for_date(db, trade_date)
+    expected_daily_codes = expected_stock_daily_codes(db, trade_date)
     adj_factor_codes, invalid_adj_factor_codes = _valid_codes_for_date(
         db,
         StockAdjFactor,
@@ -240,7 +239,7 @@ def check_raw_completeness(
         db,
         trade_date,
         "stock_daily",
-        active_codes - suspended_codes,
+        expected_daily_codes,
         stock_daily_codes,
         warning_coverage_rate=_daily_threshold(strategy, "warning", 0.98),
         error_coverage_rate=_daily_threshold(strategy, "error", 0.95),
@@ -308,7 +307,7 @@ def check_raw_completeness(
         db,
         trade_date,
         "stk_limit",
-        active_codes,
+        expected_daily_codes,
         valid_limit_codes,
         warning_coverage_rate=_raw_threshold(strategy, "stk_limit", "warning", 0.98),
         error_coverage_rate=_raw_threshold(strategy, "stk_limit", "error", 0.95),
@@ -482,19 +481,6 @@ def _index_daily_dataset(
 def _codes_for_date(db: Session, model: type, column: Any, trade_date: date) -> set[str]:
     return set(
         db.execute(select(model.ts_code).where(column == trade_date))
-        .scalars()
-        .all()
-    )
-
-
-def _suspended_codes_for_date(db: Session, trade_date: date) -> set[str]:
-    return set(
-        db.execute(
-            select(StockSuspendDaily.ts_code).where(
-                StockSuspendDaily.trade_date == trade_date,
-                StockSuspendDaily.suspend_type == "S",
-            )
-        )
         .scalars()
         .all()
     )

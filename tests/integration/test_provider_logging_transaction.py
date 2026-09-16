@@ -80,7 +80,7 @@ def test_provider_logging_uses_independent_transaction(monkeypatch) -> None:
     monkeypatch.setattr(ingestion_module, "record_dirty_range", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         ingestion_module,
-        "expected_stock_codes",
+        "expected_stock_daily_codes",
         lambda *args, **kwargs: {"000001.SZ"},
     )
     monkeypatch.setattr(

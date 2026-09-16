@@ -16,6 +16,13 @@ from app.models.market_data import (
     StockStateDaily,
     StrategySignal,
 )
+from app.services.analysis_identity import (
+    MARKET_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    SIGNAL_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
+from app.services.calc_metadata import config_hash
 
 router = APIRouter()
 
@@ -29,10 +36,13 @@ def summary(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
+    hash_value = config_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
     )
     if not target:
         return envelope(
@@ -48,14 +58,20 @@ def summary(
         )
 
     row_limit = clamp_limit(limit, default=10, maximum=50)
-    market = db.get(MarketDaily, target)
+    market = db.execute(
+        select(MarketDaily).where(
+            MarketDaily.trade_date == target,
+            MarketDaily.calc_version == MARKET_CALC_VERSION,
+            MarketDaily.config_hash == hash_value,
+        )
+    ).scalar_one_or_none()
     return envelope(
         {
             "trade_date": target.isoformat(),
             "market": _market_payload(market),
-            "state_counts": _state_counts(db, target, version),
-            "signal_counts": _signal_counts(db, target, version),
-            "sector_heat_top": _sector_heat_top(db, target, row_limit),
+            "state_counts": _state_counts(db, target, version, hash_value),
+            "signal_counts": _signal_counts(db, target, version, hash_value),
+            "sector_heat_top": _sector_heat_top(db, target, row_limit, hash_value),
             "right_side_new": _stock_pool(
                 db,
                 target,
@@ -63,6 +79,7 @@ def summary(
                 states=["S3"],
                 row_limit=row_limit,
                 new_only=True,
+                hash_value=hash_value,
             ),
             "trend_leaders": _stock_pool(
                 db,
@@ -71,6 +88,7 @@ def summary(
                 states=["S4", "S5"],
                 row_limit=row_limit,
                 new_only=False,
+                hash_value=hash_value,
             ),
         }
     )
@@ -96,12 +114,16 @@ def _market_payload(row: MarketDaily | None) -> dict[str, Any] | None:
     }
 
 
-def _state_counts(db: Session, target: date, algo_version: str) -> list[dict[str, Any]]:
+def _state_counts(
+    db: Session, target: date, algo_version: str, hash_value: str
+) -> list[dict[str, Any]]:
     stmt = (
         select(StockStateDaily.state, func.count().label("count"))
         .where(
             StockStateDaily.trade_date == target,
             StockStateDaily.algo_version == algo_version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == hash_value,
         )
         .group_by(StockStateDaily.state)
         .order_by(StockStateDaily.state)
@@ -109,12 +131,16 @@ def _state_counts(db: Session, target: date, algo_version: str) -> list[dict[str
     return [{"state": row.state, "count": row.count} for row in db.execute(stmt).all()]
 
 
-def _signal_counts(db: Session, target: date, algo_version: str) -> list[dict[str, Any]]:
+def _signal_counts(
+    db: Session, target: date, algo_version: str, hash_value: str
+) -> list[dict[str, Any]]:
     stmt = (
         select(StrategySignal.signal_type, func.count().label("count"))
         .where(
             StrategySignal.trade_date == target,
             StrategySignal.algo_version == algo_version,
+            StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+            StrategySignal.config_hash == hash_value,
         )
         .group_by(StrategySignal.signal_type)
         .order_by(StrategySignal.signal_type)
@@ -122,7 +148,9 @@ def _signal_counts(db: Session, target: date, algo_version: str) -> list[dict[st
     return [{"signal_type": row.signal_type, "count": row.count} for row in db.execute(stmt).all()]
 
 
-def _sector_heat_top(db: Session, target: date, row_limit: int) -> list[dict[str, Any]]:
+def _sector_heat_top(
+    db: Session, target: date, row_limit: int, hash_value: str
+) -> list[dict[str, Any]]:
     stmt = (
         select(
             SectorFactorDaily.trade_date,
@@ -137,7 +165,11 @@ def _sector_heat_top(db: Session, target: date, row_limit: int) -> list[dict[str
             SectorFactorDaily.eligible_member_count,
         )
         .join(Sector, SectorFactorDaily.sector_id == Sector.sector_id)
-        .where(SectorFactorDaily.trade_date == target)
+        .where(
+            SectorFactorDaily.trade_date == target,
+            SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+            SectorFactorDaily.config_hash == hash_value,
+        )
         .order_by(SectorFactorDaily.heat_rank, desc(SectorFactorDaily.heat_score))
         .limit(row_limit)
     )
@@ -151,6 +183,7 @@ def _stock_pool(
     states: list[str],
     row_limit: int,
     new_only: bool,
+    hash_value: str,
 ) -> list[dict[str, Any]]:
     stmt = (
         select(
@@ -179,6 +212,8 @@ def _stock_pool(
             StockStateDaily.trade_date == target,
             StockStateDaily.algo_version == algo_version,
             StockStateDaily.state.in_(states),
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == hash_value,
         )
         .order_by(desc(StockStateDaily.opportunity_score), desc(StockStateDaily.trend_score))
         .limit(row_limit)

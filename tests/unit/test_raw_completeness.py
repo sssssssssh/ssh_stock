@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 
 @pytest.fixture(autouse=True)
 def _m9_raw_quality(monkeypatch):
-    monkeypatch.setattr(raw_module, "_suspended_codes_for_date", lambda *args: set())
     monkeypatch.setattr(
         raw_module,
         "_event_quality_dataset",
@@ -34,7 +33,9 @@ def test_raw_completeness_requires_dataset_coverage(monkeypatch) -> None:
     daily_basic = {"000001.SZ", "000002.SZ", "000003.SZ"}
     index_daily = {"000300.SH", "000001.SH", "000852.SH"}
 
-    monkeypatch.setattr(raw_module, "expected_stock_codes", lambda db, trade_date: expected_stocks)
+    monkeypatch.setattr(
+        raw_module, "expected_stock_daily_codes", lambda db, trade_date: expected_stocks
+    )
     monkeypatch.setattr(
         raw_module,
         "_codes_for_date",
@@ -73,7 +74,9 @@ def test_raw_completeness_requires_all_configured_indices(monkeypatch) -> None:
     expected_stocks = {"000001.SZ", "000002.SZ"}
     all_stocks = {"000001.SZ", "000002.SZ"}
 
-    monkeypatch.setattr(raw_module, "expected_stock_codes", lambda db, trade_date: expected_stocks)
+    monkeypatch.setattr(
+        raw_module, "expected_stock_daily_codes", lambda db, trade_date: expected_stocks
+    )
     monkeypatch.setattr(
         raw_module,
         "_codes_for_date",
@@ -103,7 +106,9 @@ def test_raw_completeness_requires_all_configured_indices(monkeypatch) -> None:
 def test_adj_factor_invalid_values_do_not_count_as_actual(monkeypatch) -> None:
     expected_stocks = {"000001.SZ", "000002.SZ", "000003.SZ"}
     persisted = []
-    monkeypatch.setattr(raw_module, "expected_stock_codes", lambda db, trade_date: expected_stocks)
+    monkeypatch.setattr(
+        raw_module, "expected_stock_daily_codes", lambda db, trade_date: expected_stocks
+    )
     monkeypatch.setattr(
         raw_module,
         "_codes_for_date",
@@ -184,7 +189,7 @@ def test_raw_completeness_preserves_existing_stock_daily_detail_counts(monkeypat
     monkeypatch.setattr(daily_quality_module, "upsert_rows", fake_upsert_rows)
     monkeypatch.setattr(
         raw_module,
-        "expected_stock_codes",
+        "expected_stock_daily_codes",
         lambda db, trade_date: {"000001.SZ", "000002.SZ"},
     )
     monkeypatch.setattr(
@@ -271,11 +276,10 @@ def test_raw_completeness_overall_status_prioritizes_error_over_warning() -> Non
 def test_stock_daily_expected_universe_excludes_suspended_stocks(monkeypatch) -> None:
     active = {"000001.SZ", "000002.SZ", "000003.SZ"}
     daily = {"000001.SZ", "000003.SZ"}
-    monkeypatch.setattr(raw_module, "expected_stock_codes", lambda *args: active)
     monkeypatch.setattr(
         raw_module,
-        "_suspended_codes_for_date",
-        lambda *args: {"000002.SZ"},
+        "expected_stock_daily_codes",
+        lambda *args: active - {"000002.SZ"},
     )
     monkeypatch.setattr(
         raw_module,

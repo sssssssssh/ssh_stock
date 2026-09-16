@@ -55,10 +55,11 @@ def test_eval_v2_uses_next_open_market_horizons_and_adjusted_high_low() -> None:
     assert result is not None
     assert result["entry_trade_date"] == dates[1]
     assert result["entry_price"] == 101
-    assert result["ret5"] == pytest.approx(105 / 101 - 1)
-    assert result["mfe20"] == pytest.approx(122 / 101 - 1)
-    assert result["mae20"] == pytest.approx(99 / 101 - 1)
+    assert result["ret5"] == pytest.approx(106 / 101 - 1)
+    assert result["mfe20"] == pytest.approx(123 / 101 - 1)
+    assert result["mae20"] == pytest.approx(100 / 101 - 1)
     assert result["horizon_basis"] == "MARKET_TRADING_DAY"
+    assert result["evaluated_until_date"] == dates[-1]
 
 
 def test_eval_v2_does_not_shift_missing_stock_horizon() -> None:

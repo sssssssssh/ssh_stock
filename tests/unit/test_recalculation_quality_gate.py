@@ -62,6 +62,16 @@ def _job():
 
 
 def _patch_successful_calculators(monkeypatch):
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_recalculation_raw_prerequisites",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        recalculation_module,
+        "_factor_warmup_start",
+        lambda db, start: start,
+    )
     monkeypatch.setattr(recalculation_module, "TradeStatusService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)

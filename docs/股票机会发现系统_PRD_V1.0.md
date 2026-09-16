@@ -1157,6 +1157,16 @@ Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；�
 - 容器服务启用自动重启，任务执行仍以 PostgreSQL `job_run` 为唯一队列，不引入 Redis、Celery 或 Kafka。
 - GitHub Actions 在 PostgreSQL 17 service 中执行真实 Alembic 升级、完整后端测试、Ruff 和前端构建。
 - 新增 `requirements.lock` 固定当前验证依赖，其中 Tushare 固定为 `1.4.29`；代理私有字段由单一 Provider 方法封装并进行 SDK 兼容性检查。
+
+### 25.16 基础平台最终一致性收尾（2026-09-16）
+
+- ST、停牌和涨跌停 Raw 改为按交易日权威快照对账，成功空结果会清除旧事件记录并生成 PASS 质量证据。
+- 日线 expected universe 统一为 PIT active 减 suspend=S；Daily、Backfill、CatchUp 的同步顺序保证停牌数据先于日线覆盖率判断。
+- Recalculate 新增七类 Raw 前置 Gate，缺少 Milestone 9 质量证据时不允许进入 TradeStatus 或因子计算；因子阶段向前扩展最多 250 个开市日预热当前配置上下文。
+- API、Scheduler 和核心数据 CLI 只入队，QUEUED 任务只由 Worker claim；CatchUp 同步子任务直接以 RUNNING 创建。
+- 当前分析身份覆盖 Factor、Market、Sector、State、Signal 的固定计算版本、当前配置哈希和当前算法版本，页面默认查询不会混入旧配置结果。
+- Signal Eval V2 的 NEXT_OPEN 收益改为入场后第 N 个市场交易日，MFE20/MAE20 从入场后的第 1 到 20 日计算。
+- 完整 SW 成员快照成功后清除已消失的历史错误成员；Provider 任一分片失败不执行 reconciliation delete。
 ### 36.21 Phase 8：性能与可维护性（2026-09-15）
 
 - 个股 realtime-kline 改为本地优先，并返回 `local/tushare/mixed` 来源；只有交易日历显示存在本地缺口时才访问 Provider，回退结果不入库。

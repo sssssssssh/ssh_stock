@@ -57,29 +57,49 @@ def recover_stale_ingestion_jobs(
     db: Session,
     *,
     stale_job_hours: float | None = None,
+    queued_stale_hours: float | None = None,
+    running_heartbeat_timeout_minutes: float | None = None,
     now: datetime | None = None,
 ) -> int:
-    hours = float(stale_job_hours or scheduler_setting("stale_job_hours", 24))
+    queued_hours = float(
+        queued_stale_hours
+        or stale_job_hours
+        or scheduler_setting("queued_stale_hours", 24)
+    )
+    running_minutes = float(
+        running_heartbeat_timeout_minutes
+        or (stale_job_hours * 60 if stale_job_hours is not None else 0)
+        or scheduler_setting("running_heartbeat_timeout_minutes", 15)
+    )
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
         current = current.replace(tzinfo=UTC)
-    cutoff = current - timedelta(hours=hours)
     recovered = 0
     for job in active_ingestion_jobs(db):
-        started_at = (
-            getattr(job, "heartbeat_at", None)
+        original_status = job.status
+        reference_at = (
+            (getattr(job, "heartbeat_at", None) or job.started_at)
             if job.status == "RUNNING"
             else job.started_at
-        ) or job.started_at
-        if started_at is None:
+        )
+        if reference_at is None:
             continue
-        if started_at.tzinfo is None:
-            started_at = started_at.replace(tzinfo=UTC)
-        if started_at > cutoff:
+        if reference_at.tzinfo is None:
+            reference_at = reference_at.replace(tzinfo=UTC)
+        timeout = (
+            timedelta(minutes=running_minutes)
+            if job.status == "RUNNING"
+            else timedelta(hours=queued_hours)
+        )
+        if reference_at > current - timeout:
             continue
         job.status = "FAILED"
         job.finished_at = current
-        job.error_message = "stale job recovered after process restart"
+        job.error_message = (
+            "stale RUNNING job recovered after heartbeat timeout"
+            if original_status == "RUNNING"
+            else "stale QUEUED job recovered after queue timeout"
+        )
         db.add(job)
         recovered += 1
     if recovered:

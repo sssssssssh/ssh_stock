@@ -17,7 +17,13 @@ from app.models.market_data import (
     StrategySignal,
 )
 from app.repositories.replace_slice import replace_slice_rows
-from app.services.calc_metadata import calculation_metadata
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
+from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.trend.engine import (
     TrendConfig,
     calculate_stock_states,
@@ -125,6 +131,7 @@ class TrendService:
         return {"states": state_count, "signals": signal_count}
 
     def _read_factors(self, start: date, end: date) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 StockFactorDaily.trade_date,
@@ -155,15 +162,26 @@ class TrendService:
                 StockFactorDaily.rps60_delta5,
                 StockFactorDaily.eligible,
             )
-            .where(StockFactorDaily.trade_date >= start, StockFactorDaily.trade_date <= end)
+            .where(
+                StockFactorDaily.trade_date >= start,
+                StockFactorDaily.trade_date <= end,
+                StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+                StockFactorDaily.config_hash == hash_value,
+            )
             .order_by(StockFactorDaily.ts_code, StockFactorDaily.trade_date)
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_market(self, start: date, end: date) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(MarketDaily.trade_date, MarketDaily.market_score)
-            .where(MarketDaily.trade_date >= start, MarketDaily.trade_date <= end)
+            .where(
+                MarketDaily.trade_date >= start,
+                MarketDaily.trade_date <= end,
+                MarketDaily.calc_version == MARKET_CALC_VERSION,
+                MarketDaily.config_hash == hash_value,
+            )
             .order_by(MarketDaily.trade_date)
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
@@ -179,6 +197,7 @@ class TrendService:
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_sector_factors(self, start: date, end: date) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 SectorFactorDaily.trade_date,
@@ -186,7 +205,12 @@ class TrendService:
                 SectorFactorDaily.heat_score,
                 SectorFactorDaily.heat_momentum3,
             )
-            .where(SectorFactorDaily.trade_date >= start, SectorFactorDaily.trade_date <= end)
+            .where(
+                SectorFactorDaily.trade_date >= start,
+                SectorFactorDaily.trade_date <= end,
+                SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+                SectorFactorDaily.config_hash == hash_value,
+            )
             .order_by(SectorFactorDaily.trade_date, SectorFactorDaily.sector_id)
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
@@ -194,6 +218,7 @@ class TrendService:
     def _read_previous_states(
         self, start: date, target_start: date, algo_version: str
     ) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 StockStateDaily.trade_date,
@@ -205,6 +230,8 @@ class TrendService:
                 StockStateDaily.trade_date >= start,
                 StockStateDaily.trade_date < target_start,
                 StockStateDaily.algo_version == algo_version,
+                StockStateDaily.calc_version == TREND_CALC_VERSION,
+                StockStateDaily.config_hash == hash_value,
             )
             .order_by(StockStateDaily.ts_code, StockStateDaily.trade_date)
         )

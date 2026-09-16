@@ -6,11 +6,6 @@ from loguru import logger
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.jobs.catchup_job import CatchUpJob
-from app.providers.base import MarketDataProvider
-from app.providers.logging_provider import LoggingMarketDataProvider
-from app.providers.tushare_provider import TushareProvider
-from app.repositories.job_run import update_job
 from app.services.job_guard import (
     ActiveIngestionJobError,
     create_queued_ingestion_job,
@@ -24,13 +19,11 @@ def run_scheduler() -> None:
 
     def run_daily() -> None:
         with SessionLocal() as db:
-            provider = LoggingMarketDataProvider(db, TushareProvider())
-            run_scheduled_catchup(db, provider, _scheduler_today(timezone))
+            run_scheduled_catchup(db, None, _scheduler_today(timezone))
 
     def run_basic_info() -> None:
         with SessionLocal() as db:
-            provider = LoggingMarketDataProvider(db, TushareProvider())
-            run_scheduled_basic_info(db, provider)
+            run_scheduled_basic_info(db, None)
 
     cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
         "daily_cron", "10 18 * * 1-5"
@@ -49,9 +42,9 @@ def run_scheduler() -> None:
     scheduler.start()
 
 
-def run_scheduled_catchup(db, provider: MarketDataProvider, target_date: date) -> bool:
+def run_scheduled_catchup(db, provider: object | None, target_date: date) -> bool:
     try:
-        job = create_queued_ingestion_job(
+        create_queued_ingestion_job(
             db,
             "catchup",
             target_date,
@@ -66,29 +59,10 @@ def run_scheduled_catchup(db, provider: MarketDataProvider, target_date: date) -
             active.status,
         )
         return False
-    update_job(db, job, status="RUNNING", step="catchup running")
-    try:
-        plan = CatchUpJob(db, provider).run(target_date)
-        update_job(
-            db,
-            job,
-            status="SUCCESS",
-            step="catchup complete",
-            metadata={
-                **(job.job_metadata or {}),
-                "raw_required_days": len(plan.raw_required_dates),
-                "analysis_required_days": len(plan.analysis_required_dates),
-                "refresh_days": len(plan.refresh_dates),
-                "skipped": plan.skipped,
-            },
-        )
-    except Exception as exc:
-        update_job(db, job, status="FAILED", error_message=str(exc))
-        raise
     return True
 
 
-def run_scheduled_basic_info(db, provider: MarketDataProvider) -> bool:
+def run_scheduled_basic_info(db, provider: object | None) -> bool:
     try:
         create_queued_ingestion_job(
             db,

@@ -6,8 +6,11 @@ from sqlalchemy import asc, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.v1.common import clamp_limit, clamp_offset, envelope, iso, latest_date, scalar_count
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.market_data import Sector, SectorFactorDaily
+from app.services.analysis_identity import SECTOR_CALC_VERSION
+from app.services.calc_metadata import config_hash
 
 router = APIRouter()
 
@@ -21,13 +24,23 @@ def heat(
     offset: int = 0,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    target = trade_date or latest_date(db, SectorFactorDaily.trade_date)
+    hash_value = config_hash(get_settings().strategy)
+    target = trade_date or latest_date(
+        db,
+        SectorFactorDaily.trade_date,
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+        SectorFactorDaily.config_hash == hash_value,
+    )
     if not target:
         return envelope([], {"trade_date": None, "limit": limit, "offset": offset, "total": 0})
 
     row_limit = clamp_limit(limit, default=30)
     row_offset = clamp_offset(offset)
-    filters = [SectorFactorDaily.trade_date == target]
+    filters = [
+        SectorFactorDaily.trade_date == target,
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+        SectorFactorDaily.config_hash == hash_value,
+    ]
     if level:
         filters.append(Sector.level == level)
 
@@ -93,13 +106,26 @@ def overview(
     trade_date: date | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    target = trade_date or latest_date(db, SectorFactorDaily.trade_date)
+    hash_value = config_hash(get_settings().strategy)
+    target = trade_date or latest_date(
+        db,
+        SectorFactorDaily.trade_date,
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+        SectorFactorDaily.config_hash == hash_value,
+    )
     sector = db.get(Sector, sector_id)
     if not sector:
         raise HTTPException(status_code=404, detail="sector not found")
     factor = None
     if target:
-        factor = db.get(SectorFactorDaily, {"trade_date": target, "sector_id": sector_id})
+        factor = db.execute(
+            select(SectorFactorDaily).where(
+                SectorFactorDaily.trade_date == target,
+                SectorFactorDaily.sector_id == sector_id,
+                SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+                SectorFactorDaily.config_hash == hash_value,
+            )
+        ).scalar_one_or_none()
     return envelope(
         {
             "sector": {
@@ -128,10 +154,15 @@ def history(
     if not db.get(Sector, sector_id):
         raise HTTPException(status_code=404, detail="sector not found")
 
+    hash_value = config_hash(get_settings().strategy)
     row_limit = clamp_limit(limit, default=240, maximum=1000)
     stmt = (
         select(SectorFactorDaily)
-        .where(SectorFactorDaily.sector_id == sector_id)
+        .where(
+            SectorFactorDaily.sector_id == sector_id,
+            SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
+            SectorFactorDaily.config_hash == hash_value,
+        )
         .order_by(desc(SectorFactorDaily.trade_date))
         .limit(row_limit)
     )

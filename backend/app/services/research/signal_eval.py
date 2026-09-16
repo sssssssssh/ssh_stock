@@ -16,6 +16,12 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.upsert import upsert_rows
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    SIGNAL_CALC_VERSION,
+    TRADE_STATUS_CALC_VERSION,
+)
+from app.services.calc_metadata import config_hash
 
 
 def evaluate_forward_returns(
@@ -71,6 +77,7 @@ def evaluate_forward_returns_v2(
     if signal_index + entry_offset >= len(dates):
         return None
     entry_date = dates[signal_index + entry_offset]
+    entry_index = signal_index + entry_offset
     by_date = {row["trade_date"]: row for row in rows}
     entry_row = by_date.get(entry_date)
     entry_price_field = "adj_open" if entry_basis == "NEXT_OPEN" else "adj_close"
@@ -95,13 +102,16 @@ def evaluate_forward_returns_v2(
         "ret60": None,
         "mfe20": None,
         "mae20": None,
-        "evaluated_until_date": dates[min(signal_index + 60, len(dates) - 1)],
+        "evaluated_until_date": max(
+            (current for current in dates if current in by_date),
+            default=entry_date,
+        ),
     }
     if not entry_executable or entry_price is None:
         return result
 
     for horizon in (5, 10, 20, 60):
-        target_index = signal_index + horizon
+        target_index = entry_index + horizon
         if target_index >= len(dates):
             continue
         target_date = dates[target_index]
@@ -113,7 +123,7 @@ def evaluate_forward_returns_v2(
         if exit_reason is None and exit_price is not None:
             result[f"ret{horizon}"] = exit_price / entry_price - 1.0
 
-    window_dates = dates[signal_index + 1 : signal_index + 21]
+    window_dates = dates[entry_index + 1 : entry_index + 21]
     highs = [
         float(by_date[current]["adj_high"])
         for current in window_dates
@@ -197,6 +207,7 @@ class SignalEvaluationService:
         if entry_basis not in {"SIGNAL_CLOSE", "NEXT_OPEN", "NEXT_CLOSE"}:
             raise ValueError(f"unsupported entry_basis: {entry_basis}")
         version = algo_version or self.settings.algo_version
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 StrategySignal.id,
@@ -208,6 +219,8 @@ class SignalEvaluationService:
             .where(
                 StrategySignal.signal_type == signal_type,
                 StrategySignal.algo_version == version,
+                StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+                StrategySignal.config_hash == hash_value,
             )
             .order_by(StrategySignal.trade_date, StrategySignal.ts_code)
         )
@@ -288,7 +301,7 @@ class SignalEvaluationService:
                     TradeCalendar.is_open.is_(True),
                 )
                 .order_by(TradeCalendar.cal_date)
-                .limit(61)
+                .limit(62)
             )
             .scalars()
             .all()
@@ -301,9 +314,12 @@ class SignalEvaluationService:
     ) -> list[dict[str, Any]]:
         if not market_dates:
             return []
+        hash_value = config_hash(self.settings.strategy)
         factor_join = and_(
             StockFactorDaily.trade_date == StockTradeStatusDaily.trade_date,
             StockFactorDaily.ts_code == StockTradeStatusDaily.ts_code,
+            StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+            StockFactorDaily.config_hash == hash_value,
         )
         daily_join = and_(
             StockDaily.trade_date == StockTradeStatusDaily.trade_date,
@@ -329,12 +345,15 @@ class SignalEvaluationService:
             .where(
                 StockTradeStatusDaily.ts_code == ts_code,
                 StockTradeStatusDaily.trade_date.in_(market_dates),
+                StockTradeStatusDaily.calc_version == TRADE_STATUS_CALC_VERSION,
+                StockTradeStatusDaily.config_hash == hash_value,
             )
             .order_by(StockTradeStatusDaily.trade_date)
         )
         return list(self.db.execute(stmt).mappings().all())
 
     def _read_forward_factor_rows(self, ts_code: str, trade_date: date) -> list[dict[str, Any]]:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 StockFactorDaily.trade_date,
@@ -345,6 +364,8 @@ class SignalEvaluationService:
                 StockFactorDaily.ts_code == ts_code,
                 StockFactorDaily.trade_date >= trade_date,
                 StockFactorDaily.adj_close.is_not(None),
+                StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+                StockFactorDaily.config_hash == hash_value,
             )
             .order_by(StockFactorDaily.trade_date)
             .limit(61)

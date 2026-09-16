@@ -16,6 +16,7 @@ from app.models.market_data import (
 )
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job
+from app.services.analysis_identity import TREND_CALC_VERSION
 from app.services.calc_metadata import config_hash
 from app.services.dirty import (
     latest_raw_trade_date,
@@ -119,10 +120,11 @@ class CatchUpJob:
             self.db,
             "recalculate",
             end,
-            status="QUEUED",
-            step="queued from catchup",
+            status="RUNNING",
+            step="started by catchup",
             metadata={
                 "source": mode,
+                "execution_owner": "catchup",
                 "mode": mode,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
@@ -140,12 +142,12 @@ class CatchUpJob:
         )
 
     def _sync_and_validate_raw_date(self, trade_date: date) -> None:
+        self.ingestion.sync_stock_st(trade_date)
+        self.ingestion.sync_suspend_daily(trade_date)
         self.ingestion.sync_daily(trade_date)
         self.ingestion.sync_adj_factor(trade_date)
         self.ingestion.sync_daily_basic(trade_date)
         self.ingestion.sync_index_daily(trade_date)
-        self.ingestion.sync_stock_st(trade_date)
-        self.ingestion.sync_suspend_daily(trade_date)
         self.ingestion.sync_stock_limit(trade_date)
         raw_quality = check_raw_completeness(
             self.db,
@@ -187,10 +189,11 @@ class CatchUpJob:
             self.db,
             "recalculate",
             latest,
-            status="QUEUED",
-            step="queued from scheduler dirty repair",
+            status="RUNNING",
+            step="started by catchup dirty repair",
             metadata={
                 "source": "dirty_repair",
+                "execution_owner": "catchup",
                 "mode": "dirty_repair",
                 "start": start.isoformat(),
                 "end": latest.isoformat(),
@@ -365,6 +368,8 @@ def is_analysis_complete(
         StockStateDaily,
         StockStateDaily.trade_date == trade_date,
         StockStateDaily.algo_version == algo_version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == current_config_hash,
     )
     return (
         cross_table_coverage_status(

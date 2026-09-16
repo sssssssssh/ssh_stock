@@ -51,7 +51,7 @@ def _job(status: str, started_at: datetime):
 
 def test_reject_if_active_ingestion_job_raises_for_running_job() -> None:
     now = datetime.now(UTC)
-    job = _job("RUNNING", now - timedelta(hours=1))
+    job = _job("RUNNING", now - timedelta(minutes=5))
     db = _FakeDb([job])
 
     with pytest.raises(ActiveIngestionJobError):
@@ -71,7 +71,7 @@ def test_recover_stale_running_and_queued_jobs() -> None:
     assert stale_running.status == "FAILED"
     assert stale_queued.status == "FAILED"
     assert stale_running.finished_at == now
-    assert stale_queued.error_message == "stale job recovered after process restart"
+    assert stale_queued.error_message == "stale QUEUED job recovered after queue timeout"
     assert fresh.status == "RUNNING"
     assert db.commits == 1
 

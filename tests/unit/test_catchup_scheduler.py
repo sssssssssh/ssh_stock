@@ -506,7 +506,6 @@ def test_scheduler_cron_converts_crontab_weekdays_to_apscheduler_names() -> None
 
 
 def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
-    calls = []
     monkeypatch.setattr(
         scheduler_module,
         "create_queued_ingestion_job",
@@ -515,52 +514,28 @@ def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
         ),
     )
 
-    class FakeCatchUpJob:
-        def __init__(self, db, provider):
-            self.db = db
-            self.provider = provider
-
-        def run(self, target_date):
-            calls.append(target_date)
-
-    monkeypatch.setattr(scheduler_module, "CatchUpJob", FakeCatchUpJob)
-
     executed = run_scheduled_catchup(object(), object(), date(2026, 9, 4))
 
     assert executed is False
-    assert calls == []
 
 
-def test_scheduler_runs_catchup_when_no_active_job(monkeypatch) -> None:
+def test_scheduler_enqueues_catchup_without_executing_it(monkeypatch) -> None:
     calls = []
-    job = SimpleNamespace(job_metadata={})
+
+    def enqueue(db, job_type, target_trade_date, **kwargs):
+        calls.append((job_type, target_trade_date, kwargs))
+        return object()
+
     monkeypatch.setattr(
         scheduler_module,
         "create_queued_ingestion_job",
-        lambda *args, **kwargs: job,
+        enqueue,
     )
-    monkeypatch.setattr(scheduler_module, "update_job", lambda *args, **kwargs: job)
-
-    class FakeCatchUpJob:
-        def __init__(self, db, provider):
-            self.db = db
-            self.provider = provider
-
-        def run(self, target_date):
-            calls.append(target_date)
-            return SimpleNamespace(
-                raw_required_dates=[],
-                analysis_required_dates=[],
-                refresh_dates=[],
-                skipped=False,
-            )
-
-    monkeypatch.setattr(scheduler_module, "CatchUpJob", FakeCatchUpJob)
 
     executed = run_scheduled_catchup(object(), object(), date(2026, 9, 4))
 
     assert executed is True
-    assert calls == [date(2026, 9, 4)]
+    assert calls[0][0:2] == ("catchup", date(2026, 9, 4))
 
 
 def test_scheduler_runs_weekly_basic_refresh_with_existing_guard(monkeypatch) -> None:
@@ -629,12 +604,12 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
     job._refresh_raw_only(date(2026, 9, 4))
 
     assert calls == [
+        ("stock_st", date(2026, 9, 4)),
+        ("suspend_d", date(2026, 9, 4)),
         ("daily", date(2026, 9, 4)),
         ("adj_factor", date(2026, 9, 4)),
         ("daily_basic", date(2026, 9, 4)),
         ("index_daily", date(2026, 9, 4)),
-        ("stock_st", date(2026, 9, 4)),
-        ("suspend_d", date(2026, 9, 4)),
         ("stk_limit", date(2026, 9, 4)),
         ("trade_status", date(2026, 9, 4)),
     ]
@@ -685,12 +660,12 @@ def test_raw_sync_quality_error_commits_before_raise(monkeypatch) -> None:
         job._sync_and_validate_raw_date(date(2026, 9, 2))
 
     assert calls == [
+        ("stock_st", date(2026, 9, 2)),
+        ("suspend_d", date(2026, 9, 2)),
         ("daily", date(2026, 9, 2)),
         ("adj_factor", date(2026, 9, 2)),
         ("daily_basic", date(2026, 9, 2)),
         ("index_daily", date(2026, 9, 2)),
-        ("stock_st", date(2026, 9, 2)),
-        ("suspend_d", date(2026, 9, 2)),
         ("stk_limit", date(2026, 9, 2)),
     ]
     assert quality_calls == [(date(2026, 9, 2), True)]

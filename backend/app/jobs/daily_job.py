@@ -69,27 +69,45 @@ class DailyJob:
             update_job(
                 self.db,
                 job,
-                step="30 sync daily",
+                step="30 sync stock_st",
                 row_count=total_rows,
                 metadata=_progress(metadata, 3),
+            )
+            total_rows += self.ingestion.sync_stock_st(trade_date, job_id=job.id)
+
+            update_job(
+                self.db,
+                job,
+                step="35 sync suspend_d",
+                row_count=total_rows,
+                metadata=_progress(metadata, 4),
+            )
+            total_rows += self.ingestion.sync_suspend_daily(trade_date, job_id=job.id)
+
+            update_job(
+                self.db,
+                job,
+                step="40 sync daily",
+                row_count=total_rows,
+                metadata=_progress(metadata, 5),
             )
             total_rows += self.ingestion.sync_daily(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="40 sync adj_factor",
+                step="50 sync adj_factor",
                 row_count=total_rows,
-                metadata=_progress(metadata, 4),
+                metadata=_progress(metadata, 6),
             )
             total_rows += self.ingestion.sync_adj_factor(trade_date, job_id=job.id)
 
             update_job(
                 self.db,
                 job,
-                step="50 sync daily_basic",
+                step="55 sync daily_basic",
                 row_count=total_rows,
-                metadata=_progress(metadata, 5),
+                metadata=_progress(metadata, 7),
             )
             total_rows += self.ingestion.sync_daily_basic(trade_date, job_id=job.id)
 
@@ -98,27 +116,9 @@ class DailyJob:
                 job,
                 step="60 sync index_daily",
                 row_count=total_rows,
-                metadata=_progress(metadata, 6),
-            )
-            total_rows += self.ingestion.sync_index_daily(trade_date, job_id=job.id)
-
-            update_job(
-                self.db,
-                job,
-                step="62 sync stock_st",
-                row_count=total_rows,
-                metadata=_progress(metadata, 7),
-            )
-            total_rows += self.ingestion.sync_stock_st(trade_date, job_id=job.id)
-
-            update_job(
-                self.db,
-                job,
-                step="64 sync suspend_d",
-                row_count=total_rows,
                 metadata=_progress(metadata, 8),
             )
-            total_rows += self.ingestion.sync_suspend_daily(trade_date, job_id=job.id)
+            total_rows += self.ingestion.sync_index_daily(trade_date, job_id=job.id)
 
             update_job(
                 self.db,

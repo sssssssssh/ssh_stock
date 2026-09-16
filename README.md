@@ -803,8 +803,8 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 
 当前自动运行规则：
 
-- Scheduler 每次触发时先恢复超时的 `QUEUED/RUNNING` 数据任务，默认超过 `stale_job_hours=24` 小时会标记为 `FAILED`。
-- API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 共用任务互斥 Guard，同一时间只允许一个数据任务运行。
+- Worker 约每 60 秒恢复 stale 任务：QUEUED 默认 24 小时、RUNNING heartbeat 默认 15 分钟、Dirty PROCESSING 默认 30 分钟。
+- API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 都只创建 QUEUED 任务；必须保持 `python -m app.cli worker` 运行，由 Worker 唯一领取执行。
 - Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
 - Scheduler 不再只跑当天，而是执行 Catch-up：只在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis，窗口外历史缺口需要手动 `validate-data`、`backfill`、`recalculate`。
 - Catch-up 先判断 Raw 完整性，Raw 不完整进入 `raw_required_dates`；只有 Raw 完整才继续判断 Analysis，避免把窗口外未检查 Raw 的历史日期误归为只计算。
@@ -826,6 +826,10 @@ app:
     max_catchup_trade_days: 20
     refresh_recent_trade_days: 5
     dirty_max_retry_count: 3
+    queued_stale_hours: 24
+    running_heartbeat_timeout_minutes: 15
+    dirty_processing_timeout_minutes: 30
+    stale_recovery_interval_seconds: 60
 ```
 
 最后一项历史一致性修复完成后，Milestone 8、Raw 数据层、数据拉取层、Catch-up 和自动运行层按当前范围正式封版；后续只在 Milestone 9 处理可交易性数据，不继续扩展 Raw/Scheduler/Job 架构。
@@ -839,7 +843,7 @@ app:
 5. 执行 `python -m pip install -r requirements-dev.txt`。
 6. 如果使用 Docker 本地数据库，执行 `docker compose up -d postgres`；如果使用云数据库或已有本机数据库，跳过。
 7. 执行 `python -m alembic upgrade head`。
-8. 旧数据库升级后执行 `python -m app.cli validate-data --start 历史最早日期 --end 当前最新raw日期`。
+8. 旧数据库升级后按“PIT Raw 回填 -> validate-data -> recalculate”顺序处理，且保持 Worker 运行；具体命令见下方“基础平台一致性收尾”。
 9. 执行 `python -m pytest` 确认环境正确。
 10. 进入 `frontend`，执行 `npm install` 和 `npm run build` 确认前端环境正确。
 
@@ -900,13 +904,13 @@ cd backend
 python -m app.cli worker
 ```
 
-- Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 领取任务，写入 `worker_id/heartbeat_at`；启动时恢复 heartbeat 超时的 RUNNING 任务和超时的 Dirty PROCESSING。
-- API、CLI 和 Scheduler 使用同一个 PostgreSQL advisory lock 原子创建任务，避免并发请求同时通过 active 检查。`worker_poll_seconds`、`stale_job_hours` 位于 `config/app.yaml`。
+- Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 领取任务，写入 `worker_id/heartbeat_at`；运行期间周期性恢复 heartbeat 超时的 RUNNING 任务和超时的 Dirty PROCESSING。
+- API、CLI 和 Scheduler 使用同一个 PostgreSQL advisory lock 原子创建任务，避免并发请求同时通过 active 检查。分离的 queue/heartbeat/dirty 超时配置位于 `config/app.yaml`。
 - Scheduler 仍使用 `python -m app.cli scheduler`，保留 Raw Gap、Analysis Gap、Historical Repair、Recent Refresh、Dirty Repair；它和 Worker 是两个独立进程。
 
 ## Signal 研究评价 v2（Phase 6，2026-09-15）
 
-- `evaluate-signals` 默认按下一交易日开盘入场，并以市场第 5/10/20/60 个交易日为固定 horizon；个股停牌不会把目标日顺延到下一条行情。
+- `evaluate-signals` 默认按下一交易日开盘入场，并以入场日为 Day 0，使用入场后第 5/10/20/60 个市场交易日收盘价；个股停牌不会把目标日顺延到下一条行情。
 - 支持 `SIGNAL_CLOSE`、`NEXT_OPEN`、`NEXT_CLOSE`；停牌、涨停无法买入或跌停无法卖出时记录不可执行原因，价格和对应收益为 NULL。
 - MFE/MAE 使用复权 high/low，不再用未来 close 近似。研究 API 支持 `eval_version`、`entry_basis`、`executable_only`，返回可执行数量以及 ret20 的中位数、P25、P75。
 
@@ -969,3 +973,27 @@ curl http://127.0.0.1:8000/health
 日线源出现重复自然键时，任务仍会失败且不会写入重复行情，但失败前会先提交 `data_quality_daily.duplicate_count/null_count/issue_codes`，页面能够保留真实质量证据。
 
 前端已把总览、股票池、行业热度、数据质量、任务中心和研究评价拆到 `frontend/src/components/`，`App.vue` 只保留跨页面状态、请求编排和 K 线交互。
+
+## 基础平台一致性收尾（2026-09-16）
+
+- `stock_st_daily`、`stock_suspend_daily`、`stock_limit_daily` 按交易日执行 authoritative snapshot 对账；接口成功返回 0 行代表当天无事件，会删除该日旧行并写入 PASS 质量证据。
+- `stock_daily` 唯一 expected universe 为当日 PIT 有效股票减去 `suspend_type=S` 的停牌股票；Daily、Backfill、CatchUp 都先同步 ST/停牌，再同步日线。
+- `recalculate` 在 TradeStatus 之前校验请求区间及因子预热区间内七类 Raw；缺少 ST、停牌或涨跌停证据时直接失败并提示先 backfill。TradeStatus 与因子会自动向前扩展最多 250 个开市日作为当前配置预热区间。
+- 当前分析结果统一按固定 `calc_version + current config_hash` 查询；状态和信号还必须匹配当前 `algo_version`。旧配置结果不会再被总览、股票池、系统日历或 CatchUp 当成当前完成结果。
+- `daily`、`sync-basic`、`backfill`、`validate-data` CLI 现在只入队并输出 `job_id`，不会在 CLI 进程同步执行。必须另开终端运行 `python -m app.cli worker`。
+- SW 行业成员在完整 Provider 快照成功后按 `(sector_id, ts_code, valid_from)` 删除已消失旧成员；任一 Provider 分片失败时整次事务回滚，不执行删除。
+
+历史数据库升级必须按以下顺序执行。每个 CLI 命令返回后，需要等待 Worker 中对应任务完成再进入下一步：
+
+```powershell
+python -m alembic upgrade head
+python -m app.cli worker
+
+# 另一个终端：补齐历史七类 Raw，特别是 stock_st / suspend_d / stk_limit
+python -m app.cli backfill --start 2021-01-01 --end 2026-09-15
+
+# backfill 完成后校验；该命令同样只入队
+python -m app.cli validate-data --start 2021-01-01 --end 2026-09-15
+```
+
+`validate-data` 完成后，在“数据”页面提交同范围“开始补算”，或调用 `POST /api/v1/jobs/recalculate`。不要把 `alembic upgrade head` 理解为数据重拉或重算，它只升级数据库结构。

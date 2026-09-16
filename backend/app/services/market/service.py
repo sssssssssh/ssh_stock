@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.market_data import IndexDaily, MarketDaily, StockDaily, StockFactorDaily
 from app.repositories.replace_slice import replace_slice_rows
-from app.services.calc_metadata import calculation_metadata
+from app.services.analysis_identity import FACTOR_CALC_VERSION
+from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.market.engine import MarketConfig, calculate_market_daily
 
 
@@ -52,6 +53,7 @@ class MarketService:
         return count
 
     def _read_factors(self, start: date, end: date) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = (
             select(
                 StockFactorDaily.trade_date,
@@ -65,7 +67,12 @@ class MarketService:
                 StockFactorDaily.breakout60,
                 StockFactorDaily.eligible,
             )
-            .where(StockFactorDaily.trade_date >= start, StockFactorDaily.trade_date <= end)
+            .where(
+                StockFactorDaily.trade_date >= start,
+                StockFactorDaily.trade_date <= end,
+                StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+                StockFactorDaily.config_hash == hash_value,
+            )
             .order_by(StockFactorDaily.trade_date, StockFactorDaily.ts_code)
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())

@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -23,7 +23,11 @@ from app.models.market_data import (
 )
 from app.providers.base import MarketDataProvider
 from app.repositories.upsert import upsert_rows
-from app.services.dirty import changed_trade_dates, record_dirty_range
+from app.services.dirty import (
+    changed_trade_dates,
+    reconcile_daily_snapshot,
+    record_dirty_range,
+)
 from app.services.ingestion.normalizers import (
     current_sector_members_missing_in_date,
     normalize_adj_factor,
@@ -41,7 +45,7 @@ from app.services.ingestion.normalizers import (
 from app.services.quality.daily_quality import (
     CoverageResult,
     check_daily_coverage,
-    expected_stock_codes,
+    expected_stock_daily_codes,
     persist_coverage_result,
 )
 from app.services.quality.raw_checks import check_raw_daily
@@ -127,7 +131,7 @@ class IngestionService:
             issues = check_raw_daily(df, min_rows=0)
             fatal = [issue for issue in issues if issue.severity == "ERROR"]
             rows = normalize_stock_daily(df)
-            expected_codes = expected_stock_codes(self.db, trade_date)
+            expected_codes = expected_stock_daily_codes(self.db, trade_date)
             actual_codes = {row["ts_code"] for row in rows}
             quality = check_daily_coverage(
                 trade_date=trade_date,
@@ -323,19 +327,13 @@ class IngestionService:
             if issues:
                 self.db.commit()
                 raise ValueError(f"stock_st quality check failed: {issues}")
-            dirty_dates = changed_trade_dates(
+            dirty_dates = reconcile_daily_snapshot(
                 self.db,
                 StockStDaily,
                 rows,
+                trade_date=trade_date,
                 conflict_columns=["trade_date", "ts_code"],
                 compare_columns=ST_VALUE_COLUMNS,
-            )
-            record_dirty_range(
-                self.db,
-                dataset="stock_st_daily",
-                dirty_dates=dirty_dates,
-                reason="stock_st source values changed",
-                source_job_id=job_id,
             )
             count = upsert_rows(
                 self.db,
@@ -343,6 +341,13 @@ class IngestionService:
                 rows,
                 ["trade_date", "ts_code"],
                 update_columns=ST_VALUE_COLUMNS + ["updated_at"],
+            )
+            record_dirty_range(
+                self.db,
+                dataset="stock_st_daily",
+                dirty_dates=dirty_dates,
+                reason="stock_st source values changed",
+                source_job_id=job_id,
             )
             self.db.commit()
             logger.info("synced stock_st trade_date={} rows={}", trade_date, count)
@@ -380,19 +385,13 @@ class IngestionService:
             if issues:
                 self.db.commit()
                 raise ValueError(f"suspend_d quality check failed: {issues}")
-            dirty_dates = changed_trade_dates(
+            dirty_dates = reconcile_daily_snapshot(
                 self.db,
                 StockSuspendDaily,
                 rows,
+                trade_date=trade_date,
                 conflict_columns=["trade_date", "ts_code", "suspend_type"],
                 compare_columns=SUSPEND_VALUE_COLUMNS,
-            )
-            record_dirty_range(
-                self.db,
-                dataset="stock_suspend_daily",
-                dirty_dates=dirty_dates,
-                reason="suspend_d source values changed",
-                source_job_id=job_id,
             )
             count = upsert_rows(
                 self.db,
@@ -400,6 +399,13 @@ class IngestionService:
                 rows,
                 ["trade_date", "ts_code", "suspend_type"],
                 update_columns=SUSPEND_VALUE_COLUMNS + ["updated_at"],
+            )
+            record_dirty_range(
+                self.db,
+                dataset="stock_suspend_daily",
+                dirty_dates=dirty_dates,
+                reason="suspend_d source values changed",
+                source_job_id=job_id,
             )
             self.db.commit()
             logger.info("synced suspend_d trade_date={} rows={}", trade_date, count)
@@ -417,7 +423,7 @@ class IngestionService:
                 rows,
                 key_columns=["trade_date", "ts_code"],
             )
-            expected_codes = expected_stock_codes(self.db, trade_date)
+            expected_codes = expected_stock_daily_codes(self.db, trade_date)
             valid_codes = {
                 str(row["ts_code"])
                 for row in rows
@@ -465,19 +471,13 @@ class IngestionService:
                     "stk_limit quality check failed: "
                     f"coverage={quality.coverage_rate} issues={issues}"
                 )
-            dirty_dates = changed_trade_dates(
+            dirty_dates = reconcile_daily_snapshot(
                 self.db,
                 StockLimitDaily,
                 rows,
+                trade_date=trade_date,
                 conflict_columns=["trade_date", "ts_code"],
                 compare_columns=LIMIT_VALUE_COLUMNS,
-            )
-            record_dirty_range(
-                self.db,
-                dataset="stock_limit_daily",
-                dirty_dates=dirty_dates,
-                reason="stk_limit source values changed",
-                source_job_id=job_id,
             )
             count = upsert_rows(
                 self.db,
@@ -485,6 +485,13 @@ class IngestionService:
                 rows,
                 ["trade_date", "ts_code"],
                 update_columns=LIMIT_VALUE_COLUMNS + ["updated_at"],
+            )
+            record_dirty_range(
+                self.db,
+                dataset="stock_limit_daily",
+                dirty_dates=dirty_dates,
+                reason="stk_limit source values changed",
+                source_job_id=job_id,
             )
             self.db.commit()
             logger.info("synced stk_limit trade_date={} rows={}", trade_date, count)
@@ -572,7 +579,28 @@ class IngestionService:
                     "sector member PIT_INVALID: current members missing in_date: "
                     f"{missing_current_dates[:20]}"
                 )
-            rows = normalize_sector_members(df, code_to_id)
+            rows = _deduplicate_sector_member_rows(
+                normalize_sector_members(df, code_to_id)
+            )
+            if not rows:
+                raise ValueError("sector members returned no valid rows")
+            natural_keys = {
+                (row["sector_id"], row["ts_code"], row["valid_from"])
+                for row in rows
+            }
+            existing_members = list(
+                self.db.execute(
+                    select(SectorMember)
+                    .join(Sector, SectorMember.sector_id == Sector.sector_id)
+                    .where(Sector.source == "SW")
+                )
+                .scalars()
+                .all()
+            )
+            for member in existing_members:
+                key = (member.sector_id, member.ts_code, member.valid_from)
+                if key not in natural_keys:
+                    self.db.delete(member)
             count = upsert_rows(
                 self.db,
                 SectorMember,
@@ -626,6 +654,20 @@ def _raw_frame_issues(
 def _duplicate_count(rows: list[dict[str, object]], key_columns: list[str]) -> int:
     keys = [tuple(row.get(column) for column in key_columns) for row in rows]
     return len(keys) - len(set(keys))
+
+
+def _deduplicate_sector_member_rows(
+    rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    deduplicated: dict[tuple[object, object, object], dict[str, object]] = {}
+    for row in rows:
+        key = (row["sector_id"], row["ts_code"], row["valid_from"])
+        existing = deduplicated.get(key)
+        if existing is None or (
+            existing.get("valid_to") is not None and row.get("valid_to") is None
+        ):
+            deduplicated[key] = row
+    return list(deduplicated.values())
 
 
 def _index_range_chunks(

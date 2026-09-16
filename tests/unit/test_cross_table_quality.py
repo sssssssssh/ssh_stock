@@ -63,11 +63,9 @@ def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> N
     )
     monkeypatch.setattr(
         daily_quality,
-        "expected_stock_codes",
+            "expected_stock_daily_codes",
         lambda db, trade_date: {f"{idx:06d}.SZ" for idx in range(5000)},
     )
-    monkeypatch.setattr(daily_quality, "_suspended_codes", lambda db, trade_date: set())
-
     def capture_upsert(db, model, rows, conflict_columns):
         persisted.extend(rows)
         return len(rows)

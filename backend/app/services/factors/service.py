@@ -17,7 +17,8 @@ from app.models.market_data import (
     StockTradeStatusDaily,
 )
 from app.repositories.replace_slice import replace_slice_rows
-from app.services.calc_metadata import calculation_metadata
+from app.services.analysis_identity import TRADE_STATUS_CALC_VERSION
+from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.factors.engine import FactorConfig, calculate_stock_factors
 
 
@@ -101,6 +102,7 @@ class FactorService:
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_trade_status(self, start: date, end: date) -> pd.DataFrame:
+        hash_value = config_hash(self.settings.strategy)
         stmt = select(
             StockTradeStatusDaily.trade_date,
             StockTradeStatusDaily.ts_code,
@@ -111,6 +113,8 @@ class FactorService:
         ).where(
             StockTradeStatusDaily.trade_date >= start,
             StockTradeStatusDaily.trade_date <= end,
+            StockTradeStatusDaily.calc_version == TRADE_STATUS_CALC_VERSION,
+            StockTradeStatusDaily.config_hash == hash_value,
         )
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 

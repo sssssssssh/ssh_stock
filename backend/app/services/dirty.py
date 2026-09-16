@@ -52,6 +52,46 @@ def changed_trade_dates(
     return dirty_dates
 
 
+def reconcile_daily_snapshot(
+    db: Session,
+    model: type,
+    rows: list[dict[str, Any]],
+    *,
+    trade_date: date,
+    conflict_columns: list[str],
+    compare_columns: list[str],
+) -> set[date]:
+    """Reconcile an authoritative daily snapshot and report whether it changed."""
+    existing_rows = list(
+        db.execute(
+            select(model).where(model.__table__.c.trade_date == trade_date)
+        )
+        .scalars()
+        .all()
+    )
+    existing = {
+        tuple(getattr(row, column) for column in conflict_columns): row
+        for row in existing_rows
+    }
+    incoming = {
+        tuple(row.get(column) for column in conflict_columns): row for row in rows
+    }
+    changed = existing.keys() != incoming.keys()
+    if not changed:
+        for key, incoming_row in incoming.items():
+            existing_row = existing[key]
+            if any(
+                _changed(getattr(existing_row, column), incoming_row.get(column))
+                for column in compare_columns
+            ):
+                changed = True
+                break
+
+    for key in existing.keys() - incoming.keys():
+        db.delete(existing[key])
+    return {trade_date} if changed else set()
+
+
 def record_dirty_range(
     db: Session,
     *,
@@ -160,13 +200,19 @@ def mark_dirty_ranges_failed(
 def recover_stale_processing_ranges(
     db: Session,
     *,
-    stale_hours: float,
+    stale_minutes: float | None = None,
+    stale_hours: float | None = None,
     now: datetime | None = None,
 ) -> int:
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
         current = current.replace(tzinfo=UTC)
-    cutoff = current - timedelta(hours=stale_hours)
+    timeout_minutes = (
+        float(stale_minutes)
+        if stale_minutes is not None
+        else float(stale_hours or 0) * 60
+    )
+    cutoff = current - timedelta(minutes=timeout_minutes)
     rows = list(
         db.execute(
             select(DataDirtyRange).where(

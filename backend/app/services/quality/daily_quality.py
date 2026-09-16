@@ -21,6 +21,7 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.upsert import upsert_rows
+from app.services.analysis_identity import TREND_CALC_VERSION
 from app.services.calc_metadata import config_hash
 from app.services.universe import is_stock_active_on
 
@@ -82,15 +83,26 @@ class DataQualityError(RuntimeError):
     pass
 
 
-def expected_stock_codes(db: Session, trade_date: date) -> set[str]:
+def expected_stock_daily_codes(db: Session, trade_date: date) -> set[str]:
     rows = db.execute(
         select(StockBasic.ts_code, StockBasic.list_date, StockBasic.delist_date)
     ).all()
-    return {
+    active_codes = {
         row.ts_code
         for row in rows
         if is_stock_active_on(row.list_date, row.delist_date, trade_date)
     }
+    suspended_codes = set(
+        db.execute(
+            select(StockSuspendDaily.ts_code).where(
+                StockSuspendDaily.trade_date == trade_date,
+                StockSuspendDaily.suspend_type == "S",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return active_codes - suspended_codes
 
 
 def check_daily_coverage(
@@ -102,8 +114,6 @@ def check_daily_coverage(
     error_coverage_rate: float = 0.95,
     dataset: str = "stock_daily",
 ) -> CoverageResult:
-    # Current expected universe is listed and not delisted stocks only. Suspended
-    # stocks are not excluded until Milestone 9 adds suspension data.
     if not expected_codes:
         return CoverageResult(
             trade_date=trade_date,
@@ -235,6 +245,8 @@ def record_cross_table_quality(
             StockStateDaily.trade_date,
             trade_date,
             StockStateDaily.algo_version == algo_version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == hash_value,
         ),
         "sector_factor_daily": _count_date(
             db,
@@ -253,7 +265,7 @@ def record_cross_table_quality(
             MarketDaily.config_hash == hash_value,
         ),
     }
-    expected = expected_stock_codes(db, trade_date) - _suspended_codes(db, trade_date)
+    expected = expected_stock_daily_codes(db, trade_date)
     results = {}
     results["stock_daily_vs_expected"] = _persist_simple(
         db,
@@ -456,19 +468,6 @@ def _count_date(
             .select_from(model)
             .where(column == trade_date, *criteria)
         ).scalar_one()
-    )
-
-
-def _suspended_codes(db: Session, trade_date: date) -> set[str]:
-    return set(
-        db.execute(
-            select(StockSuspendDaily.ts_code).where(
-                StockSuspendDaily.trade_date == trade_date,
-                StockSuspendDaily.suspend_type == "S",
-            )
-        )
-        .scalars()
-        .all()
     )
 
 

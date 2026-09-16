@@ -9,6 +9,8 @@ from app.api.v1.common import envelope, iso
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.market_data import SignalForwardEval, StrategySignal
+from app.services.analysis_identity import SIGNAL_CALC_VERSION
+from app.services.calc_metadata import config_hash
 
 router = APIRouter()
 
@@ -159,11 +161,14 @@ def _read_eval_rows(
     entry_basis: str,
     executable_only: bool,
 ) -> list[dict[str, Any]]:
+    hash_value = config_hash(get_settings().strategy)
     filters = [
         SignalForwardEval.signal_type == signal_type,
         SignalForwardEval.algo_version == algo_version,
         SignalForwardEval.eval_version == eval_version,
         SignalForwardEval.entry_basis == entry_basis,
+        StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+        StrategySignal.config_hash == hash_value,
     ]
     if executable_only:
         filters.append(SignalForwardEval.entry_executable.is_(True))

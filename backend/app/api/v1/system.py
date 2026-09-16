@@ -22,6 +22,7 @@ from app.models.market_data import (
     StrategySignal,
     TradeCalendar,
 )
+from app.services.analysis_identity import SIGNAL_CALC_VERSION, TREND_CALC_VERSION
 from app.services.calc_metadata import config_hash
 
 router = APIRouter()
@@ -74,13 +75,17 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
             "latest_state_date": _latest_date(
                 db,
                 select(func.max(StockStateDaily.trade_date)).where(
-                    StockStateDaily.algo_version == version
+                    StockStateDaily.algo_version == version,
+                    StockStateDaily.calc_version == TREND_CALC_VERSION,
+                    StockStateDaily.config_hash == hash_value,
                 ),
             ),
             "latest_signal_date": _latest_date(
                 db,
                 select(func.max(StrategySignal.trade_date)).where(
-                    StrategySignal.algo_version == version
+                    StrategySignal.algo_version == version,
+                    StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+                    StrategySignal.config_hash == hash_value,
                 ),
             ),
             "latest_signal_eval_date": _latest_date(
@@ -163,6 +168,8 @@ def data_coverage(
         coverage_start,
         coverage_end,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
     )
     signal_counts = _counts_by_date(
         db,
@@ -170,6 +177,8 @@ def data_coverage(
         coverage_start,
         coverage_end,
         StrategySignal.algo_version == version,
+        StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+        StrategySignal.config_hash == hash_value,
     )
     signal_eval_counts = _counts_by_date(
         db,
@@ -283,6 +292,8 @@ def data_calendar(
         start,
         end,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
     )
     signal_counts = _counts_by_date(
         db,
@@ -290,6 +301,8 @@ def data_calendar(
         start,
         end,
         StrategySignal.algo_version == version,
+        StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+        StrategySignal.config_hash == hash_value,
     )
     signal_eval_counts = _counts_by_date(
         db,

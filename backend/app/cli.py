@@ -6,19 +6,14 @@ import typer
 from app.core.config import ROOT_DIR, get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging
-from app.jobs.backfill_job import BackfillJob
-from app.jobs.basic_info_job import BasicInfoJob
-from app.jobs.daily_job import DailyJob
 from app.jobs.scheduler import run_scheduler
-from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
 from app.services.job_guard import (
     ActiveIngestionJobError,
     create_queued_ingestion_job,
-    reject_if_active_ingestion_job,
 )
-from app.services.job_worker import run_validate_data_job, run_worker
+from app.services.job_worker import run_worker
 from app.services.market import MarketService
 from app.services.provider_smoke import run_provider_smoke_test
 from app.services.research import SignalEvaluationService
@@ -26,10 +21,6 @@ from app.services.sector import SectorService
 from app.services.trend import TrendService
 
 cli = typer.Typer(no_args_is_help=True)
-
-
-def _provider(db):
-    return LoggingMarketDataProvider(db, TushareProvider())
 
 
 def _parse_date(value: str, name: str) -> date:
@@ -41,14 +32,6 @@ def _parse_date(value: str, name: str) -> date:
 
 def _today() -> date:
     return datetime.now(ZoneInfo(get_settings().app_timezone)).date()
-
-
-def _guard_cli_task(db) -> None:
-    try:
-        reject_if_active_ingestion_job(db)
-    except ActiveIngestionJobError as exc:
-        typer.echo(str(exc))
-        raise typer.Exit(code=1) from exc
 
 
 def _queue_cli_job(db, job_type, target_trade_date, metadata):
@@ -138,7 +121,7 @@ def daily(trade_date: str | None = typer.Option(None, "--trade-date")) -> None:
     target = _parse_date(trade_date, "trade_date") if trade_date else _today()
     with SessionLocal() as db:
         job = _queue_cli_job(db, "daily", target, {"trade_date": target.isoformat()})
-        DailyJob(db, _provider(db)).run(target, job=job)
+    typer.echo(f"queued job_id={job.id}; run worker to execute")
 
 
 @cli.command("sync-basic")
@@ -146,7 +129,7 @@ def sync_basic() -> None:
     configure_logging()
     with SessionLocal() as db:
         job = _queue_cli_job(db, "sync_basic", None, {"stage": "queued"})
-        BasicInfoJob(db, _provider(db)).run(job=job, source="cli")
+    typer.echo(f"queued job_id={job.id}; run worker to execute")
 
 
 @cli.command()
@@ -161,7 +144,7 @@ def backfill(start: str = typer.Option(...), end: str = typer.Option(...)) -> No
             end_date,
             {"start": start_date.isoformat(), "end": end_date.isoformat()},
         )
-        BackfillJob(db, _provider(db)).run(start_date, end_date, job=job)
+    typer.echo(f"queued job_id={job.id}; run worker to execute")
 
 
 @cli.command("validate-data")
@@ -177,16 +160,7 @@ def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) 
             "progress_pct": 0,
         }
         job = _queue_cli_job(db, "validate_data", end_date, metadata)
-        try:
-            run_validate_data_job(db, job, {"source": "cli", **metadata})
-        except Exception:
-            db.rollback()
-            raise
-    result = job.job_metadata
-    typer.echo(f"total_days={result.get('total_days', 0)}")
-    typer.echo(f"pass_days={result.get('pass_days', 0)}")
-    typer.echo(f"warning_days={result.get('warning_days', 0)}")
-    typer.echo(f"error_days={result.get('error_days', 0)}")
+    typer.echo(f"queued job_id={job.id}; run worker to execute")
 
 
 @cli.command("recalc-factors")

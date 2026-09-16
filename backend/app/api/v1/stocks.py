@@ -18,6 +18,12 @@ from app.models.market_data import (
     StrategySignal,
 )
 from app.providers.tushare_provider import TushareProvider
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    SIGNAL_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
+from app.services.calc_metadata import config_hash
 from app.services.realtime_kline import load_realtime_kline
 
 router = APIRouter()
@@ -132,10 +138,13 @@ def overview(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
+    hash_value = config_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
     )
     stock = db.get(StockBasic, ts_code)
     if not stock:
@@ -146,11 +155,23 @@ def overview(
     daily = None
     signals: list[StrategySignal] = []
     if target:
-        state = db.get(
-            StockStateDaily,
-            {"trade_date": target, "ts_code": ts_code, "algo_version": version},
-        )
-        factor = db.get(StockFactorDaily, {"trade_date": target, "ts_code": ts_code})
+        state = db.execute(
+            select(StockStateDaily).where(
+                StockStateDaily.trade_date == target,
+                StockStateDaily.ts_code == ts_code,
+                StockStateDaily.algo_version == version,
+                StockStateDaily.calc_version == TREND_CALC_VERSION,
+                StockStateDaily.config_hash == hash_value,
+            )
+        ).scalar_one_or_none()
+        factor = db.execute(
+            select(StockFactorDaily).where(
+                StockFactorDaily.trade_date == target,
+                StockFactorDaily.ts_code == ts_code,
+                StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+                StockFactorDaily.config_hash == hash_value,
+            )
+        ).scalar_one_or_none()
         daily = db.get(StockDaily, {"trade_date": target, "ts_code": ts_code})
         signals = (
             db.execute(
@@ -159,6 +180,8 @@ def overview(
                     StrategySignal.trade_date == target,
                     StrategySignal.ts_code == ts_code,
                     StrategySignal.algo_version == version,
+                    StrategySignal.calc_version == SIGNAL_CALC_VERSION,
+                    StrategySignal.config_hash == hash_value,
                 )
                 .order_by(StrategySignal.signal_type)
             )
@@ -191,6 +214,7 @@ def history(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
+    hash_value = config_hash(settings.strategy)
     if not db.get(StockBasic, ts_code):
         raise HTTPException(status_code=404, detail="stock not found")
 
@@ -200,6 +224,8 @@ def history(
         .where(
             StockStateDaily.ts_code == ts_code,
             StockStateDaily.algo_version == version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == hash_value,
         )
         .order_by(desc(StockStateDaily.trade_date))
         .limit(row_limit)
@@ -224,10 +250,15 @@ def factors(
     if not db.get(StockBasic, ts_code):
         raise HTTPException(status_code=404, detail="stock not found")
 
+    hash_value = config_hash(get_settings().strategy)
     row_limit = clamp_limit(limit, default=240, maximum=1000)
     stmt = (
         select(StockFactorDaily)
-        .where(StockFactorDaily.ts_code == ts_code)
+        .where(
+            StockFactorDaily.ts_code == ts_code,
+            StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+            StockFactorDaily.config_hash == hash_value,
+        )
         .order_by(desc(StockFactorDaily.trade_date))
         .limit(row_limit)
     )
@@ -251,10 +282,13 @@ def _state_pool(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
+    hash_value = config_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
     )
     if not target:
         return envelope([], {"trade_date": None, "limit": limit, "offset": offset, "total": 0})
@@ -264,6 +298,8 @@ def _state_pool(
     filters = [
         StockStateDaily.trade_date == target,
         StockStateDaily.algo_version == version,
+        StockStateDaily.calc_version == TREND_CALC_VERSION,
+        StockStateDaily.config_hash == hash_value,
         StockStateDaily.state.in_(states),
     ]
     if new_only:

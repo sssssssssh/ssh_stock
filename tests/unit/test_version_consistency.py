@@ -41,8 +41,10 @@ def test_state_api_latest_dates_are_scoped_to_requested_algo_version(monkeypatch
     )
     dashboard_module.summary(algo_version="v-test", db=object())
 
-    assert len(captured) == 2
-    assert all("algo_version" in criterion for criterion in captured)
+    assert len(captured) == 6
+    assert sum("algo_version" in criterion for criterion in captured) == 2
+    assert sum("calc_version" in criterion for criterion in captured) == 2
+    assert sum("config_hash" in criterion for criterion in captured) == 2
 
 
 def test_cross_table_quality_counts_only_current_versions(monkeypatch) -> None:
@@ -64,10 +66,9 @@ def test_cross_table_quality_counts_only_current_versions(monkeypatch) -> None:
     monkeypatch.setattr(quality_module, "_count_date", fake_count)
     monkeypatch.setattr(
         quality_module,
-        "expected_stock_codes",
+        "expected_stock_daily_codes",
         lambda db, trade_date: {f"{index:06d}.SZ" for index in range(10)},
     )
-    monkeypatch.setattr(quality_module, "_suspended_codes", lambda db, trade_date: set())
     monkeypatch.setattr(quality_module, "upsert_rows", lambda *args, **kwargs: 1)
 
     record_cross_table_quality(object(), date(2026, 9, 15), strategy={"version": "test"})

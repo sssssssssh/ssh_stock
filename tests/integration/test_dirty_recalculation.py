@@ -79,6 +79,16 @@ class _SuccessfulTrendService:
 
 
 def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_recalculation_raw_prerequisites",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        recalculation_module,
+        "_factor_warmup_start",
+        lambda db, start: start,
+    )
     job_id = uuid4()
     job = SimpleNamespace(
         id=job_id,

@@ -101,7 +101,7 @@
 - backfill 遇到 `data_quality_daily(stock_daily)` 缺失的旧历史数据时，必须先用库内已有数据补做质量校验；只有 PASS/WARNING 才能跳过原始数据下载，ERROR 必须重新拉取。
 - backfill 跳过完整交易日时必须更新任务步骤为 `30 skip existing raw {date}`，并在 `job_metadata.skipped_raw_days`、`current_day_datasets`、`synced_dataset_count`、`skipped_dataset_count`、`error_dataset_count` 记录当前数据集状态。
 - 后端必须提供 `POST /api/v1/jobs/validate-data` 和 `python -m app.cli validate-data`，用于不访问 Tushare 的存量历史 Raw 质量补校验；任务元数据必须包含 `total_trade_days`、`completed_trade_days`、`pass_days`、`warning_days`、`error_days` 和 `progress_pct`。
-- stale `PROCESSING` dirty range 自动恢复暂未实现；后续如需要应按“超过 6 小时恢复 OPEN”的规则补充。
+- stale `PROCESSING` dirty range 超过 `dirty_processing_timeout_minutes` 后必须恢复为 `FAILED`，增加 `retry_count` 并保留错误信息。
 - `TushareProvider.get_stock_basic()` 如果核心状态 `L/D` 缺失，最终异常必须包含缺失状态和对应 Tushare 原始错误；不得只返回 `required statuses missing` 这类聚合错误。
 - Tushare 代理请求的 `requests` 网络异常必须自动重试；重试耗尽后再写入 FAILED。
 - `index_daily` 历史回填必须优先使用指数代码 + 日期区间批量拉取，避免对每个交易日重复请求同一指数。
@@ -109,7 +109,7 @@
 - `config/strategy.yaml` 的 `provider.tushare.safe_limits` 用于标记疑似截断的 Tushare 响应；达到安全行数时 Provider 日志应记录 WARNING。
 - `stock_daily` 的 expected 股票池必须按交易日使用 `active_on_date - suspended_on_date`；`adj_factor`、`daily_basic` 保持各自经实证确认的 expected 语义，不得机械照搬停牌扣除口径。
 - `validate-data` 必须调用 `check_raw_completeness()`，并用 `RawCompletenessResult.overall_status` 汇总 `pass_days/warning_days/error_days`，不得单独按 `stock_daily` 覆盖率统计。
-- `validate-data` API 进度必须包含当前七类 Raw 数据集状态；CLI 成功后必须显式 `commit()`，异常时必须 `rollback()`。
+- `validate-data` API 进度必须包含当前七类 Raw 数据集状态；CLI 只创建 `QUEUED` 任务，实际校验及事务提交由 Worker 完成。
 - `sync_daily()` 负责写入 `stock_daily` 首次采集阶段的 `duplicate_count/null_count`；`RawCompleteness` 和 `validate-data` 这类二次完整性校验不得覆盖已有的明细计数。
 - Raw 完整性必须只把有效字段计入 actual：`stock_adj_factor.adj_factor` 非空且大于 0；`index_daily.close/pre_close` 非空且大于 0；`stock_daily_basic` 只检查 `close/total_mv/circ_mv` 非空。
 - Raw 字段无效记录必须写入 `data_quality_daily.issue_codes.invalid_count/invalid_codes`，`invalid_codes` 最多保留 100 个。
@@ -120,7 +120,7 @@
 - `DailyJob` 的 RawCompleteness Gate 和跨表质量 Gate 必须先提交 `data_quality_daily` 证据，再把任务置为 FAILED；不得因为后续 rollback 丢失 ERROR 明细。
 - `run_recalculation()` 在趋势状态计算后、信号评估前必须执行范围 Cross Table Quality Gate；`start~end` 内任一交易日 `stock_daily_vs_expected`、`adj_vs_daily`、`basic_vs_daily`、`factor_vs_daily`、`state_vs_factor` 为 ERROR 时，必须先提交质量证据，再把 `recalculate` 标记 FAILED，且不得继续执行 Signal Evaluation。
 - API、Scheduler 和 CLI 数据任务入口必须共用 `app.services.job_guard`；创建新 `daily/sync_basic/backfill/recalculate/validate_data/catchup` 前必须恢复 stale 任务并拒绝活跃任务。
-- stale `QUEUED/RUNNING` 数据任务默认超过 `app.scheduler.stale_job_hours` 后自动标记 `FAILED`，错误信息固定说明为进程重启后的 stale recovery。
+- stale recovery 必须区分 `queued_stale_hours`、`running_heartbeat_timeout_minutes` 和 `dirty_processing_timeout_minutes`；Worker 约每 60 秒检查一次，不得只在启动时恢复。
 - Scheduler 必须按 `app.timezone` 计算当前日期，不得直接使用系统默认 `date.today()`；`daily_cron` 的工作日字段必须正确传给 APScheduler。
 - Scheduler 触发时执行 Catch-up，而不是只跑当天；Raw/Analysis 必须使用最近 `max_catchup_trade_days` 个 open_date 作为同一候选窗口逐日分类，先判断 Raw，只有 Raw 完整才判断 Analysis，不得把窗口外未检查 Raw 的历史日期误归为 analysis-only。
 - Analysis Complete 必须同时满足当前 `config_hash`、`factor_v1/market_v1/sector_v1`、当前 `algo_version`，并且 `factor_vs_daily` 与 `state_vs_factor` 覆盖率达到现有跨表质量 PASS 阈值；不得只用 `MAX(stock_state_daily.trade_date)` 或单表存在 1 行判断完整。
@@ -142,13 +142,18 @@
 - 因子、市场和行业当前结果的统计口径固定为各自 `factor_v1/market_v1/sector_v1 + current config_hash`；状态和信号按 current `algo_version`。API meta 必须返回当前 `algo_version/config_hash`。
 - `stock_state_daily` 和 `strategy_signal` 必须写入 `calc_version/config_hash/calc_run_id/calculated_at`；同一次趋势计算的状态与信号共用一个 `calc_run_id`。
 - 状态机逻辑或信号定义变化必须 bump `algo_version`；普通参数变化通过 `config_hash` 区分，不得混用旧配置结果。
-- API 长任务入口只允许原子创建 `JobRun(status=QUEUED)` 并立即返回，不得使用 FastAPI BackgroundTasks 执行；`daily/sync_basic/backfill/recalculate/validate_data` 由 DB Worker 领取。
+- API、Scheduler 与 `daily/sync-basic/backfill/validate-data` CLI 只允许原子创建 `JobRun(status=QUEUED)` 并立即返回；`daily/sync_basic/backfill/recalculate/validate_data/catchup` 只能由 DB Worker 领取。CatchUp 内同步执行的 Recalculate 子任务必须直接以 `RUNNING` 创建并标记 `execution_owner=catchup`。
 - DB Worker 必须使用 `SELECT ... FOR UPDATE SKIP LOCKED` 领取任务，并写入 `worker_id/heartbeat_at`；每次 `update_job` 的 RUNNING 进度更新同时刷新 heartbeat。
 - “检查 active -> 创建任务”必须在 PostgreSQL transaction advisory lock 内完成，API、Scheduler 和 CLI 共用 `create_queued_ingestion_job()`；禁止引入 Redis/Celery/Kafka。
-- Dirty Range 进入 PROCESSING 时必须写 `processing_started_at`；Worker 启动时把超时 PROCESSING 恢复为 FAILED，增加 retry_count 并记录 `stale processing recovered`。
-- Signal 后验默认使用 `eval_v2 + NEXT_OPEN + MARKET_TRADING_DAY`；同时支持 SIGNAL_CLOSE/NEXT_CLOSE，不得按个股下一条可用行情偷偷顺延 horizon。
+- Dirty Range 进入 PROCESSING 时必须写 `processing_started_at`；Worker 周期性把超时 PROCESSING 恢复为 FAILED，增加 retry_count 并记录 `stale processing recovered`。
+- Signal 后验默认使用 `eval_v2 + NEXT_OPEN + MARKET_TRADING_DAY`；NEXT_OPEN 的 Day 0 是入场日，`retN` 使用入场后第 N 个市场交易日收盘价，同时支持 SIGNAL_CLOSE/NEXT_CLOSE，不得按个股下一条可用行情偷偷顺延 horizon。
 - eval_v2 必须根据 PIT 停牌和涨跌停判断 entry/exit executable；不能成交时 `entry_price/return` 保持 NULL 并记录原因。MFE/MAE 使用与入场价一致复权口径的未来 high/low。
 - `signal_forward_eval` 以 `signal_id + eval_version + entry_basis` 唯一，允许 eval_v1 与 eval_v2 并存；研究 API 必须支持 eval_version、entry_basis、executable_only 筛选。
+- `stock_st_daily`、`stock_suspend_daily`、`stock_limit_daily` 必须按交易日权威快照对账；Provider 成功返回 0 行表示无事件，必须删除该日旧行、写 PASS 质量证据，并在确有变化时创建 Dirty Range。
+- `expected_stock_daily_codes()` 是 `sync_daily`、RawCompleteness、Cross Table、validate-data、Backfill、CatchUp 唯一日线 expected universe 定义；ST/停牌必须先于日线同步。
+- `run_recalculation()` 必须在 TradeStatus 前让请求区间及预热区间逐开市日通过七类 Raw prerequisites；TradeStatus 与因子输出范围向前扩展最多 250 个开市日作为 current-config warmup，后续衍生表仍只替换请求范围。
+- 当前 State 必须同时匹配 current algo、`trend_v1`、current config hash；当前 Signal 必须同时匹配 current algo、`signal_v1`、current config hash。Market/Sector/Trend 服务不得读取 old-config 上游结果。
+- SW `sector_member` 只在完整 Provider 快照成功并通过 PIT 校验后执行 stale natural-key 删除；任何分片失败、空快照或重复键都禁止删除。
 
 ## 安全规则
 

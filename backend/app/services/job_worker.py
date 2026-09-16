@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.jobs.backfill_job import BackfillJob
 from app.jobs.basic_info_job import BasicInfoJob
+from app.jobs.catchup_job import CatchUpJob
 from app.jobs.daily_job import DailyJob
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
@@ -27,7 +28,14 @@ from app.services.quality.history_quality import (
 )
 from app.services.recalculation import run_recalculation
 
-WORKER_JOB_TYPES = ("daily", "sync_basic", "backfill", "recalculate", "validate_data")
+WORKER_JOB_TYPES = (
+    "daily",
+    "sync_basic",
+    "backfill",
+    "recalculate",
+    "validate_data",
+    "catchup",
+)
 
 
 def worker_identity() -> str:
@@ -93,6 +101,23 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             )
         elif job.job_type == "validate_data":
             run_validate_data_job(db, job, metadata)
+        elif job.job_type == "catchup":
+            provider = _provider(db)
+            target = job.target_trade_date or _metadata_date(metadata, "trade_date")
+            plan = CatchUpJob(db, provider).run(target)
+            update_job(
+                db,
+                job,
+                status="SUCCESS",
+                step="catchup complete",
+                metadata={
+                    **metadata,
+                    "raw_required_days": len(plan.raw_required_dates),
+                    "analysis_required_days": len(plan.analysis_required_dates),
+                    "refresh_days": len(plan.refresh_dates),
+                    "skipped": plan.skipped,
+                },
+            )
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -111,19 +136,27 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
 
 def run_worker() -> None:
     poll_seconds = float(scheduler_setting("worker_poll_seconds", 2))
-    stale_hours = float(scheduler_setting("stale_job_hours", 24))
+    recovery_interval = float(scheduler_setting("stale_recovery_interval_seconds", 60))
     worker_id = worker_identity()
-    with SessionLocal() as db:
-        recovered_jobs = recover_stale_ingestion_jobs(db, stale_job_hours=stale_hours)
-        recovered_dirty = recover_stale_processing_ranges(db, stale_hours=stale_hours)
-        logger.info(
-            "worker startup id={} recovered_jobs={} recovered_dirty={}",
-            worker_id,
-            recovered_jobs,
-            recovered_dirty,
-        )
+    last_recovery = 0.0
     while True:
         with SessionLocal() as db:
+            now = time.monotonic()
+            if now - last_recovery >= recovery_interval:
+                recovered_jobs = recover_stale_ingestion_jobs(db)
+                recovered_dirty = recover_stale_processing_ranges(
+                    db,
+                    stale_minutes=float(
+                        scheduler_setting("dirty_processing_timeout_minutes", 30)
+                    ),
+                )
+                logger.info(
+                    "worker recovery id={} recovered_jobs={} recovered_dirty={}",
+                    worker_id,
+                    recovered_jobs,
+                    recovered_dirty,
+                )
+                last_recovery = now
             job_id = claim_next_job(db, worker_id)
         if job_id is None:
             time.sleep(poll_seconds)

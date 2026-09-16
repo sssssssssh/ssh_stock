@@ -58,7 +58,7 @@ def test_sync_daily_initial_quality_write_records_detail_counts(monkeypatch) -> 
     monkeypatch.setattr(ingestion_module, "check_raw_daily", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         ingestion_module,
-        "expected_stock_codes",
+        "expected_stock_daily_codes",
         lambda *args, **kwargs: {"000001.SZ"},
     )
     monkeypatch.setattr(
@@ -89,7 +89,7 @@ def test_sync_daily_persists_duplicate_evidence_before_failing(monkeypatch) -> N
     )
     monkeypatch.setattr(
         ingestion_module,
-        "expected_stock_codes",
+        "expected_stock_daily_codes",
         lambda *args, **kwargs: {"000001.SZ"},
     )
     monkeypatch.setattr(

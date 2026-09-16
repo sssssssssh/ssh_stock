@@ -21,12 +21,12 @@ from app.services.quality.raw_completeness import (
 )
 
 RAW_DATASET_STEPS = {
+    "stock_st": ("20 sync stock_st", "sync_stock_st"),
+    "suspend_d": ("25 sync suspend_d", "sync_suspend_daily"),
     "stock_daily": ("30 sync daily", "sync_daily"),
     "adj_factor": ("40 sync adj_factor", "sync_adj_factor"),
     "daily_basic": ("50 sync daily_basic", "sync_daily_basic"),
     "index_daily": ("60 sync index_daily", "sync_index_daily"),
-    "stock_st": ("62 sync stock_st", "sync_stock_st"),
-    "suspend_d": ("64 sync suspend_d", "sync_suspend_daily"),
     "stk_limit": ("66 sync stk_limit", "sync_stock_limit"),
 }
 
