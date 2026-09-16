@@ -4,11 +4,12 @@ from datetime import date, timedelta
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import (
+    DataQualityDaily,
     IndexDaily,
     Sector,
     SectorMember,
@@ -49,7 +50,10 @@ from app.services.quality.daily_quality import (
     persist_coverage_result,
 )
 from app.services.quality.raw_checks import check_raw_daily
-from app.services.quality.raw_completeness import validate_trade_calendar_rows
+from app.services.quality.raw_completeness import (
+    ensure_stock_basic_ready,
+    validate_trade_calendar_rows,
+)
 
 DAILY_VALUE_COLUMNS = [
     "open",
@@ -133,6 +137,7 @@ class IngestionService:
             rows = normalize_stock_daily(df)
             expected_codes = expected_stock_daily_codes(self.db, trade_date)
             actual_codes = {row["ts_code"] for row in rows}
+            authoritative_extra_codes = sorted(actual_codes - expected_codes)
             quality = check_daily_coverage(
                 trade_date=trade_date,
                 actual_codes=actual_codes,
@@ -163,7 +168,11 @@ class IngestionService:
                 duplicate_count=duplicate_count,
                 null_count=null_count,
                 job_id=job_id,
-                extra_issue_codes={"raw_issues": [issue.code for issue in fatal]},
+                extra_issue_codes={
+                    "raw_issues": [issue.code for issue in fatal],
+                    "authoritative_extra_count": len(authoritative_extra_codes),
+                    "authoritative_extra_codes": authoritative_extra_codes[:100],
+                },
             )
             if fatal:
                 self.db.commit()
@@ -177,14 +186,36 @@ class IngestionService:
                     f"actual={quality.actual_rows} expected={quality.expected_rows} "
                     f"coverage={quality.coverage_rate:.4f}"
                 )
+            _validate_stock_daily_reconcile_prerequisites(
+                self.db,
+                trade_date,
+                expected_codes,
+            )
+            existing_codes = set(
+                self.db.execute(
+                    select(StockDaily.ts_code).where(StockDaily.trade_date == trade_date)
+                )
+                .scalars()
+                .all()
+            )
+            stale_codes = existing_codes - expected_codes
+            write_rows = [row for row in rows if row["ts_code"] in expected_codes]
             dirty_dates = changed_trade_dates(
                 self.db,
                 StockDaily,
-                rows,
+                write_rows,
                 conflict_columns=["trade_date", "ts_code"],
                 compare_columns=DAILY_VALUE_COLUMNS,
                 preserve_existing_on_null_columns=DAILY_VALUE_COLUMNS,
             )
+            if stale_codes:
+                self.db.execute(
+                    delete(StockDaily).where(
+                        StockDaily.trade_date == trade_date,
+                        StockDaily.ts_code.in_(stale_codes),
+                    )
+                )
+                dirty_dates.add(trade_date)
             record_dirty_range(
                 self.db,
                 dataset="stock_daily",
@@ -195,12 +226,18 @@ class IngestionService:
             count = upsert_rows(
                 self.db,
                 StockDaily,
-                rows,
+                write_rows,
                 ["trade_date", "ts_code"],
                 preserve_existing_on_null_columns=DAILY_VALUE_COLUMNS,
             )
             self.db.commit()
-            logger.info("synced stock_daily trade_date={} rows={}", trade_date, count)
+            logger.info(
+                "synced stock_daily trade_date={} rows={} stale_deleted={} excluded={}",
+                trade_date,
+                count,
+                len(stale_codes),
+                len(authoritative_extra_codes),
+            )
             return count
         except Exception:
             self.db.rollback()
@@ -592,7 +629,10 @@ class IngestionService:
                 self.db.execute(
                     select(SectorMember)
                     .join(Sector, SectorMember.sector_id == Sector.sector_id)
-                    .where(Sector.source == "SW")
+                    .where(
+                        Sector.source == "SW",
+                        Sector.is_active.is_(True),
+                    )
                 )
                 .scalars()
                 .all()
@@ -613,6 +653,30 @@ class IngestionService:
         except Exception:
             self.db.rollback()
             raise
+
+
+def _validate_stock_daily_reconcile_prerequisites(
+    db: Session,
+    trade_date: date,
+    expected_codes: set[str],
+) -> None:
+    ensure_stock_basic_ready(db)
+    if not expected_codes:
+        raise ValueError(
+            f"stock_daily authoritative universe is empty for {trade_date}; "
+            "destructive reconciliation refused"
+        )
+    suspend_status = db.execute(
+        select(DataQualityDaily.status).where(
+            DataQualityDaily.trade_date == trade_date,
+            DataQualityDaily.dataset == "suspend_d",
+        )
+    ).scalar_one_or_none()
+    if suspend_status != "PASS":
+        raise ValueError(
+            f"suspend_d successful source sync evidence missing for {trade_date}; "
+            "stock_daily destructive reconciliation refused"
+        )
 
 
 def _quality_threshold(strategy: dict, severity: str) -> float:

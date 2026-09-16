@@ -803,7 +803,7 @@ Scheduler 按 `config/app.yaml` 的 `app.scheduler.daily_cron` 运行，当前�
 
 当前自动运行规则：
 
-- Worker 约每 60 秒恢复 stale 任务：QUEUED 默认 24 小时、RUNNING heartbeat 默认 15 分钟、Dirty PROCESSING 默认 30 分钟。
+- Worker 每 45 秒使用独立数据库 Session 刷新自己领取任务的 heartbeat，并约每 60 秒恢复 stale 任务：QUEUED 默认 24 小时、RUNNING heartbeat 默认 15 分钟、Dirty PROCESSING 默认 30 分钟。业务任务即使长时间不调用 `update_job()` 也不会因此失活。
 - API、Scheduler 和 CLI 的 `daily` / `sync-basic` / `backfill` / `validate-data` 都只创建 QUEUED 任务；必须保持 `python -m app.cli worker` 运行，由 Worker 唯一领取执行。
 - Scheduler 遇到已有活跃任务时只记录 warning 并跳过本次触发，不会把 worker 进程打崩。
 - Scheduler 不再只跑当天，而是执行 Catch-up：只在最近 `max_catchup_trade_days=20` 个交易日候选窗口内逐日判断 Raw 和 Analysis，窗口外历史缺口需要手动 `validate-data`、`backfill`、`recalculate`。
@@ -828,6 +828,7 @@ app:
     dirty_max_retry_count: 3
     queued_stale_hours: 24
     running_heartbeat_timeout_minutes: 15
+    worker_heartbeat_interval_seconds: 45
     dirty_processing_timeout_minutes: 30
     stale_recovery_interval_seconds: 60
 ```
@@ -904,11 +905,11 @@ cd backend
 python -m app.cli worker
 ```
 
-- Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 领取任务，写入 `worker_id/heartbeat_at`；运行期间周期性恢复 heartbeat 超时的 RUNNING 任务和超时的 Dirty PROCESSING。
+- Worker 使用 PostgreSQL `FOR UPDATE SKIP LOCKED` 领取任务，写入 `worker_id/heartbeat_at`；独立 heartbeat 线程使用单独数据库 Session，并按 RUNNING 状态及 worker ownership 每 45 秒刷新，任务成功或失败后立即停止。
 - API、CLI 和 Scheduler 使用同一个 PostgreSQL advisory lock 原子创建任务，避免并发请求同时通过 active 检查。分离的 queue/heartbeat/dirty 超时配置位于 `config/app.yaml`。
 - Scheduler 仍使用 `python -m app.cli scheduler`，保留 Raw Gap、Analysis Gap、Historical Repair、Recent Refresh、Dirty Repair；它和 Worker 是两个独立进程。
 
-## Signal 研究评价 v2（Phase 6，2026-09-15）
+## Signal 研究评价 v3（Phase 6，2026-09-16）
 
 - `evaluate-signals` 默认按下一交易日开盘入场，并以入场日为 Day 0，使用入场后第 5/10/20/60 个市场交易日收盘价；个股停牌不会把目标日顺延到下一条行情。
 - 支持 `SIGNAL_CLOSE`、`NEXT_OPEN`、`NEXT_CLOSE`；停牌、涨停无法买入或跌停无法卖出时记录不可执行原因，价格和对应收益为 NULL。
@@ -916,10 +917,10 @@ python -m app.cli worker
 
 ```powershell
 cd backend
-python -m app.cli evaluate-signals --eval-version eval_v2 --entry-basis NEXT_OPEN
+python -m app.cli evaluate-signals --eval-version eval_v3 --entry-basis NEXT_OPEN
 ```
 
-旧 eval_v1 记录与 eval_v2 可同时存在；迁移后需要重新执行评价命令生成 v2 数据。
+`eval_v1` 是旧 STOCK_ROW 版本，`eval_v2` 是历史 signal-relative MARKET_TRADING_DAY 版本，`eval_v3` 是当前 entry-relative 版本。三类历史记录可通过现有唯一键并存；当前算法不再生成 `eval_v2`，升级后执行评价命令生成 `eval_v3` 数据。
 ## Docker 一键部署（Phase 7）
 
 容器模式不要求宿主机安装 Python、Conda、Node.js 或 PostgreSQL，只需要 Docker Engine 和 Docker Compose。先复制并填写环境变量：
@@ -977,11 +978,11 @@ curl http://127.0.0.1:8000/health
 ## 基础平台一致性收尾（2026-09-16）
 
 - `stock_st_daily`、`stock_suspend_daily`、`stock_limit_daily` 按交易日执行 authoritative snapshot 对账；接口成功返回 0 行代表当天无事件，会删除该日旧行并写入 PASS 质量证据。
-- `stock_daily` 唯一 expected universe 为当日 PIT 有效股票减去 `suspend_type=S` 的停牌股票；Daily、Backfill、CatchUp 都先同步 ST/停牌，再同步日线。
-- `recalculate` 在 TradeStatus 之前校验请求区间及因子预热区间内七类 Raw；缺少 ST、停牌或涨跌停证据时直接失败并提示先 backfill。TradeStatus 与因子会自动向前扩展最多 250 个开市日作为当前配置预热区间。
+- `stock_daily` 唯一 expected universe 为当日 PIT 有效股票减去 `suspend_type=S` 的停牌股票；Daily、Backfill、CatchUp 都先同步 ST/停牌，再同步日线。日线同步只清理已确定不在该 universe 的旧行，Provider 暂时漏回的 expected 股票不会被删除，停牌 extra 也不会重新写回；清理前必须有完整 `stock_basic`、当日停牌 PASS 证据和非空 universe。
+- `recalculate` 在 TradeStatus 之前校验请求区间及预热区间内七类 Raw；缺少 ST、停牌或涨跌停证据时直接失败并提示先 backfill。TradeStatus、Factor、Market、Sector、Trend 会统一向前扩展最多 250 个开市日建立 current-config 状态链，Cross Table Gate 与 Signal Evaluation 仍只处理用户请求区间。
 - 当前分析结果统一按固定 `calc_version + current config_hash` 查询；状态和信号还必须匹配当前 `algo_version`。旧配置结果不会再被总览、股票池、系统日历或 CatchUp 当成当前完成结果。
 - `daily`、`sync-basic`、`backfill`、`validate-data` CLI 现在只入队并输出 `job_id`，不会在 CLI 进程同步执行。必须另开终端运行 `python -m app.cli worker`。
-- SW 行业成员在完整 Provider 快照成功后按 `(sector_id, ts_code, valid_from)` 删除已消失旧成员；任一 Provider 分片失败时整次事务回滚，不执行删除。
+- SW 行业成员在完整 Provider 快照成功后，仅对 active 行业按 `(sector_id, ts_code, valid_from)` 删除已消失旧成员；inactive 行业的历史成员保留。任一 Provider 分片失败时整次事务回滚，不执行删除。
 
 历史数据库升级必须按以下顺序执行。每个 CLI 命令返回后，需要等待 Worker 中对应任务完成再进入下一步：
 

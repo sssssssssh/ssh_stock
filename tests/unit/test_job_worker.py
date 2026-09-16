@@ -6,7 +6,7 @@ from uuid import uuid4
 import app.api.v1.jobs as jobs_api
 import app.services.job_guard as guard_module
 import app.services.job_worker as worker_module
-from app.repositories.job_run import update_job
+from app.repositories.job_run import touch_job_heartbeat, update_job
 from app.services.dirty import recover_stale_processing_ranges
 from app.services.job_worker import claim_next_job, execute_claimed_job
 from sqlalchemy.dialects import postgresql
@@ -205,3 +205,95 @@ def test_update_job_refreshes_running_heartbeat() -> None:
     update_job(FakeDb(), job, status="RUNNING", step="working")
 
     assert job.heartbeat_at is not None
+
+
+def test_touch_job_heartbeat_requires_running_owner() -> None:
+    class FakeDb:
+        def __init__(self):
+            self.statement = None
+            self.commits = 0
+
+        def execute(self, statement):
+            self.statement = statement
+            return SimpleNamespace(rowcount=0)
+
+        def commit(self):
+            self.commits += 1
+
+    db = FakeDb()
+    touched = touch_job_heartbeat(db, uuid4(), "wrong-worker")
+    sql = str(db.statement.compile(dialect=postgresql.dialect()))
+
+    assert touched is False
+    assert "job_run.status" in sql
+    assert "job_run.worker_id" in sql
+    assert db.commits == 1
+
+
+def test_worker_heartbeat_loop_uses_independent_sessions_and_stops(monkeypatch) -> None:
+    sessions = []
+    touches = []
+
+    class HeartbeatSession:
+        def __enter__(self):
+            sessions.append(self)
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    class StopEvent:
+        waits = 0
+
+        def wait(self, interval):
+            self.waits += 1
+            return self.waits > 2
+
+    monkeypatch.setattr(worker_module, "SessionLocal", HeartbeatSession)
+    monkeypatch.setattr(
+        worker_module,
+        "touch_job_heartbeat",
+        lambda db, job_id, worker_id: touches.append((db, job_id, worker_id)) or True,
+    )
+    job_id = uuid4()
+
+    worker_module._run_heartbeat_loop(
+        job_id,
+        "worker-a",
+        StopEvent(),
+        interval_seconds=0.01,
+    )
+
+    assert len(sessions) == 2
+    assert len(touches) == 2
+    assert all(call[1:] == (job_id, "worker-a") for call in touches)
+
+
+def test_worker_heartbeat_stops_when_job_is_terminal(monkeypatch) -> None:
+    class HeartbeatSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    class StopEvent:
+        def wait(self, interval):
+            return False
+
+    touches = []
+    monkeypatch.setattr(worker_module, "SessionLocal", HeartbeatSession)
+    monkeypatch.setattr(
+        worker_module,
+        "touch_job_heartbeat",
+        lambda *args: touches.append(args) or False,
+    )
+
+    worker_module._run_heartbeat_loop(
+        uuid4(),
+        "worker-a",
+        StopEvent(),
+        interval_seconds=0.01,
+    )
+
+    assert len(touches) == 1

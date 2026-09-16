@@ -19,6 +19,17 @@ class _BusinessDb:
     def rollback(self):
         self.rollbacks += 1
 
+    def execute(self, statement):
+        return _EmptyResult()
+
+
+class _EmptyResult:
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
 
 class _LogDb:
     def __init__(self, sink):
@@ -86,6 +97,11 @@ def test_provider_logging_uses_independent_transaction(monkeypatch) -> None:
     monkeypatch.setattr(
         ingestion_module,
         "persist_coverage_result",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        ingestion_module,
+        "_validate_stock_daily_reconcile_prerequisites",
         lambda *args, **kwargs: None,
     )
 

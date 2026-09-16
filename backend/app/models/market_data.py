@@ -484,7 +484,7 @@ class SignalForwardEval(Base):
     ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
     signal_type: Mapped[str] = mapped_column(String(32), nullable=False)
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
-    eval_version: Mapped[str] = mapped_column(String(16), nullable=False, default="eval_v2")
+    eval_version: Mapped[str] = mapped_column(String(16), nullable=False, default="eval_v3")
     entry_basis: Mapped[str] = mapped_column(String(16), nullable=False, default="NEXT_OPEN")
     horizon_basis: Mapped[str] = mapped_column(
         String(32), nullable=False, default="MARKET_TRADING_DAY"

@@ -174,3 +174,96 @@ def test_run_recalculation_cross_table_error_fails_and_skips_signals(monkeypatch
     assert job.status == "FAILED"
     assert job.job_metadata["cross_table_error_days"] == 1
     assert signal_calls == []
+
+
+def test_run_recalculation_warms_all_analysis_but_validates_requested_range(
+    monkeypatch,
+) -> None:
+    requested_start = date(2026, 9, 10)
+    warmup_start = date(2026, 8, 3)
+    end = date(2026, 9, 16)
+    calls = []
+
+    class ScalarService:
+        def __init__(self, db):
+            self.name = self.__class__.__name__
+
+        def recalc(self, start, finish, calc_run_id=None):
+            calls.append((self.name, start, finish, calc_run_id))
+            return 1
+
+    class FactorService(ScalarService):
+        pass
+
+    class MarketService(ScalarService):
+        pass
+
+    class SectorService(ScalarService):
+        pass
+
+    class TradeStatusService(ScalarService):
+        pass
+
+    class TrendService(ScalarService):
+        def recalc(self, start, finish, calc_run_id=None):
+            calls.append((self.name, start, finish, calc_run_id))
+            return {"states": 1, "signals": 0}
+
+    monkeypatch.setattr(
+        recalculation_module,
+        "_factor_warmup_start",
+        lambda db, start: warmup_start,
+    )
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_recalculation_raw_prerequisites",
+        lambda db, start, finish, **kwargs: calls.append(("raw", start, finish, None)),
+    )
+    monkeypatch.setattr(recalculation_module, "TradeStatusService", TradeStatusService)
+    monkeypatch.setattr(recalculation_module, "FactorService", FactorService)
+    monkeypatch.setattr(recalculation_module, "MarketService", MarketService)
+    monkeypatch.setattr(recalculation_module, "SectorService", SectorService)
+    monkeypatch.setattr(recalculation_module, "TrendService", TrendService)
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_cross_table_range",
+        lambda db, start, finish, **kwargs: calls.append(
+            ("quality", start, finish, kwargs["job_id"])
+        )
+        or SimpleNamespace(has_error=False, as_metadata=lambda: {}),
+    )
+
+    class SignalService:
+        def __init__(self, db):
+            pass
+
+        def evaluate(self, *, start, end):
+            calls.append(("signal", start, end, None))
+            return {"evaluated": 0}
+
+    monkeypatch.setattr(recalculation_module, "SignalEvaluationService", SignalService)
+    job = _job()
+
+    recalculation_module.run_recalculation(
+        _FakeDb(),
+        job,
+        requested_start,
+        end,
+        evaluate_signals=True,
+    )
+
+    for service_name in {
+        "TradeStatusService",
+        "FactorService",
+        "MarketService",
+        "SectorService",
+        "TrendService",
+    }:
+        service_calls = [call for call in calls if call[0] == service_name]
+        assert service_calls
+        assert service_calls[0][1] == warmup_start
+        assert service_calls[-1][2] == end
+        assert all(call[3] == job.id for call in service_calls)
+    assert ("raw", warmup_start, end, None) in calls
+    assert ("quality", requested_start, end, job.id) in calls
+    assert ("signal", requested_start, end, None) in calls

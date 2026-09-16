@@ -1,6 +1,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.models.job import JobRun, ProviderApiLog
@@ -58,6 +59,26 @@ def update_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def touch_job_heartbeat(
+    db: Session,
+    job_id: object,
+    worker_id: str,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    result = db.execute(
+        update(JobRun)
+        .where(
+            JobRun.id == job_id,
+            JobRun.status == "RUNNING",
+            JobRun.worker_id == worker_id,
+        )
+        .values(heartbeat_at=now or datetime.now(UTC))
+    )
+    db.commit()
+    return result.rowcount == 1
 
 
 def log_provider_call(

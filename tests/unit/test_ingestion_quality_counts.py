@@ -18,6 +18,17 @@ class _FakeDb:
     def rollback(self) -> None:
         self.rollbacks += 1
 
+    def execute(self, statement):
+        return _EmptyResult()
+
+
+class _EmptyResult:
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
+
 
 class _FakeProvider:
     def get_daily(self, trade_date: date) -> pd.DataFrame:
@@ -68,6 +79,11 @@ def test_sync_daily_initial_quality_write_records_detail_counts(monkeypatch) -> 
     )
     monkeypatch.setattr(ingestion_module, "changed_trade_dates", lambda *args, **kwargs: set())
     monkeypatch.setattr(ingestion_module, "record_dirty_range", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        ingestion_module,
+        "_validate_stock_daily_reconcile_prerequisites",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr(ingestion_module, "upsert_rows", lambda *args, **kwargs: 2)
     db = _FakeDb()
 
@@ -105,6 +121,7 @@ def test_sync_daily_persists_duplicate_evidence_before_failing(monkeypatch) -> N
     assert db.commits == 1
     assert persisted[0][0].status == "ERROR"
     assert persisted[0][1]["duplicate_count"] == 1
-    assert persisted[0][1]["extra_issue_codes"] == {
-        "raw_issues": ["DAILY_DUPLICATED_PK"]
-    }
+    assert persisted[0][1]["extra_issue_codes"]["raw_issues"] == [
+        "DAILY_DUPLICATED_PK"
+    ]
+    assert persisted[0][1]["extra_issue_codes"]["authoritative_extra_count"] == 0

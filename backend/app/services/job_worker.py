@@ -1,5 +1,6 @@
 import os
 import socket
+import threading
 import time
 import uuid
 from datetime import UTC, date, datetime
@@ -19,7 +20,7 @@ from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
-from app.repositories.job_run import update_job
+from app.repositories.job_run import touch_job_heartbeat, update_job
 from app.services.dirty import recover_stale_processing_ranges
 from app.services.job_guard import recover_stale_ingestion_jobs, scheduler_setting
 from app.services.quality.history_quality import (
@@ -74,6 +75,17 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
     if job is None:
         return
     metadata = dict(job.job_metadata or {})
+    stop_heartbeat = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
+    worker_id = getattr(job, "worker_id", None)
+    if job.status == "RUNNING" and worker_id:
+        heartbeat_thread = threading.Thread(
+            target=_run_heartbeat_loop,
+            args=(job.id, worker_id, stop_heartbeat),
+            daemon=True,
+            name=f"job-heartbeat-{job.id}",
+        )
+        heartbeat_thread.start()
     try:
         if job.job_type == "daily":
             provider = _provider(db)
@@ -132,6 +144,29 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                 error_message=str(exc),
             )
         logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
+    finally:
+        stop_heartbeat.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join(timeout=5)
+
+
+def _run_heartbeat_loop(
+    job_id: uuid.UUID,
+    worker_id: str,
+    stop_event: threading.Event,
+    *,
+    interval_seconds: float | None = None,
+) -> None:
+    interval = interval_seconds or float(
+        scheduler_setting("worker_heartbeat_interval_seconds", 45)
+    )
+    while not stop_event.wait(interval):
+        try:
+            with SessionLocal() as heartbeat_db:
+                if not touch_job_heartbeat(heartbeat_db, job_id, worker_id):
+                    return
+        except Exception:
+            logger.exception("worker heartbeat failed job_id={} worker_id={}", job_id, worker_id)
 
 
 def run_worker() -> None:

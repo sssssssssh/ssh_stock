@@ -215,7 +215,7 @@ def evaluate_signals(
     start: str | None = typer.Option(None, "--start"),
     end: str | None = typer.Option(None, "--end"),
     limit: int | None = typer.Option(None, "--limit"),
-    eval_version: str = typer.Option("eval_v2", "--eval-version"),
+    eval_version: str = typer.Option("eval_v3", "--eval-version"),
     entry_basis: str = typer.Option("NEXT_OPEN", "--entry-basis"),
 ) -> None:
     configure_logging()

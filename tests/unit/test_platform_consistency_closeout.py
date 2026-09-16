@@ -12,6 +12,7 @@ from app.models.market_data import (
     Sector,
     SectorMember,
     StockBasic,
+    StockDaily,
     StockStDaily,
     StockSuspendDaily,
     TradeCalendar,
@@ -381,6 +382,224 @@ def test_sector_member_provider_failure_does_not_delete_existing() -> None:
         with pytest.raises(RuntimeError, match="batch failed"):
             IngestionService(db, Provider()).sync_sector_members()
         assert db.execute(select(SectorMember.ts_code)).scalar_one() == "OLD.SZ"
+
+
+def test_sector_member_empty_snapshot_does_not_delete_existing() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Sector.__table__.create(engine)
+    SectorMember.__table__.create(engine)
+
+    class Provider:
+        def get_sector_members(self):
+            return pd.DataFrame()
+
+    with Session(engine) as db:
+        sector = Sector(
+            source="SW",
+            source_code="801010.SI",
+            name="Sector",
+            is_active=True,
+        )
+        db.add(sector)
+        db.flush()
+        db.add(
+            SectorMember(
+                sector_id=sector.sector_id,
+                ts_code="OLD.SZ",
+                valid_from=date(2020, 1, 1),
+            )
+        )
+        db.commit()
+
+        with pytest.raises(ValueError, match="returned no valid rows"):
+            IngestionService(db, Provider()).sync_sector_members()
+        assert db.execute(select(SectorMember.ts_code)).scalar_one() == "OLD.SZ"
+
+
+def test_sector_member_reconciliation_preserves_inactive_sector_history(
+    monkeypatch,
+) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Sector.__table__.create(engine)
+    SectorMember.__table__.create(engine)
+
+    class Provider:
+        def get_sector_members(self):
+            return pd.DataFrame(
+                [
+                    {
+                        "l1_code": "ACTIVE",
+                        "con_code": "CURRENT.SZ",
+                        "in_date": "20200101",
+                        "is_new": "Y",
+                    }
+                ]
+            )
+
+    monkeypatch.setattr(
+        ingestion_module,
+        "upsert_rows",
+        lambda db, model, rows, *args, **kwargs: len(list(rows)),
+    )
+    with Session(engine) as db:
+        active = Sector(source="SW", source_code="ACTIVE", name="Active", is_active=True)
+        inactive = Sector(
+            source="SW", source_code="INACTIVE", name="Inactive", is_active=False
+        )
+        db.add_all([active, inactive])
+        db.flush()
+        db.add_all(
+            [
+                SectorMember(
+                    sector_id=active.sector_id,
+                    ts_code="STALE.SZ",
+                    valid_from=date(2020, 1, 1),
+                ),
+                SectorMember(
+                    sector_id=inactive.sector_id,
+                    ts_code="HISTORY.SZ",
+                    valid_from=date(2018, 1, 1),
+                ),
+            ]
+        )
+        db.commit()
+
+        IngestionService(db, Provider()).sync_sector_members()
+        remaining = set(db.execute(select(SectorMember.ts_code)).scalars().all())
+
+    assert remaining == {"HISTORY.SZ"}
+
+
+class _DailyProvider:
+    def __init__(self, codes: set[str]) -> None:
+        self.codes = codes
+
+    def get_daily(self, trade_date: date) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "trade_date": trade_date.strftime("%Y%m%d"),
+                    "ts_code": code,
+                    "open": 10,
+                    "high": 11,
+                    "low": 9,
+                    "close": 10,
+                    "pre_close": 10,
+                    "change": 0,
+                    "pct_chg": 0,
+                    "vol": 100,
+                    "amount": 1000,
+                }
+                for code in sorted(self.codes)
+            ]
+        )
+
+
+def _patch_daily_reconcile_dependencies(monkeypatch, expected_codes, captured_rows) -> None:
+    monkeypatch.setattr(
+        ingestion_module,
+        "expected_stock_daily_codes",
+        lambda *args, **kwargs: set(expected_codes),
+    )
+    monkeypatch.setattr(
+        ingestion_module,
+        "_validate_stock_daily_reconcile_prerequisites",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(ingestion_module, "persist_coverage_result", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ingestion_module, "changed_trade_dates", lambda *args, **kwargs: set())
+    monkeypatch.setattr(ingestion_module, "record_dirty_range", lambda *args, **kwargs: None)
+    monkeypatch.setattr(ingestion_module, "_quality_threshold", lambda *args, **kwargs: 0.0)
+    monkeypatch.setattr(
+        ingestion_module,
+        "upsert_rows",
+        lambda db, model, rows, *args, **kwargs: captured_rows.extend(list(rows))
+        or len(captured_rows),
+    )
+
+
+def test_stock_daily_reconcile_deletes_only_confirmed_non_expected_rows(
+    monkeypatch,
+) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    StockDaily.__table__.create(engine)
+    target = date(2026, 9, 10)
+    captured_rows = []
+    dirty_calls = []
+    _patch_daily_reconcile_dependencies(monkeypatch, {"A", "B"}, captured_rows)
+    monkeypatch.setattr(
+        ingestion_module,
+        "record_dirty_range",
+        lambda db, **kwargs: dirty_calls.append(kwargs),
+    )
+
+    with Session(engine) as db:
+        db.add_all(
+            [StockDaily(trade_date=target, ts_code=code, close=10) for code in ("A", "B", "C")]
+        )
+        db.commit()
+
+        IngestionService(db, _DailyProvider({"A", "B"})).sync_daily(target)
+        remaining = set(db.execute(select(StockDaily.ts_code)).scalars().all())
+
+    assert remaining == {"A", "B"}
+    assert {row["ts_code"] for row in captured_rows} == {"A", "B"}
+    assert dirty_calls[0]["dirty_dates"] == {target}
+
+
+def test_stock_daily_reconcile_keeps_expected_provider_missing_row(monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    StockDaily.__table__.create(engine)
+    target = date(2026, 9, 10)
+    captured_rows = []
+    _patch_daily_reconcile_dependencies(monkeypatch, {"A", "B", "C"}, captured_rows)
+
+    with Session(engine) as db:
+        db.add_all(
+            [StockDaily(trade_date=target, ts_code=code, close=10) for code in ("A", "B", "C")]
+        )
+        db.commit()
+
+        IngestionService(db, _DailyProvider({"A", "B"})).sync_daily(target)
+        remaining = set(db.execute(select(StockDaily.ts_code)).scalars().all())
+
+    assert remaining == {"A", "B", "C"}
+
+
+def test_stock_daily_reconcile_excludes_suspended_provider_extra(monkeypatch) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    StockDaily.__table__.create(engine)
+    target = date(2026, 9, 10)
+    captured_rows = []
+    _patch_daily_reconcile_dependencies(monkeypatch, {"A", "B"}, captured_rows)
+
+    with Session(engine) as db:
+        IngestionService(db, _DailyProvider({"A", "B", "C"})).sync_daily(target)
+
+    assert {row["ts_code"] for row in captured_rows} == {"A", "B"}
+
+
+def test_stock_daily_reconcile_refuses_empty_universe_before_delete(
+    monkeypatch,
+) -> None:
+    engine = create_engine("sqlite:///:memory:")
+    StockDaily.__table__.create(engine)
+    target = date(2026, 9, 10)
+    monkeypatch.setattr(
+        ingestion_module,
+        "expected_stock_daily_codes",
+        lambda *args, **kwargs: set(),
+    )
+    monkeypatch.setattr(ingestion_module, "ensure_stock_basic_ready", lambda db: None)
+    monkeypatch.setattr(ingestion_module, "persist_coverage_result", lambda *args, **kwargs: None)
+
+    with Session(engine) as db:
+        db.add(StockDaily(trade_date=target, ts_code="A", close=10))
+        db.commit()
+
+        with pytest.raises(ValueError, match="authoritative universe is empty"):
+            IngestionService(db, _DailyProvider({"A"})).sync_daily(target)
+        assert db.execute(select(StockDaily.ts_code)).scalar_one() == "A"
 
 
 def test_factor_warmup_uses_previous_250_open_dates() -> None:

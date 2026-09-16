@@ -62,7 +62,7 @@ def evaluate_forward_returns(
     return result
 
 
-def evaluate_forward_returns_v2(
+def evaluate_forward_returns_v3(
     signal_trade_date: date,
     market_trade_dates: Sequence[date],
     rows: Sequence[dict[str, Any]],
@@ -88,7 +88,7 @@ def evaluate_forward_returns_v2(
     )
     entry_executable = entry_reason is None
     result: dict[str, Any] = {
-        "eval_version": "eval_v2",
+        "eval_version": "eval_v3",
         "entry_basis": entry_basis,
         "horizon_basis": "MARKET_TRADING_DAY",
         "entry_trade_date": entry_date,
@@ -199,10 +199,10 @@ class SignalEvaluationService:
         start: date | None = None,
         end: date | None = None,
         limit: int | None = None,
-        eval_version: str = "eval_v2",
+        eval_version: str = "eval_v3",
         entry_basis: str = "NEXT_OPEN",
     ) -> dict[str, int]:
-        if eval_version not in {"eval_v1", "eval_v2"}:
+        if eval_version not in {"eval_v1", "eval_v3"}:
             raise ValueError(f"unsupported eval_version: {eval_version}")
         if entry_basis not in {"SIGNAL_CLOSE", "NEXT_OPEN", "NEXT_CLOSE"}:
             raise ValueError(f"unsupported entry_basis: {entry_basis}")
@@ -253,10 +253,10 @@ class SignalEvaluationService:
                     }
             else:
                 market_dates = self._read_market_trade_dates(signal["trade_date"])
-                forward_rows = self._read_forward_v2_rows(
+                forward_rows = self._read_forward_market_rows(
                     signal["ts_code"], market_dates
                 )
-                evaluated = evaluate_forward_returns_v2(
+                evaluated = evaluate_forward_returns_v3(
                     signal["trade_date"],
                     market_dates,
                     forward_rows,
@@ -307,7 +307,7 @@ class SignalEvaluationService:
             .all()
         )
 
-    def _read_forward_v2_rows(
+    def _read_forward_market_rows(
         self,
         ts_code: str,
         market_dates: Sequence[date],

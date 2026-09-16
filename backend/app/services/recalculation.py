@@ -57,11 +57,12 @@ def run_recalculation(
     }
     total_rows = 0
     try:
-        factor_start = _factor_warmup_start(db, start)
-        metadata["factor_warmup_start"] = factor_start.isoformat()
+        analysis_start = _factor_warmup_start(db, start)
+        metadata["analysis_warmup_start"] = analysis_start.isoformat()
+        metadata["factor_warmup_start"] = analysis_start.isoformat()
         validate_recalculation_raw_prerequisites(
             db,
-            factor_start,
+            analysis_start,
             end,
             strategy=settings.strategy,
         )
@@ -76,11 +77,11 @@ def run_recalculation(
             metadata={**metadata, "stage": "trade_status", "progress_pct": 4},
         )
         total_rows += TradeStatusService(db).recalc(
-            factor_start,
+            analysis_start,
             end,
             calc_run_id=job.id,
         )
-        factor_chunks = _month_chunks(factor_start, end)
+        factor_chunks = _month_chunks(analysis_start, end)
         factor_service = FactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
             start_progress = round(8 + ((index - 1) / len(factor_chunks)) * 52, 1)
@@ -122,7 +123,7 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "market", "progress_pct": 65},
         )
-        total_rows += MarketService(db).recalc(start, end, calc_run_id=job.id)
+        total_rows += MarketService(db).recalc(analysis_start, end, calc_run_id=job.id)
 
         update_job(
             db,
@@ -131,7 +132,7 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "sectors", "progress_pct": 78},
         )
-        total_rows += SectorService(db).recalc(start, end, calc_run_id=job.id)
+        total_rows += SectorService(db).recalc(analysis_start, end, calc_run_id=job.id)
 
         update_job(
             db,
@@ -140,7 +141,7 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "states", "progress_pct": 90},
         )
-        trend_rows = TrendService(db).recalc(start, end, calc_run_id=job.id)
+        trend_rows = TrendService(db).recalc(analysis_start, end, calc_run_id=job.id)
         total_rows += trend_rows["states"] + trend_rows["signals"]
 
         update_job(
