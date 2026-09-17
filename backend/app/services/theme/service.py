@@ -21,6 +21,7 @@ from app.models.market_data import (
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import FACTOR_CALC_VERSION, THEME_CALC_VERSION
 from app.services.calc_metadata import calculation_metadata, config_hash
+from app.services.quality.theme_quality import required_theme_snapshot_dates
 from app.services.theme.engine import ThemeConfig, calculate_theme_factors
 
 
@@ -31,14 +32,32 @@ class ThemeFactorService:
 
     def recalc(self, start: date, end: date, calc_run_id: uuid.UUID | None = None) -> int:
         lookback_start = start - timedelta(days=150)
+        source_quality = self._source_quality(lookback_start, end)
+        usable_dates = {
+            trade_date
+            for trade_date, values in source_quality.items()
+            if values["status"] in {"PASS", "WARNING"}
+        }
+        output_dates = sorted(day for day in usable_dates if start <= day <= end)
+        if not output_dates:
+            logger.warning(
+                "skipped theme factors start={} end={} reason=no usable theme daily quality",
+                start,
+                end,
+            )
+            return 0
+        theme_daily = self._frame(ThemeDaily, lookback_start, end)
+        if not theme_daily.empty:
+            theme_daily = theme_daily[theme_daily["trade_date"].isin(usable_dates)]
+        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end)
         rows = calculate_theme_factors(
-            theme_daily=self._frame(ThemeDaily, lookback_start, end),
-            members=self._members(end),
+            theme_daily=theme_daily,
+            members=self._members(snapshot_dates),
             factors=self._factors(lookback_start, end),
             index_daily=self._frame(IndexDaily, lookback_start, end),
             moneyflow=self._frame(ThemeMoneyflowDaily, lookback_start, end),
             limits=self._frame(ThemeLimitDaily, lookback_start, end),
-            valid_snapshots=self._pass_dates("ths_theme_member_snapshot", end),
+            valid_snapshots=set(snapshot_dates),
             moneyflow_pass_dates=self._pass_dates("ths_theme_moneyflow", end),
             limit_pass_dates=self._pass_dates("ths_theme_limit", end),
             start=start,
@@ -52,14 +71,19 @@ class ThemeFactorService:
             calc_version=THEME_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
-        payload = [{**_clean(row), **metadata} for row in rows.to_dict("records")]
+        payload = []
+        for row in rows.to_dict("records"):
+            clean_row = _clean(row)
+            clean_row["source_coverage"] = source_quality[clean_row["trade_date"]][
+                "coverage_rate"
+            ]
+            payload.append({**clean_row, **metadata})
         count = replace_slice_rows(
             self.db,
             ThemeFactorDaily,
             payload,
             scope_filters=[
-                ThemeFactorDaily.trade_date >= start,
-                ThemeFactorDaily.trade_date <= end,
+                ThemeFactorDaily.trade_date.in_(output_dates),
             ],
             key_columns=["trade_date", "theme_code"],
         )
@@ -84,10 +108,14 @@ class ThemeFactorService:
             ]
         )
 
-    def _members(self, end: date) -> pd.DataFrame:
+    def _members(self, snapshot_dates: list[date]) -> pd.DataFrame:
+        if not snapshot_dates:
+            return pd.DataFrame()
         rows = (
             self.db.execute(
-                select(ThemeMemberSnapshot).where(ThemeMemberSnapshot.snapshot_date <= end)
+                select(ThemeMemberSnapshot).where(
+                    ThemeMemberSnapshot.snapshot_date.in_(snapshot_dates)
+                )
             )
             .scalars()
             .all()
@@ -132,12 +160,32 @@ class ThemeFactorService:
                 select(DataQualityDaily.trade_date).where(
                     DataQualityDaily.trade_date <= end,
                     DataQualityDaily.dataset == dataset,
-                    DataQualityDaily.status == "PASS",
+                    DataQualityDaily.status.in_(("PASS", "WARNING", "SOURCE_EMPTY")),
                 )
             )
             .scalars()
             .all()
         )
+
+    def _source_quality(self, start: date, end: date) -> dict[date, dict[str, Any]]:
+        rows = self.db.execute(
+            select(
+                DataQualityDaily.trade_date,
+                DataQualityDaily.status,
+                DataQualityDaily.coverage_rate,
+            ).where(
+                DataQualityDaily.trade_date >= start,
+                DataQualityDaily.trade_date <= end,
+                DataQualityDaily.dataset == "ths_theme_daily",
+            )
+        ).all()
+        return {
+            row.trade_date: {
+                "status": row.status,
+                "coverage_rate": row.coverage_rate,
+            }
+            for row in rows
+        }
 
 
 def _clean(row: dict[str, Any]) -> dict[str, Any]:

@@ -83,9 +83,16 @@ class TushareProvider:
             else min_interval_seconds
         )
         self._min_interval_seconds = max(0.0, float(configured_interval))
-        self._safe_limits = settings.strategy.get("provider", {}).get("tushare", {}).get(
+        legacy_limits = settings.strategy.get("provider", {}).get("tushare", {}).get(
             "safe_limits", {}
         )
+        runtime_limits = settings.app_config.get("provider", {}).get("tushare", {}).get(
+            "safe_limits", {}
+        )
+        self._safe_limits = {
+            **(legacy_limits if isinstance(legacy_limits, dict) else {}),
+            **(runtime_limits if isinstance(runtime_limits, dict) else {}),
+        }
 
         import tushare as ts
 

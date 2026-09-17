@@ -7,15 +7,34 @@ import pandas as pd
 
 
 @dataclass(frozen=True)
+class PositionConfig:
+    ma20_extended: float = 0.15
+    ma20_extreme: float = 0.20
+    amount_overheat: float = 2.5
+    amount_extreme: float = 3.0
+
+
+@dataclass(frozen=True)
 class OpportunityConfig:
     left_weights: dict[str, float]
     trend_weights: dict[str, float]
     left_watch: float
     left_strong: float
+    position: PositionConfig = PositionConfig()
+    left_structure_weight: float = 0.80
+    left_context_weight: float = 0.20
+    trend_quality_weight: float = 0.70
+    trend_position_weight: float = 0.30
+    right_score_weight: float = 0.75
+    right_context_weight: float = 0.15
+    right_market_weight: float = 0.10
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "OpportunityConfig":
         left = value.get("left_reversal", {})
+        position = value.get("position", {})
+        opportunity = value.get("opportunity", {})
+        right_side = value.get("right_side", {})
         return cls(
             left_weights={key: float(weight) for key, weight in left.get("weights", {}).items()},
             trend_weights={
@@ -24,6 +43,19 @@ class OpportunityConfig:
             },
             left_watch=float(left.get("watch_score", 60)),
             left_strong=float(left.get("strong_score", 75)),
+            position=PositionConfig(
+                ma20_extended=float(position.get("ma20_extended", 0.15)),
+                ma20_extreme=float(position.get("ma20_extreme", 0.20)),
+                amount_overheat=float(position.get("amount_overheat", 2.5)),
+                amount_extreme=float(position.get("amount_extreme", 3.0)),
+            ),
+            left_structure_weight=float(opportunity.get("left_structure_weight", 0.80)),
+            left_context_weight=float(opportunity.get("left_context_weight", 0.20)),
+            trend_quality_weight=float(opportunity.get("trend_quality_weight", 0.70)),
+            trend_position_weight=float(opportunity.get("trend_position_weight", 0.30)),
+            right_score_weight=float(right_side.get("right_score_weight", 0.75)),
+            right_context_weight=float(right_side.get("context_weight", 0.15)),
+            right_market_weight=float(right_side.get("market_weight", 0.10)),
         )
 
 
@@ -72,10 +104,16 @@ def calculate_opportunities(
             "market_score": config.trend_weights.get("market", 0.05),
         },
     ).where(values["state"].isin(["S4", "S5"]))
-    values["position_score"] = _position_score(values).where(values["state"].isin(["S4", "S5"]))
-    values["extension_risk"] = values.apply(_extension_risk, axis=1)
+    values["position_score"] = _position_score(values, config.position).where(
+        values["state"].isin(["S4", "S5"])
+    )
+    values["extension_risk"] = values.apply(
+        lambda row: _extension_risk(row, config.position), axis=1
+    )
     values["opportunity_stage"] = values.apply(lambda row: _stage(row, config), axis=1)
-    values["opportunity_score"] = values.apply(_opportunity_score, axis=1)
+    values["opportunity_score"] = values.apply(
+        lambda row: _opportunity_score(row, config), axis=1
+    )
     values["reason_codes"] = values.apply(_reason_codes, axis=1)
     values["algo_version"] = algo_version
 
@@ -334,16 +372,16 @@ def _weighted_available(values: pd.DataFrame, weights: dict[str, float]) -> pd.S
     return numerator.div(denominator.replace(0, np.nan))
 
 
-def _position_score(values: pd.DataFrame) -> pd.Series:
+def _position_score(values: pd.DataFrame, config: PositionConfig) -> pd.Series:
     distance = values["adj_close"] / values["ma20"] - 1
-    ma_score = distance.map(_ma20_distance_score)
+    ma_score = distance.map(lambda value: _ma20_distance_score(value, config))
     drawdown_score = values["drawdown_high60"].map(_drawdown_position_score)
     atr_score = values["atr_percentile60"].map(_atr_position_score)
     volume_score = values["amount_ratio20"].map(_volume_heat_score)
     return 0.40 * ma_score + 0.30 * drawdown_score + 0.20 * atr_score + 0.10 * volume_score
 
 
-def _ma20_distance_score(value: float) -> float:
+def _ma20_distance_score(value: float, config: PositionConfig) -> float:
     if pd.isna(value):
         return 0
     if value < -0.05:
@@ -354,9 +392,9 @@ def _ma20_distance_score(value: float) -> float:
         return 100
     if value <= 0.10:
         return 90
-    if value <= 0.15:
+    if value <= config.ma20_extended:
         return 65
-    if value <= 0.20:
+    if value <= config.ma20_extreme:
         return 35
     return 10
 
@@ -391,7 +429,7 @@ def _volume_heat_score(value: float) -> float:
     return 25
 
 
-def _extension_risk(row: pd.Series) -> str | None:
+def _extension_risk(row: pd.Series, config: PositionConfig) -> str | None:
     if row.get("state") not in {"S4", "S5"}:
         return None
     close, ma20, ma60 = row.get("adj_close"), row.get("ma20"), row.get("ma60")
@@ -402,9 +440,9 @@ def _extension_risk(row: pd.Series) -> str | None:
         return "BROKEN"
     if -0.03 <= distance <= 0.03 and (pd.isna(ma60) or close > ma60):
         return "PULLBACK"
-    if distance > 0.20 or row.get("amount_ratio20", 0) > 3:
+    if distance > config.ma20_extreme or row.get("amount_ratio20", 0) > config.amount_extreme:
         return "EXTREME"
-    if distance > 0.15 or row.get("amount_ratio20", 0) > 2.5:
+    if distance > config.ma20_extended or row.get("amount_ratio20", 0) > config.amount_overheat:
         return "EXTENDED"
     return "NORMAL"
 
@@ -425,20 +463,21 @@ def _stage(row: pd.Series, config: OpportunityConfig) -> str:
     return "OTHER"
 
 
-def _opportunity_score(row: pd.Series) -> float | None:
+def _opportunity_score(row: pd.Series, config: OpportunityConfig) -> float | None:
     stage = row["opportunity_stage"]
     if stage.startswith("LEFT"):
         context = row.get("context_score")
         return (
             row["left_reversal_score"]
             if pd.isna(context)
-            else 0.8 * row["left_reversal_score"] + 0.2 * context
+            else config.left_structure_weight * row["left_reversal_score"]
+            + config.left_context_weight * context
         )
     if stage.startswith("RIGHT"):
         scores = [
-            (row.get("right_side_score"), 0.75),
-            (row.get("context_score"), 0.15),
-            (row.get("market_score"), 0.10),
+            (row.get("right_side_score"), config.right_score_weight),
+            (row.get("context_score"), config.right_context_weight),
+            (row.get("market_score"), config.right_market_weight),
         ]
         valid = [
             (score, weight) for score, weight in scores if score is not None and not pd.isna(score)
@@ -449,7 +488,10 @@ def _opportunity_score(row: pd.Series) -> float | None:
             else None
         )
     if stage in {"TREND", "STRONG_TREND"}:
-        return 0.70 * row["trend_rank_score"] + 0.30 * row["position_score"]
+        return (
+            config.trend_quality_weight * row["trend_rank_score"]
+            + config.trend_position_weight * row["position_score"]
+        )
     return None
 
 

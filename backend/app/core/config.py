@@ -71,8 +71,30 @@ def _validate_opportunity_weights(config: dict[str, Any]) -> None:
         if not isinstance(weights, dict) or not weights:
             raise ValueError(f"opportunity config missing weights: {section}.{key}")
         total = sum(float(value) for value in weights.values())
-        if total <= 0 or total > 1.000001 or any(float(value) < 0 for value in weights.values()):
+        if abs(total - 1.0) > 1e-6 or any(float(value) < 0 for value in weights.values()):
             raise ValueError(f"opportunity weights are invalid: {section}.{key}={total}")
+
+    paired_weights = [
+        (
+            "opportunity.left",
+            config.get("opportunity", {}),
+            ("left_structure_weight", "left_context_weight"),
+        ),
+        (
+            "opportunity.trend",
+            config.get("opportunity", {}),
+            ("trend_quality_weight", "trend_position_weight"),
+        ),
+        (
+            "right_side",
+            config.get("right_side", {}),
+            ("right_score_weight", "context_weight", "market_weight"),
+        ),
+    ]
+    for name, section, keys in paired_weights:
+        total = sum(float(section.get(key, 0)) for key in keys)
+        if abs(total - 1.0) > 1e-6:
+            raise ValueError(f"opportunity weights are invalid: {name}={total}")
 
 
 @lru_cache

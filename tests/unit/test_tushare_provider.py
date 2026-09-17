@@ -43,6 +43,10 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
     assert calls == [("set_token", "test-token"), ("pro_api", None)]
     assert fake_pro._DataApi__http_url == "https://fastapic.stockai888.top"
     assert provider._min_interval_seconds == 2.5
+    assert provider._safe_limits["ths_index"] == 5000
+    assert provider._safe_limits["ths_daily"] == 3000
+    assert provider._safe_limits["moneyflow_cnt_ths"] == 5000
+    assert provider._safe_limits["limit_cpt_list"] == 2000
 
 
 def test_tushare_proxy_configuration_rejects_incompatible_sdk() -> None:

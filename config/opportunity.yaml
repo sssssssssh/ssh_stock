@@ -2,6 +2,7 @@ theme:
   enabled: true
   source: THS
   min_member_count: 5
+  min_data_coverage: 0.50
   heat_weights:
     excess_return5: 0.18
     excess_return20: 0.08
@@ -13,7 +14,7 @@ theme:
     moneyflow_score: 0.15
     limit_up_density: 0.08
     limit_strength_score: 0.05
-    turnover_ratio20: 0.03
+    turnover_ratio20: 0.05
   lifecycle:
     watch: 40
     heating: 60
@@ -49,9 +50,23 @@ position:
   ma20_extended: 0.15
   ma20_extreme: 0.20
   amount_overheat: 2.5
+  amount_extreme: 3.0
+
+right_side:
+  right_score_weight: 0.75
+  context_weight: 0.15
+  market_weight: 0.10
 
 opportunity:
   left_structure_weight: 0.80
   left_context_weight: 0.20
   trend_quality_weight: 0.70
   trend_position_weight: 0.30
+
+opportunity_quality:
+  opportunity_vs_state:
+    warning_coverage_rate: 0.98
+    error_coverage_rate: 0.90
+  theme_factor_vs_theme_daily:
+    warning_coverage_rate: 0.95
+    error_coverage_rate: 0.80

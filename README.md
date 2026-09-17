@@ -1024,6 +1024,16 @@ python -m app.cli backfill --start 2026-05-01 --end 2026-09-16
 
 Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 是可选增强源。无权限或暂时不可用时只降低 Theme Heat 的 `data_coverage`，可用权重自动归一化，不会让核心日更失败，也不会把缺失值当作 0。Provider smoke 现在输出五个 THS 接口状态和 `theme_capability`（`FULL/NO_LIMIT_DATA/NO_MONEYFLOW/BASIC_ONLY`）。
 
+收口后的运行规则：
+
+- Theme Catalog 在 Daily 和 CatchUp 启动时日更一次；Theme Member Snapshot 仍由每周 `sync-basic` 采集，不能用当前成员回填历史。
+- `ths_member.is_new` 至少出现一个有效 Y/N 时只保存 Y；该列缺失或全空时兼容保存全部。Catalog 声明成员数大于 0 但过滤后为空时记录 `CURRENT_MEMBER_EMPTY` 并拒绝快照。
+- `ths_theme_daily` 只有 PASS/WARNING 才允许生成 ThemeFactor；ERROR 会保留旧 Raw 和旧 ThemeFactor。`source_coverage` 表示源题材覆盖率，`data_coverage` 表示 Heat 特征可用权重比例，两者不可混用。
+- Theme Daily、Moneyflow、Limit 的成功权威快照发生新增、修改或删除时都会建立 Dirty Range；Provider 错误时禁止删除旧 Raw。
+- `config/strategy.yaml` 继续控制 Factor/Market/Sector/Trend；`config/opportunity.yaml` 控制 Theme 生命周期、仓位阈值和 Opportunity 综合权重。修改后者会使 CatchUp 识别旧 Opportunity 哈希并补算。
+- Tushare 接口运行时安全上限放在 `config/app.yaml` 的 `provider.tushare.safe_limits`，不参与任何策略配置哈希。
+- `/api/v1/system/data-calendar` 使用 `CORE_COMPLETE` 和 `OPPORTUNITY_COMPLETE` 区分核心分析完成与题材/机会结果完成。
+
 新增查询接口：
 
 - `GET /api/v1/themes`

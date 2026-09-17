@@ -14,3 +14,11 @@ app:
     refresh_recent_trade_days: 5
     dirty_max_retry_count: 3
     worker_poll_seconds: 2
+
+provider:
+  tushare:
+    safe_limits:
+      ths_index: 5000
+      ths_daily: 3000
+      moneyflow_cnt_ths: 5000
+      limit_cpt_list: 2000

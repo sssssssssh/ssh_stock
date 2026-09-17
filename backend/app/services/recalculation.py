@@ -40,6 +40,7 @@ def run_recalculation(
     dirty_ranges = dirty_ranges or []
     settings = get_settings()
     hash_value = config_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
     metadata: dict[str, Any] = {
         "source": mode,
         "mode": mode,
@@ -48,9 +49,14 @@ def run_recalculation(
         "evaluate_signals": evaluate_signals,
         "calc_run_id": str(job.id),
         "config_hash": hash_value,
+        "strategy_config_hash": hash_value,
+        "opportunity_config_hash": opportunity_hash,
         "factor_calc_version": "factor_v1",
         "market_calc_version": "market_v1",
         "sector_calc_version": "sector_v1",
+        "theme_calc_version": "theme_v1",
+        "trend_calc_version": "trend_v1",
+        "opportunity_calc_version": "opportunity_v1",
         "dirty_range_ids": [row.id for row in dirty_ranges],
         "dirty_start_date": start.isoformat() if mode == "dirty_repair" else None,
         "recalc_end_date": end.isoformat() if mode == "dirty_repair" else None,

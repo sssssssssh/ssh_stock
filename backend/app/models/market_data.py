@@ -649,6 +649,7 @@ class ThemeFactorDaily(Base):
     heat_momentum3: Mapped[float | None] = mapped_column(Float)
     rank_change: Mapped[int | None] = mapped_column(Integer)
     lifecycle: Mapped[str | None] = mapped_column(String(32))
+    source_coverage: Mapped[float | None] = mapped_column(Float)
     data_coverage: Mapped[float | None] = mapped_column(Float)
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)

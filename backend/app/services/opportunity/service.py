@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import (
-    DataQualityDaily,
     MarketDaily,
     SectorFactorDaily,
     SectorMember,
@@ -31,6 +30,7 @@ from app.services.analysis_identity import (
 )
 from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.opportunity.engine import OpportunityConfig, calculate_opportunities
+from app.services.quality.theme_quality import required_theme_snapshot_dates
 
 
 class OpportunityService:
@@ -49,6 +49,7 @@ class OpportunityService:
         lookback_start = start - timedelta(days=190)
         strategy_hash = config_hash(self.settings.strategy)
         opportunity_hash = config_hash(self.settings.opportunity_config)
+        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end)
         frame = calculate_opportunities(
             factors=self._versioned_frame(
                 StockFactorDaily, lookback_start, end, FACTOR_CALC_VERSION, strategy_hash
@@ -62,7 +63,7 @@ class OpportunityService:
                 SectorFactorDaily, lookback_start, end, SECTOR_CALC_VERSION, strategy_hash
             ),
             themes=self._all_frame(Theme),
-            theme_members=self._all_frame(ThemeMemberSnapshot),
+            theme_members=self._theme_members(snapshot_dates),
             theme_factors=self._versioned_frame(
                 ThemeFactorDaily,
                 lookback_start,
@@ -70,7 +71,7 @@ class OpportunityService:
                 THEME_CALC_VERSION,
                 opportunity_hash,
             ),
-            valid_snapshots=self._valid_snapshots(end),
+            valid_snapshots=set(snapshot_dates),
             start=start,
             end=end,
             algo_version=version,
@@ -138,17 +139,16 @@ class OpportunityService:
     def _all_frame(self, model: type) -> pd.DataFrame:
         return _models_frame(self.db.execute(select(model)).scalars().all(), model)
 
-    def _valid_snapshots(self, end: date) -> set[date]:
-        return set(
+    def _theme_members(self, snapshot_dates: list[date]) -> pd.DataFrame:
+        if not snapshot_dates:
+            return pd.DataFrame()
+        return _models_frame(
             self.db.execute(
-                select(DataQualityDaily.trade_date).where(
-                    DataQualityDaily.trade_date <= end,
-                    DataQualityDaily.dataset == "ths_theme_member_snapshot",
-                    DataQualityDaily.status == "PASS",
+                select(ThemeMemberSnapshot).where(
+                    ThemeMemberSnapshot.snapshot_date.in_(snapshot_dates)
                 )
-            )
-            .scalars()
-            .all()
+            ).scalars().all(),
+            ThemeMemberSnapshot,
         )
 
 

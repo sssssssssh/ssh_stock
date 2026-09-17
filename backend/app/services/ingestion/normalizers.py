@@ -255,18 +255,23 @@ def normalize_themes(df: pd.DataFrame, seen_date: date) -> list[dict[str, Any]]:
 
 
 def normalize_theme_members(df: pd.DataFrame, snapshot_date: date) -> list[dict[str, Any]]:
+    source = df
+    has_valid_flags = False
+    if "is_new" in df.columns:
+        flags = df["is_new"].astype("string").str.strip().str.upper()
+        has_valid_flags = bool(flags.isin(["Y", "N"]).any())
+        if has_valid_flags:
+            source = df[flags == "Y"]
     rows = [
         {
             "snapshot_date": snapshot_date,
             "theme_code": item.get("ts_code"),
             "ts_code": item.get("con_code"),
             "stock_name": item.get("con_name"),
-            "is_new": str(item.get("is_new", "")).upper() == "Y"
-            if item.get("is_new") is not None
-            else None,
+            "is_new": True if has_valid_flags else None,
             "source": "THS",
         }
-        for item in df.to_dict("records")
+        for item in source.to_dict("records")
     ]
     return [row for row in rows if row["theme_code"] and row["ts_code"]]
 

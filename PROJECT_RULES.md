@@ -213,3 +213,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Opportunity 必须同时保留 Left、Right、TrendRank、Position、Context 和最终阶段分数；趋势榜默认按 `trend_rank_score` 排序，不得用总机会分替代。
 - Pipeline 顺序固定为 TradeStatus、Factor、Market、Sector、ThemeFactor、Trend、Opportunity、CrossTable、SignalEval。Theme 原始源失败只记录状态并降级，不得破坏核心 Raw Gate。
 - 行业热榜 API/UI 默认只显示 SW L1；题材与机会 API 的 latest date 必须匹配当前版本和独立配置哈希，并支持显式历史日期。
+- Theme Daily ERROR 不允许参与 Theme Heat，也不得删除或覆盖旧可信 Theme Raw/ThemeFactor；只有 PASS/WARNING 日期可以生成 ThemeFactor。
+- Theme Raw 成功权威快照的新增、修改和删除必须创建 Dirty Range；Provider ERROR、权限错误和瞬时错误禁止 destructive reconcile。
+- THS Member Snapshot 的 `is_new` 存在有效 Y/N 时只保存 Y；列缺失或全空时保存全部，Catalog 成员数大于 0 但 current member 为空时必须报 `CURRENT_MEMBER_EMPTY`。
+- CatchUp Analysis Complete 必须检查当前 `opportunity_config_hash` 的 ThemeFactor（源可用时）与 Opportunity（State 存在时），不得让旧哈希结果垫高完成度。
+- Strategy config hash 与 Opportunity config hash 必须分离；Provider runtime Safe Limit 不得进入任一策略哈希。
+- `ThemeFactorDaily.source_coverage` 表示 Theme Daily 源覆盖率，`data_coverage` 表示 Heat 特征覆盖率，禁止混用。
+- Theme Catalog 日更，Theme Member Snapshot 周更；历史 Theme/Opportunity 查询只允许加载 start 前最近 PASS 快照与区间内 PASS 快照。

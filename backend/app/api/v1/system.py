@@ -18,11 +18,20 @@ from app.models.market_data import (
     StockDaily,
     StockDailyBasic,
     StockFactorDaily,
+    StockOpportunityDaily,
     StockStateDaily,
     StrategySignal,
+    ThemeDaily,
+    ThemeFactorDaily,
+    ThemeMemberSnapshot,
     TradeCalendar,
 )
-from app.services.analysis_identity import SIGNAL_CALC_VERSION, TREND_CALC_VERSION
+from app.services.analysis_identity import (
+    OPPORTUNITY_CALC_VERSION,
+    SIGNAL_CALC_VERSION,
+    THEME_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
 from app.services.calc_metadata import config_hash
 
 router = APIRouter()
@@ -38,6 +47,7 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
     settings = get_settings()
     version = settings.algo_version
     hash_value = config_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
     return {
         "code": 0,
         "message": "ok",
@@ -94,8 +104,34 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
                     SignalForwardEval.algo_version == version
                 ),
             ),
+            "latest_theme_daily_date": _latest_date(
+                db, select(func.max(ThemeDaily.trade_date))
+            ),
+            "latest_theme_factor_date": _latest_date(
+                db,
+                select(func.max(ThemeFactorDaily.trade_date)).where(
+                    ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
+                    ThemeFactorDaily.config_hash == opportunity_hash,
+                ),
+            ),
+            "latest_opportunity_date": _latest_date(
+                db,
+                select(func.max(StockOpportunityDaily.trade_date)).where(
+                    StockOpportunityDaily.algo_version == version,
+                    StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
+                    StockOpportunityDaily.config_hash == opportunity_hash,
+                ),
+            ),
+            "latest_theme_member_snapshot": _latest_date(
+                db, select(func.max(ThemeMemberSnapshot.snapshot_date))
+            ),
         },
-        "meta": {"algo_version": version, "config_hash": hash_value},
+        "meta": {
+            "algo_version": version,
+            "config_hash": hash_value,
+            "strategy_config_hash": hash_value,
+            "opportunity_config_hash": opportunity_hash,
+        },
     }
 
 
@@ -109,6 +145,7 @@ def data_coverage(
     settings = get_settings()
     version = settings.algo_version
     hash_value = config_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
     date_stmt = select(StockDaily.trade_date).distinct().order_by(desc(StockDaily.trade_date))
     if start:
         date_stmt = date_stmt.where(StockDaily.trade_date >= start)
@@ -187,6 +224,26 @@ def data_coverage(
         coverage_end,
         SignalForwardEval.algo_version == version,
     )
+    theme_daily_counts = _counts_by_date(
+        db, ThemeDaily.trade_date, coverage_start, coverage_end
+    )
+    theme_factor_counts = _counts_by_date(
+        db,
+        ThemeFactorDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
+        ThemeFactorDaily.config_hash == opportunity_hash,
+    )
+    opportunity_counts = _counts_by_date(
+        db,
+        StockOpportunityDaily.trade_date,
+        coverage_start,
+        coverage_end,
+        StockOpportunityDaily.algo_version == version,
+        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
+        StockOpportunityDaily.config_hash == opportunity_hash,
+    )
     quality_status = _quality_status_by_date(db, coverage_start, coverage_end)
 
     rows = []
@@ -204,12 +261,17 @@ def data_coverage(
                 "state_rows": state_counts.get(trade_date, 0),
                 "signal_rows": signal_counts.get(trade_date, 0),
                 "signal_eval_rows": signal_eval_counts.get(trade_date, 0),
+                "theme_daily_rows": theme_daily_counts.get(trade_date, 0),
+                "theme_factor_rows": theme_factor_counts.get(trade_date, 0),
+                "opportunity_rows": opportunity_counts.get(trade_date, 0),
                 "current_version_rows": {
                     "factor": factor_counts.get(trade_date, 0),
                     "market": market_counts.get(trade_date, 0),
                     "sector_factor": sector_counts.get(trade_date, 0),
                     "state": state_counts.get(trade_date, 0),
                     "signal": signal_counts.get(trade_date, 0),
+                    "theme_factor": theme_factor_counts.get(trade_date, 0),
+                    "opportunity": opportunity_counts.get(trade_date, 0),
                 },
                 "quality_status": quality_status.get(trade_date),
             }
@@ -224,6 +286,7 @@ def data_coverage(
             "total": len(rows),
             "algo_version": version,
             "config_hash": hash_value,
+            "opportunity_config_hash": opportunity_hash,
         },
     )
 
@@ -237,6 +300,7 @@ def data_calendar(
     settings = get_settings()
     version = settings.algo_version
     hash_value = config_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
     if end < start:
         return envelope(
             [],
@@ -245,6 +309,7 @@ def data_calendar(
                 "end": end.isoformat(),
                 "algo_version": version,
                 "config_hash": hash_value,
+                "opportunity_config_hash": opportunity_hash,
             },
         )
 
@@ -311,6 +376,25 @@ def data_calendar(
         end,
         SignalForwardEval.algo_version == version,
     )
+    theme_daily_counts = _counts_by_date(db, ThemeDaily.trade_date, start, end)
+    theme_factor_counts = _counts_by_date(
+        db,
+        ThemeFactorDaily.trade_date,
+        start,
+        end,
+        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
+        ThemeFactorDaily.config_hash == opportunity_hash,
+    )
+    opportunity_counts = _counts_by_date(
+        db,
+        StockOpportunityDaily.trade_date,
+        start,
+        end,
+        StockOpportunityDaily.algo_version == version,
+        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
+        StockOpportunityDaily.config_hash == opportunity_hash,
+    )
+    theme_source_status = _theme_source_status_by_date(db, start, end)
     quality_status = _quality_status_by_date(db, start, end)
 
     rows = []
@@ -324,6 +408,9 @@ def data_calendar(
         market_rows = market_counts.get(current, 0)
         state_rows = state_counts.get(current, 0)
         sector_rows = sector_counts.get(current, 0)
+        theme_daily_rows = theme_daily_counts.get(current, 0)
+        theme_factor_rows = theme_factor_counts.get(current, 0)
+        opportunity_rows = opportunity_counts.get(current, 0)
         day_quality_status = quality_status.get(current)
         if is_open is False:
             coverage_status = "CLOSED"
@@ -332,7 +419,24 @@ def data_calendar(
         elif stock_rows <= 0:
             coverage_status = "MISSING"
         elif factor_rows > 0 and market_rows > 0 and state_rows > 0 and sector_rows > 0:
-            coverage_status = "COMPLETE"
+            opportunity_complete = _configured_coverage_not_error(
+                state_rows,
+                opportunity_rows,
+                settings.opportunity_config,
+                "opportunity_vs_state",
+            )
+            source_usable = theme_source_status.get(current) in {"PASS", "WARNING"}
+            theme_complete = not source_usable or _configured_coverage_not_error(
+                theme_daily_rows,
+                theme_factor_rows,
+                settings.opportunity_config,
+                "theme_factor_vs_theme_daily",
+            )
+            coverage_status = (
+                "OPPORTUNITY_COMPLETE"
+                if opportunity_complete and theme_complete
+                else "CORE_COMPLETE"
+            )
         elif factor_rows > 0 and market_rows > 0 and state_rows > 0:
             coverage_status = "ANALYZED"
         else:
@@ -353,12 +457,17 @@ def data_calendar(
                 "state_rows": state_rows,
                 "signal_rows": signal_counts.get(current, 0),
                 "signal_eval_rows": signal_eval_counts.get(current, 0),
+                "theme_daily_rows": theme_daily_rows,
+                "theme_factor_rows": theme_factor_rows,
+                "opportunity_rows": opportunity_rows,
                 "current_version_rows": {
                     "factor": factor_rows,
                     "market": market_rows,
                     "sector_factor": sector_rows,
                     "state": state_rows,
                     "signal": signal_counts.get(current, 0),
+                    "theme_factor": theme_factor_rows,
+                    "opportunity": opportunity_rows,
                 },
                 "quality_status": day_quality_status,
             }
@@ -372,6 +481,7 @@ def data_calendar(
             "end": end.isoformat(),
             "algo_version": version,
             "config_hash": hash_value,
+            "opportunity_config_hash": opportunity_hash,
         },
     )
 
@@ -403,6 +513,7 @@ def _quality_status_by_date(db: Session, start: date, end: date) -> dict[date, s
             select(DataQualityDaily.trade_date, DataQualityDaily.status)
             .where(DataQualityDaily.trade_date >= start, DataQualityDaily.trade_date <= end)
             .where(DataQualityDaily.status.in_(["ERROR", "WARNING"]))
+            .where(~DataQualityDaily.dataset.like("ths_theme%"))
             .order_by(DataQualityDaily.trade_date)
         )
         .all()
@@ -413,3 +524,27 @@ def _quality_status_by_date(db: Session, start: date, end: date) -> dict[date, s
         if priority[status] > priority.get(result.get(trade_date, ""), 0):
             result[trade_date] = status
     return result
+
+
+def _theme_source_status_by_date(db: Session, start: date, end: date) -> dict[date, str]:
+    rows = db.execute(
+        select(DataQualityDaily.trade_date, DataQualityDaily.status).where(
+            DataQualityDaily.trade_date >= start,
+            DataQualityDaily.trade_date <= end,
+            DataQualityDaily.dataset == "ths_theme_daily",
+        )
+    ).all()
+    return {trade_date: status for trade_date, status in rows}
+
+
+def _configured_coverage_not_error(
+    expected: int,
+    actual: int,
+    config: dict[str, Any],
+    dataset: str,
+) -> bool:
+    if expected <= 0:
+        return True
+    thresholds = config.get("opportunity_quality", {}).get(dataset, {})
+    error_rate = float(thresholds.get("error_coverage_rate", 0.90))
+    return min(actual / expected, 1.0) >= error_rate

@@ -11,14 +11,25 @@ class ThemeConfig:
     benchmark_code: str
     min_member_count: int
     weights: dict[str, float]
+    lifecycle_watch: float = 40
+    lifecycle_heating: float = 60
+    lifecycle_main_up: float = 75
+    lifecycle_climax: float = 90
+    min_data_coverage: float = 0.50
 
     @classmethod
     def from_configs(cls, strategy: dict[str, Any], opportunity: dict[str, Any]) -> "ThemeConfig":
         theme = opportunity.get("theme", {})
+        lifecycle = theme.get("lifecycle", {})
         return cls(
             benchmark_code=strategy.get("benchmark", {}).get("primary", "000300.SH"),
             min_member_count=int(theme.get("min_member_count", 5)),
             weights={key: float(value) for key, value in theme.get("heat_weights", {}).items()},
+            lifecycle_watch=float(lifecycle.get("watch", 40)),
+            lifecycle_heating=float(lifecycle.get("heating", 60)),
+            lifecycle_main_up=float(lifecycle.get("main_up", 75)),
+            lifecycle_climax=float(lifecycle.get("climax", 90)),
+            min_data_coverage=float(theme.get("min_data_coverage", 0.50)),
         )
 
 
@@ -173,8 +184,11 @@ def calculate_theme_factors(
         values = daily[f"{column}_pct"]
         weighted += values.fillna(0) * weight
         available += values.notna().astype(float) * weight
-    daily["data_coverage"] = available
-    daily["heat_score"] = (weighted / available.replace(0, np.nan)).where(available >= 0.50)
+    total_weight = sum(config.weights.values())
+    daily["data_coverage"] = available / total_weight if total_weight else 0.0
+    daily["heat_score"] = (weighted / available.replace(0, np.nan)).where(
+        daily["data_coverage"] >= config.min_data_coverage
+    )
     daily["heat_rank"] = daily.groupby("trade_date")["heat_score"].rank(
         method="first", ascending=False
     )
@@ -184,7 +198,7 @@ def calculate_theme_factors(
     daily["prev_heat"] = group["heat_score"].shift(1)
     daily["prev_rank"] = group["heat_rank"].shift(1)
     daily["rank_change"] = daily["prev_rank"] - daily["heat_rank"]
-    daily["lifecycle"] = daily.apply(_lifecycle, axis=1)
+    daily["lifecycle"] = daily.apply(lambda row: _lifecycle(row, config), axis=1)
     output = daily[(daily["trade_date"] >= start) & (daily["trade_date"] <= end)].copy()
     columns = [
         "trade_date",
@@ -318,7 +332,12 @@ def _merge_optional_sources(
     )
     density_rank = _rank(daily["limit_up_density"], daily["trade_date"])
     continuous_rank = _rank(daily["continuous_limit_density"], daily["trade_date"])
-    hot_rank_score = (100 - _rank(daily["hot_rank"], daily["trade_date"])).fillna(0)
+    hot_rank_score = (
+        daily.groupby("trade_date")["hot_rank"]
+        .rank(pct=True, ascending=False, method="average")
+        .mul(100)
+        .fillna(0)
+    )
     daily["limit_strength_score"] = (
         0.50 * density_rank + 0.30 * continuous_rank + 0.20 * hot_rank_score
     )
@@ -326,26 +345,32 @@ def _merge_optional_sources(
     return daily
 
 
-def _lifecycle(row: pd.Series) -> str | None:
+def _lifecycle(row: pd.Series, config: ThemeConfig) -> str | None:
     heat = row.get("heat_score")
     if heat is None or pd.isna(heat):
         return None
     momentum = row.get("heat_momentum3")
     momentum = 0 if pd.isna(momentum) else float(momentum)
-    if heat >= 90 and (
+    if heat >= config.lifecycle_climax and (
         (row.get("breadth20", 0) or 0) >= 0.80 or (row.get("_limit_density_pct", 0) or 0) >= 90
     ):
         return "CLIMAX"
-    if heat >= 70 and momentum <= -8:
+    divergence_threshold = (config.lifecycle_heating + config.lifecycle_main_up) / 2
+    if heat >= divergence_threshold and momentum <= -8:
         return "DIVERGENCE"
-    if heat >= 75 and momentum >= 0:
+    if heat >= config.lifecycle_main_up and momentum >= 0:
         return "MAIN_UP"
-    if heat >= 60 and momentum > 5:
+    if heat >= config.lifecycle_heating and momentum > 5:
         return "HEATING"
-    if not pd.isna(row.get("prev_heat")) and row["prev_heat"] < 55 <= heat and momentum >= 10:
+    starting_threshold = (config.lifecycle_watch + config.lifecycle_heating) / 2
+    if (
+        not pd.isna(row.get("prev_heat"))
+        and row["prev_heat"] < starting_threshold <= heat
+        and momentum >= 10
+    ):
         return "STARTING"
-    if 40 <= heat < 60:
+    if config.lifecycle_watch <= heat < config.lifecycle_heating:
         return "WATCH"
-    if heat < 60 and momentum < 0:
+    if heat < config.lifecycle_heating and momentum < 0:
         return "COOLING"
-    return "COLD" if heat < 40 else "WATCH"
+    return "COLD" if heat < config.lifecycle_watch else "WATCH"

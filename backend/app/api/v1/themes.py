@@ -128,11 +128,15 @@ def overview(
         member_distribution = [
             {"stage": stage, "count": count} for stage, count in sorted(counts.items())
         ]
-        top_members["trend"] = [r for r in member_rows if r["state"] in {"S4", "S5"}][:10]
-        top_members["right"] = [r for r in member_rows if r["state"] == "S3"][:10]
-        top_members["left"] = [
-            r for r in member_rows if str(r["opportunity_stage"]).startswith("LEFT")
-        ][:10]
+        top_members["trend"] = _member_opportunities(
+            db, theme_code, target, None, 10, 0, pool="trend"
+        )
+        top_members["right"] = _member_opportunities(
+            db, theme_code, target, None, 10, 0, pool="right"
+        )
+        top_members["left"] = _member_opportunities(
+            db, theme_code, target, None, 10, 0, pool="left"
+        )
     return envelope(
         {
             "theme": _model_payload(theme),
@@ -187,6 +191,8 @@ def _member_opportunities(
     stage: str | None,
     limit: int,
     offset: int,
+    *,
+    pool: str | None = None,
 ) -> list[dict[str, Any]]:
     snapshot = latest_valid_theme_member_snapshot(db, target)
     if snapshot is None:
@@ -202,6 +208,16 @@ def _member_opportunities(
     ]
     if stage:
         filters.append(StockOpportunityDaily.opportunity_stage == stage)
+    order = desc(StockOpportunityDaily.opportunity_score)
+    if pool == "trend":
+        filters.append(StockOpportunityDaily.state.in_(("S4", "S5")))
+        order = desc(StockOpportunityDaily.trend_rank_score)
+    elif pool == "right":
+        filters.append(StockOpportunityDaily.state == "S3")
+        order = desc(StockOpportunityDaily.right_side_score)
+    elif pool == "left":
+        filters.append(StockOpportunityDaily.opportunity_stage.like("LEFT%"))
+        order = desc(StockOpportunityDaily.left_reversal_score)
     stmt = (
         select(StockOpportunityDaily, StockBasic.name)
         .select_from(ThemeMemberSnapshot)
@@ -211,7 +227,7 @@ def _member_opportunities(
         )
         .outerjoin(StockBasic, StockOpportunityDaily.ts_code == StockBasic.ts_code)
         .where(*filters)
-        .order_by(desc(StockOpportunityDaily.opportunity_score))
+        .order_by(order)
         .limit(limit)
         .offset(offset)
     )

@@ -158,6 +158,7 @@ class DailyJob:
                 metadata=_progress(metadata, 11),
             )
             try:
+                total_rows += self.ingestion.sync_ths_themes(trade_date)
                 total_rows += self.ingestion.sync_theme_daily(trade_date)
                 optional_status = self.ingestion.sync_theme_optional_sources(trade_date)
                 metadata = {

@@ -26,6 +26,7 @@ from app.services.dirty import (
 from app.services.ingestion import IngestionService
 from app.services.job_guard import scheduler_setting
 from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
+from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.recalculation import run_recalculation
 from app.services.trade_status import TradeStatusService
@@ -57,6 +58,15 @@ class CatchUpJob:
         calendar_start = target_date - timedelta(days=max(90, max_trade_days * 4))
         self.ingestion.sync_trade_calendar(calendar_start, target_date)
         self.ingestion.sync_stock_basic()
+        sync_theme_catalog = getattr(self.ingestion, "sync_ths_themes", None)
+        if callable(sync_theme_catalog):
+            try:
+                sync_theme_catalog(target_date)
+            except Exception as exc:
+                rollback = getattr(self.db, "rollback", None)
+                if callable(rollback):
+                    rollback()
+                logger.warning("catch-up theme catalog sync failed error={}", exc)
         open_dates = _open_trade_dates(self.db, calendar_start, target_date)
         candidate_dates = _candidate_catchup_dates(
             open_dates,
@@ -66,6 +76,7 @@ class CatchUpJob:
             self.db,
             candidate_dates,
             strategy=self.settings.strategy,
+            opportunity_config=getattr(self.settings, "opportunity_config", None),
             algo_version=self.settings.algo_version,
         )
         plan = build_catchup_plan(
@@ -280,8 +291,15 @@ def analysis_complete_dates(
     *,
     algo_version: str,
     strategy: dict | None = None,
+    opportunity_config: dict | None = None,
 ) -> set[date]:
-    resolved_strategy = strategy if strategy is not None else get_settings().strategy
+    settings = get_settings()
+    resolved_strategy = strategy if strategy is not None else settings.strategy
+    resolved_opportunity = (
+        opportunity_config
+        if opportunity_config is not None
+        else settings.opportunity_config
+    )
     return {
         trade_date
         for trade_date in _open_trade_dates(db, start, end)
@@ -289,6 +307,7 @@ def analysis_complete_dates(
             db,
             trade_date,
             strategy=resolved_strategy,
+            opportunity_config=resolved_opportunity,
             algo_version=algo_version,
         )
     }
@@ -299,6 +318,7 @@ def classify_catchup_dates(
     candidate_dates: list[date],
     *,
     strategy: dict,
+    opportunity_config: dict | None = None,
     algo_version: str,
 ) -> tuple[list[date], list[date]]:
     raw_required_dates: list[date] = []
@@ -317,6 +337,7 @@ def classify_catchup_dates(
             db,
             trade_date,
             strategy=strategy,
+            opportunity_config=opportunity_config,
             algo_version=algo_version,
         ):
             analysis_required_dates.append(trade_date)
@@ -324,6 +345,35 @@ def classify_catchup_dates(
 
 
 def is_analysis_complete(
+    db: Session,
+    trade_date: date,
+    *,
+    strategy: dict,
+    opportunity_config: dict | None = None,
+    algo_version: str,
+) -> bool:
+    if not is_core_analysis_complete(
+        db,
+        trade_date,
+        strategy=strategy,
+        algo_version=algo_version,
+    ):
+        return False
+    if opportunity_config is None:
+        return True
+    resolved_opportunity = opportunity_config
+    quality = check_opportunity_quality(
+        db,
+        trade_date,
+        strategy_hash=config_hash(strategy),
+        opportunity_hash=config_hash(resolved_opportunity),
+        algo_version=algo_version,
+        config=resolved_opportunity,
+    )
+    return quality.is_complete
+
+
+def is_core_analysis_complete(
     db: Session,
     trade_date: date,
     *,

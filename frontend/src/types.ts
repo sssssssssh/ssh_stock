@@ -14,6 +14,10 @@ export type SystemStatus = {
   latest_state_date: string | null;
   latest_signal_date: string | null;
   latest_signal_eval_date: string | null;
+  latest_theme_daily_date: string | null;
+  latest_theme_factor_date: string | null;
+  latest_opportunity_date: string | null;
+  latest_theme_member_snapshot: string | null;
 };
 
 export type DataCoverageRow = {
@@ -28,13 +32,23 @@ export type DataCoverageRow = {
   state_rows: number;
   signal_rows: number;
   signal_eval_rows: number;
+  theme_daily_rows: number;
+  theme_factor_rows: number;
+  opportunity_rows: number;
   quality_status?: string | null;
 };
 
 export type DataCalendarRow = {
   date: string;
   is_open: boolean | null;
-  coverage_status: "CLOSED" | "MISSING" | "RAW_ONLY" | "ANALYZED" | "COMPLETE" | "DEGRADED";
+  coverage_status:
+    | "CLOSED"
+    | "MISSING"
+    | "RAW_ONLY"
+    | "ANALYZED"
+    | "CORE_COMPLETE"
+    | "OPPORTUNITY_COMPLETE"
+    | "DEGRADED";
   stock_daily_rows: number;
   daily_basic_rows: number;
   adj_factor_rows: number;
@@ -45,6 +59,9 @@ export type DataCalendarRow = {
   state_rows: number;
   signal_rows: number;
   signal_eval_rows: number;
+  theme_daily_rows: number;
+  theme_factor_rows: number;
+  opportunity_rows: number;
   quality_status?: string | null;
 };
 

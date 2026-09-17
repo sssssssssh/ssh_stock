@@ -124,10 +124,42 @@ def test_member_snapshot_does_not_pass_when_a_theme_is_missing(monkeypatch) -> N
     )
     db = Db()
 
-    with pytest.raises(ValueError, match="snapshot incomplete"):
+    with pytest.raises(ValueError, match="CURRENT_MEMBER_EMPTY"):
         IngestionService(db, Provider()).sync_ths_theme_member_snapshot(date(2026, 9, 17))
 
     assert db.rollbacks == 1
     assert db.commits == 1
     assert quality[0].status == "ERROR"
     assert quality[0].expected_rows == 2
+
+
+def test_theme_member_normalizer_keeps_only_current_members_when_flags_are_valid() -> None:
+    target = date(2026, 9, 17)
+    rows = normalize_theme_members(
+        pd.DataFrame(
+            [
+                {"ts_code": "A.TI", "con_code": "000001.SZ", "is_new": "Y"},
+                {"ts_code": "A.TI", "con_code": "000002.SZ", "is_new": "N"},
+            ]
+        ),
+        target,
+    )
+
+    assert [row["ts_code"] for row in rows] == ["000001.SZ"]
+    assert rows[0]["is_new"] is True
+
+
+def test_theme_member_normalizer_keeps_all_members_when_flags_are_empty() -> None:
+    target = date(2026, 9, 17)
+    rows = normalize_theme_members(
+        pd.DataFrame(
+            [
+                {"ts_code": "A.TI", "con_code": "000001.SZ", "is_new": None},
+                {"ts_code": "A.TI", "con_code": "000002.SZ", "is_new": ""},
+            ]
+        ),
+        target,
+    )
+
+    assert {row["ts_code"] for row in rows} == {"000001.SZ", "000002.SZ"}
+    assert all(row["is_new"] is None for row in rows)

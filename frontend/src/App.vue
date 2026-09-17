@@ -201,7 +201,9 @@ const calendarSummary = computed(() => {
     open: openRows.length,
     pulled: openRows.filter((row) => row.stock_daily_rows > 0).length,
     analyzed: openRows.filter((row) => row.factor_rows > 0 && row.state_rows > 0).length,
-    complete: openRows.filter((row) => row.coverage_status === "COMPLETE").length
+    complete: openRows.filter((row) =>
+      ["CORE_COMPLETE", "OPPORTUNITY_COMPLETE"].includes(row.coverage_status)
+    ).length
   };
 });
 
@@ -738,7 +740,8 @@ function calendarStatusLabel(status: DataCalendarRow["coverage_status"] | undefi
     MISSING: "缺",
     RAW_ONLY: "原",
     ANALYZED: "算",
-    COMPLETE: "全",
+    CORE_COMPLETE: "核",
+    OPPORTUNITY_COMPLETE: "全",
     DEGRADED: "差"
   };
   return status ? map[status] : "--";

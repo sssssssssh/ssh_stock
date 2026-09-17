@@ -1182,3 +1182,11 @@ Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；�
 - 题材榜综合超额收益、成员广度、RPS、资金、涨停强度和换手活跃度；缺失增强源时按可用权重归一化，覆盖不足 50% 不输出 Heat。
 - 新增左侧反转池（S1/S2）、新右侧确认池（S3）和趋势强股池（S4/S5）。趋势池分开展示趋势质量、当前位置和过热风险。
 - 首页形成热门行业、热门题材、左侧反转、新右侧确认、趋势强股五个观察区；题材详情支持成员状态分布和历史日期查询。
+
+### 36.23 Milestone 10 收口（2026-09-17）
+
+- CatchUp 完整性增加 ThemeFactor 与 Opportunity：Theme 源 PASS/WARNING 时要求当前机会配置哈希的 ThemeFactor，当前 State 存在时要求同哈希、同算法版本的 Opportunity。
+- Theme Daily ERROR 不产生或覆盖 ThemeFactor；WARNING 可计算并展示 `source_coverage`。`data_coverage` 仅描述 Heat 特征可用比例，完整时为 1.0。
+- Theme 三类日频 Raw 使用成功快照权威对账，新增、修订和 stale 删除均触发 Dirty Repair；源错误保留旧数据。
+- Theme Catalog 日更，成员周更。成员接口返回有效 `is_new` 标志时只保存 Y，保证历史 PIT 不包含已退出成员。
+- 系统日历新增 CORE_COMPLETE、OPPORTUNITY_COMPLETE，数据覆盖页同时展示 Theme Daily、ThemeFactor 和 Opportunity。

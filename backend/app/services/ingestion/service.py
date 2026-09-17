@@ -106,6 +106,42 @@ INDEX_DAILY_VALUE_COLUMNS = [
 ST_VALUE_COLUMNS = ["name", "st_type", "st_type_name"]
 SUSPEND_VALUE_COLUMNS = ["suspend_timing"]
 LIMIT_VALUE_COLUMNS = ["pre_close", "up_limit", "down_limit", "asset_type", "exchange"]
+THEME_DAILY_VALUE_COLUMNS = [
+    "open",
+    "high",
+    "low",
+    "close",
+    "pre_close",
+    "avg_price",
+    "change",
+    "pct_change",
+    "vol",
+    "turnover_rate",
+    "total_mv",
+]
+THEME_MONEYFLOW_VALUE_COLUMNS = [
+    "lead_stock",
+    "close_price",
+    "pct_change",
+    "theme_index",
+    "company_num",
+    "lead_stock_pct_change",
+    "net_buy_amount",
+    "net_sell_amount",
+    "net_amount",
+]
+THEME_LIMIT_VALUE_COLUMNS = [
+    "days",
+    "up_stat",
+    "cons_nums",
+    "up_nums",
+    "pct_chg",
+    "hot_rank",
+]
+
+
+class ThemeDailyQualityError(ValueError):
+    pass
 
 
 class IngestionService:
@@ -687,32 +723,42 @@ class IngestionService:
             raise
 
     def sync_ths_theme_member_snapshot(self, snapshot_date: date) -> int:
-        theme_codes = list(
+        catalog_rows = list(
             self.db.execute(
-                select(Theme.theme_code).where(
+                select(Theme.theme_code, Theme.constituent_count).where(
                     Theme.source == "THS",
                     Theme.theme_type == "CONCEPT",
                     Theme.is_active.is_(True),
                 )
             )
-            .scalars()
             .all()
         )
+        theme_counts: dict[str, int | None] = {}
+        for row in catalog_rows:
+            if isinstance(row, str):
+                theme_counts[row] = None
+            else:
+                theme_counts[str(row[0])] = row[1]
+        theme_codes = list(theme_counts)
         try:
             if not theme_codes:
                 raise ValueError("no active THS themes; sync catalog first")
             frame = self.provider.get_ths_concept_members(theme_codes)
             rows = normalize_theme_members(frame, snapshot_date)
-            if not rows or frame.attrs.get("provider_warning"):
+            if frame.attrs.get("provider_warning"):
                 raise ValueError("THS theme member snapshot invalid or possibly truncated")
-            requested_codes = set(theme_codes)
+            requested_codes = {
+                code for code, count in theme_counts.items() if count is None or count > 0
+            }
             returned_codes = {str(row["theme_code"]) for row in rows}
-            if returned_codes != requested_codes:
-                missing = sorted(requested_codes - returned_codes)
+            missing = sorted(requested_codes - returned_codes)
+            if missing:
+                raise ValueError(f"CURRENT_MEMBER_EMPTY themes={missing[:20]}")
+            if not returned_codes.issubset(set(theme_codes)):
                 unexpected = sorted(returned_codes - requested_codes)
                 raise ValueError(
                     "THS theme member snapshot incomplete "
-                    f"missing={missing[:20]} unexpected={unexpected[:20]}"
+                    f"unexpected={unexpected[:20]}"
                 )
             unique = {
                 (row["snapshot_date"], row["theme_code"], row["ts_code"]): row for row in rows
@@ -785,18 +831,41 @@ class IngestionService:
                 dataset="ths_theme_daily",
             )
             persist_coverage_result(self.db, result)
+            if result.status == "ERROR":
+                self.db.commit()
+                raise ThemeDailyQualityError(
+                    "ths_theme_daily coverage ERROR "
+                    f"expected={result.expected_rows} actual={result.actual_rows}"
+                )
+            dirty_dates = reconcile_daily_snapshot(
+                self.db,
+                ThemeDaily,
+                rows,
+                trade_date=trade_date,
+                conflict_columns=["trade_date", "theme_code"],
+                compare_columns=THEME_DAILY_VALUE_COLUMNS,
+            )
             count = upsert_rows(self.db, ThemeDaily, rows, ["trade_date", "theme_code"])
+            record_dirty_range(
+                self.db,
+                dataset="theme_daily",
+                dirty_dates=dirty_dates,
+                reason="authoritative theme daily snapshot changed",
+            )
             self.db.commit()
             return count
+        except ThemeDailyQualityError:
+            raise
         except Exception as exc:
             self.db.rollback()
+            status = _optional_theme_error_status(exc)
             _persist_theme_quality(
                 self.db,
                 trade_date,
                 "ths_theme_daily",
                 len(active_codes),
                 0,
-                "ERROR",
+                status,
                 error=str(exc),
             )
             self.db.commit()
@@ -847,8 +916,30 @@ class IngestionService:
                 raise ValueError(f"{dataset} POSSIBLE_TRUNCATION")
             rows = [row for row in normalize(frame) if row["theme_code"] in active_codes]
             status = "PASS" if rows else "SOURCE_EMPTY"
-            if rows:
-                upsert_rows(self.db, model, rows, ["trade_date", "theme_code"])
+            compare_columns = (
+                THEME_MONEYFLOW_VALUE_COLUMNS
+                if model is ThemeMoneyflowDaily
+                else THEME_LIMIT_VALUE_COLUMNS
+            )
+            dirty_dates = reconcile_daily_snapshot(
+                self.db,
+                model,
+                rows,
+                trade_date=trade_date,
+                conflict_columns=["trade_date", "theme_code"],
+                compare_columns=compare_columns,
+            )
+            upsert_rows(self.db, model, rows, ["trade_date", "theme_code"])
+            record_dirty_range(
+                self.db,
+                dataset=(
+                    "theme_moneyflow_daily"
+                    if model is ThemeMoneyflowDaily
+                    else "theme_limit_daily"
+                ),
+                dirty_dates=dirty_dates,
+                reason=f"authoritative {dataset} snapshot changed",
+            )
             _persist_theme_quality(self.db, trade_date, dataset, len(rows), len(rows), status)
             self.db.commit()
             return status
@@ -906,7 +997,9 @@ def _persist_theme_quality(
             missing_codes=[],
             extra_codes=[],
             status=status,
-            error_count=1 if status == "ERROR" else 0,
+            error_count=1
+            if status in {"ERROR", "PERMISSION_UNAVAILABLE", "TRANSIENT_ERROR"}
+            else 0,
         ),
         extra_issue_codes={"source_error": error[:1000]} if error else None,
     )
