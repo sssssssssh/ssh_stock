@@ -160,13 +160,20 @@ class CatchUpJob:
         if raw_quality.overall_status == "ERROR":
             statuses = raw_quality.as_metadata()["current_day_datasets"]
             raise DataQualityError(
-                "raw completeness failed: "
-                f"trade_date={trade_date} statuses={statuses}"
+                f"raw completeness failed: trade_date={trade_date} statuses={statuses}"
             )
         TradeStatusService(self.db).recalc(trade_date, trade_date)
 
     def _refresh_raw_only(self, trade_date: date) -> None:
         self._sync_and_validate_raw_date(trade_date)
+        try:
+            self.ingestion.sync_theme_daily(trade_date)
+            self.ingestion.sync_theme_optional_sources(trade_date)
+        except Exception as exc:
+            self.db.rollback()
+            logger.exception(
+                "catch-up theme refresh failed trade_date={} error={}", trade_date, exc
+            )
 
     def _run_dirty_repair_if_needed(self) -> None:
         dirty_ranges = repairable_dirty_ranges(
@@ -393,6 +400,4 @@ def _candidate_catchup_dates(
 
 
 def _count_matching(db: Session, model: type, *criteria) -> int:
-    return int(
-        db.execute(select(func.count()).select_from(model).where(*criteria)).scalar_one()
-    )
+    return int(db.execute(select(func.count()).select_from(model).where(*criteria)).scalar_one())

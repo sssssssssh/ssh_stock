@@ -35,6 +35,14 @@ class _FakeIngestion:
         self.calls.append("sector_members")
         return 30
 
+    def sync_ths_themes(self, snapshot_date):
+        self.calls.append("theme_catalog")
+        return 3
+
+    def sync_ths_theme_member_snapshot(self, snapshot_date):
+        self.calls.append("theme_members")
+        return 12
+
 
 def test_basic_info_job_syncs_metadata_only(monkeypatch) -> None:
     monkeypatch.setattr(basic_info_job_module, "IngestionService", _FakeIngestion)
@@ -54,7 +62,13 @@ def test_basic_info_job_syncs_metadata_only(monkeypatch) -> None:
 
     BasicInfoJob(_FakeDb(), provider).run(job=job)
 
-    assert provider.calls == ["stock_basic", "sector_metadata", "sector_members"]
+    assert provider.calls == [
+        "stock_basic",
+        "sector_metadata",
+        "sector_members",
+        "theme_catalog",
+        "theme_members",
+    ]
     assert job.status == "SUCCESS"
     assert job.step == "180 sync basic info complete"
-    assert job.row_count == 42
+    assert job.row_count == 57

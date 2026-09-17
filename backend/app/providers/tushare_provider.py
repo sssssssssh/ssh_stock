@@ -347,6 +347,63 @@ class TushareProvider:
             return pd.DataFrame()
         return _deduplicate_sector_members(pd.concat(frames, ignore_index=True))
 
+    def get_ths_concepts(self) -> pd.DataFrame:
+        return self._call(
+            "ths_index",
+            exchange="A",
+            type="N",
+            fields="ts_code,name,count,exchange,list_date,type",
+        )
+
+    def get_ths_concept_members(self, concept_codes: list[str]) -> pd.DataFrame:
+        frames: list[pd.DataFrame] = []
+        for code in concept_codes:
+            frame = self._call(
+                "ths_member",
+                ts_code=code,
+                fields="ts_code,con_code,con_name,weight,in_date,out_date,is_new",
+            )
+            if frame.attrs.get("provider_warning"):
+                raise RuntimeError(f"ths_member POSSIBLE_TRUNCATION theme_code={code}")
+            required = {"ts_code", "con_code"}
+            if not required <= set(frame.columns):
+                raise RuntimeError(
+                    f"ths_member schema invalid theme_code={code} "
+                    f"missing={sorted(required - set(frame.columns))}"
+                )
+            frames.append(frame)
+        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    def get_ths_daily(self, trade_date: date) -> pd.DataFrame:
+        return self._call(
+            "ths_daily",
+            log_trade_date=trade_date,
+            trade_date=to_tushare_date(trade_date),
+            fields=(
+                "ts_code,trade_date,open,high,low,close,pre_close,avg_price,change,"
+                "pct_change,vol,turnover_rate,total_mv"
+            ),
+        )
+
+    def get_ths_concept_moneyflow(self, trade_date: date) -> pd.DataFrame:
+        return self._call(
+            "moneyflow_cnt_ths",
+            log_trade_date=trade_date,
+            trade_date=to_tushare_date(trade_date),
+            fields=(
+                "trade_date,ts_code,name,lead_stock,close_price,pct_change,industry_index,"
+                "company_num,pct_change_stock,net_buy_amount,net_sell_amount,net_amount"
+            ),
+        )
+
+    def get_limit_concept_list(self, trade_date: date) -> pd.DataFrame:
+        return self._call(
+            "limit_cpt_list",
+            log_trade_date=trade_date,
+            trade_date=to_tushare_date(trade_date),
+            fields="ts_code,name,trade_date,days,up_stat,cons_nums,up_nums,pct_chg,rank",
+        )
+
     def _get_sector_member_batches(
         self,
         classification: pd.DataFrame,

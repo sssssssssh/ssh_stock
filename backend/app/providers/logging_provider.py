@@ -119,3 +119,27 @@ class LoggingMarketDataProvider:
 
     def get_sector_members(self) -> pd.DataFrame:
         return self._logged("index_member_all", None, self.inner.get_sector_members)
+
+    def get_ths_concepts(self) -> pd.DataFrame:
+        return self._logged("ths_index", None, self.inner.get_ths_concepts)
+
+    def get_ths_concept_members(self, concept_codes: list[str]) -> pd.DataFrame:
+        return self._logged(
+            "ths_member", None, self.inner.get_ths_concept_members, concept_codes
+        )
+
+    def get_ths_daily(self, trade_date: date) -> pd.DataFrame:
+        return self._logged("ths_daily", trade_date, self.inner.get_ths_daily, trade_date)
+
+    def get_ths_concept_moneyflow(self, trade_date: date) -> pd.DataFrame:
+        return self._logged(
+            "moneyflow_cnt_ths",
+            trade_date,
+            self.inner.get_ths_concept_moneyflow,
+            trade_date,
+        )
+
+    def get_limit_concept_list(self, trade_date: date) -> pd.DataFrame:
+        return self._logged(
+            "limit_cpt_list", trade_date, self.inner.get_limit_concept_list, trade_date
+        )

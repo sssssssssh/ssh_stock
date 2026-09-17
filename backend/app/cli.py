@@ -111,7 +111,13 @@ def provider_smoke_test(
         typer.echo(f"provider_smoke_ok=false error={type(exc).__name__}: {exc}")
         raise typer.Exit(code=1) from exc
     for result in results:
-        typer.echo(f"{result.api_name}: rows={result.rows} status=PASS")
+        if result.api_name == "theme_capability":
+            typer.echo(f"theme_capability={result.status}")
+            continue
+        detail = f" detail={result.detail}" if result.detail else ""
+        typer.echo(
+            f"{result.api_name}: rows={result.rows} status={result.status}{detail}"
+        )
     typer.echo("provider_smoke_ok=true")
 
 

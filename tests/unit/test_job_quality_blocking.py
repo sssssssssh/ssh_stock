@@ -98,6 +98,14 @@ class _FakeIngestion:
         self._record("sector_members")
         return 1
 
+    def sync_theme_daily(self, trade_date):
+        self._record("theme_daily")
+        return 1
+
+    def sync_theme_optional_sources(self, trade_date):
+        self._record("theme_optional")
+        return {"moneyflow": "PASS", "limit": "PASS"}
+
 
 class _FakeScalarService:
     def __init__(self, db):
@@ -123,6 +131,8 @@ class _FakeProvider:
 @pytest.fixture(autouse=True)
 def _patch_trade_status_service(monkeypatch):
     monkeypatch.setattr(daily_job_module, "TradeStatusService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "ThemeFactorService", _FakeScalarService)
+    monkeypatch.setattr(daily_job_module, "OpportunityService", _FakeScalarService)
 
 
 def _job(job_type: str = "daily") -> SimpleNamespace:
@@ -425,14 +435,16 @@ def test_backfill_prefetches_index_daily_by_range_when_missing(monkeypatch) -> N
     BackfillJob(_FakeDb(), provider).run(date(2026, 1, 5), date(2026, 1, 5), job=job)
 
     assert job.status == "SUCCESS"
-    assert provider.calls == ["index_daily_range"]
+    assert provider.calls == ["index_daily_range", "theme_daily", "theme_optional"]
 
 
 def test_backfill_falls_back_to_daily_index_when_range_fails(monkeypatch) -> None:
-    states = iter([
-        _raw_complete("ERROR", False),
-        _raw_complete(),
-    ])
+    states = iter(
+        [
+            _raw_complete("ERROR", False),
+            _raw_complete(),
+        ]
+    )
 
     class FallbackIngestion(_FakeIngestion):
         def sync_index_daily_range(self, start, end, job_id=None):
@@ -455,7 +467,12 @@ def test_backfill_falls_back_to_daily_index_when_range_fails(monkeypatch) -> Non
     BackfillJob(_FakeDb(), provider).run(date(2026, 1, 5), date(2026, 1, 5), job=job)
 
     assert job.status == "SUCCESS"
-    assert provider.calls == ["index_daily_range", "index_daily"]
+    assert provider.calls == [
+        "index_daily_range",
+        "theme_daily",
+        "theme_optional",
+        "index_daily",
+    ]
     assert job.job_metadata["index_daily_range_status"] == "WARNING"
 
 

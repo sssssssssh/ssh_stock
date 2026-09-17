@@ -1,6 +1,7 @@
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.models.job import JobRun
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
@@ -54,6 +55,29 @@ class BasicInfoJob:
                 metadata={**metadata, "stage": "sector_members", "progress_pct": 85},
             )
             total_rows += self.ingestion.sync_sector_members()
+
+            snapshot_date = business_today()
+            update_job(
+                self.db,
+                job,
+                step="27 sync THS theme catalog",
+                row_count=total_rows,
+                metadata={**metadata, "stage": "theme_catalog", "progress_pct": 90},
+            )
+            try:
+                total_rows += self.ingestion.sync_ths_themes(snapshot_date)
+                total_rows += self.ingestion.sync_ths_theme_member_snapshot(snapshot_date)
+                metadata = {**metadata, "theme_sync_status": "PASS"}
+            except Exception as exc:
+                self.db.rollback()
+                metadata = {
+                    **metadata,
+                    "theme_sync_status": "ERROR",
+                    "theme_sync_error": str(exc)[:1000],
+                }
+                logger.exception(
+                    "THS theme snapshot sync failed without rolling back core basic data"
+                )
 
             update_job(
                 self.db,

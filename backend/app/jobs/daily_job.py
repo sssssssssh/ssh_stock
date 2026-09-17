@@ -10,6 +10,7 @@ from app.repositories.job_run import start_job, update_job
 from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
 from app.services.market import MarketService
+from app.services.opportunity import OpportunityService
 from app.services.quality.daily_quality import DataQualityError, record_cross_table_quality
 from app.services.quality.raw_completeness import (
     RawCompletenessResult,
@@ -17,6 +18,7 @@ from app.services.quality.raw_completeness import (
     trade_calendar_open_status,
 )
 from app.services.sector import SectorService
+from app.services.theme import ThemeFactorService
 from app.services.trade_status import TradeStatusService
 from app.services.trend import TrendService
 
@@ -28,7 +30,7 @@ class DailyJob:
 
     def run(self, trade_date: date, job: JobRun | None = None) -> None:
         job = job or start_job(self.db, "daily", trade_date)
-        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 15}
+        metadata = {"trade_date": trade_date.isoformat(), "stage_total": 19}
         update_job(
             self.db,
             job,
@@ -151,9 +153,33 @@ class DailyJob:
             update_job(
                 self.db,
                 job,
-                step="75 calculate trade status",
+                step="72 sync theme raw",
                 row_count=total_rows,
                 metadata=_progress(metadata, 11),
+            )
+            try:
+                total_rows += self.ingestion.sync_theme_daily(trade_date)
+                optional_status = self.ingestion.sync_theme_optional_sources(trade_date)
+                metadata = {
+                    **metadata,
+                    "theme_sync_status": "PASS",
+                    "theme_optional_status": optional_status,
+                }
+            except Exception as exc:
+                self.db.rollback()
+                metadata = {
+                    **metadata,
+                    "theme_sync_status": "ERROR",
+                    "theme_sync_error": str(exc)[:1000],
+                }
+                logger.exception("theme raw sync failed; continuing core daily analysis")
+
+            update_job(
+                self.db,
+                job,
+                step="75 calculate trade status",
+                row_count=total_rows,
+                metadata=_progress(metadata, 12),
             )
             total_rows += TradeStatusService(self.db).recalc(
                 trade_date,
@@ -166,7 +192,7 @@ class DailyJob:
                 job,
                 step="80 calculate stock factors",
                 row_count=total_rows,
-                metadata=_progress(metadata, 12),
+                metadata=_progress(metadata, 13),
             )
             total_rows += FactorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
@@ -175,7 +201,7 @@ class DailyJob:
                 job,
                 step="90 calculate market score",
                 row_count=total_rows,
-                metadata=_progress(metadata, 13),
+                metadata=_progress(metadata, 14),
             )
             total_rows += MarketService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
@@ -184,16 +210,27 @@ class DailyJob:
                 job,
                 step="100 calculate sector heat",
                 row_count=total_rows,
-                metadata=_progress(metadata, 14),
+                metadata=_progress(metadata, 15),
             )
             total_rows += SectorService(self.db).recalc(trade_date, trade_date, calc_run_id=job.id)
 
             update_job(
                 self.db,
                 job,
+                step="105 calculate theme heat",
+                row_count=total_rows,
+                metadata=_progress(metadata, 16),
+            )
+            total_rows += ThemeFactorService(self.db).recalc(
+                trade_date, trade_date, calc_run_id=job.id
+            )
+
+            update_job(
+                self.db,
+                job,
                 step="110 calculate trend states",
                 row_count=total_rows,
-                metadata=_progress(metadata, 15),
+                metadata=_progress(metadata, 17),
             )
             trend_rows = TrendService(self.db).recalc(
                 trade_date,
@@ -201,6 +238,16 @@ class DailyJob:
                 calc_run_id=job.id,
             )
             total_rows += trend_rows["states"] + trend_rows["signals"]
+            update_job(
+                self.db,
+                job,
+                step="120 calculate opportunities",
+                row_count=total_rows,
+                metadata=_progress(metadata, 18),
+            )
+            total_rows += OpportunityService(self.db).recalc(
+                trade_date, trade_date, calc_run_id=job.id
+            )
             quality = record_cross_table_quality(
                 self.db,
                 trade_date,
@@ -220,7 +267,7 @@ class DailyJob:
                 status="SUCCESS",
                 step="180 mark SUCCESS",
                 row_count=total_rows,
-                metadata={**metadata, "stage_index": 15, "progress_pct": 100},
+                metadata={**metadata, "stage_index": 19, "progress_pct": 100},
             )
             logger.info("daily job success trade_date={} rows={}", trade_date, total_rows)
         except Exception as exc:

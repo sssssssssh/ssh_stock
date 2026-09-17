@@ -13,9 +13,12 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import DashboardView from "./components/DashboardView.vue";
 import DataQuality from "./components/DataQuality.vue";
 import JobCenter from "./components/JobCenter.vue";
+import OpportunityTable from "./components/OpportunityTable.vue";
 import ResearchSummary from "./components/ResearchSummary.vue";
 import SectorHeatPanel from "./components/SectorHeat.vue";
 import StockPool from "./components/StockPool.vue";
+import ThemeDetail from "./components/ThemeDetail.vue";
+import ThemeHeatTable from "./components/ThemeHeatTable.vue";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -25,11 +28,16 @@ import {
   fetchDataCoverage,
   fetchDecayPool,
   fetchJobs,
+  fetchLeftReversal,
+  fetchOpportunityRightSide,
+  fetchOpportunityTrends,
   fetchRealtimeKline,
   fetchResearchStats,
   fetchRightSidePool,
   fetchSectorHeat,
   fetchSystemStatus,
+  fetchThemeHeat,
+  fetchThemeOverview,
   fetchTrendPool
 } from "./services/api";
 import type {
@@ -37,12 +45,15 @@ import type {
   DataCalendarRow,
   DataCoverageRow,
   JobRun,
+  OpportunityItem,
   RealtimeKlineResponse,
   RealtimeKlineRow,
   ResearchStats,
   SectorHeat,
   StockPoolItem,
-  SystemStatus
+  SystemStatus,
+  ThemeHeat,
+  ThemeOverview
 } from "./types";
 
 type ViewKey = "overview" | "data" | "long" | "short";
@@ -99,6 +110,13 @@ const rightSidePool = ref<StockPoolItem[]>([]);
 const trendPool = ref<StockPoolItem[]>([]);
 const decayPool = ref<StockPoolItem[]>([]);
 const researchStats = ref<ResearchStats | null>(null);
+const themeHeat = ref<ThemeHeat[]>([]);
+const leftOpportunities = ref<OpportunityItem[]>([]);
+const rightOpportunities = ref<OpportunityItem[]>([]);
+const trendOpportunities = ref<OpportunityItem[]>([]);
+const selectedTheme = ref<ThemeHeat | null>(null);
+const themeOverview = ref<ThemeOverview | null>(null);
+const themeDetailLoading = ref(false);
 const marketChartRef = ref<HTMLDivElement | null>(null);
 const sectorChartRef = ref<HTMLDivElement | null>(null);
 const klineChartRef = ref<HTMLDivElement | null>(null);
@@ -244,7 +262,11 @@ async function loadData() {
       nextTrend,
       nextDecay,
       nextSectorHeat,
-      nextResearchStats
+      nextResearchStats,
+      nextThemeHeat,
+      nextLeftOpportunities,
+      nextRightOpportunities,
+      nextTrendOpportunities
     ] = await Promise.all([
       fetchSystemStatus(),
       fetchDashboardSummary(),
@@ -255,7 +277,11 @@ async function loadData() {
       fetchTrendPool(),
       fetchDecayPool(),
       fetchSectorHeat(),
-      fetchResearchStats()
+      fetchResearchStats(),
+      fetchThemeHeat(),
+      fetchLeftReversal(),
+      fetchOpportunityRightSide(),
+      fetchOpportunityTrends()
     ]);
     status.value = nextStatus;
     summary.value = nextSummary;
@@ -267,6 +293,10 @@ async function loadData() {
     decayPool.value = nextDecay;
     sectorHeat.value = nextSectorHeat.length ? nextSectorHeat : nextSummary.sector_heat_top;
     researchStats.value = nextResearchStats;
+    themeHeat.value = nextThemeHeat;
+    leftOpportunities.value = nextLeftOpportunities;
+    rightOpportunities.value = nextRightOpportunities;
+    trendOpportunities.value = nextTrendOpportunities;
     await nextTick();
     renderCharts();
   } catch (error) {
@@ -286,6 +316,24 @@ async function refreshJobStatus() {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "任务状态刷新失败";
   }
+}
+
+async function openThemeDetail(theme: ThemeHeat) {
+  selectedTheme.value = theme;
+  themeOverview.value = null;
+  themeDetailLoading.value = true;
+  try {
+    themeOverview.value = await fetchThemeOverview(theme.theme_code);
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "题材详情加载失败";
+  } finally {
+    themeDetailLoading.value = false;
+  }
+}
+
+function closeThemeDetail() {
+  selectedTheme.value = null;
+  themeOverview.value = null;
 }
 
 async function loadCoverageCalendar() {
@@ -937,6 +985,39 @@ function statusLabel(status: string) {
             <ResearchSummary :stats="researchStats" :format-percent="formatPercent" />
           </template>
         </DashboardView>
+        <section class="discovery-grid">
+          <SectorHeatPanel
+            title="热门行业"
+            subtitle="申万一级行业"
+            :rows="sectorHeat.slice(0, 15)"
+            :format-number="formatNumber"
+          />
+          <ThemeHeatTable
+            :rows="themeHeat"
+            :format-number="formatNumber"
+            @select="openThemeDetail"
+          />
+        </section>
+        <section class="discovery-grid">
+          <OpportunityTable
+            title="左侧反转"
+            kind="left"
+            :rows="leftOpportunities"
+            :format-number="formatNumber"
+          />
+          <OpportunityTable
+            title="新右侧确认"
+            kind="right"
+            :rows="rightOpportunities"
+            :format-number="formatNumber"
+          />
+        </section>
+        <OpportunityTable
+          title="趋势强股"
+          kind="trend"
+          :rows="trendOpportunities"
+          :format-number="formatNumber"
+        />
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">
@@ -1136,5 +1217,11 @@ function statusLabel(status: string) {
         <div v-else class="empty-block">暂无 K 线数据</div>
       </section>
     </div>
+    <ThemeDetail
+      v-if="selectedTheme"
+      :data="themeOverview"
+      :loading="themeDetailLoading"
+      @close="closeThemeDetail"
+    />
   </main>
 </template>

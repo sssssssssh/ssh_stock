@@ -18,7 +18,7 @@ router = APIRouter()
 @router.get("/heat")
 def heat(
     trade_date: date | None = None,
-    level: str | None = None,
+    level: str | None = "L1",
     sort: str = "heat_score",
     limit: int = 30,
     offset: int = 0,

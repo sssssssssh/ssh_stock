@@ -4,11 +4,14 @@ import type {
   DataCoverageRow,
   DashboardSummary,
   JobRun,
+  OpportunityItem,
   RealtimeKlineResponse,
   ResearchStats,
   SectorHeat,
   StockPoolItem,
-  SystemStatus
+  SystemStatus,
+  ThemeHeat,
+  ThemeOverview
 } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -52,6 +55,26 @@ export function fetchRightSidePool(): Promise<StockPoolItem[]> {
 
 export function fetchTrendPool(): Promise<StockPoolItem[]> {
   return request<StockPoolItem[]>("/stocks/trends?states=S4,S5&limit=80");
+}
+
+export function fetchThemeHeat(): Promise<ThemeHeat[]> {
+  return request<ThemeHeat[]>("/themes?limit=30");
+}
+
+export function fetchLeftReversal(): Promise<OpportunityItem[]> {
+  return request<OpportunityItem[]>("/opportunities/left-reversal?limit=50");
+}
+
+export function fetchOpportunityRightSide(): Promise<OpportunityItem[]> {
+  return request<OpportunityItem[]>("/opportunities/right-side?new_only=true&limit=50");
+}
+
+export function fetchOpportunityTrends(): Promise<OpportunityItem[]> {
+  return request<OpportunityItem[]>("/opportunities/trends?limit=80");
+}
+
+export function fetchThemeOverview(themeCode: string): Promise<ThemeOverview> {
+  return request<ThemeOverview>(`/themes/${encodeURIComponent(themeCode)}/overview`);
 }
 
 export function fetchDecayPool(): Promise<StockPoolItem[]> {

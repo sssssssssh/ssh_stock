@@ -12,17 +12,13 @@ class _SmokeProvider:
         )
 
     def get_stock_basic(self):
-        return pd.DataFrame(
-            [{"ts_code": "000001.SZ", "list_status": "L", "list_date": "19910403"}]
-        )
+        return pd.DataFrame([{"ts_code": "000001.SZ", "list_status": "L", "list_date": "19910403"}])
 
     def get_daily(self, trade_date):
         return pd.DataFrame([{"trade_date": trade_date, "ts_code": "000001.SZ", "close": 10}])
 
     def get_adj_factor(self, trade_date):
-        return pd.DataFrame(
-            [{"trade_date": trade_date, "ts_code": "000001.SZ", "adj_factor": 1}]
-        )
+        return pd.DataFrame([{"trade_date": trade_date, "ts_code": "000001.SZ", "adj_factor": 1}])
 
     def get_daily_basic(self, trade_date):
         return pd.DataFrame(
@@ -66,6 +62,47 @@ class _SmokeProvider:
             ]
         )
 
+    def get_ths_concepts(self):
+        return pd.DataFrame([{"ts_code": "885001.TI", "name": "概念", "type": "N"}])
+
+    def get_ths_daily(self, trade_date):
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "885001.TI",
+                    "trade_date": trade_date,
+                    "close": 100,
+                    "turnover_rate": 1,
+                }
+            ]
+        )
+
+    def get_ths_concept_members(self, theme_codes):
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "000001.SZ",
+                    "con_code": theme_codes[0],
+                    "con_name": "概念",
+                }
+            ]
+        )
+
+    def get_ths_concept_moneyflow(self, trade_date):
+        return pd.DataFrame([{"ts_code": "885001.TI", "trade_date": trade_date, "net_amount": 1}])
+
+    def get_limit_concept_list(self, trade_date):
+        return pd.DataFrame(
+            [
+                {
+                    "ts_code": "885001.TI",
+                    "trade_date": trade_date,
+                    "up_nums": 1,
+                    "cons_nums": 0,
+                }
+            ]
+        )
+
 
 def test_provider_smoke_test_checks_all_required_apis() -> None:
     results = run_provider_smoke_test(
@@ -86,7 +123,14 @@ def test_provider_smoke_test_checks_all_required_apis() -> None:
         "stock_st",
         "suspend_d",
         "stk_limit",
+        "ths_index",
+        "ths_daily",
+        "ths_member",
+        "moneyflow_cnt_ths",
+        "limit_cpt_list",
+        "theme_capability",
     ]
+    assert results[-1].status == "FULL"
 
 
 def test_provider_smoke_test_rejects_missing_required_fields() -> None:
@@ -99,3 +143,20 @@ def test_provider_smoke_test_rejects_missing_required_fields() -> None:
             date(2026, 9, 15),
             index_codes=["000300.SH"],
         )
+
+
+def test_provider_smoke_test_degrades_optional_permission_errors() -> None:
+    provider = _SmokeProvider()
+    provider.get_ths_concept_moneyflow = lambda trade_date: (_ for _ in ()).throw(
+        RuntimeError("permission denied")
+    )
+
+    results = run_provider_smoke_test(
+        provider,
+        date(2026, 9, 15),
+        index_codes=["000300.SH"],
+    )
+
+    by_name = {result.api_name: result for result in results}
+    assert by_name["moneyflow_cnt_ths"].status == "PERMISSION_UNAVAILABLE"
+    assert by_name["theme_capability"].status == "NO_MONEYFLOW"

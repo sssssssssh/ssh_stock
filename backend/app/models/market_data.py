@@ -352,7 +352,7 @@ class DataQualityDaily(Base):
     null_count: Mapped[int | None] = mapped_column(Integer)
     warning_count: Mapped[int | None] = mapped_column(Integer)
     error_count: Mapped[int | None] = mapped_column(Integer)
-    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
     issue_codes: Mapped[dict | None] = mapped_column(JSONB)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -504,3 +504,197 @@ class SignalForwardEval(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class Theme(Base):
+    __tablename__ = "theme"
+
+    theme_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    theme_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    exchange: Mapped[str | None] = mapped_column(String(16))
+    constituent_count: Mapped[int | None] = mapped_column(Integer)
+    list_date: Mapped[date | None] = mapped_column(Date)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    first_seen_date: Mapped[date | None] = mapped_column(Date)
+    last_seen_date: Mapped[date | None] = mapped_column(Date)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThemeMemberSnapshot(Base):
+    __tablename__ = "theme_member_snapshot"
+    __table_args__ = (
+        PrimaryKeyConstraint("snapshot_date", "theme_code", "ts_code"),
+        Index("idx_theme_member_stock_snapshot", "ts_code", "snapshot_date"),
+    )
+
+    snapshot_date: Mapped[date] = mapped_column(Date)
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    ts_code: Mapped[str] = mapped_column(String(16))
+    stock_name: Mapped[str | None] = mapped_column(String(64))
+    is_new: Mapped[bool | None] = mapped_column(Boolean)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ThemeDaily(Base):
+    __tablename__ = "theme_daily"
+    __table_args__ = (
+        PrimaryKeyConstraint("trade_date", "theme_code"),
+        Index("idx_theme_daily_code_date", "theme_code", "trade_date"),
+    )
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    open: Mapped[float | None] = mapped_column(Float)
+    high: Mapped[float | None] = mapped_column(Float)
+    low: Mapped[float | None] = mapped_column(Float)
+    close: Mapped[float | None] = mapped_column(Float)
+    pre_close: Mapped[float | None] = mapped_column(Float)
+    avg_price: Mapped[float | None] = mapped_column(Float)
+    change: Mapped[float | None] = mapped_column(Float)
+    pct_change: Mapped[float | None] = mapped_column(Float)
+    vol: Mapped[float | None] = mapped_column(Float)
+    turnover_rate: Mapped[float | None] = mapped_column(Float)
+    total_mv: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThemeMoneyflowDaily(Base):
+    __tablename__ = "theme_moneyflow_daily"
+    __table_args__ = (PrimaryKeyConstraint("trade_date", "theme_code"),)
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    name: Mapped[str | None] = mapped_column(String(128))
+    lead_stock: Mapped[str | None] = mapped_column(String(64))
+    close_price: Mapped[float | None] = mapped_column(Float)
+    pct_change: Mapped[float | None] = mapped_column(Float)
+    theme_index: Mapped[float | None] = mapped_column(Float)
+    company_num: Mapped[float | None] = mapped_column(Float)
+    lead_stock_pct_change: Mapped[float | None] = mapped_column(Float)
+    net_buy_amount: Mapped[float | None] = mapped_column(Float)
+    net_sell_amount: Mapped[float | None] = mapped_column(Float)
+    net_amount: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThemeLimitDaily(Base):
+    __tablename__ = "theme_limit_daily"
+    __table_args__ = (PrimaryKeyConstraint("trade_date", "theme_code"),)
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    name: Mapped[str | None] = mapped_column(String(128))
+    days: Mapped[int | None] = mapped_column(Integer)
+    up_stat: Mapped[str | None] = mapped_column(String(64))
+    cons_nums: Mapped[int | None] = mapped_column(Integer)
+    up_nums: Mapped[int | None] = mapped_column(Integer)
+    pct_chg: Mapped[float | None] = mapped_column(Float)
+    hot_rank: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ThemeFactorDaily(Base):
+    __tablename__ = "theme_factor_daily"
+    __table_args__ = (
+        PrimaryKeyConstraint("trade_date", "theme_code"),
+        Index("idx_theme_factor_date_rank", "trade_date", "heat_rank"),
+    )
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    member_snapshot_date: Mapped[date | None] = mapped_column(Date)
+    member_count: Mapped[int | None] = mapped_column(Integer)
+    eligible_member_count: Mapped[int | None] = mapped_column(Integer)
+    return1: Mapped[float | None] = mapped_column(Float)
+    return3: Mapped[float | None] = mapped_column(Float)
+    return5: Mapped[float | None] = mapped_column(Float)
+    return20: Mapped[float | None] = mapped_column(Float)
+    excess_return5: Mapped[float | None] = mapped_column(Float)
+    excess_return20: Mapped[float | None] = mapped_column(Float)
+    breadth20: Mapped[float | None] = mapped_column(Float)
+    breadth60: Mapped[float | None] = mapped_column(Float)
+    up_rate: Mapped[float | None] = mapped_column(Float)
+    new_high20_rate: Mapped[float | None] = mapped_column(Float)
+    rps60_median: Mapped[float | None] = mapped_column(Float)
+    turnover_rate: Mapped[float | None] = mapped_column(Float)
+    turnover_ratio20: Mapped[float | None] = mapped_column(Float)
+    net_amount: Mapped[float | None] = mapped_column(Float)
+    net_amount_3d: Mapped[float | None] = mapped_column(Float)
+    net_amount_per_member: Mapped[float | None] = mapped_column(Float)
+    moneyflow_score: Mapped[float | None] = mapped_column(Float)
+    limit_up_count: Mapped[int | None] = mapped_column(Integer)
+    limit_up_density: Mapped[float | None] = mapped_column(Float)
+    continuous_limit_count: Mapped[int | None] = mapped_column(Integer)
+    continuous_limit_density: Mapped[float | None] = mapped_column(Float)
+    hot_list_days: Mapped[int | None] = mapped_column(Integer)
+    hot_rank: Mapped[int | None] = mapped_column(Integer)
+    limit_strength_score: Mapped[float | None] = mapped_column(Float)
+    heat_score: Mapped[float | None] = mapped_column(Float)
+    heat_rank: Mapped[int | None] = mapped_column(Integer)
+    heat_momentum1: Mapped[float | None] = mapped_column(Float)
+    heat_momentum3: Mapped[float | None] = mapped_column(Float)
+    rank_change: Mapped[int | None] = mapped_column(Integer)
+    lifecycle: Mapped[str | None] = mapped_column(String(32))
+    data_coverage: Mapped[float | None] = mapped_column(Float)
+    calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class StockOpportunityDaily(Base):
+    __tablename__ = "stock_opportunity_daily"
+    __table_args__ = (
+        PrimaryKeyConstraint("trade_date", "ts_code", "algo_version"),
+        Index(
+            "idx_opportunity_date_stage_score",
+            "trade_date",
+            "opportunity_stage",
+            "opportunity_score",
+        ),
+    )
+
+    trade_date: Mapped[date] = mapped_column(Date)
+    ts_code: Mapped[str] = mapped_column(String(16))
+    algo_version: Mapped[str] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    previous_state: Mapped[str | None] = mapped_column(String(16))
+    state_day_count: Mapped[int | None] = mapped_column(Integer)
+    left_reversal_score: Mapped[float | None] = mapped_column(Float)
+    left_reversal_new: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    right_side_score: Mapped[float | None] = mapped_column(Float)
+    trend_score: Mapped[float | None] = mapped_column(Float)
+    trend_rank_score: Mapped[float | None] = mapped_column(Float)
+    position_score: Mapped[float | None] = mapped_column(Float)
+    extension_risk: Mapped[str | None] = mapped_column(String(16))
+    market_score: Mapped[float | None] = mapped_column(Float)
+    industry_sector_id: Mapped[int | None] = mapped_column(Integer)
+    industry_heat: Mapped[float | None] = mapped_column(Float)
+    industry_lifecycle: Mapped[str | None] = mapped_column(String(32))
+    primary_theme_code: Mapped[str | None] = mapped_column(String(32))
+    primary_theme_name: Mapped[str | None] = mapped_column(String(128))
+    primary_theme_heat: Mapped[float | None] = mapped_column(Float)
+    primary_theme_lifecycle: Mapped[str | None] = mapped_column(String(32))
+    hot_theme_count: Mapped[int | None] = mapped_column(Integer)
+    context_score: Mapped[float | None] = mapped_column(Float)
+    opportunity_stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    opportunity_score: Mapped[float | None] = mapped_column(Float)
+    reason_codes: Mapped[dict | None] = mapped_column(JSONB)
+    calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

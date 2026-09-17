@@ -159,8 +159,72 @@ export type DashboardSummary = {
   state_counts: StateCount[];
   signal_counts: SignalCount[];
   sector_heat_top: SectorHeat[];
-  right_side_new: StockPoolItem[];
-  trend_leaders: StockPoolItem[];
+  industry_heat_top: SectorHeat[];
+  theme_heat_top: ThemeHeat[];
+  left_reversal_top: OpportunityItem[];
+  right_side_new: OpportunityItem[];
+  trend_leaders: OpportunityItem[];
+};
+
+export type ThemeHeat = {
+  trade_date: string;
+  theme_code: string;
+  name: string;
+  heat_score: number | null;
+  heat_rank: number | null;
+  heat_momentum3: number | null;
+  rank_change: number | null;
+  lifecycle: string | null;
+  return1: number | null;
+  return5: number | null;
+  moneyflow_score: number | null;
+  net_amount: number | null;
+  limit_up_count: number | null;
+  continuous_limit_count: number | null;
+  breadth20: number | null;
+  rps60_median: number | null;
+  data_coverage: number | null;
+  member_count?: number | null;
+  eligible_member_count?: number | null;
+};
+
+export type OpportunityItem = {
+  trade_date: string;
+  ts_code: string;
+  name: string | null;
+  state: string;
+  previous_state: string | null;
+  left_reversal_score: number | null;
+  left_reversal_new: boolean;
+  right_side_score: number | null;
+  trend_score: number | null;
+  trend_rank_score: number | null;
+  position_score: number | null;
+  extension_risk: string | null;
+  market_score: number | null;
+  industry_name: string | null;
+  industry_heat: number | null;
+  primary_theme_code: string | null;
+  primary_theme_name: string | null;
+  primary_theme_heat: number | null;
+  context_score: number | null;
+  opportunity_stage: string;
+  opportunity_score: number | null;
+  rps20?: number | null;
+  rps60?: number | null;
+  rps120?: number | null;
+  rps20_delta5?: number | null;
+  ma20_slope5?: number | null;
+  higher_low?: boolean | null;
+  reason_codes: Record<string, unknown> | null;
+};
+
+export type ThemeOverview = {
+  theme: Record<string, unknown>;
+  factor: ThemeHeat | null;
+  history: ThemeHeat[];
+  member_distribution: Array<{ stage: string; count: number }>;
+  top_members: Record<string, OpportunityItem[]>;
 };
 
 export type ResearchStats = {

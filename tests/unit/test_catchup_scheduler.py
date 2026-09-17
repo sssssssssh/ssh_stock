@@ -132,8 +132,9 @@ def test_analysis_complete_dates_require_current_algo_version(monkeypatch) -> No
     monkeypatch.setattr(
         catchup_module,
         "is_analysis_complete",
-        lambda db, trade_date, **kwargs: trade_date == date(2026, 9, 2)
-        and kwargs["algo_version"] == "v1.0",
+        lambda db, trade_date, **kwargs: (
+            trade_date == date(2026, 9, 2) and kwargs["algo_version"] == "v1.0"
+        ),
     )
     completed = analysis_complete_dates(
         object(),
@@ -201,8 +202,9 @@ def test_catchup_candidate_window_ignores_older_history(monkeypatch) -> None:
     monkeypatch.setattr(
         catchup_module,
         "check_raw_completeness",
-        lambda db, trade_date, **kwargs: checked_dates.append(trade_date)
-        or SimpleNamespace(is_complete=True),
+        lambda db, trade_date, **kwargs: (
+            checked_dates.append(trade_date) or SimpleNamespace(is_complete=True)
+        ),
     )
     monkeypatch.setattr(catchup_module, "is_analysis_complete", lambda *args, **kwargs: True)
 
@@ -223,8 +225,7 @@ def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
 
     def count_matching(db, model, *criteria):
         text = " ".join(
-            str(criterion.compile(compile_kwargs={"literal_binds": True}))
-            for criterion in criteria
+            str(criterion.compile(compile_kwargs={"literal_binds": True})) for criterion in criteria
         )
         calls[model.__name__] = text
         if model is StockDaily:
@@ -271,6 +272,7 @@ def _configured_catchup_job(
         "_open_trade_dates",
         lambda db, start, end: open_dates,
     )
+
     def classify(*args, **kwargs):
         events.append(("classify",))
         return raw_required_dates, analysis_required_dates
@@ -626,6 +628,12 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
         def sync_stock_limit(self, trade_date):
             calls.append(("stk_limit", trade_date))
 
+        def sync_theme_daily(self, trade_date):
+            calls.append(("theme_daily", trade_date))
+
+        def sync_theme_optional_sources(self, trade_date):
+            calls.append(("theme_optional", trade_date))
+
     monkeypatch.setattr(
         catchup_module,
         "check_raw_completeness",
@@ -658,6 +666,8 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
         ("index_daily", date(2026, 9, 4)),
         ("stk_limit", date(2026, 9, 4)),
         ("trade_status", date(2026, 9, 4)),
+        ("theme_daily", date(2026, 9, 4)),
+        ("theme_optional", date(2026, 9, 4)),
     ]
     assert db.commits == 1
 

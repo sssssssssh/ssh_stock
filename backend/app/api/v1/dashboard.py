@@ -13,13 +13,18 @@ from app.models.market_data import (
     Sector,
     SectorFactorDaily,
     StockBasic,
+    StockOpportunityDaily,
     StockStateDaily,
     StrategySignal,
+    Theme,
+    ThemeFactorDaily,
 )
 from app.services.analysis_identity import (
     MARKET_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
     SECTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
+    THEME_CALC_VERSION,
     TREND_CALC_VERSION,
 )
 from app.services.calc_metadata import config_hash
@@ -52,6 +57,9 @@ def summary(
                 "state_counts": [],
                 "signal_counts": [],
                 "sector_heat_top": [],
+                "industry_heat_top": [],
+                "theme_heat_top": [],
+                "left_reversal_top": [],
                 "right_side_new": [],
                 "trend_leaders": [],
             }
@@ -65,30 +73,42 @@ def summary(
             MarketDaily.config_hash == hash_value,
         )
     ).scalar_one_or_none()
+    industry_top = _sector_heat_top(db, target, row_limit, hash_value)
+    opportunity_hash = config_hash(settings.opportunity_config)
     return envelope(
         {
             "trade_date": target.isoformat(),
             "market": _market_payload(market),
             "state_counts": _state_counts(db, target, version, hash_value),
             "signal_counts": _signal_counts(db, target, version, hash_value),
-            "sector_heat_top": _sector_heat_top(db, target, row_limit, hash_value),
-            "right_side_new": _stock_pool(
+            "sector_heat_top": industry_top,
+            "industry_heat_top": industry_top,
+            "theme_heat_top": _theme_heat_top(db, target, row_limit, opportunity_hash),
+            "left_reversal_top": _opportunity_pool(
                 db,
                 target,
                 version,
-                states=["S3"],
-                row_limit=row_limit,
-                new_only=True,
-                hash_value=hash_value,
+                ["LEFT_WATCH", "LEFT_REVERSAL"],
+                row_limit,
+                opportunity_hash,
             ),
-            "trend_leaders": _stock_pool(
+            "right_side_new": _opportunity_pool(
                 db,
                 target,
                 version,
-                states=["S4", "S5"],
-                row_limit=row_limit,
-                new_only=False,
-                hash_value=hash_value,
+                ["RIGHT_SIDE_NEW"],
+                row_limit,
+                opportunity_hash,
+                desc(StockOpportunityDaily.right_side_score),
+            ),
+            "trend_leaders": _opportunity_pool(
+                db,
+                target,
+                version,
+                ["TREND", "STRONG_TREND"],
+                row_limit,
+                opportunity_hash,
+                desc(StockOpportunityDaily.trend_rank_score),
             ),
         }
     )
@@ -169,6 +189,7 @@ def _sector_heat_top(
             SectorFactorDaily.trade_date == target,
             SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
             SectorFactorDaily.config_hash == hash_value,
+            Sector.level == "L1",
         )
         .order_by(SectorFactorDaily.heat_rank, desc(SectorFactorDaily.heat_score))
         .limit(row_limit)
@@ -176,51 +197,76 @@ def _sector_heat_top(
     return [_mapping_payload(row) for row in db.execute(stmt).mappings().all()]
 
 
-def _stock_pool(
-    db: Session,
-    target: date,
-    algo_version: str,
-    states: list[str],
-    row_limit: int,
-    new_only: bool,
-    hash_value: str,
+def _theme_heat_top(
+    db: Session, target: date, row_limit: int, hash_value: str
 ) -> list[dict[str, Any]]:
     stmt = (
         select(
-            StockStateDaily.trade_date,
-            StockStateDaily.ts_code,
-            StockBasic.name,
-            StockBasic.industry,
-            StockStateDaily.state,
-            StockStateDaily.previous_state,
-            StockStateDaily.state_day_count,
-            StockStateDaily.is_new_state,
-            StockStateDaily.right_side_score,
-            StockStateDaily.trend_score,
-            StockStateDaily.opportunity_score,
-            StockStateDaily.primary_sector_id,
-            Sector.name.label("sector_name"),
-            StockStateDaily.sector_heat,
-            StockStateDaily.market_score,
-            StockStateDaily.fast_transition,
-            StockStateDaily.reason_codes,
+            ThemeFactorDaily.trade_date,
+            ThemeFactorDaily.theme_code,
+            Theme.name,
+            ThemeFactorDaily.heat_score,
+            ThemeFactorDaily.heat_rank,
+            ThemeFactorDaily.heat_momentum3,
+            ThemeFactorDaily.rank_change,
+            ThemeFactorDaily.lifecycle,
+            ThemeFactorDaily.return1,
+            ThemeFactorDaily.return5,
+            ThemeFactorDaily.moneyflow_score,
+            ThemeFactorDaily.net_amount,
+            ThemeFactorDaily.limit_up_count,
+            ThemeFactorDaily.continuous_limit_count,
+            ThemeFactorDaily.breadth20,
+            ThemeFactorDaily.rps60_median,
+            ThemeFactorDaily.data_coverage,
         )
-        .select_from(StockStateDaily)
-        .outerjoin(StockBasic, StockStateDaily.ts_code == StockBasic.ts_code)
-        .outerjoin(Sector, StockStateDaily.primary_sector_id == Sector.sector_id)
+        .join(Theme, ThemeFactorDaily.theme_code == Theme.theme_code)
         .where(
-            StockStateDaily.trade_date == target,
-            StockStateDaily.algo_version == algo_version,
-            StockStateDaily.state.in_(states),
-            StockStateDaily.calc_version == TREND_CALC_VERSION,
-            StockStateDaily.config_hash == hash_value,
+            ThemeFactorDaily.trade_date == target,
+            ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
+            ThemeFactorDaily.config_hash == hash_value,
         )
-        .order_by(desc(StockStateDaily.opportunity_score), desc(StockStateDaily.trend_score))
+        .order_by(ThemeFactorDaily.heat_rank)
         .limit(row_limit)
     )
-    if new_only:
-        stmt = stmt.where(StockStateDaily.is_new_state.is_(True))
     return [_mapping_payload(row) for row in db.execute(stmt).mappings().all()]
+
+
+def _opportunity_pool(
+    db: Session,
+    target: date,
+    algo_version: str,
+    stages: list[str],
+    row_limit: int,
+    hash_value: str,
+    order_by: Any = desc(StockOpportunityDaily.left_reversal_score),
+) -> list[dict[str, Any]]:
+    stmt = (
+        select(
+            StockOpportunityDaily,
+            StockBasic.name,
+            StockBasic.industry,
+        )
+        .outerjoin(StockBasic, StockOpportunityDaily.ts_code == StockBasic.ts_code)
+        .where(
+            StockOpportunityDaily.trade_date == target,
+            StockOpportunityDaily.algo_version == algo_version,
+            StockOpportunityDaily.opportunity_stage.in_(stages),
+            StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
+            StockOpportunityDaily.config_hash == hash_value,
+        )
+        .order_by(order_by, StockOpportunityDaily.ts_code)
+        .limit(row_limit)
+    )
+    result = []
+    for opportunity, name, industry in db.execute(stmt).all():
+        payload = {
+            column.name: iso(getattr(opportunity, column.name))
+            for column in opportunity.__table__.columns
+        }
+        payload.update({"name": name, "industry": industry})
+        result.append(payload)
+    return result
 
 
 def _mapping_payload(row: dict[str, Any]) -> dict[str, Any]:

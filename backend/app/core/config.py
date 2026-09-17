@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     app_name: str = "空间"
     algo_version: str = "v1.0"
     strategy: dict[str, Any] = Field(default_factory=dict)
+    opportunity_config: dict[str, Any] = Field(default_factory=dict)
     app_config: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
@@ -46,6 +47,8 @@ class Settings(BaseSettings):
         settings = cls()
         app_config = load_yaml_config(ROOT_DIR / "config" / "app.yaml")
         strategy = load_yaml_config(ROOT_DIR / "config" / "strategy.yaml")
+        opportunity_config = load_yaml_config(ROOT_DIR / "config" / "opportunity.yaml")
+        _validate_opportunity_weights(opportunity_config)
         app_section = app_config.get("app", {})
         if isinstance(app_section, dict):
             settings.app_name = app_section.get("name", settings.app_name)
@@ -53,7 +56,23 @@ class Settings(BaseSettings):
             settings.app_timezone = app_section.get("timezone", settings.app_timezone)
         settings.app_config = app_config
         settings.strategy = strategy
+        settings.opportunity_config = opportunity_config
         return settings
+
+
+def _validate_opportunity_weights(config: dict[str, Any]) -> None:
+    paths = [
+        ("theme", "heat_weights"),
+        ("left_reversal", "weights"),
+        ("trend_pool", "weights"),
+    ]
+    for section, key in paths:
+        weights = config.get(section, {}).get(key, {})
+        if not isinstance(weights, dict) or not weights:
+            raise ValueError(f"opportunity config missing weights: {section}.{key}")
+        total = sum(float(value) for value in weights.values())
+        if total <= 0 or total > 1.000001 or any(float(value) < 0 for value in weights.values()):
+            raise ValueError(f"opportunity weights are invalid: {section}.{key}={total}")
 
 
 @lru_cache

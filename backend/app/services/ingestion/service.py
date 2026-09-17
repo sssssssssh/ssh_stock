@@ -20,6 +20,11 @@ from app.models.market_data import (
     StockLimitDaily,
     StockStDaily,
     StockSuspendDaily,
+    Theme,
+    ThemeDaily,
+    ThemeLimitDaily,
+    ThemeMemberSnapshot,
+    ThemeMoneyflowDaily,
     TradeCalendar,
 )
 from app.providers.base import MarketDataProvider
@@ -41,6 +46,11 @@ from app.services.ingestion.normalizers import (
     normalize_stock_limit,
     normalize_stock_st,
     normalize_stock_suspend,
+    normalize_theme_daily,
+    normalize_theme_limit,
+    normalize_theme_members,
+    normalize_theme_moneyflow,
+    normalize_themes,
     normalize_trade_calendar,
 )
 from app.services.quality.daily_quality import (
@@ -150,10 +160,7 @@ class IngestionService:
                 int(df.duplicated(subset=["trade_date", "ts_code"]).sum()) if not df.empty else 0
             )
             null_count = sum(
-                1
-                for row in rows
-                for column in DAILY_VALUE_COLUMNS
-                if row.get(column) is None
+                1 for row in rows for column in DAILY_VALUE_COLUMNS if row.get(column) is None
             )
             if fatal:
                 quality = replace(
@@ -176,9 +183,7 @@ class IngestionService:
             )
             if fatal:
                 self.db.commit()
-                raise ValueError(
-                    f"daily quality check failed: {[issue.code for issue in fatal]}"
-                )
+                raise ValueError(f"daily quality check failed: {[issue.code for issue in fatal]}")
             if quality.status == "ERROR":
                 self.db.commit()
                 raise ValueError(
@@ -403,11 +408,7 @@ class IngestionService:
                 key_columns=["trade_date", "ts_code", "suspend_type"],
             )
             invalid_types = sorted(
-                {
-                    str(row["suspend_type"])
-                    for row in rows
-                    if row["suspend_type"] not in {"S", "R"}
-                }
+                {str(row["suspend_type"]) for row in rows if row["suspend_type"] not in {"S", "R"}}
             )
             if invalid_types:
                 issues.append(f"INVALID_SUSPEND_TYPE:{','.join(invalid_types)}")
@@ -491,13 +492,9 @@ class IngestionService:
             persist_coverage_result(
                 self.db,
                 quality,
-                duplicate_count=_duplicate_count(
-                    rows, ["trade_date", "ts_code"]
-                ),
+                duplicate_count=_duplicate_count(rows, ["trade_date", "ts_code"]),
                 null_count=sum(
-                    1
-                    for row in rows
-                    if row["up_limit"] is None or row["down_limit"] is None
+                    1 for row in rows if row["up_limit"] is None or row["down_limit"] is None
                 ),
                 job_id=job_id,
                 extra_issue_codes={"raw_issues": issues},
@@ -616,15 +613,10 @@ class IngestionService:
                     "sector member PIT_INVALID: current members missing in_date: "
                     f"{missing_current_dates[:20]}"
                 )
-            rows = _deduplicate_sector_member_rows(
-                normalize_sector_members(df, code_to_id)
-            )
+            rows = _deduplicate_sector_member_rows(normalize_sector_members(df, code_to_id))
             if not rows:
                 raise ValueError("sector members returned no valid rows")
-            natural_keys = {
-                (row["sector_id"], row["ts_code"], row["valid_from"])
-                for row in rows
-            }
+            natural_keys = {(row["sector_id"], row["ts_code"], row["valid_from"]) for row in rows}
             existing_members = list(
                 self.db.execute(
                     select(SectorMember)
@@ -654,6 +646,219 @@ class IngestionService:
             self.db.rollback()
             raise
 
+    def sync_ths_themes(self, snapshot_date: date) -> int:
+        try:
+            frame = self.provider.get_ths_concepts()
+            rows = normalize_themes(frame, snapshot_date)
+            if not rows or frame.attrs.get("provider_warning"):
+                raise ValueError("ths theme catalog invalid or possibly truncated")
+            source_codes = {str(row["theme_code"]) for row in rows}
+            count = upsert_rows(
+                self.db,
+                Theme,
+                rows,
+                ["theme_code"],
+                update_columns=[
+                    "source",
+                    "name",
+                    "theme_type",
+                    "exchange",
+                    "constituent_count",
+                    "list_date",
+                    "is_active",
+                    "last_seen_date",
+                    "updated_at",
+                ],
+            )
+            self.db.execute(
+                update(Theme)
+                .where(Theme.source == "THS", Theme.theme_code.not_in(source_codes))
+                .values(is_active=False, last_seen_date=snapshot_date)
+            )
+            _persist_theme_quality(
+                self.db, snapshot_date, "ths_theme_catalog", len(rows), len(rows), "PASS"
+            )
+            self.db.commit()
+            return count
+        except Exception:
+            self.db.rollback()
+            _persist_theme_quality(self.db, snapshot_date, "ths_theme_catalog", 0, 0, "ERROR")
+            self.db.commit()
+            raise
+
+    def sync_ths_theme_member_snapshot(self, snapshot_date: date) -> int:
+        theme_codes = list(
+            self.db.execute(
+                select(Theme.theme_code).where(
+                    Theme.source == "THS",
+                    Theme.theme_type == "CONCEPT",
+                    Theme.is_active.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        try:
+            if not theme_codes:
+                raise ValueError("no active THS themes; sync catalog first")
+            frame = self.provider.get_ths_concept_members(theme_codes)
+            rows = normalize_theme_members(frame, snapshot_date)
+            if not rows or frame.attrs.get("provider_warning"):
+                raise ValueError("THS theme member snapshot invalid or possibly truncated")
+            requested_codes = set(theme_codes)
+            returned_codes = {str(row["theme_code"]) for row in rows}
+            if returned_codes != requested_codes:
+                missing = sorted(requested_codes - returned_codes)
+                unexpected = sorted(returned_codes - requested_codes)
+                raise ValueError(
+                    "THS theme member snapshot incomplete "
+                    f"missing={missing[:20]} unexpected={unexpected[:20]}"
+                )
+            unique = {
+                (row["snapshot_date"], row["theme_code"], row["ts_code"]): row for row in rows
+            }
+            rows = list(unique.values())
+            self.db.execute(
+                delete(ThemeMemberSnapshot).where(
+                    ThemeMemberSnapshot.snapshot_date == snapshot_date
+                )
+            )
+            count = upsert_rows(
+                self.db,
+                ThemeMemberSnapshot,
+                rows,
+                ["snapshot_date", "theme_code", "ts_code"],
+            )
+            _persist_theme_quality(
+                self.db,
+                snapshot_date,
+                "ths_theme_member_snapshot",
+                len(theme_codes),
+                len({row["theme_code"] for row in rows}),
+                "PASS",
+            )
+            self.db.commit()
+            return count
+        except Exception as exc:
+            self.db.rollback()
+            _persist_theme_quality(
+                self.db,
+                snapshot_date,
+                "ths_theme_member_snapshot",
+                len(theme_codes),
+                0,
+                "ERROR",
+                error=str(exc),
+            )
+            self.db.commit()
+            raise
+
+    def sync_theme_daily(self, trade_date: date) -> int:
+        active_codes = set(
+            self.db.execute(
+                select(Theme.theme_code).where(
+                    Theme.source == "THS",
+                    Theme.theme_type == "CONCEPT",
+                    Theme.is_active.is_(True),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        try:
+            if not active_codes:
+                raise ValueError("no active THS themes; sync catalog first")
+            frame = self.provider.get_ths_daily(trade_date)
+            rows = [
+                row for row in normalize_theme_daily(frame) if row["theme_code"] in active_codes
+            ]
+            actual_codes = {row["theme_code"] for row in rows}
+            quality_config = self.settings.opportunity_config.get("theme_quality", {}).get(
+                "daily", {}
+            )
+            result = check_daily_coverage(
+                trade_date=trade_date,
+                actual_codes=actual_codes,
+                expected_codes=active_codes,
+                warning_coverage_rate=float(quality_config.get("warning_coverage_rate", 0.90)),
+                error_coverage_rate=float(quality_config.get("error_coverage_rate", 0.75)),
+                dataset="ths_theme_daily",
+            )
+            persist_coverage_result(self.db, result)
+            count = upsert_rows(self.db, ThemeDaily, rows, ["trade_date", "theme_code"])
+            self.db.commit()
+            return count
+        except Exception as exc:
+            self.db.rollback()
+            _persist_theme_quality(
+                self.db,
+                trade_date,
+                "ths_theme_daily",
+                len(active_codes),
+                0,
+                "ERROR",
+                error=str(exc),
+            )
+            self.db.commit()
+            raise
+
+    def sync_theme_optional_sources(self, trade_date: date) -> dict[str, str]:
+        statuses = {}
+        statuses["moneyflow"] = self._sync_optional_theme_source(
+            trade_date,
+            "ths_theme_moneyflow",
+            self.provider.get_ths_concept_moneyflow,
+            normalize_theme_moneyflow,
+            ThemeMoneyflowDaily,
+        )
+        statuses["limit"] = self._sync_optional_theme_source(
+            trade_date,
+            "ths_theme_limit",
+            self.provider.get_limit_concept_list,
+            normalize_theme_limit,
+            ThemeLimitDaily,
+        )
+        return statuses
+
+    def _sync_optional_theme_source(
+        self,
+        trade_date: date,
+        dataset: str,
+        fetch,
+        normalize,
+        model: type,
+    ) -> str:
+        try:
+            active_codes = set(
+                self.db.execute(
+                    select(Theme.theme_code).where(
+                        Theme.source == "THS",
+                        Theme.theme_type == "CONCEPT",
+                        Theme.is_active.is_(True),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if not active_codes:
+                raise ValueError("no active THS themes; sync catalog first")
+            frame = fetch(trade_date)
+            if frame.attrs.get("provider_warning"):
+                raise ValueError(f"{dataset} POSSIBLE_TRUNCATION")
+            rows = [row for row in normalize(frame) if row["theme_code"] in active_codes]
+            status = "PASS" if rows else "SOURCE_EMPTY"
+            if rows:
+                upsert_rows(self.db, model, rows, ["trade_date", "theme_code"])
+            _persist_theme_quality(self.db, trade_date, dataset, len(rows), len(rows), status)
+            self.db.commit()
+            return status
+        except Exception as exc:
+            self.db.rollback()
+            status = _optional_theme_error_status(exc)
+            _persist_theme_quality(self.db, trade_date, dataset, 0, 0, status, error=str(exc))
+            self.db.commit()
+            return status
+
 
 def _validate_stock_daily_reconcile_prerequisites(
     db: Session,
@@ -679,6 +884,45 @@ def _validate_stock_daily_reconcile_prerequisites(
         )
 
 
+def _persist_theme_quality(
+    db: Session,
+    trade_date: date,
+    dataset: str,
+    expected_rows: int,
+    actual_rows: int,
+    status: str,
+    *,
+    error: str | None = None,
+) -> None:
+    coverage = actual_rows / expected_rows if expected_rows else None
+    persist_coverage_result(
+        db,
+        CoverageResult(
+            trade_date=trade_date,
+            dataset=dataset,
+            expected_rows=expected_rows,
+            actual_rows=actual_rows,
+            coverage_rate=coverage,
+            missing_codes=[],
+            extra_codes=[],
+            status=status,
+            error_count=1 if status == "ERROR" else 0,
+        ),
+        extra_issue_codes={"source_error": error[:1000]} if error else None,
+    )
+
+
+def _optional_theme_error_status(exc: Exception) -> str:
+    message = str(exc).lower()
+    if any(marker in message for marker in ("permission", "无权限", "积分不足")):
+        return "PERMISSION_UNAVAILABLE"
+    if any(
+        marker in message for marker in ("timeout", "connection", "unexpected_eof", "max retries")
+    ):
+        return "TRANSIENT_ERROR"
+    return "ERROR"
+
+
 def _quality_threshold(strategy: dict, severity: str) -> float:
     daily = strategy.get("data_quality", {}).get("daily", {})
     key = f"{severity}_coverage_rate"
@@ -693,9 +937,7 @@ def _raw_quality_threshold(
     default: float,
 ) -> float:
     return float(
-        strategy.get("raw_quality", {})
-        .get(dataset, {})
-        .get(f"{severity}_coverage_rate", default)
+        strategy.get("raw_quality", {}).get(dataset, {}).get(f"{severity}_coverage_rate", default)
     )
 
 

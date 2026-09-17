@@ -111,6 +111,22 @@ class BackfillJob:
             skipped_dataset_count = 0
             for index, current in enumerate(open_dates, 1):
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
+                try:
+                    total_rows += self.ingestion.sync_theme_daily(current)
+                    theme_optional = self.ingestion.sync_theme_optional_sources(current)
+                    metadata = {
+                        **metadata,
+                        "theme_sync_status": "PASS",
+                        "theme_optional_status": theme_optional,
+                    }
+                except Exception as exc:
+                    self.db.rollback()
+                    metadata = {
+                        **metadata,
+                        "theme_sync_status": "ERROR",
+                        "theme_sync_error": str(exc)[:1000],
+                    }
+                    logger.exception("theme backfill failed trade_date={}", current)
                 completeness = check_raw_completeness(
                     self.db,
                     current,
@@ -179,13 +195,15 @@ class BackfillJob:
 
                 if not completeness.is_complete:
                     raise ValueError(_raw_incomplete_error(completeness))
-            metadata = _clear_daily_progress({
-                **metadata,
-                "completed_open_days": len(open_dates),
-                "current_open_day_index": len(open_dates),
-                "synced_dataset_count": synced_dataset_count,
-                "skipped_dataset_count": skipped_dataset_count,
-            })
+            metadata = _clear_daily_progress(
+                {
+                    **metadata,
+                    "completed_open_days": len(open_dates),
+                    "current_open_day_index": len(open_dates),
+                    "synced_dataset_count": synced_dataset_count,
+                    "skipped_dataset_count": skipped_dataset_count,
+                }
+            )
 
             update_job(
                 self.db,
@@ -283,8 +301,7 @@ def _refresh_after_stock_daily_if_needed(
 def _raw_incomplete_error(completeness: RawCompletenessResult) -> str:
     statuses = completeness.as_metadata()["current_day_datasets"]
     return (
-        "raw data incomplete after sync: "
-        f"trade_date={completeness.trade_date} statuses={statuses}"
+        f"raw data incomplete after sync: trade_date={completeness.trade_date} statuses={statuses}"
     )
 
 
@@ -292,9 +309,7 @@ def _any_index_daily_incomplete(db: Session, open_dates: list[date]) -> bool:
     if not open_dates:
         return False
     expected = set(
-        get_settings().strategy.get("benchmark", {}).get(
-            "market_indices", ["000300.SH"]
-        )
+        get_settings().strategy.get("benchmark", {}).get("market_indices", ["000300.SH"])
     )
     existing: dict[date, set[str]] = {trade_date: set() for trade_date in open_dates}
     rows = db.execute(

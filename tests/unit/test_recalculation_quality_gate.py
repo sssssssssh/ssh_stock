@@ -76,7 +76,9 @@ def _patch_successful_calculators(monkeypatch):
     monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "SectorService", _SuccessfulScalarService)
+    monkeypatch.setattr(recalculation_module, "ThemeFactorService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "TrendService", _SuccessfulTrendService)
+    monkeypatch.setattr(recalculation_module, "OpportunityService", _SuccessfulScalarService)
 
 
 def test_run_recalculation_cross_table_gate_passes_before_success(monkeypatch) -> None:
@@ -204,6 +206,12 @@ def test_run_recalculation_warms_all_analysis_but_validates_requested_range(
     class TradeStatusService(ScalarService):
         pass
 
+    class ThemeFactorService(ScalarService):
+        pass
+
+    class OpportunityService(ScalarService):
+        pass
+
     class TrendService(ScalarService):
         def recalc(self, start, finish, calc_run_id=None):
             calls.append((self.name, start, finish, calc_run_id))
@@ -223,14 +231,16 @@ def test_run_recalculation_warms_all_analysis_but_validates_requested_range(
     monkeypatch.setattr(recalculation_module, "FactorService", FactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", MarketService)
     monkeypatch.setattr(recalculation_module, "SectorService", SectorService)
+    monkeypatch.setattr(recalculation_module, "ThemeFactorService", ThemeFactorService)
     monkeypatch.setattr(recalculation_module, "TrendService", TrendService)
+    monkeypatch.setattr(recalculation_module, "OpportunityService", OpportunityService)
     monkeypatch.setattr(
         recalculation_module,
         "validate_cross_table_range",
-        lambda db, start, finish, **kwargs: calls.append(
-            ("quality", start, finish, kwargs["job_id"])
-        )
-        or SimpleNamespace(has_error=False, as_metadata=lambda: {}),
+        lambda db, start, finish, **kwargs: (
+            calls.append(("quality", start, finish, kwargs["job_id"]))
+            or SimpleNamespace(has_error=False, as_metadata=lambda: {})
+        ),
     )
 
     class SignalService:
@@ -264,6 +274,9 @@ def test_run_recalculation_warms_all_analysis_but_validates_requested_range(
         assert service_calls[0][1] == warmup_start
         assert service_calls[-1][2] == end
         assert all(call[3] == job.id for call in service_calls)
+    for service_name in {"ThemeFactorService", "OpportunityService"}:
+        service_calls = [call for call in calls if call[0] == service_name]
+        assert service_calls == [(service_name, requested_start, end, job.id)]
     assert ("raw", warmup_start, end, None) in calls
     assert ("quality", requested_start, end, job.id) in calls
     assert ("signal", requested_start, end, None) in calls

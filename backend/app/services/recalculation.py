@@ -17,10 +17,12 @@ from app.services.dirty import (
 )
 from app.services.factors import FactorService
 from app.services.market import MarketService
+from app.services.opportunity import OpportunityService
 from app.services.quality.daily_quality import DataQualityError, validate_cross_table_range
 from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
+from app.services.theme import ThemeFactorService
 from app.services.trade_status import TradeStatusService
 from app.services.trend import TrendService
 
@@ -137,12 +139,30 @@ def run_recalculation(
         update_job(
             db,
             job,
+            step="115 calculate theme heat",
+            row_count=total_rows,
+            metadata={**metadata, "stage": "themes", "progress_pct": 84},
+        )
+        total_rows += ThemeFactorService(db).recalc(start, end, calc_run_id=job.id)
+
+        update_job(
+            db,
+            job,
             step="120 calculate trend states",
             row_count=total_rows,
             metadata={**metadata, "stage": "states", "progress_pct": 90},
         )
         trend_rows = TrendService(db).recalc(analysis_start, end, calc_run_id=job.id)
         total_rows += trend_rows["states"] + trend_rows["signals"]
+
+        update_job(
+            db,
+            job,
+            step="130 calculate opportunities",
+            row_count=total_rows,
+            metadata={**metadata, "stage": "opportunities", "progress_pct": 92},
+        )
+        total_rows += OpportunityService(db).recalc(start, end, calc_run_id=job.id)
 
         update_job(
             db,
@@ -239,15 +259,12 @@ def validate_recalculation_raw_prerequisites(
                 if (
                     (dataset in {"index_daily", "stock_st", "suspend_d"} and status != "PASS")
                     or (
-                        dataset
-                        not in {"index_daily", "stock_st", "suspend_d"}
+                        dataset not in {"index_daily", "stock_st", "suspend_d"}
                         and status not in {"PASS", "WARNING"}
                     )
                 )
             }
-            failures.append(
-                f"trade_date={trade_date} failed_datasets={failed} statuses={statuses}"
-            )
+            failures.append(f"trade_date={trade_date} failed_datasets={failed} statuses={statuses}")
     if failures:
         detail = "; ".join(failures[:20])
         raise DataQualityError(

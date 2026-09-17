@@ -67,3 +67,16 @@ def test_dashboard_summary_returns_empty_payload_without_state_date() -> None:
     assert body["code"] == 0
     assert body["data"]["trade_date"] is None
     assert body["data"]["right_side_new"] == []
+    assert body["data"]["theme_heat_top"] == []
+    assert body["data"]["left_reversal_top"] == []
+
+
+def test_milestone10_routes_are_registered() -> None:
+    paths = app.openapi()["paths"]
+
+    assert "/api/v1/themes" in paths
+    assert "/api/v1/themes/{theme_code}/overview" in paths
+    assert "/api/v1/themes/{theme_code}/members" in paths
+    assert "/api/v1/opportunities/left-reversal" in paths
+    assert "/api/v1/opportunities/right-side" in paths
+    assert "/api/v1/opportunities/trends" in paths

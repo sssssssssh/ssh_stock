@@ -233,3 +233,93 @@ def current_sector_members_missing_in_date(df: pd.DataFrame) -> list[str]:
         code = item.get("con_code") or item.get("ts_code") or "UNKNOWN"
         missing.append(str(code))
     return sorted(set(missing))
+
+
+def normalize_themes(df: pd.DataFrame, seen_date: date) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "theme_code": item.get("ts_code"),
+            "source": "THS",
+            "name": item.get("name"),
+            "theme_type": "CONCEPT",
+            "exchange": item.get("exchange"),
+            "constituent_count": int(item["count"]) if not pd.isna(item.get("count")) else None,
+            "list_date": parse_tushare_date(item.get("list_date")),
+            "is_active": True,
+            "first_seen_date": seen_date,
+            "last_seen_date": seen_date,
+        }
+        for item in df.to_dict("records")
+    ]
+    return [row for row in rows if row["theme_code"] and row["name"]]
+
+
+def normalize_theme_members(df: pd.DataFrame, snapshot_date: date) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "snapshot_date": snapshot_date,
+            "theme_code": item.get("ts_code"),
+            "ts_code": item.get("con_code"),
+            "stock_name": item.get("con_name"),
+            "is_new": str(item.get("is_new", "")).upper() == "Y"
+            if item.get("is_new") is not None
+            else None,
+            "source": "THS",
+        }
+        for item in df.to_dict("records")
+    ]
+    return [row for row in rows if row["theme_code"] and row["ts_code"]]
+
+
+def normalize_theme_daily(df: pd.DataFrame) -> list[dict[str, Any]]:
+    fields = [
+        "open", "high", "low", "close", "pre_close", "avg_price", "change",
+        "pct_change", "vol", "turnover_rate", "total_mv",
+    ]
+    rows = []
+    for item in df.to_dict("records"):
+        row = {
+            "trade_date": parse_tushare_date(item.get("trade_date")),
+            "theme_code": item.get("ts_code"),
+        }
+        row.update({field: clean_float(item.get(field)) for field in fields})
+        rows.append(row)
+    return [row for row in rows if row["trade_date"] and row["theme_code"]]
+
+
+def normalize_theme_moneyflow(df: pd.DataFrame) -> list[dict[str, Any]]:
+    mapping = {
+        "name": "name", "lead_stock": "lead_stock", "close_price": "close_price",
+        "pct_change": "pct_change", "industry_index": "theme_index",
+        "company_num": "company_num", "pct_change_stock": "lead_stock_pct_change",
+        "net_buy_amount": "net_buy_amount", "net_sell_amount": "net_sell_amount",
+        "net_amount": "net_amount",
+    }
+    rows = []
+    for item in df.to_dict("records"):
+        row = {
+            "trade_date": parse_tushare_date(item.get("trade_date")),
+            "theme_code": item.get("ts_code"),
+        }
+        for source, target in mapping.items():
+            value = item.get(source)
+            row[target] = value if target in {"name", "lead_stock"} else clean_float(value)
+        rows.append(row)
+    return [row for row in rows if row["trade_date"] and row["theme_code"]]
+
+
+def normalize_theme_limit(df: pd.DataFrame) -> list[dict[str, Any]]:
+    rows = []
+    for item in df.to_dict("records"):
+        rows.append({
+            "trade_date": parse_tushare_date(item.get("trade_date")),
+            "theme_code": item.get("ts_code"),
+            "name": item.get("name"),
+            "days": int(item["days"]) if not pd.isna(item.get("days")) else None,
+            "up_stat": item.get("up_stat"),
+            "cons_nums": int(item["cons_nums"]) if not pd.isna(item.get("cons_nums")) else None,
+            "up_nums": int(item["up_nums"]) if not pd.isna(item.get("up_nums")) else None,
+            "pct_chg": clean_float(item.get("pct_chg")),
+            "hot_rank": int(item["rank"]) if not pd.isna(item.get("rank")) else None,
+        })
+    return [row for row in rows if row["trade_date"] and row["theme_code"]]

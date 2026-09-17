@@ -78,9 +78,9 @@
 - 前端一级目录固定为 `总览`、`数据`、`长线`、`短线`。基础信息同步入口、原始行情拉取入口、补算因子入口、任务状态、数据覆盖日历和数据覆盖表必须放在 `数据` 页面；长线股票池和行业热度放在 `长线` 页面；短线风险池、信号计数和短线动量放在 `短线` 页面。
 - 数据页面的主要面板必须支持点击标题收起/展开；收起时只保留标题行和右侧操作区，不卸载任务轮询和数据状态。
 - 股票池中的股票代码必须可点击查看实时 K 线；实时 K 线使用 `GET /api/v1/stocks/{ts_code}/realtime-kline?days=180`，只从 Tushare 查询并返回前端绘图，不写入本地数据库。默认展示 180 个自然日，并支持 90 / 180 / 365 日切换。
-- 后端必须提供 `POST /api/v1/jobs/sync-basic` 作为页面基础信息同步入口，只同步 `stock_basic`、`sector`、`sector_member`，不得触发因子、市场、行业热度、状态、信号或后验计算。
-- 后端必须提供 `POST /api/v1/jobs/backfill` 作为页面原始行情拉取入口，只同步交易日历和七类 Raw 数据集（`stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`、`stock_st`、`suspend_d`、`stk_limit`），不得接受或展示 `evaluate_signals`，不得触发因子、市场、行业热度、状态、信号或后验计算。
-- 后端必须提供 `POST /api/v1/jobs/recalculate` 作为页面补算入口，按因子、市场、行业、状态、信号评估的顺序运行；因子阶段必须按自然月分块执行，并持续更新 `job_run.step`、`row_count`、`job_metadata.progress_pct`、`factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start` 和 `factor_chunk_end`。
+- 后端必须提供 `POST /api/v1/jobs/sync-basic` 作为页面基础信息同步入口，只同步 `stock_basic`、SW `sector/sector_member`、THS Theme Catalog 和同步当天的真实 Theme Member Snapshot，不得触发因子、市场、热度、状态、机会池、信号或后验计算。
+- 后端必须提供 `POST /api/v1/jobs/backfill` 作为页面原始数据拉取入口，同步交易日历、七类核心 Raw 数据集（`stock_daily`、`stock_adj_factor`、`stock_daily_basic`、`index_daily`、`stock_st`、`suspend_d`、`stk_limit`）及 THS Theme Daily/可选增强源；不得伪造历史 Theme Member Snapshot，不得接受或展示 `evaluate_signals`，不得触发任何衍生计算。
+- 后端必须提供 `POST /api/v1/jobs/recalculate` 作为页面补算入口，按因子、市场、行业、题材、状态、机会池、跨表质量、信号评估的顺序运行；因子阶段必须按自然月分块执行，并持续更新 `job_run.step`、`row_count`、`job_metadata.progress_pct`、`factor_chunk_index`、`factor_chunk_count`、`factor_chunk_start` 和 `factor_chunk_end`。
 - `recalculate` 的 `row_count` 在因子分块完成写库后更新；前端在分块计算中必须提示“当前因子分块完成后更新行数”，避免把 0 行误解为卡死。
 - 数据覆盖日历使用 `GET /api/v1/system/data-calendar`，状态含义固定为 `CLOSED` 休市、`MISSING` 未拉取、`DEGRADED` 数据质量异常、`RAW_ONLY` 已拉未算、`ANALYZED` 基础分析完成、`COMPLETE` 行业热度也完成。
 - 前端数据覆盖明细表必须分页展示，默认每页 20 条，支持 10 / 20 / 50 / 100 条切换；不得直接全量渲染成长页面。
@@ -202,3 +202,14 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 日线源数据触发 duplicate/其他 Raw ERROR 时，必须先把 `duplicate_count`、`null_count` 和 issue code 提交到 `data_quality_daily`，再使任务失败。
 - Backfill 的全区间指数完整性预检必须使用单次批量查询，禁止为每个交易日重复运行完整七数据集校验。
 - 前端职责组件固定为 Dashboard、StockPool、SectorHeat、DataQuality、JobCenter、Research；`App.vue` 负责状态编排，不再堆叠这些页面的完整模板。
+
+## Milestone 10 题材与机会池规则（2026-09-17）
+
+- SW Sector 与 THS Theme 是两个独立维度，禁止把同花顺概念写入 `sector/sector_member`。
+- `theme_member_snapshot` 只保存实际同步当天的完整快照；历史查询必须使用 `trade_date` 之前最近一份 `data_quality_daily.status=PASS` 的快照。禁止用当前成员回填历史。
+- Theme 和 Opportunity 参数只允许放在 `config/opportunity.yaml`，使用 `theme_v1/opportunity_v1 + opportunity config hash`；Factor/Market/Sector/Trend 继续使用既有 strategy hash 和版本。
+- `moneyflow_cnt_ths`、`limit_cpt_list` 缺失时对应指标必须为 NULL，Heat 按可用权重归一化；`data_coverage < 0.50` 时禁止生成 Heat。
+- Left Pool 仅允许 `eligible=true AND state IN (S1,S2)`；Right Side 复用 S3；Trend Pool 复用 S4/S5，不新增或修改状态机。
+- Opportunity 必须同时保留 Left、Right、TrendRank、Position、Context 和最终阶段分数；趋势榜默认按 `trend_rank_score` 排序，不得用总机会分替代。
+- Pipeline 顺序固定为 TradeStatus、Factor、Market、Sector、ThemeFactor、Trend、Opportunity、CrossTable、SignalEval。Theme 原始源失败只记录状态并降级，不得破坏核心 Raw Gate。
+- 行业热榜 API/UI 默认只显示 SW L1；题材与机会 API 的 latest date 必须匹配当前版本和独立配置哈希，并支持显式历史日期。

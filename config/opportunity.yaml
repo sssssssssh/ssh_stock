@@ -1,0 +1,57 @@
+theme:
+  enabled: true
+  source: THS
+  min_member_count: 5
+  heat_weights:
+    excess_return5: 0.18
+    excess_return20: 0.08
+    breadth20: 0.12
+    breadth60: 0.08
+    new_high20_rate: 0.08
+    rps60_median: 0.08
+    up_rate: 0.05
+    moneyflow_score: 0.15
+    limit_up_density: 0.08
+    limit_strength_score: 0.05
+    turnover_ratio20: 0.03
+  lifecycle:
+    watch: 40
+    heating: 60
+    main_up: 75
+    climax: 90
+
+theme_quality:
+  daily:
+    warning_coverage_rate: 0.90
+    error_coverage_rate: 0.75
+
+left_reversal:
+  watch_score: 60
+  strong_score: 75
+  weights:
+    stabilization: 0.15
+    ma20_turn: 0.20
+    higher_low: 0.15
+    rps_recovery: 0.20
+    price_recovery: 0.15
+    volatility_contraction: 0.10
+    volume_structure: 0.05
+
+trend_pool:
+  weights:
+    trend_score: 0.55
+    rps60: 0.20
+    rps120: 0.10
+    context: 0.10
+    market: 0.05
+
+position:
+  ma20_extended: 0.15
+  ma20_extreme: 0.20
+  amount_overheat: 2.5
+
+opportunity:
+  left_structure_weight: 0.80
+  left_context_weight: 0.20
+  trend_quality_weight: 0.70
+  trend_position_weight: 0.30

@@ -9,6 +9,8 @@ SECTOR_CALC_VERSION = "sector_v1"
 TREND_CALC_VERSION = "trend_v1"
 SIGNAL_CALC_VERSION = "signal_v1"
 TRADE_STATUS_CALC_VERSION = "trade_status_v1"
+THEME_CALC_VERSION = "theme_v1"
+OPPORTUNITY_CALC_VERSION = "opportunity_v1"
 
 
 @dataclass(frozen=True)

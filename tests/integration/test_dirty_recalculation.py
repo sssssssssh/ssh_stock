@@ -144,7 +144,9 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
     monkeypatch.setattr(recalculation_module, "FactorService", _SuccessfulFactorService)
     monkeypatch.setattr(recalculation_module, "MarketService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "SectorService", _SuccessfulScalarService)
+    monkeypatch.setattr(recalculation_module, "ThemeFactorService", _SuccessfulScalarService)
     monkeypatch.setattr(recalculation_module, "TrendService", _SuccessfulTrendService)
+    monkeypatch.setattr(recalculation_module, "OpportunityService", _SuccessfulScalarService)
     monkeypatch.setattr(
         recalculation_module,
         "validate_cross_table_range",

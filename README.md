@@ -573,8 +573,8 @@ POST /api/v1/jobs/validate-data
 
 “数据”页面的“拉取数据与任务”面板分成两个入口：
 
-- 点击“同步基础信息”：调用 `POST /api/v1/jobs/sync-basic`，只同步 `stock_basic`、`sector`、`sector_member`，不计算因子和股票池。
-- 选择开始日期和结束日期后点击“拉取原始数据”：调用 `POST /api/v1/jobs/backfill`，只同步交易日历、日线、复权因子、每日指标和指数日线，不计算因子和股票池。
+- 点击“同步基础信息”：调用 `POST /api/v1/jobs/sync-basic`，同步 `stock_basic`、申万行业、THS Theme Catalog 和同步当天的真实 Theme Member Snapshot，不计算因子和股票池。
+- 选择开始日期和结束日期后点击“拉取原始数据”：调用 `POST /api/v1/jobs/backfill`，同步交易日历、七类核心 Raw 数据和 THS Theme 日行情/可选增强源，不计算因子和股票池，也不会伪造历史 Theme Member Snapshot。
 
 “数据”页面里的“补算因子与股票池”“拉取数据与任务”“数据覆盖日历”三个面板支持点击标题收起/展开。收起后只保留标题行和右侧操作区，方便减少页面纵向占用。
 
@@ -583,7 +583,9 @@ POST /api/v1/jobs/validate-data
 - `stock_factor_daily`：均线、收益、RPS、Eligible Universe 等个股因子。
 - `market_daily`：市场温度。
 - `sector_factor_daily`：行业热度。
+- `theme_factor_daily`：题材热度和生命周期。
 - `stock_state_daily` / `strategy_signal`：趋势状态和股票池信号。
+- `stock_opportunity_daily`：左侧反转、右侧确认、趋势质量、位置与题材上下文。
 - 可选 `signal_forward_eval`：信号后验评估。
 
 补算任务的因子阶段会按自然月拆分执行。页面任务状态会显示当前分块范围、累计写入行数和进度百分比；行数会在当前因子分块完成并写库后更新，所以单个分块计算中可能短时间保持 0。
@@ -1000,3 +1002,35 @@ python -m app.cli validate-data --start 2021-01-01 --end 2026-09-15
 ```
 
 `validate-data` 完成后，在“数据”页面提交同范围“开始补算”，或调用 `POST /api/v1/jobs/recalculate`。不要把 `alembic upgrade head` 理解为数据重拉或重算，它只升级数据库结构。
+
+## Milestone 10：热点题材与机会池（2026-09-17）
+
+Milestone 10 在既有申万行业和 S0~S6 状态机之上增加同花顺概念题材层，不改变已封版 Raw、Factor、Trend 公式。参数位于 `config/opportunity.yaml`，Theme/Opportunity 使用独立配置哈希；修改该文件不会令既有 Factor/Trend 数据失效。
+
+首次启用顺序：
+
+```powershell
+python -m alembic upgrade head
+python -m app.cli provider-smoke-test --trade-date 2026-09-16
+python -m app.cli worker
+
+# 另一个终端依次入队，并等待前一个任务完成
+python -m app.cli sync-basic
+python -m app.cli backfill --start 2026-05-01 --end 2026-09-16
+# 在“数据”页面对同一区间执行“开始补算”
+```
+
+`sync-basic` 会同步 THS Concept Catalog，并把当天真实 `ths_member` 保存为成员快照。历史 PIT 可信度只从系统第一份完整 `PASS` 快照开始；系统绝不会用当前成员回填更早日期。更早日期仍可计算题材 OHLC、资金、涨停等自身指标，但成员 breadth 和股票题材上下文保持 `NULL`。
+
+Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 是可选增强源。无权限或暂时不可用时只降低 Theme Heat 的 `data_coverage`，可用权重自动归一化，不会让核心日更失败，也不会把缺失值当作 0。Provider smoke 现在输出五个 THS 接口状态和 `theme_capability`（`FULL/NO_LIMIT_DATA/NO_MONEYFLOW/BASIC_ONLY`）。
+
+新增查询接口：
+
+- `GET /api/v1/themes`
+- `GET /api/v1/themes/{theme_code}/overview`
+- `GET /api/v1/themes/{theme_code}/members`
+- `GET /api/v1/opportunities/left-reversal`
+- `GET /api/v1/opportunities/right-side`
+- `GET /api/v1/opportunities/trends`
+
+首页同时展示申万一级热门行业、热门题材、左侧反转、新右侧确认和趋势强股。趋势池同时展示趋势质量、位置分和过热风险；题材行可打开详情查看成员状态。
