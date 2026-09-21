@@ -1052,4 +1052,4 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞 Core Raw。
 - `net_amount_3d` 只在当前日和前两个市场交易日的 Moneyflow 质量均可信且该题材三日都有数值时生成。`ERROR` 日期的旧 Raw 不参与滚动；`SOURCE_EMPTY` 不解释为全题材净流入 0，相应特征为 `NULL`。
 - `left_reversal_new` 要求上一真实交易日有记录：今天 S1/S2 且分数达强信号阈值，昨天非 S1/S2 或昨天分数低于强信号阈值。缺失昨天记录不判为首次触发。生命周期 `STARTING` 和 `DIVERGENCE` 分别使用 `config/opportunity.yaml` 中显式的 `starting`、`divergence_min_heat`。
-- `ths_member` 的行数达到已配置的 `provider.tushare.safe_limits.ths_member` 时，Provider 会标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。Tushare 官方接口文档目前未披露单次最大返回行数，因此默认配置未伪造数值阈值；须取得官方或当前代理的明确上限后，在 `config/app.yaml` 中填写小于上限的阈值。
+- `provider.tushare.safe_limits.ths_member=5000` 是当前代理的实测报警线，不是请求返回上限：单题材实测可返回 5536 行，无筛选请求在 6000 行发生截断；当前目标概念题材最大实测返回 3840 行。任一题材返回行数达到 5000 时标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。官方文档未公布单次最大行数，代理行为变化时需重新核验阈值。

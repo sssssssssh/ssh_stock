@@ -47,6 +47,7 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
     assert provider._safe_limits["ths_daily"] == 3000
     assert provider._safe_limits["moneyflow_cnt_ths"] == 5000
     assert provider._safe_limits["limit_cpt_list"] == 2000
+    assert provider._safe_limits["ths_member"] == 5000
 
 
 def test_tushare_proxy_configuration_rejects_incompatible_sdk() -> None:
@@ -95,6 +96,19 @@ def test_tushare_provider_marks_possible_truncation() -> None:
 
     assert df.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
     assert "safe_limit=2" in df.attrs["provider_warning_message"]
+
+
+def test_ths_member_safe_limit_boundary() -> None:
+    provider = object.__new__(TushareProvider)
+    provider._safe_limits = {"ths_member": 5000}
+    below_limit = pd.DataFrame({"con_code": range(4999)})
+    at_limit = pd.DataFrame({"con_code": range(5000)})
+
+    provider._mark_possible_truncation("ths_member", below_limit)
+    provider._mark_possible_truncation("ths_member", at_limit)
+
+    assert "provider_warning" not in below_limit.attrs
+    assert at_limit.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
 
 
 def test_tushare_provider_fetches_index_daily_range(monkeypatch) -> None:

@@ -223,4 +223,4 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 禁止使用 `Theme.is_active` 直接构造历史 Theme universe；必须按 `list_date/first_seen_date/last_seen_date` 对目标交易日判断。`last_seen_date` 只能表示最后一次真实出现在 Catalog 的日期，发现消失时不能改写。
 - Theme Raw 只在源质量可信（PASS/WARNING）时执行 destructive reconciliation；ERROR/TRANSIENT_ERROR/PERMISSION_UNAVAILABLE 不得删除旧 Raw。CatchUp 必须区分 Core Raw 与 Theme Raw 修复，Theme 缺失/ERROR/TRANSIENT_ERROR 可重试，权限不可用可降级且不无限重试。
 - Moneyflow 三日滚动不得使用非可信日期的旧 Raw；`SOURCE_EMPTY` 不得伪装为零。`left_reversal_new` 必须同时检查上一真实交易日的 state 与 score，缺上一日记录不能标新。Lifecycle STARTING/DIVERGENCE 必须使用显式配置阈值。
-- `ths_member` 的安全行数阈值仅可在确认当前接口官方/代理单次上限后配置，且必须低于上限；达到阈值必须使整份成员快照失败。不得猜测数字。
+- `ths_member` 运行时安全阈值设为 5000，依据当前代理单题材已返回 5536 行、无筛选请求在 6000 行出现截断的只读实测；这是保守报警线，不宣称官方上限。达到阈值必须使整份成员快照失败；代理行为变化时重新核验，不得把目录 `count` 当成精确行数。
