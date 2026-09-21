@@ -1044,3 +1044,12 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - `GET /api/v1/opportunities/trends`
 
 首页同时展示申万一级热门行业、热门题材、左侧反转、新右侧确认和趋势强股。趋势池同时展示趋势质量、位置分和过热风险；题材行可打开详情查看成员状态。
+
+### Milestone 10 历史正确性（2026-09-21）
+
+- `Theme.is_active` 只表示当前是否仍在 THS Catalog。历史题材范围使用 `list_date`、`first_seen_date`、`last_seen_date` 按交易日推导；Catalog 观察日使用实际运行日，不把历史 Backfill 截止日期伪装成观察日。`last_seen_date` 是最后一次真实出现在 Catalog 的日期，发现下架时不改写。历史 `ths_theme_daily.expected_rows` 使用该日范围，不使用今天的 active 数量。
+- 历史 Theme Member PIT 从首份 `PASS` 的 `ThemeMemberSnapshot` 才可信。首次运行前已经永久下架、且当前 THS 接口不可发现的题材无法可靠恢复；历史板块数据可回溯范围受当前可发现题材代码限制。空库 Backfill 会先尝试同步当前 Catalog，但不会把当前成员冒充历史成员。
+- CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞 Core Raw。
+- `net_amount_3d` 只在当前日和前两个市场交易日的 Moneyflow 质量均可信且该题材三日都有数值时生成。`ERROR` 日期的旧 Raw 不参与滚动；`SOURCE_EMPTY` 不解释为全题材净流入 0，相应特征为 `NULL`。
+- `left_reversal_new` 要求上一真实交易日有记录：今天 S1/S2 且分数达强信号阈值，昨天非 S1/S2 或昨天分数低于强信号阈值。缺失昨天记录不判为首次触发。生命周期 `STARTING` 和 `DIVERGENCE` 分别使用 `config/opportunity.yaml` 中显式的 `starting`、`divergence_min_heat`。
+- `ths_member` 的行数达到已配置的 `provider.tushare.safe_limits.ths_member` 时，Provider 会标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。Tushare 官方接口文档目前未披露单次最大返回行数，因此默认配置未伪造数值阈值；须取得官方或当前代理的明确上限后，在 `config/app.yaml` 中填写小于上限的阈值。

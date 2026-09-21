@@ -2,12 +2,13 @@ import uuid
 from datetime import date
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.models.market_data import IndexDaily, TradeCalendar
+from app.models.market_data import IndexDaily, Theme, TradeCalendar
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
@@ -67,6 +68,14 @@ class BackfillJob:
             total_rows += upsert_rows(self.db, TradeCalendar, calendar_rows, ["cal_date"])
             self.db.commit()
             open_dates = [row["cal_date"] for row in calendar_rows if row["is_open"]]
+            if open_dates and not self.db.execute(
+                select(func.count()).select_from(Theme)
+            ).scalar_one():
+                try:
+                    self.ingestion.sync_ths_themes(business_today())
+                except Exception as exc:
+                    self.db.rollback()
+                    logger.warning("theme catalog initialization failed end={} error={}", end, exc)
             metadata = {
                 **metadata,
                 "open_days": len(open_dates),

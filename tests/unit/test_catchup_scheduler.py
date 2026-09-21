@@ -293,6 +293,7 @@ def _configured_catchup_job(
         ("recalculate", start, end, mode)
     )
     job._refresh_raw_only = lambda current: events.append(("refresh", current))
+    job._theme_repair_dates = lambda dates: []
     job._run_dirty_repair_if_needed = lambda: events.append(("dirty_repair",))
     return job, events
 
@@ -646,6 +647,10 @@ def test_raw_refresh_uses_raw_only_ingestion_methods(monkeypatch) -> None:
     job = CatchUpJob.__new__(CatchUpJob)
     job.db = db
     job.ingestion = FakeIngestion()
+    job._sync_theme_raw_best_effort = lambda current, force=False: (
+        calls.append(("theme_daily", current)),
+        calls.append(("theme_optional", current)),
+    )
     job.settings = SimpleNamespace(strategy={})
     monkeypatch.setattr(
         catchup_module,
@@ -809,3 +814,24 @@ def test_dirty_repair_does_not_retry_failed_at_limit(monkeypatch) -> None:
     job._run_dirty_repair_if_needed()
 
     assert recalc_calls == []
+
+
+def test_historical_theme_repair_recalculates_to_latest_raw(monkeypatch) -> None:
+    repair_date = date(2026, 9, 2)
+    latest = date(2026, 9, 16)
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[repair_date, latest],
+        raw_required_dates=[],
+        analysis_required_dates=[],
+        latest=latest,
+    )
+    job._theme_repair_dates = lambda dates: [repair_date]
+    job._sync_theme_raw_best_effort = lambda current: events.append(
+        ("theme_repair", current)
+    ) or True
+
+    job.run(latest)
+
+    assert ("theme_repair", repair_date) in events
+    assert ("recalculate", repair_date, latest, "catchup_analysis") in events

@@ -12,6 +12,9 @@ from app.services.quality.daily_quality import DataQualityError
 
 
 class _FakeDb:
+    def execute(self, statement):
+        return SimpleNamespace(scalar_one=lambda: 1)
+
     def add(self, row):
         return None
 

@@ -17,6 +17,7 @@ from app.models.market_data import (
     ThemeLimitDaily,
     ThemeMemberSnapshot,
     ThemeMoneyflowDaily,
+    TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import FACTOR_CALC_VERSION, THEME_CALC_VERSION
@@ -58,13 +59,14 @@ class ThemeFactorService:
             moneyflow=self._frame(ThemeMoneyflowDaily, lookback_start, end),
             limits=self._frame(ThemeLimitDaily, lookback_start, end),
             valid_snapshots=set(snapshot_dates),
-            moneyflow_pass_dates=self._pass_dates("ths_theme_moneyflow", end),
+            moneyflow_pass_dates=self._pass_dates("ths_theme_moneyflow", end, allow_empty=False),
             limit_pass_dates=self._pass_dates("ths_theme_limit", end),
             start=start,
             end=end,
             config=ThemeConfig.from_configs(
                 self.settings.strategy, self.settings.opportunity_config
             ),
+            market_trade_dates=self._open_trade_dates(lookback_start, end),
         )
         metadata = calculation_metadata(
             config=self.settings.opportunity_config,
@@ -154,14 +156,30 @@ class ThemeFactorService:
             ]
         )
 
-    def _pass_dates(self, dataset: str, end: date) -> set[date]:
+    def _pass_dates(self, dataset: str, end: date, *, allow_empty: bool = True) -> set[date]:
+        statuses = ("PASS", "WARNING", "SOURCE_EMPTY") if allow_empty else ("PASS", "WARNING")
         return set(
             self.db.execute(
                 select(DataQualityDaily.trade_date).where(
                     DataQualityDaily.trade_date <= end,
                     DataQualityDaily.dataset == dataset,
-                    DataQualityDaily.status.in_(("PASS", "WARNING", "SOURCE_EMPTY")),
+                    DataQualityDaily.status.in_(statuses),
                 )
+            )
+            .scalars()
+            .all()
+        )
+
+    def _open_trade_dates(self, start: date, end: date) -> list[date]:
+        return list(
+            self.db.execute(
+                select(TradeCalendar.cal_date)
+                .where(
+                    TradeCalendar.cal_date >= start,
+                    TradeCalendar.cal_date <= end,
+                    TradeCalendar.is_open.is_(True),
+                )
+                .order_by(TradeCalendar.cal_date)
             )
             .scalars()
             .all()

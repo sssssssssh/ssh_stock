@@ -12,7 +12,9 @@ class ThemeConfig:
     min_member_count: int
     weights: dict[str, float]
     lifecycle_watch: float = 40
+    lifecycle_starting: float = 55
     lifecycle_heating: float = 60
+    lifecycle_divergence_min_heat: float = 70
     lifecycle_main_up: float = 75
     lifecycle_climax: float = 90
     min_data_coverage: float = 0.50
@@ -26,7 +28,9 @@ class ThemeConfig:
             min_member_count=int(theme.get("min_member_count", 5)),
             weights={key: float(value) for key, value in theme.get("heat_weights", {}).items()},
             lifecycle_watch=float(lifecycle.get("watch", 40)),
+            lifecycle_starting=float(lifecycle.get("starting", 55)),
             lifecycle_heating=float(lifecycle.get("heating", 60)),
+            lifecycle_divergence_min_heat=float(lifecycle.get("divergence_min_heat", 70)),
             lifecycle_main_up=float(lifecycle.get("main_up", 75)),
             lifecycle_climax=float(lifecycle.get("climax", 90)),
             min_data_coverage=float(theme.get("min_data_coverage", 0.50)),
@@ -62,6 +66,7 @@ def calculate_theme_factors(
     start: date,
     end: date,
     config: ThemeConfig,
+    market_trade_dates: list[date] | None = None,
 ) -> pd.DataFrame:
     if theme_daily.empty:
         return pd.DataFrame()
@@ -173,7 +178,12 @@ def calculate_theme_factors(
     ] = np.nan
 
     daily = _merge_optional_sources(
-        daily, moneyflow, limits, moneyflow_pass_dates, limit_pass_dates
+        daily,
+        moneyflow,
+        limits,
+        moneyflow_pass_dates,
+        limit_pass_dates,
+        market_trade_dates or sorted(daily["trade_date"].unique()),
     )
     inputs = list(config.weights)
     for column in inputs:
@@ -247,22 +257,40 @@ def _merge_optional_sources(
     limits: pd.DataFrame,
     moneyflow_pass_dates: set[date],
     limit_pass_dates: set[date],
+    market_trade_dates: list[date],
 ) -> pd.DataFrame:
     if not moneyflow.empty:
         flow = moneyflow.copy()
         flow["trade_date"] = pd.to_datetime(flow["trade_date"]).dt.date
+        flow = flow[flow["trade_date"].isin(moneyflow_pass_dates)].copy()
         flow = flow.sort_values(["theme_code", "trade_date"])
-        flow["net_amount_3d"] = flow.groupby("theme_code")["net_amount"].transform(
-            lambda value: value.rolling(3, min_periods=1).sum()
+        positions = {trade_date: index for index, trade_date in enumerate(market_trade_dates)}
+        flow["market_position"] = flow["trade_date"].map(positions)
+        grouped = flow.groupby("theme_code")
+        previous_position = grouped["market_position"].shift(1)
+        first_position = grouped["market_position"].shift(2)
+        flow["net_amount_3d"] = (
+            flow["net_amount"]
+            + grouped["net_amount"].shift(1)
+            + grouped["net_amount"].shift(2)
+        ).where(
+            (flow["market_position"] - previous_position == 1)
+            & (flow["market_position"] - first_position == 2)
         )
         flow["net_amount_per_member"] = flow["net_amount"] / flow["company_num"].clip(lower=1)
         for column in ("net_amount", "net_amount_3d", "net_amount_per_member"):
             flow[f"{column}_rank"] = _rank(flow[column], flow["trade_date"])
-        flow["moneyflow_score"] = (
-            0.50 * flow["net_amount_rank"]
-            + 0.30 * flow["net_amount_3d_rank"]
-            + 0.20 * flow["net_amount_per_member_rank"]
+        components = {
+            "net_amount_rank": 0.50,
+            "net_amount_3d_rank": 0.30,
+            "net_amount_per_member_rank": 0.20,
+        }
+        weighted = sum(flow[column].fillna(0) * weight for column, weight in components.items())
+        available = sum(
+            flow[column].notna().astype(float) * weight
+            for column, weight in components.items()
         )
+        flow["moneyflow_score"] = weighted / available.replace(0, np.nan)
         daily = daily.merge(
             flow[
                 [
@@ -287,12 +315,6 @@ def _merge_optional_sources(
             "company_num",
         ):
             daily[column] = np.nan
-    for index in daily.index:
-        if daily.at[index, "trade_date"] not in moneyflow_pass_dates:
-            daily.loc[
-                index, ["net_amount", "net_amount_3d", "net_amount_per_member", "moneyflow_score"]
-            ] = np.nan
-
     limit_columns = [
         "limit_up_count",
         "continuous_limit_count",
@@ -355,17 +377,15 @@ def _lifecycle(row: pd.Series, config: ThemeConfig) -> str | None:
         (row.get("breadth20", 0) or 0) >= 0.80 or (row.get("_limit_density_pct", 0) or 0) >= 90
     ):
         return "CLIMAX"
-    divergence_threshold = (config.lifecycle_heating + config.lifecycle_main_up) / 2
-    if heat >= divergence_threshold and momentum <= -8:
+    if heat >= config.lifecycle_divergence_min_heat and momentum <= -8:
         return "DIVERGENCE"
     if heat >= config.lifecycle_main_up and momentum >= 0:
         return "MAIN_UP"
     if heat >= config.lifecycle_heating and momentum > 5:
         return "HEATING"
-    starting_threshold = (config.lifecycle_watch + config.lifecycle_heating) / 2
     if (
         not pd.isna(row.get("prev_heat"))
-        and row["prev_heat"] < starting_threshold <= heat
+        and row["prev_heat"] < config.lifecycle_starting <= heat
         and momentum >= 10
     ):
         return "STARTING"

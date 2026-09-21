@@ -220,3 +220,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Strategy config hash 与 Opportunity config hash 必须分离；Provider runtime Safe Limit 不得进入任一策略哈希。
 - `ThemeFactorDaily.source_coverage` 表示 Theme Daily 源覆盖率，`data_coverage` 表示 Heat 特征覆盖率，禁止混用。
 - Theme Catalog 日更，Theme Member Snapshot 周更；历史 Theme/Opportunity 查询只允许加载 start 前最近 PASS 快照与区间内 PASS 快照。
+- 禁止使用 `Theme.is_active` 直接构造历史 Theme universe；必须按 `list_date/first_seen_date/last_seen_date` 对目标交易日判断。`last_seen_date` 只能表示最后一次真实出现在 Catalog 的日期，发现消失时不能改写。
+- Theme Raw 只在源质量可信（PASS/WARNING）时执行 destructive reconciliation；ERROR/TRANSIENT_ERROR/PERMISSION_UNAVAILABLE 不得删除旧 Raw。CatchUp 必须区分 Core Raw 与 Theme Raw 修复，Theme 缺失/ERROR/TRANSIENT_ERROR 可重试，权限不可用可降级且不无限重试。
+- Moneyflow 三日滚动不得使用非可信日期的旧 Raw；`SOURCE_EMPTY` 不得伪装为零。`left_reversal_new` 必须同时检查上一真实交易日的 state 与 score，缺上一日记录不能标新。Lifecycle STARTING/DIVERGENCE 必须使用显式配置阈值。
+- `ths_member` 的安全行数阈值仅可在确认当前接口官方/代理单次上限后配置，且必须低于上限；达到阈值必须使整份成员快照失败。不得猜测数字。

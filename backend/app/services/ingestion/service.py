@@ -64,6 +64,7 @@ from app.services.quality.raw_completeness import (
     ensure_stock_basic_ready,
     validate_trade_calendar_rows,
 )
+from app.services.quality.theme_quality import expected_theme_codes_on_date
 
 DAILY_VALUE_COLUMNS = [
     "open",
@@ -708,8 +709,12 @@ class IngestionService:
             )
             self.db.execute(
                 update(Theme)
-                .where(Theme.source == "THS", Theme.theme_code.not_in(source_codes))
-                .values(is_active=False, last_seen_date=snapshot_date)
+                .where(
+                    Theme.source == "THS",
+                    Theme.is_active.is_(True),
+                    Theme.theme_code.not_in(source_codes),
+                )
+                .values(is_active=False)
             )
             _persist_theme_quality(
                 self.db, snapshot_date, "ths_theme_catalog", len(rows), len(rows), "PASS"
@@ -800,32 +805,23 @@ class IngestionService:
             raise
 
     def sync_theme_daily(self, trade_date: date) -> int:
-        active_codes = set(
-            self.db.execute(
-                select(Theme.theme_code).where(
-                    Theme.source == "THS",
-                    Theme.theme_type == "CONCEPT",
-                    Theme.is_active.is_(True),
-                )
-            )
-            .scalars()
-            .all()
-        )
+        expected_codes = expected_theme_codes_on_date(self.db, trade_date)
         try:
-            if not active_codes:
-                raise ValueError("no active THS themes; sync catalog first")
+            if not expected_codes:
+                raise ValueError(f"no known THS themes on {trade_date}; sync catalog first")
             frame = self.provider.get_ths_daily(trade_date)
-            rows = [
-                row for row in normalize_theme_daily(frame) if row["theme_code"] in active_codes
-            ]
-            actual_codes = {row["theme_code"] for row in rows}
+            if frame.attrs.get("provider_warning"):
+                raise ValueError("ths_theme_daily POSSIBLE_TRUNCATION")
+            source_rows = normalize_theme_daily(frame)
+            actual_codes = {row["theme_code"] for row in source_rows}
+            rows = [row for row in source_rows if row["theme_code"] in expected_codes]
             quality_config = self.settings.opportunity_config.get("theme_quality", {}).get(
                 "daily", {}
             )
             result = check_daily_coverage(
                 trade_date=trade_date,
                 actual_codes=actual_codes,
-                expected_codes=active_codes,
+                expected_codes=expected_codes,
                 warning_coverage_rate=float(quality_config.get("warning_coverage_rate", 0.90)),
                 error_coverage_rate=float(quality_config.get("error_coverage_rate", 0.75)),
                 dataset="ths_theme_daily",
@@ -863,7 +859,7 @@ class IngestionService:
                 self.db,
                 trade_date,
                 "ths_theme_daily",
-                len(active_codes),
+                len(expected_codes),
                 0,
                 status,
                 error=str(exc),
@@ -898,24 +894,18 @@ class IngestionService:
         model: type,
     ) -> str:
         try:
-            active_codes = set(
-                self.db.execute(
-                    select(Theme.theme_code).where(
-                        Theme.source == "THS",
-                        Theme.theme_type == "CONCEPT",
-                        Theme.is_active.is_(True),
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            if not active_codes:
-                raise ValueError("no active THS themes; sync catalog first")
+            expected_codes = expected_theme_codes_on_date(self.db, trade_date)
+            if not expected_codes:
+                raise ValueError(f"no known THS themes on {trade_date}; sync catalog first")
             frame = fetch(trade_date)
             if frame.attrs.get("provider_warning"):
                 raise ValueError(f"{dataset} POSSIBLE_TRUNCATION")
-            rows = [row for row in normalize(frame) if row["theme_code"] in active_codes]
-            status = "PASS" if rows else "SOURCE_EMPTY"
+            source_rows = normalize(frame)
+            extra_codes = sorted(
+                {row["theme_code"] for row in source_rows} - expected_codes
+            )
+            rows = [row for row in source_rows if row["theme_code"] in expected_codes]
+            status = "WARNING" if extra_codes else "PASS" if rows else "SOURCE_EMPTY"
             compare_columns = (
                 THEME_MONEYFLOW_VALUE_COLUMNS
                 if model is ThemeMoneyflowDaily
@@ -940,7 +930,15 @@ class IngestionService:
                 dirty_dates=dirty_dates,
                 reason=f"authoritative {dataset} snapshot changed",
             )
-            _persist_theme_quality(self.db, trade_date, dataset, len(rows), len(rows), status)
+            _persist_theme_quality(
+                self.db,
+                trade_date,
+                dataset,
+                len(rows),
+                len(rows),
+                status,
+                extra_codes=extra_codes,
+            )
             self.db.commit()
             return status
         except Exception as exc:
@@ -984,6 +982,7 @@ def _persist_theme_quality(
     status: str,
     *,
     error: str | None = None,
+    extra_codes: list[str] | None = None,
 ) -> None:
     coverage = actual_rows / expected_rows if expected_rows else None
     persist_coverage_result(
@@ -995,7 +994,7 @@ def _persist_theme_quality(
             actual_rows=actual_rows,
             coverage_rate=coverage,
             missing_codes=[],
-            extra_codes=[],
+            extra_codes=extra_codes or [],
             status=status,
             error_count=1
             if status in {"ERROR", "PERMISSION_UNAVAILABLE", "TRANSIENT_ERROR"}

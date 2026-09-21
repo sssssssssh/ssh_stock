@@ -1190,3 +1190,6 @@ Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；�
 - Theme 三类日频 Raw 使用成功快照权威对账，新增、修订和 stale 删除均触发 Dirty Repair；源错误保留旧数据。
 - Theme Catalog 日更，成员周更。成员接口返回有效 `is_new` 标志时只保存 Y，保证历史 PIT 不包含已退出成员。
 - 系统日历新增 CORE_COMPLETE、OPPORTUNITY_COMPLETE，数据覆盖页同时展示 Theme Daily、ThemeFactor 和 Opportunity。
+# Milestone 10 历史正确性补充（2026-09-21）
+
+历史题材范围按目标交易日的上市、首次发现和最后一次在 THS Catalog 出现日期判断，当前 active 状态不能抹掉历史数据。成员的 PIT 只从第一份质量 PASS 快照开始；首次运行前已永久下架且不可发现的题材无法恢复。CatchUp 对缺失或失败的历史题材原始数据独立重试，权限不可用允许降级。资金三日净额要求连续三个可信交易日；左侧首次强信号要求上一真实交易日存在。STARTING/DIVERGENCE 阈值在机会配置中显式维护。

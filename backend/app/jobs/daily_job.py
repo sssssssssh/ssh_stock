@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.core.config import get_settings
 from app.models.job import JobRun
 from app.providers.base import MarketDataProvider
@@ -158,7 +159,7 @@ class DailyJob:
                 metadata=_progress(metadata, 11),
             )
             try:
-                total_rows += self.ingestion.sync_ths_themes(trade_date)
+                total_rows += self.ingestion.sync_ths_themes(business_today())
                 total_rows += self.ingestion.sync_theme_daily(trade_date)
                 optional_status = self.ingestion.sync_theme_optional_sources(trade_date)
                 metadata = {

@@ -5,6 +5,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.core.config import get_settings
 from app.models.market_data import (
     MarketDaily,
@@ -28,6 +29,11 @@ from app.services.job_guard import scheduler_setting
 from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
 from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.quality.raw_completeness import check_raw_completeness
+from app.services.quality.theme_quality import (
+    expected_theme_codes_on_date,
+    theme_raw_needs_repair,
+    theme_source_status,
+)
 from app.services.recalculation import run_recalculation
 from app.services.trade_status import TradeStatusService
 
@@ -61,7 +67,7 @@ class CatchUpJob:
         sync_theme_catalog = getattr(self.ingestion, "sync_ths_themes", None)
         if callable(sync_theme_catalog):
             try:
-                sync_theme_catalog(target_date)
+                sync_theme_catalog(business_today())
             except Exception as exc:
                 rollback = getattr(self.db, "rollback", None)
                 if callable(rollback):
@@ -79,6 +85,7 @@ class CatchUpJob:
             opportunity_config=getattr(self.settings, "opportunity_config", None),
             algo_version=self.settings.algo_version,
         )
+        theme_repair_dates = self._theme_repair_dates(candidate_dates)
         plan = build_catchup_plan(
             open_dates=open_dates,
             raw_required_dates=raw_required_dates,
@@ -99,7 +106,26 @@ class CatchUpJob:
             logger.info("catch-up raw-only repair trade_date={}", current)
             self._sync_and_validate_raw_date(current)
 
-        recalc_dates = plan.required_dates
+        repaired_theme_dates = [
+            current
+            for current in theme_repair_dates
+            if self._sync_theme_raw_best_effort(current)
+        ]
+        failed_theme_dates = set(theme_repair_dates) - set(repaired_theme_dates)
+        analysis_dates = [
+            current
+            for current in plan.analysis_required_dates
+            if current not in failed_theme_dates
+            or not is_core_analysis_complete(
+                self.db,
+                current,
+                strategy=self.settings.strategy,
+                algo_version=self.settings.algo_version,
+            )
+        ]
+        recalc_dates = sorted(
+            set(plan.raw_required_dates + analysis_dates + repaired_theme_dates)
+        )
         if recalc_dates:
             latest = latest_raw_trade_date(self.db)
             if latest is None:
@@ -177,14 +203,46 @@ class CatchUpJob:
 
     def _refresh_raw_only(self, trade_date: date) -> None:
         self._sync_and_validate_raw_date(trade_date)
+        self._sync_theme_raw_best_effort(trade_date, force=True)
+
+    def _theme_repair_dates(self, candidate_dates: list[date]) -> list[date]:
+        return [
+            trade_date
+            for trade_date in candidate_dates
+            if expected_theme_codes_on_date(self.db, trade_date)
+            and (
+                theme_raw_needs_repair(self.db, trade_date)
+                or any(
+                    theme_source_status(self.db, trade_date, dataset)
+                    in {"ERROR", "TRANSIENT_ERROR"}
+                    for dataset in ("ths_theme_moneyflow", "ths_theme_limit")
+                )
+            )
+        ]
+
+    def _sync_theme_raw_best_effort(self, trade_date: date, *, force: bool = False) -> bool:
+        status = theme_source_status(self.db, trade_date, "ths_theme_daily")
+        sync_daily = status != "PERMISSION_UNAVAILABLE" and (
+            force or theme_raw_needs_repair(self.db, trade_date)
+        )
+        repaired = False
         try:
-            self.ingestion.sync_theme_daily(trade_date)
+            if sync_daily:
+                self.ingestion.sync_theme_daily(trade_date)
+                repaired = theme_source_status(
+                    self.db, trade_date, "ths_theme_daily"
+                ) in {"PASS", "WARNING"}
+        except Exception as exc:
+            self.db.rollback()
+            logger.warning("catch-up theme daily repair failed date={} error={}", trade_date, exc)
+        try:
             self.ingestion.sync_theme_optional_sources(trade_date)
         except Exception as exc:
             self.db.rollback()
-            logger.exception(
-                "catch-up theme refresh failed trade_date={} error={}", trade_date, exc
+            logger.warning(
+                "catch-up optional theme repair failed date={} error={}", trade_date, exc
             )
+        return repaired
 
     def _run_dirty_repair_if_needed(self) -> None:
         dirty_ranges = repairable_dirty_ranges(

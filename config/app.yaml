@@ -22,3 +22,4 @@ provider:
       ths_daily: 3000
       moneyflow_cnt_ths: 5000
       limit_cpt_list: 2000
+      # ths_member: set only after confirming the provider's per-call row cap.

@@ -17,7 +17,9 @@ theme:
     turnover_ratio20: 0.05
   lifecycle:
     watch: 40
+    starting: 55
     heating: 60
+    divergence_min_heat: 70
     main_up: 75
     climax: 90
 

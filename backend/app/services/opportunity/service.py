@@ -18,6 +18,7 @@ from app.models.market_data import (
     Theme,
     ThemeFactorDaily,
     ThemeMemberSnapshot,
+    TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
@@ -76,6 +77,19 @@ class OpportunityService:
             end=end,
             algo_version=version,
             config=OpportunityConfig.from_dict(self.settings.opportunity_config),
+            market_trade_dates=list(
+                self.db.execute(
+                    select(TradeCalendar.cal_date)
+                    .where(
+                        TradeCalendar.cal_date >= lookback_start,
+                        TradeCalendar.cal_date <= end,
+                        TradeCalendar.is_open.is_(True),
+                    )
+                    .order_by(TradeCalendar.cal_date)
+                )
+                .scalars()
+                .all()
+            ),
         )
         metadata = calculation_metadata(
             config=self.settings.opportunity_config,

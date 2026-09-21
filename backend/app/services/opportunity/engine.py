@@ -73,6 +73,7 @@ def calculate_opportunities(
     end: date,
     algo_version: str,
     config: OpportunityConfig,
+    market_trade_dates: list[date] | None = None,
 ) -> pd.DataFrame:
     if states.empty or factors.empty:
         return pd.DataFrame()
@@ -87,7 +88,8 @@ def calculate_opportunities(
     else:
         values["market_score"] = np.nan
 
-    values = _left_scores(values, config)
+    open_dates = market_trade_dates or sorted(factors["trade_date"].unique())
+    values = _left_scores(values, config, open_dates)
     values = _industry_context(values, sector_members, sector_factors)
     values = _theme_context(values, themes, theme_members, theme_factors, valid_snapshots)
     values["context_score"] = _weighted_available(
@@ -167,7 +169,12 @@ def _prepare_factor_context(factors: pd.DataFrame) -> pd.DataFrame:
     return values
 
 
-def _left_scores(values: pd.DataFrame, config: OpportunityConfig) -> pd.DataFrame:
+def _left_scores(
+    values: pd.DataFrame,
+    config: OpportunityConfig,
+    market_trade_dates: list[date],
+) -> pd.DataFrame:
+    values = values.sort_values(["ts_code", "trade_date"]).copy()
     eligible = values["eligible"].fillna(False) & values["state"].isin(["S1", "S2"])
     values["stabilization"] = values.apply(_stabilization, axis=1)
     values["ma20_turn"] = values.apply(_ma20_turn, axis=1)
@@ -193,12 +200,23 @@ def _left_scores(values: pd.DataFrame, config: OpportunityConfig) -> pd.DataFram
     for name, column in component_map.items():
         score += values[column].fillna(0) * config.left_weights.get(name, 0)
     values["left_reversal_score"] = score.clip(0, 100).where(eligible)
-    previous = values.groupby("ts_code")["left_reversal_score"].shift(1)
+    previous_dates = {
+        trade_date: market_trade_dates[index - 1]
+        for index, trade_date in enumerate(market_trade_dates)
+        if index > 0
+    }
+    grouped = values.groupby("ts_code")
+    previous_date = grouped["trade_date"].shift(1)
+    previous_state = grouped["state"].shift(1)
+    previous_score = grouped["left_reversal_score"].shift(1)
     values["left_reversal_new"] = (
         eligible
         & (values["left_reversal_score"] >= config.left_strong)
-        & previous.notna()
-        & (previous < config.left_strong)
+        & previous_date.eq(values["trade_date"].map(previous_dates))
+        & (
+            ~previous_state.isin(["S1", "S2"])
+            | (previous_score < config.left_strong)
+        )
     )
     return values
 
