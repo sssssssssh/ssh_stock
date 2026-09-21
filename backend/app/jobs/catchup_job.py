@@ -111,18 +111,7 @@ class CatchUpJob:
             for current in theme_repair_dates
             if self._sync_theme_raw_best_effort(current)
         ]
-        failed_theme_dates = set(theme_repair_dates) - set(repaired_theme_dates)
-        analysis_dates = [
-            current
-            for current in plan.analysis_required_dates
-            if current not in failed_theme_dates
-            or not is_core_analysis_complete(
-                self.db,
-                current,
-                strategy=self.settings.strategy,
-                algo_version=self.settings.algo_version,
-            )
-        ]
+        analysis_dates = list(plan.analysis_required_dates)
         recalc_dates = sorted(
             set(plan.raw_required_dates + analysis_dates + repaired_theme_dates)
         )

@@ -23,4 +23,4 @@ provider:
       moneyflow_cnt_ths: 5000
       limit_cpt_list: 2000
       # Conservative alert threshold; this proxy returned 6000 rows for a truncated request.
-      ths_member: 5000
+      ths_member: 6000

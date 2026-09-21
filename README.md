@@ -335,7 +335,7 @@ python -m app.cli check-tushare
 
 如果 `daily` 报 SQLAlchemy 链接 `https://sqlalche.me/e/20/e3q8`，先看报错前面的真实错误：
 
-- 如果数据库迁移版本不是最新，执行 `python -m alembic upgrade head`。当前最新应为 `0008_dirty_retry_metadata`。
+- 检查迁移版本时分别执行 `python -m alembic current` 和 `python -m alembic heads`；正常情况下两者一致。不一致时执行 `python -m alembic upgrade head`，再运行 `python -m alembic current` 确认。不要依赖文档中硬编码的 revision 名称，始终以 `alembic heads` 为准。
 - 如果看到 `number of parameters must be between 0 and 65535`，说明旧代码一次性 upsert 行数太多；当前代码已经把 `upsert_rows` 改为自动分批写入。
 - 如果 `sector_factor_daily rows=0` 但任务成功，通常是因为数据库只有单日行情，Eligible Universe 需要历史 lookback。先做历史回填，再重算行业热度。
 
@@ -1050,7 +1050,7 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - `Theme.is_active` 只表示当前是否仍在 THS Catalog。历史 Board universe 优先以 `list_date` 为下界，只有缺失时才以系统首次观察日 `first_seen_date` 为保守下界；有值的 `last_seen_date` 是最后一次真实出现在 Catalog 的日期和历史上界。Catalog 观察日使用实际运行日，不把历史 Backfill 截止日期伪装成观察日，也不因发现下架而改写 `last_seen_date`。历史 `ths_theme_daily.expected_rows` 使用该日 Board universe，不使用今天的 active 数量。
 - 历史 Theme Member PIT 从首份 `PASS` 的 `ThemeMemberSnapshot` 才可信。首次运行前已经永久下架、且当前 THS 接口不可发现的题材无法可靠恢复；历史板块数据可回溯范围受当前可发现题材代码限制。空库 Backfill 会先尝试同步当前 Catalog，但不会把当前成员冒充历史成员。
 - Board 日行情历史可依 `list_date` 回填，但这不证明历史成员归属；成员广度和股票-题材归属仍只从第一份 PASS 成员快照起可信。Opportunity Quality 在 Theme Daily 源质量为 PASS/WARNING 时，以当天实际落库的 `ThemeDaily` 行数作为 ThemeFactor 应有行数；源 `actual_rows` 可包含 extra 代码，不能充当衍生结果分母。源 ERROR 等不可用状态仍跳过该项检查。
-- CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞 Core Raw。
+- CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞已判定需要补算的 Core Analysis 或 Opportunity；Theme 修复失败时 Opportunity 仍可降级计算。
 - `net_amount_3d` 只在当前日和前两个市场交易日的 Moneyflow 质量均可信且该题材三日都有数值时生成。`ERROR` 日期的旧 Raw 不参与滚动；`SOURCE_EMPTY` 不解释为全题材净流入 0，相应特征为 `NULL`。
 - `left_reversal_new` 要求上一真实交易日有记录：今天 S1/S2 且分数达强信号阈值，昨天非 S1/S2 或昨天分数低于强信号阈值。缺失昨天记录不判为首次触发。生命周期 `STARTING` 和 `DIVERGENCE` 分别使用 `config/opportunity.yaml` 中显式的 `starting`、`divergence_min_heat`。
-- `provider.tushare.safe_limits.ths_member=5000` 是当前代理的实测报警线，不是请求返回上限：单题材实测可返回 5536 行，无筛选请求在 6000 行发生截断；当前目标概念题材最大实测返回 3840 行。任一题材返回行数达到 5000 时标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。官方文档未公布单次最大行数，代理行为变化时需重新核验阈值。
+- `provider.tushare.safe_limits.ths_member=6000` 是当前代理侧经验保护阈值，不是 Tushare 官方单次返回上限：单题材已正常返回 5536 行，无筛选请求在 6000 行附近出现疑似截断。任一题材返回行数达到或超过 6000 时标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。代理行为变化时需重新核验阈值。

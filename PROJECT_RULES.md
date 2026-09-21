@@ -224,4 +224,5 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - ThemeFactor 完整性的应有行数必须基于源质量 PASS/WARNING 当天实际落库的 `ThemeDaily` 行数；`DataQualityDaily.actual_rows` 可能包含源 extra 代码，不能直接作为衍生结果分母。源 ERROR/权限不可用仍跳过 ThemeFactor 完整性检查。
 - Theme Raw 只在源质量可信（PASS/WARNING）时执行 destructive reconciliation；ERROR/TRANSIENT_ERROR/PERMISSION_UNAVAILABLE 不得删除旧 Raw。CatchUp 必须区分 Core Raw 与 Theme Raw 修复，Theme 缺失/ERROR/TRANSIENT_ERROR 可重试，权限不可用可降级且不无限重试。
 - Moneyflow 三日滚动不得使用非可信日期的旧 Raw；`SOURCE_EMPTY` 不得伪装为零。`left_reversal_new` 必须同时检查上一真实交易日的 state 与 score，缺上一日记录不能标新。Lifecycle STARTING/DIVERGENCE 必须使用显式配置阈值。
-- `ths_member` 运行时安全阈值设为 5000，依据当前代理单题材已返回 5536 行、无筛选请求在 6000 行出现截断的只读实测；这是保守报警线，不宣称官方上限。达到阈值必须使整份成员快照失败；代理行为变化时重新核验，不得把目录 `count` 当成精确行数。
+- `ths_member` 运行时安全阈值设为 6000，依据当前代理单题材已正常返回 5536 行、无筛选请求在 6000 行附近出现疑似截断的只读实测；这是代理侧经验保护阈值，不宣称 Tushare 官方上限。达到或超过阈值必须使整份成员快照失败；代理行为变化时重新核验，不得把目录 `count` 当成精确行数。
+- Theme Raw repair 失败不得阻断已判定为 `analysis_required` 的 Opportunity/Core Analysis 补算；Theme 是增强数据源，失败时允许降级 Opportunity。

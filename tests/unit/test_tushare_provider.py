@@ -47,7 +47,7 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
     assert provider._safe_limits["ths_daily"] == 3000
     assert provider._safe_limits["moneyflow_cnt_ths"] == 5000
     assert provider._safe_limits["limit_cpt_list"] == 2000
-    assert provider._safe_limits["ths_member"] == 5000
+    assert provider._safe_limits["ths_member"] == 6000
 
 
 def test_tushare_proxy_configuration_rejects_incompatible_sdk() -> None:
@@ -98,17 +98,33 @@ def test_tushare_provider_marks_possible_truncation() -> None:
     assert "safe_limit=2" in df.attrs["provider_warning_message"]
 
 
-def test_ths_member_safe_limit_boundary() -> None:
+@pytest.mark.parametrize(
+    ("row_count", "expected_warning"),
+    [(5536, False), (5999, False), (6000, True), (6001, True)],
+)
+def test_ths_member_safe_limit_boundary(row_count, expected_warning) -> None:
     provider = object.__new__(TushareProvider)
-    provider._safe_limits = {"ths_member": 5000}
-    below_limit = pd.DataFrame({"con_code": range(4999)})
-    at_limit = pd.DataFrame({"con_code": range(5000)})
+    provider._safe_limits = {"ths_member": 6000}
+    frame = pd.DataFrame({"ts_code": "A.TI", "con_code": range(row_count)})
 
-    provider._mark_possible_truncation("ths_member", below_limit)
-    provider._mark_possible_truncation("ths_member", at_limit)
+    provider._mark_possible_truncation("ths_member", frame)
 
-    assert "provider_warning" not in below_limit.attrs
-    assert at_limit.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
+    if expected_warning:
+        assert frame.attrs["provider_warning"] == "POSSIBLE_TRUNCATION"
+    else:
+        assert "provider_warning" not in frame.attrs
+
+    def call(api_name, **kwargs):
+        assert api_name == "ths_member"
+        provider._mark_possible_truncation(api_name, frame)
+        return frame
+
+    provider._call = call
+    if expected_warning:
+        with pytest.raises(RuntimeError, match="POSSIBLE_TRUNCATION theme_code=A.TI"):
+            provider.get_ths_concept_members(["A.TI"])
+    else:
+        assert len(provider.get_ths_concept_members(["A.TI"])) == row_count
 
 
 def test_tushare_provider_fetches_index_daily_range(monkeypatch) -> None:

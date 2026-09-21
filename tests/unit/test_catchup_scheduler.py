@@ -835,3 +835,65 @@ def test_historical_theme_repair_recalculates_to_latest_raw(monkeypatch) -> None
 
     assert ("theme_repair", repair_date) in events
     assert ("recalculate", repair_date, latest, "catchup_analysis") in events
+
+
+@pytest.mark.parametrize(
+    ("core_complete", "opportunity_complete", "theme_repair_succeeds", "expected_recalc"),
+    [
+        (True, False, False, True),
+        (True, True, False, False),
+        (True, True, True, True),
+        (False, False, False, True),
+    ],
+    ids=[
+        "missing_opportunity_theme_repair_fails",
+        "complete_opportunity_theme_repair_fails",
+        "theme_repair_succeeds",
+        "incomplete_core_theme_repair_fails",
+    ],
+)
+def test_catchup_theme_repair_does_not_block_required_analysis(
+    monkeypatch, core_complete, opportunity_complete, theme_repair_succeeds, expected_recalc
+) -> None:
+    trade_date = date(2026, 9, 21)
+    job, events = _configured_catchup_job(
+        monkeypatch,
+        open_dates=[trade_date],
+        raw_required_dates=[],
+        analysis_required_dates=[],
+        latest=trade_date,
+    )
+    job.settings.opportunity_config = {}
+    monkeypatch.setattr(
+        catchup_module,
+        "check_raw_completeness",
+        lambda *args, **kwargs: SimpleNamespace(is_complete=True),
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "is_core_analysis_complete",
+        lambda *args, **kwargs: core_complete,
+    )
+    monkeypatch.setattr(
+        catchup_module,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: SimpleNamespace(is_complete=opportunity_complete),
+    )
+    monkeypatch.setattr(catchup_module, "classify_catchup_dates", classify_catchup_dates)
+    job._theme_repair_dates = lambda dates: [trade_date]
+    job._sync_theme_raw_best_effort = lambda current: (
+        events.append(("theme_repair", current)) or theme_repair_succeeds
+    )
+
+    plan = job.run(trade_date)
+
+    assert plan.analysis_required_dates == (
+        [] if core_complete and opportunity_complete else [trade_date]
+    )
+    assert ("theme_repair", trade_date) in events
+    recalc_events = [event for event in events if event[0] == "recalculate"]
+    assert recalc_events == (
+        [("recalculate", trade_date, trade_date, "catchup_analysis")]
+        if expected_recalc
+        else []
+    )
