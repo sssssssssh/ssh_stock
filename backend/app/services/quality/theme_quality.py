@@ -1,20 +1,20 @@
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.market_data import DataQualityDaily, Theme, ThemeDaily
 
 
 def expected_theme_codes_on_date(db: Session, trade_date: date) -> set[str]:
+    lower_bound = func.coalesce(Theme.list_date, Theme.first_seen_date)
     return set(
         db.execute(
             select(Theme.theme_code).where(
                 Theme.source == "THS",
                 Theme.theme_type == "CONCEPT",
-                (Theme.list_date.is_(None)) | (Theme.list_date <= trade_date),
-                (Theme.first_seen_date.is_(None)) | (Theme.first_seen_date <= trade_date),
-                Theme.last_seen_date >= trade_date,
+                or_(lower_bound.is_(None), lower_bound <= trade_date),
+                or_(Theme.last_seen_date.is_(None), Theme.last_seen_date >= trade_date),
             )
         )
         .scalars()

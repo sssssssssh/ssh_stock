@@ -1047,8 +1047,9 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 
 ### Milestone 10 历史正确性（2026-09-21）
 
-- `Theme.is_active` 只表示当前是否仍在 THS Catalog。历史题材范围使用 `list_date`、`first_seen_date`、`last_seen_date` 按交易日推导；Catalog 观察日使用实际运行日，不把历史 Backfill 截止日期伪装成观察日。`last_seen_date` 是最后一次真实出现在 Catalog 的日期，发现下架时不改写。历史 `ths_theme_daily.expected_rows` 使用该日范围，不使用今天的 active 数量。
+- `Theme.is_active` 只表示当前是否仍在 THS Catalog。历史 Board universe 优先以 `list_date` 为下界，只有缺失时才以系统首次观察日 `first_seen_date` 为保守下界；有值的 `last_seen_date` 是最后一次真实出现在 Catalog 的日期和历史上界。Catalog 观察日使用实际运行日，不把历史 Backfill 截止日期伪装成观察日，也不因发现下架而改写 `last_seen_date`。历史 `ths_theme_daily.expected_rows` 使用该日 Board universe，不使用今天的 active 数量。
 - 历史 Theme Member PIT 从首份 `PASS` 的 `ThemeMemberSnapshot` 才可信。首次运行前已经永久下架、且当前 THS 接口不可发现的题材无法可靠恢复；历史板块数据可回溯范围受当前可发现题材代码限制。空库 Backfill 会先尝试同步当前 Catalog，但不会把当前成员冒充历史成员。
+- Board 日行情历史可依 `list_date` 回填，但这不证明历史成员归属；成员广度和股票-题材归属仍只从第一份 PASS 成员快照起可信。Opportunity Quality 在 Theme Daily 源质量为 PASS/WARNING 时，以当天实际落库的 `ThemeDaily` 行数作为 ThemeFactor 应有行数；源 `actual_rows` 可包含 extra 代码，不能充当衍生结果分母。源 ERROR 等不可用状态仍跳过该项检查。
 - CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞 Core Raw。
 - `net_amount_3d` 只在当前日和前两个市场交易日的 Moneyflow 质量均可信且该题材三日都有数值时生成。`ERROR` 日期的旧 Raw 不参与滚动；`SOURCE_EMPTY` 不解释为全题材净流入 0，相应特征为 `NULL`。
 - `left_reversal_new` 要求上一真实交易日有记录：今天 S1/S2 且分数达强信号阈值，昨天非 S1/S2 或昨天分数低于强信号阈值。缺失昨天记录不判为首次触发。生命周期 `STARTING` 和 `DIVERGENCE` 分别使用 `config/opportunity.yaml` 中显式的 `starting`、`divergence_min_heat`。

@@ -9,6 +9,7 @@ from app.models.market_data import (
     DataQualityDaily,
     StockOpportunityDaily,
     StockStateDaily,
+    ThemeDaily,
     ThemeFactorDaily,
 )
 from app.services.analysis_identity import (
@@ -54,18 +55,15 @@ def check_opportunity_quality(
         StockOpportunityDaily.config_hash == opportunity_hash,
     )
     source_quality = db.execute(
-        select(
-            DataQualityDaily.status,
-            DataQualityDaily.actual_rows,
-        ).where(
+        select(DataQualityDaily.status).where(
             DataQualityDaily.trade_date == trade_date,
             DataQualityDaily.dataset == "ths_theme_daily",
         )
     ).first()
     source_status = source_quality.status if source_quality else None
     theme_expected = (
-        int(source_quality.actual_rows or 0)
-        if source_quality and source_status in {"PASS", "WARNING"}
+        _count(db, ThemeDaily, ThemeDaily.trade_date == trade_date)
+        if source_status in {"PASS", "WARNING"}
         else 0
     )
     theme_factor_count = _count(

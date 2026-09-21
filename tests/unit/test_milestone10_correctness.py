@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import app.jobs.catchup_job as catchup_module
@@ -7,10 +7,11 @@ import app.services.opportunity.engine as opportunity_module
 import pandas as pd
 import pytest
 from app.jobs.catchup_job import CatchUpJob
-from app.models.market_data import Theme, ThemeLimitDaily, ThemeMoneyflowDaily
+from app.models.market_data import Theme, ThemeDaily, ThemeLimitDaily, ThemeMoneyflowDaily
 from app.providers.tushare_provider import TushareProvider
 from app.services.ingestion.service import IngestionService
 from app.services.opportunity.engine import _left_scores
+from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.quality.theme_quality import expected_theme_codes_on_date
 from app.services.theme.engine import ThemeConfig, _lifecycle, _merge_optional_sources
 from sqlalchemy import create_engine, select
@@ -40,6 +41,155 @@ def test_historical_theme_universe_uses_catalog_dates() -> None:
         assert expected_theme_codes_on_date(db, date(2026, 9, 16)) == set()
         assert expected_theme_codes_on_date(db, date(2026, 9, 18)) == {"NEW.TI"}
     engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("list_date", "first_seen", "last_seen", "active", "target", "expected"),
+    [
+        (date(2020, 1, 1), date(2026, 9, 21), date(2026, 9, 21), True,
+         date(2026, 5, 1), True),
+        (date(2026, 9, 18), date(2026, 9, 18), date(2026, 9, 21), True,
+         date(2026, 9, 15), False),
+        (None, date(2026, 9, 21), date(2026, 9, 21), True,
+         date(2026, 9, 20), False),
+        (None, date(2026, 9, 21), date(2026, 9, 21), True,
+         date(2026, 9, 21), True),
+        (date(2020, 1, 1), date(2026, 9, 1), date(2026, 9, 15), False,
+         date(2026, 9, 10), True),
+        (date(2020, 1, 1), date(2026, 9, 1), date(2026, 9, 15), False,
+         date(2026, 9, 16), False),
+        (date(2020, 1, 1), date(2026, 9, 21), None, True,
+         date(2026, 9, 10), True),
+    ],
+)
+def test_theme_board_universe_boundaries(
+    list_date, first_seen, last_seen, active, target, expected
+) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Theme.__table__.create(engine)
+    with Session(engine) as db:
+        db.add(Theme(
+            theme_code="A.TI", source="THS", name="A", theme_type="CONCEPT",
+            list_date=list_date, first_seen_date=first_seen,
+            last_seen_date=last_seen, is_active=active,
+        ))
+        db.flush()
+        assert ("A.TI" in expected_theme_codes_on_date(db, target)) is expected
+    engine.dispose()
+
+
+def test_theme_board_universe_covers_historical_backfill_window() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Theme.__table__.create(engine)
+    with Session(engine) as db:
+        db.add(Theme(
+            theme_code="A.TI", source="THS", name="A", theme_type="CONCEPT",
+            list_date=date(2020, 1, 1), first_seen_date=date(2026, 9, 21),
+            last_seen_date=date(2026, 9, 21), is_active=True,
+        ))
+        db.flush()
+        start = date(2026, 5, 1)
+        assert all(
+            "A.TI" in expected_theme_codes_on_date(db, start + timedelta(days=offset))
+            for offset in range(120)
+        )
+    engine.dispose()
+
+
+def test_historical_theme_daily_sync_uses_list_date_before_first_seen(monkeypatch) -> None:
+    target = date(2026, 5, 1)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Theme.__table__.create(engine)
+    ThemeDaily.__table__.create(engine)
+    with Session(engine) as db:
+        db.add(Theme(
+            theme_code="A.TI", source="THS", name="A", theme_type="CONCEPT",
+            is_active=True, list_date=date(2020, 1, 1),
+            first_seen_date=date(2026, 9, 21), last_seen_date=date(2026, 9, 21),
+        ))
+        db.commit()
+        quality = []
+        monkeypatch.setattr(
+            ingestion_module, "persist_coverage_result",
+            lambda session, result: quality.append(result),
+        )
+        monkeypatch.setattr(
+            ingestion_module, "reconcile_daily_snapshot", lambda *args, **kwargs: set()
+        )
+        monkeypatch.setattr(
+            ingestion_module, "record_dirty_range", lambda *args, **kwargs: None
+        )
+
+        def insert_rows(session, model, rows, keys):
+            session.add_all(model(**row) for row in rows)
+            return len(rows)
+
+        monkeypatch.setattr(ingestion_module, "upsert_rows", insert_rows)
+        provider = SimpleNamespace(get_ths_daily=lambda day: pd.DataFrame([
+            {"ts_code": "A.TI", "trade_date": "20260501", "close": 10}
+        ]))
+        assert IngestionService(db, provider).sync_theme_daily(target) == 1
+        assert db.execute(select(ThemeDaily.theme_code)).scalar_one() == "A.TI"
+        assert quality[0].status == "PASS"
+    engine.dispose()
+
+
+def test_historical_theme_catchup_repair_uses_list_date(monkeypatch) -> None:
+    target = date(2026, 5, 1)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Theme.__table__.create(engine)
+    with Session(engine) as db:
+        db.add(Theme(
+            theme_code="A.TI", source="THS", name="A", theme_type="CONCEPT",
+            is_active=True, list_date=date(2020, 1, 1),
+            first_seen_date=date(2026, 9, 21), last_seen_date=date(2026, 9, 21),
+        ))
+        db.flush()
+        job = CatchUpJob.__new__(CatchUpJob)
+        job.db = db
+        monkeypatch.setattr(catchup_module, "theme_raw_needs_repair", lambda *args: True)
+        assert job._theme_repair_dates([target]) == [target]
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("source_status", "source_actual", "persisted", "factor", "expected"),
+    [
+        ("WARNING", 110, 90, 90, "PASS"),
+        ("PASS", 100, 100, 80, "ERROR"),
+        ("ERROR", 110, 90, 90, "SKIPPED"),
+    ],
+)
+def test_theme_factor_quality_uses_persisted_daily_rows(
+    source_status, source_actual, persisted, factor, expected
+) -> None:
+    class QualityDb:
+        def __init__(self):
+            self.queried = []
+
+        def execute(self, statement):
+            table = statement.get_final_froms()[0].name
+            self.queried.append(table)
+            if table == "data_quality_daily":
+                return SimpleNamespace(
+                    first=lambda: SimpleNamespace(status=source_status, actual_rows=source_actual)
+                )
+            counts = {
+                "stock_state_daily": 1,
+                "stock_opportunity_daily": 1,
+                "theme_daily": persisted,
+                "theme_factor_daily": factor,
+            }
+            return SimpleNamespace(scalar_one=lambda: counts[table])
+
+    db = QualityDb()
+    result = check_opportunity_quality(
+        db, date(2026, 9, 21), strategy_hash="strategy", opportunity_hash="opportunity",
+        algo_version="v1.1", config={},
+    )
+    assert result.results["theme_factor_vs_theme_daily"] == expected
+    assert result.counts["theme_daily"] == (persisted if source_status != "ERROR" else 0)
+    assert ("theme_daily" in db.queried) is (source_status != "ERROR")
 
 
 def test_catalog_disappearance_preserves_last_real_seen_date(monkeypatch) -> None:
