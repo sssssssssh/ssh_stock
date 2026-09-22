@@ -226,3 +226,14 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Moneyflow 三日滚动不得使用非可信日期的旧 Raw；`SOURCE_EMPTY` 不得伪装为零。`left_reversal_new` 必须同时检查上一真实交易日的 state 与 score，缺上一日记录不能标新。Lifecycle STARTING/DIVERGENCE 必须使用显式配置阈值。
 - `ths_member` 运行时安全阈值设为 6000，依据当前代理单题材已正常返回 5536 行、无筛选请求在 6000 行附近出现疑似截断的只读实测；这是代理侧经验保护阈值，不宣称 Tushare 官方上限。达到或超过阈值必须使整份成员快照失败；代理行为变化时重新核验，不得把目录 `count` 当成精确行数。
 - Theme Raw repair 失败不得阻断已判定为 `analysis_required` 的 Opportunity/Core Analysis 补算；Theme 是增强数据源，失败时允许降级 Opportunity。
+
+## Milestone 11 研究验证层规则（2026-09-22）
+
+- Research 只评价 Production，不得自动修改 `strategy.yaml`、`opportunity.yaml` 或状态机；`research_config_hash` 必须独立，研究配置变化不能使 Production 数据失效。
+- Source Snapshot 只能读取 Base/Event Trade Date 当天及之前的派生值；未来数据仅用于收益、Benchmark、MFE/MAE 和状态转化结果，不能回填历史源快照。
+- 股票研究默认 T+1 NEXT_OPEN，题材研究默认 T+1 NEXT_CLOSE；同一 Horizon 的绝对、Benchmark 和超额收益必须使用同一入场/退出市场交易日。
+- 每个 Horizon 分开记录 Mature 与 Executable；未成熟收益必须为 NULL，禁止写 0。Benchmark 缺失时保留绝对收益并记录警告。
+- 研究评估按交易日批量查询、按代码分块批量 upsert，不得按事件执行未来数据 N+1 查询；相同自然键重跑必须更新同一结果行，并允许未来 Horizon 成熟后补齐。
+- Left Threshold 必须逐阈值动态重建 crossing，要求上一真实市场交易日 Opportunity 存在；不能复用生产 `left_reversal_new`。
+- TopN 是 event-level cohort，不是组合资金曲线；状态机参数改变不能靠过滤既有研究结果模拟。
+- `RESEARCH_EVAL` 是独立队列任务；失败只标记自身，不得影响 Daily/CatchUp。近期通过每日 65 交易日回看更新，较早修订靠手工区间重跑。

@@ -1,18 +1,247 @@
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.v1.common import envelope, iso
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.models.market_data import SignalForwardEval, StrategySignal
+from app.jobs.research_job import queue_research_eval
+from app.models.market_data import (
+    OpportunityForwardEval,
+    SignalForwardEval,
+    StrategySignal,
+    ThemeForwardEval,
+)
 from app.services.analysis_identity import SIGNAL_CALC_VERSION
 from app.services.calc_metadata import config_hash
+from app.services.research import analytics
 
 router = APIRouter()
+
+
+class ResearchEvalRequest(BaseModel):
+    start: date
+    end: date
+    opportunity_only: bool = False
+    theme_only: bool = False
+    transition_only: bool = False
+
+
+@router.post("/evaluate")
+def enqueue_research_eval(
+    payload: ResearchEvalRequest, db: Session = Depends(get_db)
+) -> dict[str, Any]:
+    try:
+        job = queue_research_eval(
+            db,
+            payload.start,
+            payload.end,
+            mode="api",
+            opportunity_only=payload.opportunity_only,
+            theme_only=payload.theme_only,
+            transition_only=payload.transition_only,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return envelope({"id": str(job.id), "status": job.status}, {"accepted": True})
+
+
+def _research_meta(start: date | None, end: date | None) -> dict[str, Any]:
+    if start and end and start > end:
+        raise HTTPException(status_code=422, detail="start must be <= end")
+    settings = get_settings()
+    return {
+        "start": iso(start),
+        "end": iso(end),
+        "research_version": settings.research_config["version"],
+        "research_config_hash": config_hash(settings.research_config),
+    }
+
+
+@router.get("/status")
+def research_status(db: Session = Depends(get_db)) -> dict[str, Any]:
+    return envelope(analytics.research_status(db, get_settings()))
+
+
+@router.get("/opportunities/stats")
+def opportunity_research_stats(
+    stage: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    market_regime: str | None = None,
+    industry_lifecycle: str | None = None,
+    theme_lifecycle: str | None = None,
+    extension_risk: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    meta = _research_meta(start, end)
+    stages = {
+        "LEFT_WATCH",
+        "LEFT_REVERSAL",
+        "RIGHT_SIDE_NEW",
+        "RIGHT_SIDE",
+        "TREND",
+        "STRONG_TREND",
+    }
+    if stage and stage not in stages:
+        raise HTTPException(status_code=422, detail="unsupported stage")
+    filters = {
+        key: value
+        for key, value in {
+            "market_regime": market_regime,
+            "industry_lifecycle": industry_lifecycle,
+            "primary_theme_lifecycle": theme_lifecycle,
+            "extension_risk": extension_risk,
+        }.items()
+        if value is not None
+    }
+    return envelope(
+        analytics.opportunity_stats(db, get_settings(), start, end, stage=stage, filters=filters),
+        {**meta, "stage": stage, **filters},
+    )
+
+
+@router.get("/opportunities/buckets")
+def opportunity_research_buckets(
+    field: str = "opportunity_score",
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    meta = _research_meta(start, end)
+    if field not in analytics.OPPORTUNITY_BUCKETS:
+        raise HTTPException(status_code=422, detail="unsupported bucket field")
+    return envelope(
+        analytics.bucket_stats(
+            db, get_settings(), start, end, model=OpportunityForwardEval, field=field
+        ),
+        {**meta, "field": field},
+    )
+
+
+@router.get("/left/thresholds")
+def left_thresholds(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.transition_stats(db, get_settings(), start, end, left=True),
+        _research_meta(start, end),
+    )
+
+
+@router.get("/right/transitions")
+def right_transitions(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.transition_stats(db, get_settings(), start, end, left=False),
+        _research_meta(start, end),
+    )
+
+
+@router.get("/trends/topn")
+def trend_topn(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.topn_stats(db, get_settings(), start, end, theme=False),
+        _research_meta(start, end),
+    )
+
+
+@router.get("/positions/stats")
+def position_stats(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.position_stats(db, get_settings(), start, end), _research_meta(start, end)
+    )
+
+
+@router.get("/themes/stats")
+def theme_research_stats(
+    start: date | None = None,
+    end: date | None = None,
+    lifecycle: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.theme_stats(db, get_settings(), start, end, lifecycle),
+        {**_research_meta(start, end), "lifecycle": lifecycle},
+    )
+
+
+@router.get("/themes/buckets")
+def theme_research_buckets(
+    field: str = "heat_score",
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    meta = _research_meta(start, end)
+    if field not in analytics.THEME_BUCKETS:
+        raise HTTPException(status_code=422, detail="unsupported bucket field")
+    return envelope(
+        analytics.bucket_stats(db, get_settings(), start, end, model=ThemeForwardEval, field=field),
+        {**meta, "field": field},
+    )
+
+
+@router.get("/themes/topn")
+def theme_topn(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.topn_stats(db, get_settings(), start, end, theme=True),
+        _research_meta(start, end),
+    )
+
+
+@router.get("/themes/lifecycle")
+def theme_lifecycle(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return envelope(
+        analytics.theme_lifecycle_stats(db, get_settings(), start, end),
+        _research_meta(start, end),
+    )
+
+
+@router.get("/context")
+def research_context(
+    group_by: str = "market_regime",
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    meta = _research_meta(start, end)
+    if group_by not in {
+        "market_regime",
+        "industry_lifecycle",
+        "primary_theme_lifecycle",
+        "extension_risk",
+    }:
+        raise HTTPException(status_code=422, detail="unsupported group_by")
+    return envelope(
+        analytics.context_stats(db, get_settings(), start, end, group_by),
+        {**meta, "group_by": group_by},
+    )
 
 
 @router.get("/signals/stats")
@@ -118,9 +347,7 @@ def signal_buckets(
         {
             "bucket": bucket,
             "count": len(bucket_rows),
-            "executable_count": sum(
-                row.get("entry_executable") is True for row in bucket_rows
-            ),
+            "executable_count": sum(row.get("entry_executable") is True for row in bucket_rows),
             "avg_ret5": _avg(bucket_rows, "ret5"),
             "avg_ret10": _avg(bucket_rows, "ret10"),
             "avg_ret20": _avg(bucket_rows, "ret20"),

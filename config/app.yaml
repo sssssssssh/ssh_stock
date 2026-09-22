@@ -24,3 +24,7 @@ provider:
       limit_cpt_list: 2000
       # Conservative alert threshold; this proxy returned 6000 rows for a truncated request.
       ths_member: 6000
+
+research:
+  enabled: true
+  daily_cron: "30 19 * * 1-5"

@@ -15,6 +15,7 @@ import DataQuality from "./components/DataQuality.vue";
 import JobCenter from "./components/JobCenter.vue";
 import OpportunityTable from "./components/OpportunityTable.vue";
 import ResearchSummary from "./components/ResearchSummary.vue";
+import ResearchLab from "./components/ResearchLab.vue";
 import SectorHeatPanel from "./components/SectorHeat.vue";
 import StockPool from "./components/StockPool.vue";
 import ThemeDetail from "./components/ThemeDetail.vue";
@@ -79,6 +80,7 @@ const submittingRecalculation = ref(false);
 const errorMessage = ref("");
 const jobMessage = ref("");
 const activeView = ref<ViewKey>("overview");
+const overviewMode = ref<"market" | "research">("market");
 const activePool = ref<PoolTab>("right");
 const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
   recalc: false,
@@ -972,6 +974,13 @@ function statusLabel(status: string) {
       <div v-if="jobMessage" class="success-strip">{{ jobMessage }}</div>
 
       <section v-show="activeView === 'overview'" class="view-stack">
+        <div class="overview-mode-switch" role="tablist" aria-label="总览视图">
+          <button type="button" role="tab" :aria-selected="overviewMode === 'market'"
+            :class="{ selected: overviewMode === 'market' }" @click="overviewMode = 'market'">市场</button>
+          <button type="button" role="tab" :aria-selected="overviewMode === 'research'"
+            :class="{ selected: overviewMode === 'research' }" @click="overviewMode = 'research'">研究</button>
+        </div>
+        <template v-if="overviewMode === 'market'">
         <DashboardView
           :metrics="metrics"
           :market-regime="summary?.market?.regime || 'NO_DATA'"
@@ -1021,6 +1030,8 @@ function statusLabel(status: string) {
           :rows="trendOpportunities"
           :format-number="formatNumber"
         />
+        </template>
+        <ResearchLab v-else />
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">

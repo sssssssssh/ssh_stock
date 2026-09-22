@@ -3,9 +3,13 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from loguru import logger
+from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
+from app.jobs.research_job import RESEARCH_JOB_TYPE, queue_research_eval
+from app.models.job import JobRun
+from app.models.market_data import StockDaily, TradeCalendar
 from app.services.job_guard import (
     ActiveIngestionJobError,
     create_queued_ingestion_job,
@@ -25,12 +29,12 @@ def run_scheduler() -> None:
         with SessionLocal() as db:
             run_scheduled_basic_info(db, None)
 
-    cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
-        "daily_cron", "10 18 * * 1-5"
+    cron = (
+        settings.app_config.get("app", {}).get("scheduler", {}).get("daily_cron", "10 18 * * 1-5")
     )
     scheduler.add_job(run_daily, "cron", id="daily_job", **cron_trigger_kwargs(cron))
-    basic_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
-        "basic_info_cron", "30 9 * * 6"
+    basic_cron = (
+        settings.app_config.get("app", {}).get("scheduler", {}).get("basic_info_cron", "30 9 * * 6")
     )
     scheduler.add_job(
         run_basic_info,
@@ -38,6 +42,20 @@ def run_scheduler() -> None:
         id="weekly_basic_refresh",
         **cron_trigger_kwargs(basic_cron),
     )
+    research_runtime = settings.app_config.get("research", {})
+    if research_runtime.get("enabled", False):
+        research_cron = research_runtime.get("daily_cron", "30 19 * * 1-5")
+
+        def run_research() -> None:
+            with SessionLocal() as db:
+                run_scheduled_research(db, _scheduler_today(timezone))
+
+        scheduler.add_job(
+            run_research,
+            "cron",
+            id="daily_research_refresh",
+            **cron_trigger_kwargs(research_cron),
+        )
     logger.info("scheduler started daily_cron={} basic_info_cron={}", cron, basic_cron)
     scheduler.start()
 
@@ -79,6 +97,42 @@ def run_scheduled_basic_info(db, provider: object | None) -> bool:
             active.status,
         )
         return False
+    return True
+
+
+def run_scheduled_research(db, target_date: date) -> bool:
+    active = db.scalar(
+        select(func.count())
+        .select_from(JobRun)
+        .where(
+            JobRun.job_type == RESEARCH_JOB_TYPE,
+            JobRun.status.in_(("QUEUED", "RUNNING")),
+        )
+    )
+    if active:
+        return False
+    latest_raw = db.scalar(
+        select(func.max(StockDaily.trade_date)).where(StockDaily.trade_date <= target_date)
+    )
+    if latest_raw is None:
+        return False
+    settings = get_settings()
+    open_dates = (
+        db.execute(
+            select(TradeCalendar.cal_date)
+            .where(
+                TradeCalendar.is_open.is_(True),
+                TradeCalendar.cal_date <= latest_raw,
+            )
+            .order_by(TradeCalendar.cal_date.desc())
+            .limit(settings.research_config["refresh_lookback_trade_days"] + 1)
+        )
+        .scalars()
+        .all()
+    )
+    if not open_dates:
+        return False
+    queue_research_eval(db, open_dates[-1], open_dates[0], mode="scheduler")
     return True
 
 

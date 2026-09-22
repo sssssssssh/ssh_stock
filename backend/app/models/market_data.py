@@ -360,9 +360,7 @@ class DataQualityDaily(Base):
 
 class DataDirtyRange(Base):
     __tablename__ = "data_dirty_range"
-    __table_args__ = (
-        Index("idx_data_dirty_range_status_start", "status", "dirty_start_date"),
-    )
+    __table_args__ = (Index("idx_data_dirty_range_status_start", "status", "dirty_start_date"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     dataset: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -699,3 +697,206 @@ class StockOpportunityDaily(Base):
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class _ResearchForwardFields:
+    entry_trade_date: Mapped[date | None] = mapped_column(Date)
+    entry_price: Mapped[float | None] = mapped_column(Float)
+    entry_executable: Mapped[bool | None] = mapped_column(Boolean)
+    entry_reason: Mapped[str | None] = mapped_column(String(32))
+    evaluated_until_date: Mapped[date | None] = mapped_column(Date)
+    mature5: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mature10: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mature20: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mature60: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    exit_trade_date5: Mapped[date | None] = mapped_column(Date)
+    exit_trade_date10: Mapped[date | None] = mapped_column(Date)
+    exit_trade_date20: Mapped[date | None] = mapped_column(Date)
+    exit_trade_date60: Mapped[date | None] = mapped_column(Date)
+    exit_executable5: Mapped[bool | None] = mapped_column(Boolean)
+    exit_executable10: Mapped[bool | None] = mapped_column(Boolean)
+    exit_executable20: Mapped[bool | None] = mapped_column(Boolean)
+    exit_executable60: Mapped[bool | None] = mapped_column(Boolean)
+    exit_reason5: Mapped[str | None] = mapped_column(String(32))
+    exit_reason10: Mapped[str | None] = mapped_column(String(32))
+    exit_reason20: Mapped[str | None] = mapped_column(String(32))
+    exit_reason60: Mapped[str | None] = mapped_column(String(32))
+    ret5: Mapped[float | None] = mapped_column(Float)
+    ret10: Mapped[float | None] = mapped_column(Float)
+    ret20: Mapped[float | None] = mapped_column(Float)
+    ret60: Mapped[float | None] = mapped_column(Float)
+    benchmark_ret5: Mapped[float | None] = mapped_column(Float)
+    benchmark_ret10: Mapped[float | None] = mapped_column(Float)
+    benchmark_ret20: Mapped[float | None] = mapped_column(Float)
+    benchmark_ret60: Mapped[float | None] = mapped_column(Float)
+    excess_ret5: Mapped[float | None] = mapped_column(Float)
+    excess_ret10: Mapped[float | None] = mapped_column(Float)
+    excess_ret20: Mapped[float | None] = mapped_column(Float)
+    excess_ret60: Mapped[float | None] = mapped_column(Float)
+    mfe20: Mapped[float | None] = mapped_column(Float)
+    mae20: Mapped[float | None] = mapped_column(Float)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class OpportunityForwardEval(_ResearchForwardFields, Base):
+    __tablename__ = "opportunity_forward_eval"
+    __table_args__ = (
+        UniqueConstraint(
+            "trade_date",
+            "ts_code",
+            "algo_version",
+            "opportunity_config_hash",
+            "research_version",
+            "research_config_hash",
+            "eval_version",
+            "entry_basis",
+            name="uq_opportunity_forward_eval_identity",
+        ),
+        Index("idx_opp_eval_date_stage", "trade_date", "opportunity_stage"),
+        Index("idx_opp_eval_stage_rank", "opportunity_stage", "trend_rank_score"),
+        Index("idx_opp_eval_risk_date", "extension_risk", "trade_date"),
+        Index("idx_opp_eval_regime_date", "market_regime", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    opportunity_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    research_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    eval_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    entry_basis: Mapped[str] = mapped_column(String(16), nullable=False)
+    benchmark_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    previous_state: Mapped[str | None] = mapped_column(String(16))
+    state_day_count: Mapped[int | None] = mapped_column(Integer)
+    opportunity_stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    left_reversal_score: Mapped[float | None] = mapped_column(Float)
+    left_reversal_new: Mapped[bool | None] = mapped_column(Boolean)
+    right_side_score: Mapped[float | None] = mapped_column(Float)
+    trend_score: Mapped[float | None] = mapped_column(Float)
+    trend_rank_score: Mapped[float | None] = mapped_column(Float)
+    position_score: Mapped[float | None] = mapped_column(Float)
+    extension_risk: Mapped[str | None] = mapped_column(String(16))
+    opportunity_score: Mapped[float | None] = mapped_column(Float)
+    context_score: Mapped[float | None] = mapped_column(Float)
+    market_score: Mapped[float | None] = mapped_column(Float)
+    market_regime: Mapped[str | None] = mapped_column(String(32))
+    industry_sector_id: Mapped[int | None] = mapped_column(Integer)
+    industry_heat: Mapped[float | None] = mapped_column(Float)
+    industry_lifecycle: Mapped[str | None] = mapped_column(String(32))
+    primary_theme_code: Mapped[str | None] = mapped_column(String(32))
+    primary_theme_heat: Mapped[float | None] = mapped_column(Float)
+    primary_theme_lifecycle: Mapped[str | None] = mapped_column(String(32))
+    hot_theme_count: Mapped[int | None] = mapped_column(Integer)
+
+
+class ThemeForwardEval(_ResearchForwardFields, Base):
+    __tablename__ = "theme_forward_eval"
+    __table_args__ = (
+        UniqueConstraint(
+            "trade_date",
+            "theme_code",
+            "opportunity_config_hash",
+            "research_version",
+            "research_config_hash",
+            "eval_version",
+            "entry_basis",
+            name="uq_theme_forward_eval_identity",
+        ),
+        Index("idx_theme_eval_date_rank", "trade_date", "heat_rank"),
+        Index("idx_theme_eval_lifecycle_date", "lifecycle", "trade_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    theme_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    theme_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    research_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    eval_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    entry_basis: Mapped[str] = mapped_column(String(16), nullable=False)
+    benchmark_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    heat_score: Mapped[float | None] = mapped_column(Float)
+    heat_rank: Mapped[int | None] = mapped_column(Integer)
+    heat_momentum1: Mapped[float | None] = mapped_column(Float)
+    heat_momentum3: Mapped[float | None] = mapped_column(Float)
+    rank_change: Mapped[int | None] = mapped_column(Integer)
+    lifecycle: Mapped[str | None] = mapped_column(String(32))
+    return1: Mapped[float | None] = mapped_column(Float)
+    return5: Mapped[float | None] = mapped_column(Float)
+    return20: Mapped[float | None] = mapped_column(Float)
+    moneyflow_score: Mapped[float | None] = mapped_column(Float)
+    net_amount: Mapped[float | None] = mapped_column(Float)
+    net_amount_3d: Mapped[float | None] = mapped_column(Float)
+    limit_strength_score: Mapped[float | None] = mapped_column(Float)
+    limit_up_count: Mapped[int | None] = mapped_column(Integer)
+    continuous_limit_count: Mapped[int | None] = mapped_column(Integer)
+    breadth20: Mapped[float | None] = mapped_column(Float)
+    breadth60: Mapped[float | None] = mapped_column(Float)
+    rps60_median: Mapped[float | None] = mapped_column(Float)
+    source_coverage: Mapped[float | None] = mapped_column(Float)
+    data_coverage: Mapped[float | None] = mapped_column(Float)
+
+
+class ResearchTransitionEval(Base):
+    __tablename__ = "research_transition_eval"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_trade_date",
+            "ts_code",
+            "event_key",
+            "algo_version",
+            "strategy_config_hash",
+            "opportunity_config_hash",
+            "research_version",
+            "research_config_hash",
+            name="uq_research_transition_identity",
+        ),
+        Index("idx_transition_key_date", "event_key", "event_trade_date"),
+        Index("idx_transition_type_threshold", "event_type", "threshold_value"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    event_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    threshold_value: Mapped[float | None] = mapped_column(Float)
+    source_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_score: Mapped[float | None] = mapped_column(Float)
+    algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    trend_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    research_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    research_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    mature5: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mature10: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mature20: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    state5: Mapped[str | None] = mapped_column(String(16))
+    state10: Mapped[str | None] = mapped_column(String(16))
+    state20: Mapped[str | None] = mapped_column(String(16))
+    days_to_s3: Mapped[int | None] = mapped_column(Integer)
+    days_to_s4plus: Mapped[int | None] = mapped_column(Integer)
+    days_to_s5: Mapped[int | None] = mapped_column(Integer)
+    reached_s3_5: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s3_10: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s3_20: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s4plus_5: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s4plus_10: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s4plus_20: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s5_5: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s5_10: Mapped[bool | None] = mapped_column(Boolean)
+    reached_s5_20: Mapped[bool | None] = mapped_column(Boolean)
+    hit_s0_20: Mapped[bool | None] = mapped_column(Boolean)
+    hit_s6_20: Mapped[bool | None] = mapped_column(Boolean)
+    fell_below_s3_20: Mapped[bool | None] = mapped_column(Boolean)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

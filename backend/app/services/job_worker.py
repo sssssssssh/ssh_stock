@@ -16,6 +16,7 @@ from app.jobs.backfill_job import BackfillJob
 from app.jobs.basic_info_job import BasicInfoJob
 from app.jobs.catchup_job import CatchUpJob
 from app.jobs.daily_job import DailyJob
+from app.jobs.research_job import RESEARCH_JOB_TYPE, run_research_eval
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
 from app.providers.logging_provider import LoggingMarketDataProvider
@@ -36,6 +37,7 @@ WORKER_JOB_TYPES = (
     "recalculate",
     "validate_data",
     "catchup",
+    RESEARCH_JOB_TYPE,
 )
 
 
@@ -130,6 +132,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                     "skipped": plan.skipped,
                 },
             )
+        elif job.job_type == RESEARCH_JOB_TYPE:
+            run_research_eval(db, job)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -157,9 +161,7 @@ def _run_heartbeat_loop(
     *,
     interval_seconds: float | None = None,
 ) -> None:
-    interval = interval_seconds or float(
-        scheduler_setting("worker_heartbeat_interval_seconds", 45)
-    )
+    interval = interval_seconds or float(scheduler_setting("worker_heartbeat_interval_seconds", 45))
     while not stop_event.wait(interval):
         try:
             with SessionLocal() as heartbeat_db:
@@ -181,9 +183,7 @@ def run_worker() -> None:
                 recovered_jobs = recover_stale_ingestion_jobs(db)
                 recovered_dirty = recover_stale_processing_ranges(
                     db,
-                    stale_minutes=float(
-                        scheduler_setting("dirty_processing_timeout_minutes", 30)
-                    ),
+                    stale_minutes=float(scheduler_setting("dirty_processing_timeout_minutes", 30)),
                 )
                 logger.info(
                     "worker recovery id={} recovered_jobs={} recovered_dirty={}",
@@ -282,9 +282,7 @@ def _load_dirty_ranges(db: Session, ids: object) -> list[DataDirtyRange]:
     if not values:
         return []
     return list(
-        db.execute(select(DataDirtyRange).where(DataDirtyRange.id.in_(values)))
-        .scalars()
-        .all()
+        db.execute(select(DataDirtyRange).where(DataDirtyRange.id.in_(values))).scalars().all()
     )
 
 

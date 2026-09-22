@@ -16,7 +16,7 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, init);
   const body = (await response.json().catch(() => null)) as ApiEnvelope<T> | { detail?: string } | null;
   if (!response.ok) {

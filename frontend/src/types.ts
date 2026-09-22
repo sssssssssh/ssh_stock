@@ -260,3 +260,67 @@ export type ResearchStats = {
   avg_mae20: number | null;
   latest_evaluated_until_date: string | null;
 };
+
+export type ResearchStatus = {
+  research_version: string;
+  research_config_hash: string;
+  benchmark_code: string;
+  latest_opportunity_eval_base_date: string | null;
+  latest_theme_eval_base_date: string | null;
+  latest_transition_eval_base_date: string | null;
+  latest_evaluated_market_date: string | null;
+  opportunity_eval_rows: number;
+  theme_eval_rows: number;
+  transition_eval_rows: number;
+  mature5_rows: number;
+  mature20_rows: number;
+  mature60_rows: number;
+};
+
+export type ResearchHorizonStats = {
+  horizon: number;
+  event_count: number;
+  mature_count: number;
+  entry_executable_count: number;
+  exit_executable_count: number;
+  return_sample_count: number;
+  excess_sample_count: number;
+  avg_return: number | null;
+  median_return: number | null;
+  p25_return: number | null;
+  p75_return: number | null;
+  win_rate: number | null;
+  avg_benchmark_return: number | null;
+  avg_excess_return: number | null;
+  median_excess_return: number | null;
+  excess_win_rate: number | null;
+  avg_mfe20: number | null;
+  avg_mae20: number | null;
+  sample_warning: boolean;
+};
+
+export type ResearchBucketRow = {
+  group: string;
+  event_count: number;
+  horizons: ResearchHorizonStats[];
+};
+
+export type LeftThresholdRow = ResearchBucketRow & {
+  reached_s3_20: number | null;
+  reached_s4plus_20: number | null;
+  reached_s5_20: number | null;
+  avg_days_to_s3: number | null;
+  avg_days_to_s4plus: number | null;
+  avg_days_to_s5: number | null;
+  hit_s0_20: number | null;
+  hit_s6_20: number | null;
+};
+
+export type RightTransitionStats = LeftThresholdRow & {
+  fell_below_s3_20: number | null;
+};
+
+export type TrendTopNRow = ResearchBucketRow;
+export type PositionStatsRow = ResearchBucketRow;
+export type ThemeTopNRow = ResearchBucketRow;
+export type ThemeLifecycleRow = ResearchBucketRow;

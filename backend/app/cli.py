@@ -6,6 +6,7 @@ import typer
 from app.core.config import ROOT_DIR, get_settings
 from app.core.db import SessionLocal
 from app.core.logging import configure_logging
+from app.jobs.research_job import queue_research_eval
 from app.jobs.scheduler import run_scheduler
 from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
@@ -21,6 +22,30 @@ from app.services.sector import SectorService
 from app.services.trend import TrendService
 
 cli = typer.Typer(no_args_is_help=True)
+
+
+@cli.command("research-eval")
+def research_eval(
+    start: str = typer.Option(...),
+    end: str = typer.Option(...),
+    opportunity_only: bool = typer.Option(False, "--opportunity-only"),
+    theme_only: bool = typer.Option(False, "--theme-only"),
+    transition_only: bool = typer.Option(False, "--transition-only"),
+) -> None:
+    try:
+        with SessionLocal() as db:
+            job = queue_research_eval(
+                db,
+                _parse_date(start, "start"),
+                _parse_date(end, "end"),
+                mode="cli",
+                opportunity_only=opportunity_only,
+                theme_only=theme_only,
+                transition_only=transition_only,
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"research_eval queued job_id={job.id}; run worker to execute")
 
 
 def _parse_date(value: str, name: str) -> date:
@@ -98,9 +123,7 @@ def provider_smoke_test(
     configure_logging()
     target = _parse_date(trade_date, "trade_date") if trade_date else _today()
     settings = get_settings()
-    index_codes = settings.strategy.get("benchmark", {}).get(
-        "market_indices", ["000300.SH"]
-    )
+    index_codes = settings.strategy.get("benchmark", {}).get("market_indices", ["000300.SH"])
     try:
         results = run_provider_smoke_test(
             TushareProvider(),
@@ -115,9 +138,7 @@ def provider_smoke_test(
             typer.echo(f"theme_capability={result.status}")
             continue
         detail = f" detail={result.detail}" if result.detail else ""
-        typer.echo(
-            f"{result.api_name}: rows={result.rows} status={result.status}{detail}"
-        )
+        typer.echo(f"{result.api_name}: rows={result.rows} status={result.status}{detail}")
     typer.echo("provider_smoke_ok=true")
 
 

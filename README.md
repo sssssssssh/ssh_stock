@@ -1003,6 +1003,33 @@ python -m app.cli validate-data --start 2021-01-01 --end 2026-09-15
 
 `validate-data` 完成后，在“数据”页面提交同范围“开始补算”，或调用 `POST /api/v1/jobs/recalculate`。不要把 `alembic upgrade head` 理解为数据重拉或重算，它只升级数据库结构。
 
+### Milestone 11 历史效果验证
+
+研究层只评价已写入的 Production Opportunity/Theme/State 快照，不修改 `strategy.yaml`、`opportunity.yaml` 或 S0-S6。研究方法单独放在 `config/research.yaml`，其 `research_config_hash` 与策略及机会配置哈希隔离。v1 持久化列固定为 5/10/20/60 日收益及 5/10/20 日状态转化；其他 Horizon 会在配置校验时报错，需要后续版本迁移。迁移 `0017_milestone11_research` 新建 `opportunity_forward_eval`、`theme_forward_eval`、`research_transition_eval` 三张逐事件结果表；不会重拉或重算生产数据。
+
+先确保历史 Raw、因子、题材与机会池已完成，再启动 DB Worker 并提交研究任务：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m alembic upgrade head
+python -m app.cli worker
+```
+
+在另一个终端提交研究区间（`start/end` 是信号发生日，不是退出日）：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli research-eval --start 2025-01-01 --end 2025-12-31
+```
+
+可选 `--opportunity-only`、`--theme-only`、`--transition-only`，三者只能选一个；不加参数时三类全部运行。也可在“总览 → 研究”提交任务，进度通过现有任务列表查看。`config/app.yaml` 中的 `research.enabled/daily_cron` 控制每日定时研究，默认 19:30 回看最近 65 个市场交易日，使 60 日 Horizon 随未来行情逐渐成熟。较早历史数据发生修订时，人工重跑相应 `research-eval --start ... --end ...` 区间。
+
+股票事件日 T 的默认入场是 T+1 开盘价（NEXT_OPEN），题材是 T+1 收盘价（NEXT_CLOSE）。5/10/20/60 日退出日期从入场日之后按市场交易日计数；股票使用复权收盘价，题材使用题材收盘价。Benchmark 默认沪深 300，同入场/退出日期计算，超额收益为绝对收益减 Benchmark 收益。Benchmark 缺失只令 Benchmark/Excess 为 NULL，绝对收益保留。每个 Horizon 单独记录 `mature`、退出可成交性和原因；未成熟收益为 NULL，不能当成 0。MFE20/MAE20 只汇总已成熟的 20 日样本。
+
+左侧研究按 60/65/70/75/80/85 各自重建“昨日未达、今日达到”的阈值穿越，不复用生产 `left_reversal_new`；昨日机会快照缺失时不生成事件。右侧研究以 `RIGHT_SIDE_NEW` 为事件，追踪 S4+/S5 转化及跌回 S3 以下、命中 S6。Trend TopN 与 Theme TopN 均是**事件级 Cohort**，同一股票或题材连续多日可以产生多个样本，不代表组合持仓收益。API 位于 `/api/v1/research/status`、`/opportunities/*`、`/left/thresholds`、`/right/transitions`、`/trends/topn`、`/positions/stats`、`/themes/*` 和 `/context`；旧 `/signals/*` 继续兼容。
+
+已知限制：Theme 成员 PIT 只从首份 PASS 成员快照后可信，历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
+
 ## Milestone 10：热点题材与机会池（2026-09-17）
 
 Milestone 10 在既有申万行业和 S0~S6 状态机之上增加同花顺概念题材层，不改变已封版 Raw、Factor、Trend 公式。参数位于 `config/opportunity.yaml`，Theme/Opportunity 使用独立配置哈希；修改该文件不会令既有 Factor/Trend 数据失效。
