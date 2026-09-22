@@ -860,6 +860,8 @@ class ResearchTransitionEval(Base):
             "ts_code",
             "event_key",
             "algo_version",
+            "trend_calc_version",
+            "opportunity_calc_version",
             "strategy_config_hash",
             "opportunity_config_hash",
             "research_version",
@@ -880,6 +882,7 @@ class ResearchTransitionEval(Base):
     source_score: Mapped[float | None] = mapped_column(Float)
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
     trend_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    opportunity_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     research_version: Mapped[str] = mapped_column(String(32), nullable=False)

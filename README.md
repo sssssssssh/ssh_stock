@@ -18,7 +18,7 @@
 - Python 3.12 + FastAPI 后端骨架
 - SQLAlchemy 2.x 数据模型
 - Alembic 数据库迁移
-- PostgreSQL Docker Compose 本地开发配置
+- 外部 PostgreSQL 17 数据库；Docker Compose 运行应用服务
 - Pydantic Settings + YAML 配置加载
 - MarketDataProvider 抽象
 - TushareProvider，token 只从环境变量读取
@@ -49,7 +49,7 @@
 
 这种情况下：
 
-- 不需要执行 `docker compose up -d postgres`
+- Docker Compose 不提供 PostgreSQL 服务
 - 只需要在 `.env` 里填写云端 `DATABASE_URL`
 - 仍然需要执行 `python -m alembic upgrade head` 创建业务表
 
@@ -78,7 +78,7 @@ DATABASE_URL=postgresql+psycopg://用户名:密码@云数据库地址:5432/数�
 
 这种情况下：
 
-- 不需要执行 `docker compose up -d postgres`
+- Docker Compose 不提供 PostgreSQL 服务
 - 只需要把 `.env` 的 `DATABASE_URL` 指向本机 PostgreSQL
 - 仍然需要执行 `python -m alembic upgrade head` 创建业务表
 
@@ -95,27 +95,9 @@ APP_TIMEZONE=Asia/Shanghai
 LOG_LEVEL=INFO
 ```
 
-### 场景 C：你没有数据库，想用 Docker 本地启动 PostgreSQL
+### 没有 PostgreSQL 时
 
-这种情况下才需要执行：
-
-```powershell
-docker compose up -d postgres
-```
-
-`.env` 可以使用：
-
-```dotenv
-DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
-POSTGRES_PASSWORD=stock
-TUSHARE_TOKEN=你的TushareToken
-TUSHARE_HTTP_URL=https://fastapic.stockai888.top
-TUSHARE_MIN_INTERVAL_SECONDS=1.5
-API_HOST=127.0.0.1
-API_PORT=8000
-APP_TIMEZONE=Asia/Shanghai
-LOG_LEVEL=INFO
-```
+先准备可访问的 PostgreSQL 17 实例，再填写 `.env`；当前 Compose 不包含数据库服务。
 
 ## 第一次启动流程
 
@@ -186,20 +168,9 @@ $env:PYTHONPATH = "backend"
 - 如果你已经执行过 `python -m pip install -e .[dev]`，多数情况下也可以不设置。
 - 如果执行 `python -m app.cli ...` 提示找不到 `app`，就必须设置。
 
-### 5. 启动数据库
+### 5. 检查数据库
 
-只有场景 C 需要执行：
-
-```powershell
-docker compose up -d postgres
-```
-
-作用：用 Docker 在本机启动 PostgreSQL。
-
-什么时候跳过：
-
-- 你使用云端 PostgreSQL，跳过。
-- 你使用本机已安装 PostgreSQL，跳过。
+确认外部 PostgreSQL 已运行，且 `.env` 的 `DATABASE_URL` 可从宿主机访问。当前 Compose 不负责启动数据库。
 
 ### 6. 自动建表
 
@@ -743,32 +714,7 @@ npm install
 npm run dev
 ```
 
-不要执行：
-
-```powershell
-docker compose up -d postgres
-```
-
-### 你要用 Docker 本地数据库
-
-终端 1 执行：
-
-```powershell
-Copy-Item .env.example .env
-python -m pip install -r requirements-dev.txt
-docker compose up -d postgres
-$env:PYTHONPATH = "backend"
-python -m alembic upgrade head
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
-```
-
-终端 2 执行：
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
+Docker Compose 只运行 migration、backend、worker 和 scheduler，不运行 PostgreSQL。
 
 ## 测试
 
@@ -844,7 +790,7 @@ app:
 3. 阅读 `PROJECT_RULES.md`、`docs/` 下两份 Markdown 文档和本 README。
 4. 复制 `.env.example` 为 `.env`，填入数据库连接和 `TUSHARE_TOKEN`。
 5. 执行 `python -m pip install -r requirements-dev.txt`。
-6. 如果使用 Docker 本地数据库，执行 `docker compose up -d postgres`；如果使用云数据库或已有本机数据库，跳过。
+6. 确认外部 PostgreSQL 可访问；容器部署还需填写可从容器访问的 `DOCKER_DATABASE_URL`。
 7. 执行 `python -m alembic upgrade head`。
 8. 旧数据库升级后按“PIT Raw 回填 -> validate-data -> recalculate”顺序处理，且保持 Worker 运行；具体命令见下方“基础平台一致性收尾”。
 9. 执行 `python -m pytest` 确认环境正确。
@@ -931,7 +877,7 @@ python -m app.cli evaluate-signals --eval-version eval_v3 --entry-basis NEXT_OPE
 Copy-Item .env.example .env
 ```
 
-至少填写 `TUSHARE_TOKEN`。默认 Docker 数据库账号为 `stock/stock`；如果修改 `POSTGRES_PASSWORD`，必须同时把 `DOCKER_DATABASE_URL` 填成使用同一密码、主机名为 `postgres` 的连接串。
+填写 `TUSHARE_TOKEN`、宿主机使用的 `DATABASE_URL` 和容器使用的 `DOCKER_DATABASE_URL`。两条数据库连接指向同一外部 PostgreSQL；容器地址必须可从容器访问。
 
 完整启动：
 
@@ -940,7 +886,7 @@ docker compose up -d --build
 docker compose ps
 ```
 
-启动顺序为 `postgres healthy -> migration 完成 -> backend/worker/scheduler`。`migration` 容器只执行一次 `python -m alembic upgrade head`，它只升级表结构，不会重新拉取或重新计算数据。后端健康检查会访问 `/health` 并执行数据库 `SELECT 1`。
+先确保外部 PostgreSQL 可访问；Compose 启动顺序为 `migration 完成 -> backend/worker/scheduler`。`migration` 容器只执行一次 `python -m alembic upgrade head`，它只升级表结构，不会重新拉取或重新计算数据。后端健康检查会访问 `/health` 并执行数据库 `SELECT 1`。
 
 常用检查：
 
@@ -950,13 +896,13 @@ docker compose logs -f backend worker scheduler
 curl http://127.0.0.1:8000/health
 ```
 
-正常健康响应包含 `{"status":"ok","database":"ok"}`。如果使用云端 PostgreSQL，不需要启动本地 `postgres` 服务；应在 `.env` 中填写可从容器访问的 `DOCKER_DATABASE_URL`，再按部署环境调整 Compose 服务。
+正常健康响应包含 `{"status":"ok","database":"ok"}`。当前 Compose 只管理应用服务，数据库由外部 PostgreSQL 提供。
 
 本地非 Docker 开发仍可使用 `requirements-dev.txt`；可复现部署和 CI 使用固定版本的 `requirements.lock`。GitHub Actions 会在 PostgreSQL 17 service 中执行实际迁移、完整 pytest、ruff，以及 `frontend` 的 `npm ci` 和 `npm run build`。
 
 ## Phase 7 部署加固进度（2026-09-15）
 
-- PostgreSQL 镜像升级为 17，并增加 `pg_isready` 健康检查。
+- CI 使用 PostgreSQL 17；部署 Compose 使用外部 PostgreSQL。
 - 增加一次性 migration 服务、独立 DB worker 和独立 scheduler，业务进程不会在旧 schema 上启动。
 - `/health` 已覆盖 API 与数据库连通性；数据库不可用返回 503。
 - 新增 `.github/workflows/ci.yml` 和 `requirements.lock`，当前锁定 `tushare==1.4.29`。
@@ -1037,6 +983,8 @@ Transition 的 5/10/20 日成熟条件是未来市场交易日存在且对应股
 Research Job 支持过期 QUEUED/RUNNING 恢复；调度和 Worker 会避开 active daily、sync_basic、backfill、recalculate、catchup 任务。Production 忙时 Research 保持或重新进入队列，正在执行 Research 时 Worker 不认领会修改 Production 的任务，避免读取半更新快照。
 
 研究任务入队使用独立 PostgreSQL advisory lock 做原子 active-check：已有活跃 Research 或 Production 任务时不重复入队，API 返回 409。任务元数据记录三类结果的写入与删除行数，以及目标源策略哈希。LEFT Context 使用的生产 strong 阈值必须包含在 `research.left_thresholds`；否则应用在配置校验时拒绝启动。
+
+Research Job 入队时保存完整配置与计算版本身份。若在 Worker 真正执行前配置或计算版本变化，旧 QUEUED Job 会以 `RESEARCH_IDENTITY_CHANGED_SINCE_QUEUE` 失败，必须重新创建任务；不会用新配置执行旧任务。`0020_transition_calc_lineage` 给 Transition 增加机会计算版本并扩展自然键，旧行标为 `legacy-unverified`，不会作为当前版本展示；迁移只改表结构，不重算研究数据。
 
 已知限制：Theme 成员 PIT 只从首份 PASS 成员快照后可信，历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
 

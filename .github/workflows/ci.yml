@@ -33,6 +33,8 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock
       - run: python -m alembic upgrade head
+      - run: python -m alembic downgrade 0019_research_source_lineage
+      - run: python -m alembic upgrade head
       - run: python -m pytest
       - run: python -m ruff check backend tests migrations
       - uses: actions/setup-node@v4

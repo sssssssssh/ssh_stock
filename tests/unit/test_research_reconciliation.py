@@ -54,7 +54,9 @@ def _row(model, code, *, event_key="LEFT_75", strategy="strategy-B"):
         }
     return {
         "event_trade_date": date(2026, 5, 10), "ts_code": code,
-        "event_key": event_key, "algo_version": "v1.1", **common,
+        "event_key": event_key, "algo_version": "v1.1",
+        "trend_calc_version": "trend_v1", "opportunity_calc_version": "opportunity_v1",
+        **common,
     }
 
 
@@ -80,6 +82,11 @@ def _scope(model):
         filters.extend((
             model.theme_calc_version == "theme_v1",
             model.eval_version == "research_eval_v1", model.entry_basis == "NEXT_OPEN",
+        ))
+    if model is ResearchTransitionEval:
+        filters.extend((
+            model.trend_calc_version == "trend_v1",
+            model.opportunity_calc_version == "opportunity_v1",
         ))
     return filters
 

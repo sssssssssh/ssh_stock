@@ -4,12 +4,13 @@ from types import SimpleNamespace
 import app.jobs.research_job as research_job
 import app.jobs.scheduler as scheduler_module
 import pytest
+from app.core.config import get_settings
 from app.services.job_guard import ResearchQueueConflictError
 
 
 def test_research_job_processes_batches_and_records_progress(monkeypatch) -> None:
     monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
-    settings = SimpleNamespace(research_config={"batch_trade_days": 20})
+    settings = get_settings()
     monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(
         research_job,
@@ -48,7 +49,10 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
         },
     )
     monkeypatch.setattr(research_job, "update_job", lambda db, job, **kwargs: calls.append(kwargs))
-    job = SimpleNamespace(job_metadata={"start": "2026-01-01", "end": "2026-01-05"})
+    job = SimpleNamespace(job_metadata={
+        "start": "2026-01-01", "end": "2026-01-05",
+        **research_job.current_research_identity(settings),
+    })
 
     totals = research_job.run_research_eval(object(), job)
 
@@ -65,11 +69,8 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
 
 def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
     monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
-    monkeypatch.setattr(
-        research_job,
-        "get_settings",
-        lambda: SimpleNamespace(research_config={"batch_trade_days": 20}),
-    )
+    settings = get_settings()
+    monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(research_job, "trade_batches", lambda *args: iter([[date(2026, 1, 2)]]))
     monkeypatch.setattr(
         research_job,
@@ -88,6 +89,7 @@ def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
             "start": "2026-01-02",
             "end": "2026-01-02",
             "opportunity_only": True,
+            **research_job.current_research_identity(settings),
         }
     )
     with pytest.raises(RuntimeError, match="input rows > 0"):
@@ -143,6 +145,7 @@ def test_research_queue_recovers_stale_and_stores_lineage_metadata(monkeypatch) 
     assert db.commits == 0
     metadata = captured[0]["metadata"]
     assert metadata["source_strategy_config_hash"] == metadata["strategy_config_hash"]
+    assert set(research_job.RESEARCH_IDENTITY_KEYS) <= metadata.keys()
     assert metadata["opportunity_deleted_rows"] == 0
     assert metadata["theme_deleted_rows"] == 0
     assert metadata["transition_deleted_rows"] == 0
@@ -169,6 +172,60 @@ def test_manual_research_queue_rejects_active_production(monkeypatch) -> None:
     with pytest.raises(ResearchQueueConflictError, match="production job"):
         research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
     assert db.rollbacks == 1
+
+
+def test_stale_recovery_survives_production_conflict(monkeypatch) -> None:
+    stale = SimpleNamespace(
+        status="RUNNING", started_at=datetime.now(UTC) - timedelta(hours=2),
+        heartbeat_at=datetime.now(UTC) - timedelta(hours=1),
+        finished_at=None, error_message=None,
+    )
+    db = _QueueDb([stale], production_busy=True)
+    monkeypatch.setattr(
+        research_job, "start_job",
+        lambda *args, **kwargs: pytest.fail("production conflict must prevent enqueue"),
+    )
+    with pytest.raises(ResearchQueueConflictError, match="production job"):
+        research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
+    assert stale.status == "FAILED"
+    assert db.commits == 1
+    assert db.rollbacks == 0
+
+
+@pytest.mark.parametrize("changed", ("strategy", "research_config", "algo_version"))
+def test_research_identity_drift_fails_before_trade_batches(monkeypatch, changed) -> None:
+    queued_settings = get_settings().model_copy(deep=True)
+    queued = research_job.current_research_identity(queued_settings)
+    current_settings = queued_settings.model_copy(deep=True)
+    if changed == "strategy":
+        current_settings.strategy["identity_test"] = "changed"
+    elif changed == "research_config":
+        current_settings.research_config["identity_test"] = "changed"
+    else:
+        current_settings.algo_version = "changed"
+    monkeypatch.setattr(research_job, "get_settings", lambda: current_settings)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    monkeypatch.setattr(
+        research_job, "trade_batches",
+        lambda *args: pytest.fail("drifted job must not load trade batches"),
+    )
+    monkeypatch.setattr(
+        research_job, "evaluate_opportunity_batch",
+        lambda *args: pytest.fail("drifted job must not evaluate"),
+    )
+    updates = []
+    monkeypatch.setattr(
+        research_job, "update_job", lambda db, job, **kwargs: updates.append(kwargs)
+    )
+    job = SimpleNamespace(job_metadata={
+        "start": "2026-01-02", "end": "2026-01-02", **queued,
+    })
+    assert research_job.run_research_eval(object(), job) == {}
+    assert updates[0]["status"] == "FAILED"
+    assert updates[0]["step"] == "research identity changed since queue"
+    assert "RESEARCH_IDENTITY_CHANGED_SINCE_QUEUE" in updates[0]["error_message"]
+    assert updates[0]["metadata"]["strategy_config_hash"] == queued["strategy_config_hash"]
+    assert updates[0]["metadata"]["identity_changed_fields"]
 
 
 class _QueueDb:

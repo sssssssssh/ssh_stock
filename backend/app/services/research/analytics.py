@@ -164,6 +164,7 @@ def _identity_filters(model: type, settings: Any) -> list[Any]:
     if model is ResearchTransitionEval:
         filters.append(model.strategy_config_hash == config_hash(settings.strategy))
         filters.append(model.trend_calc_version == TREND_CALC_VERSION)
+        filters.append(model.opportunity_calc_version == OPPORTUNITY_CALC_VERSION)
     return filters
 
 
@@ -467,7 +468,7 @@ def transition_stats(
             & (forward.ts_code == transition.ts_code)
             & (forward.algo_version == transition.algo_version)
             & (forward.strategy_config_hash == transition.strategy_config_hash)
-            & (forward.opportunity_calc_version == OPPORTUNITY_CALC_VERSION)
+            & (forward.opportunity_calc_version == transition.opportunity_calc_version)
             & (forward.opportunity_config_hash == transition.opportunity_config_hash)
             & (forward.research_version == transition.research_version)
             & (forward.research_config_hash == transition.research_config_hash)

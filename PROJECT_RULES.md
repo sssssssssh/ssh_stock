@@ -186,10 +186,10 @@
 Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 ## Phase 7 部署与依赖规则（2026-09-15）
 
-- 生产容器固定使用 PostgreSQL 17；业务容器必须等待数据库健康且迁移容器成功执行 `alembic upgrade head` 后才能启动。
+- 部署使用外部 PostgreSQL 17；业务容器必须等待迁移容器成功执行 `alembic upgrade head` 后才能启动。
 - API、DB worker 和 scheduler 是三个独立进程；API 只入队，worker 消费 `job_run`，scheduler 只负责定时编排。
 - `/health` 必须同时验证 API 存活和数据库 `SELECT 1`，数据库不可用时返回 HTTP 503。
-- `postgres`、`backend`、`worker` 使用 `restart: unless-stopped`；scheduler 同样按长期服务运行。
+- `backend`、`worker` 使用 `restart: unless-stopped`；scheduler 同样按长期服务运行。
 - Python 部署依赖以 `requirements.lock` 为准，尤其不得自行猜测或漂移 Tushare 版本。
 - Tushare 代理地址只能由 Provider 内 `_configure_tushare_http_url()` 配置；SDK 私有结构变化时必须明确失败，禁止静默退回官方地址。
 - CI 必须在 PostgreSQL 17 上实际执行 Alembic，随后运行完整 pytest、ruff 和前端生产构建。
@@ -247,3 +247,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - `StockOpportunityDaily` 与 `ThemeFactorDaily` 必须记录 `source_strategy_config_hash`；旧行 `legacy-unverified` 不得进入 current Research。Research 写入的策略身份必须来自已过滤验证的源行，不得只根据运行时配置推断。
 - Research LEFT Context 依赖的生产 `left_reversal.strong_score` 必须在 `research.left_thresholds` 中。
 - Research queue 创建必须持独立 advisory lock 完成 stale recovery、active-check 与入队，防止多 Scheduler/API 重复排队。
+- Research Job Queue 时必须冻结完整 Research Identity；执行前 current identity 与 queued identity 不一致时必须失败，不得用新配置执行旧 Job。
+- ResearchTransitionEval identity 必须包含 trend_calc_version 与 opportunity_calc_version。
+- stale Research recovery 的持久化不能因为后续 queue conflict rollback。
+- Docker Compose 只管理 migration/backend/worker/scheduler，数据库使用外部 PostgreSQL。

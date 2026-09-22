@@ -202,7 +202,8 @@ def test_strategy_identity_and_context_event_universes_do_not_mix() -> None:
             db.add(ResearchTransitionEval(
                 id=index, event_trade_date=day, ts_code=code, event_type=kind, event_key=key,
                 source_state=state, algo_version=settings.algo_version,
-                trend_calc_version="trend_v1", strategy_config_hash=strategy_hash,
+                trend_calc_version="trend_v1", opportunity_calc_version="opportunity_v1",
+                strategy_config_hash=strategy_hash,
                 opportunity_config_hash=opportunity_hash, research_version=RESEARCH_VERSION,
                 research_config_hash=research_hash,
             ))
@@ -225,6 +226,43 @@ def test_strategy_identity_and_context_event_universes_do_not_mix() -> None:
         assert next(row for row in transition_stats(
             db, settings, day, day, left=True
         ) if row["group"] == "LEFT_75")["event_count"] == 1
+
+
+def test_transition_calc_versions_coexist_but_only_current_version_is_read() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    ResearchTransitionEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 1, 5)
+    identity = {
+        "algo_version": settings.algo_version,
+        "strategy_config_hash": config_hash(settings.strategy),
+        "opportunity_config_hash": config_hash(settings.opportunity_config),
+        "research_version": RESEARCH_VERSION,
+        "research_config_hash": config_hash(settings.research_config),
+    }
+    with Session(engine) as db:
+        db.add(OpportunityForwardEval(
+            id=1, trade_date=day, ts_code="A.SZ", opportunity_calc_version="opportunity_v1",
+            eval_version=RESEARCH_EVAL_VERSION, entry_basis="NEXT_OPEN",
+            benchmark_code="000300.SH", state="S2", opportunity_stage="LEFT_REVERSAL",
+            mature5=True, entry_executable=True, exit_executable5=True, ret5=0.1,
+            **identity,
+        ))
+        for index, (trend, opportunity) in enumerate((
+            ("trend_v1", "opportunity_v1"),
+            ("trend_v2", "opportunity_v1"),
+            ("trend_v1", "opportunity_v2"),
+        ), start=1):
+            db.add(ResearchTransitionEval(
+                id=index, event_trade_date=day, ts_code="A.SZ",
+                event_type="LEFT_THRESHOLD_CROSS", event_key="LEFT_75", source_state="S2",
+                trend_calc_version=trend, opportunity_calc_version=opportunity, **identity,
+            ))
+        db.commit()
+        assert db.query(ResearchTransitionEval).count() == 3
+        results = transition_stats(db, settings, day, day, left=True)
+    assert next(row for row in results if row["group"] == "LEFT_75")["event_count"] == 1
 
 
 def test_bucket_numeric_order_bounded_100_and_negative_momentum() -> None:

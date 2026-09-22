@@ -7,7 +7,16 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.job import JobRun
 from app.repositories.job_run import start_job, update_job
-from app.services.analysis_identity import RESEARCH_VERSION
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
+    RESEARCH_EVAL_VERSION,
+    RESEARCH_VERSION,
+    THEME_CALC_VERSION,
+    TRADE_STATUS_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
 from app.services.calc_metadata import config_hash
 from app.services.job_guard import (
     ResearchQueueConflictError,
@@ -20,6 +29,46 @@ from app.services.research.theme_eval import evaluate_theme_batch
 from app.services.research.transition_eval import evaluate_transition_batch
 
 RESEARCH_JOB_TYPE = "RESEARCH_EVAL"
+RESEARCH_IDENTITY_KEYS = (
+    "algo_version",
+    "strategy_config_hash",
+    "source_strategy_config_hash",
+    "opportunity_config_hash",
+    "research_config_hash",
+    "research_version",
+    "research_eval_version",
+    "factor_calc_version",
+    "market_calc_version",
+    "trade_status_calc_version",
+    "theme_calc_version",
+    "trend_calc_version",
+    "opportunity_calc_version",
+    "benchmark_code",
+    "stock_entry_basis",
+    "theme_entry_basis",
+)
+
+
+def current_research_identity(settings: Any) -> dict[str, str]:
+    strategy_hash = config_hash(settings.strategy)
+    return {
+        "algo_version": settings.algo_version,
+        "strategy_config_hash": strategy_hash,
+        "source_strategy_config_hash": strategy_hash,
+        "opportunity_config_hash": config_hash(settings.opportunity_config),
+        "research_config_hash": config_hash(settings.research_config),
+        "research_version": RESEARCH_VERSION,
+        "research_eval_version": RESEARCH_EVAL_VERSION,
+        "factor_calc_version": FACTOR_CALC_VERSION,
+        "market_calc_version": MARKET_CALC_VERSION,
+        "trade_status_calc_version": TRADE_STATUS_CALC_VERSION,
+        "theme_calc_version": THEME_CALC_VERSION,
+        "trend_calc_version": TREND_CALC_VERSION,
+        "opportunity_calc_version": OPPORTUNITY_CALC_VERSION,
+        "benchmark_code": settings.research_config["benchmark_code"],
+        "stock_entry_basis": settings.research_config["stock"]["entry_basis"],
+        "theme_entry_basis": settings.research_config["theme"]["entry_basis"],
+    }
 
 
 def queue_research_eval(
@@ -37,7 +86,7 @@ def queue_research_eval(
     if sum((opportunity_only, theme_only, transition_only)) > 1:
         raise ValueError("only one research-only flag is allowed")
     _acquire_research_advisory_lock(db)
-    recover_stale_research_jobs(db, commit=False)
+    recovered = recover_stale_research_jobs(db, commit=False)
     active = db.scalar(
         select(JobRun).where(
             JobRun.job_type == RESEARCH_JOB_TYPE,
@@ -45,11 +94,13 @@ def queue_research_eval(
         ).limit(1)
     )
     if active is not None or not research_can_run(db):
-        db.rollback()
+        if recovered:
+            db.commit()
+        else:
+            db.rollback()
         reason = "active research job exists" if active is not None else "production job is active"
         raise ResearchQueueConflictError(reason)
     settings = get_settings()
-    strategy_hash = config_hash(settings.strategy)
     return start_job(
         db,
         RESEARCH_JOB_TYPE,
@@ -64,12 +115,7 @@ def queue_research_eval(
             "opportunity_only": opportunity_only,
             "theme_only": theme_only,
             "transition_only": transition_only,
-            "research_version": RESEARCH_VERSION,
-            "research_config_hash": config_hash(settings.research_config),
-            "strategy_config_hash": strategy_hash,
-            "source_strategy_config_hash": strategy_hash,
-            "opportunity_config_hash": config_hash(settings.opportunity_config),
-            "benchmark_code": settings.research_config["benchmark_code"],
+            **current_research_identity(settings),
             "opportunity_rows": 0,
             "opportunity_deleted_rows": 0,
             "theme_rows": 0,
@@ -93,6 +139,17 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
         return {}
     settings = get_settings()
     metadata = dict(job.job_metadata or {})
+    current_identity = current_research_identity(settings)
+    changed = [
+        key for key in RESEARCH_IDENTITY_KEYS if metadata.get(key) != current_identity[key]
+    ]
+    if changed:
+        update_job(
+            db, job, status="FAILED", step="research identity changed since queue",
+            error_message="RESEARCH_IDENTITY_CHANGED_SINCE_QUEUE: " + ", ".join(changed),
+            metadata={**metadata, "identity_changed_fields": changed},
+        )
+        return {}
     start, end = date.fromisoformat(metadata["start"]), date.fromisoformat(metadata["end"])
     batches = list(trade_batches(db, start, end, settings.research_config["batch_trade_days"]))
     totals = {
