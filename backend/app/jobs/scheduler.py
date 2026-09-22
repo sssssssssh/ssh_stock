@@ -12,6 +12,7 @@ from app.models.job import JobRun
 from app.models.market_data import StockDaily, TradeCalendar
 from app.services.job_guard import (
     ActiveIngestionJobError,
+    ResearchQueueConflictError,
     create_queued_ingestion_job,
     recover_stale_research_jobs,
     research_can_run,
@@ -137,7 +138,10 @@ def run_scheduled_research(db, target_date: date) -> bool:
     )
     if not open_dates:
         return False
-    queue_research_eval(db, open_dates[-1], open_dates[0], mode="scheduler")
+    try:
+        queue_research_eval(db, open_dates[-1], open_dates[0], mode="scheduler")
+    except ResearchQueueConflictError:
+        return False
     return True
 
 

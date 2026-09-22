@@ -1009,6 +1009,8 @@ python -m app.cli validate-data --start 2021-01-01 --end 2026-09-15
 
 `0018_research_closeout` 为股票及题材 Forward Eval 增加 `strategy_config_hash` 并扩展自然键；旧行缺少可核实的策略来源，迁移后保留为 `legacy-unverified`，默认研究查询不混用，需重新提交历史研究区间生成带当前策略身份的结果。研究结果同时记录 strategy、opportunity、research 配置哈希及算法/计算版本，不同策略版本不得互相覆盖。该迁移也不会自动重拉 Raw 或重算 Production。
 
+`0019_research_source_lineage` 在 `stock_opportunity_daily` 与 `theme_factor_daily` 增加 `source_strategy_config_hash`。升级时旧 Production 派生行统一标为 `legacy-unverified`，Research 不会把它们误标成当前策略结果。升级后必须先对计划研究区间及所需前置回看期执行 Production“开始补算”，确认机会与题材因子已有当前策略血缘，再运行 Research；仅执行 Alembic 不会重算数据。每次 Research 重跑都会将当前身份、当前日期切片视为权威结果：存在的事件更新或插入，已失效的 Opportunity/Theme Eval 和 Left/Right Transition 事件删除；其它策略、机会或研究配置身份的历史结果不受影响。
+
 先确保历史 Raw、因子、题材与机会池已完成，再启动 DB Worker 并提交研究任务：
 
 ```powershell
@@ -1033,6 +1035,8 @@ python -m app.cli research-eval --start 2025-01-01 --end 2025-12-31
 Transition 的 5/10/20 日成熟条件是未来市场交易日存在且对应股票在整个 horizon 内有连续的当前版本 `StockStateDaily`；State 缺失表示 UNKNOWN，不按未转化处理。`days_to_state` 仅在 Day1 起连续可信的 State 前缀中计算，不跨缺失日推断。Context 的 `research_type=ALL/LEFT/RIGHT/TREND/POSITION` 分别表示全体、生产 strong 阈值穿越事件、RIGHT_SIDE_NEW 事件、S4/S5、S4/S5；Opportunity Bucket 同名参数按状态范围筛选，Trend 榜页面固定传 `TREND`。Score bucket 数值排序，100 分归入最后一个 0~100 分段，负数动量保持负数分段。
 
 Research Job 支持过期 QUEUED/RUNNING 恢复；调度和 Worker 会避开 active daily、sync_basic、backfill、recalculate、catchup 任务。Production 忙时 Research 保持或重新进入队列，正在执行 Research 时 Worker 不认领会修改 Production 的任务，避免读取半更新快照。
+
+研究任务入队使用独立 PostgreSQL advisory lock 做原子 active-check：已有活跃 Research 或 Production 任务时不重复入队，API 返回 409。任务元数据记录三类结果的写入与删除行数，以及目标源策略哈希。LEFT Context 使用的生产 strong 阈值必须包含在 `research.left_thresholds`；否则应用在配置校验时拒绝启动。
 
 已知限制：Theme 成员 PIT 只从首份 PASS 成员快照后可信，历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
 

@@ -73,13 +73,18 @@ class ThemeFactorService:
             calc_version=THEME_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
+        strategy_hash = config_hash(self.settings.strategy)
         payload = []
         for row in rows.to_dict("records"):
             clean_row = _clean(row)
             clean_row["source_coverage"] = source_quality[clean_row["trade_date"]][
                 "coverage_rate"
             ]
-            payload.append({**clean_row, **metadata})
+            payload.append({
+                **clean_row,
+                **metadata,
+                "source_strategy_config_hash": strategy_hash,
+            })
         count = replace_slice_rows(
             self.db,
             ThemeFactorDaily,

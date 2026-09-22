@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Iterator
 from datetime import date
 from typing import Any
 
@@ -11,7 +12,7 @@ from app.models.market_data import (
     StockStateDaily,
     TradeCalendar,
 )
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows_with_stats
 from app.services.analysis_identity import (
     OPPORTUNITY_CALC_VERSION,
     RESEARCH_VERSION,
@@ -114,6 +115,14 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
     strategy_hash = config_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
+    scope_filters = (
+        ResearchTransitionEval.event_trade_date.in_(base_dates),
+        ResearchTransitionEval.algo_version == settings.algo_version,
+        ResearchTransitionEval.strategy_config_hash == strategy_hash,
+        ResearchTransitionEval.opportunity_config_hash == opportunity_hash,
+        ResearchTransitionEval.research_version == RESEARCH_VERSION,
+        ResearchTransitionEval.research_config_hash == research_hash,
+    )
     previous_date = db.scalar(
         select(TradeCalendar.cal_date)
         .where(
@@ -139,6 +148,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
                 StockOpportunityDaily.algo_version == settings.algo_version,
                 StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
                 StockOpportunityDaily.config_hash == opportunity_hash,
+                StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
                 StockOpportunityDaily.state.in_(STATES),
             )
         )
@@ -156,6 +166,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
                     StockOpportunityDaily.algo_version == settings.algo_version,
                     StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
                     StockOpportunityDaily.config_hash == opportunity_hash,
+                    StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
                     StockOpportunityDaily.ts_code.in_({base.ts_code for base in bases}),
                 )
             )
@@ -166,64 +177,71 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)
-    counts = {"base_rows": len(bases), "eval_rows": 0}
+    counts = {"base_rows": len(bases), "eval_rows": 0, "deleted_rows": 0}
     codes = sorted(by_code)
-    for offset in range(0, len(codes), 250):
-        chunk = codes[offset : offset + 250]
-        state_rows = (
-            db.execute(
-                select(
-                    StockStateDaily.ts_code, StockStateDaily.trade_date, StockStateDaily.state
-                ).where(
-                    StockStateDaily.ts_code.in_(chunk),
-                    StockStateDaily.trade_date.between(dates[0], dates[-1]),
-                    StockStateDaily.algo_version == settings.algo_version,
-                    StockStateDaily.calc_version == TREND_CALC_VERSION,
-                    StockStateDaily.config_hash == strategy_hash,
-                )
-            ).all()
-            if dates
-            else []
-        )
-        states: dict[str, dict[date, str]] = defaultdict(dict)
-        for row in state_rows:
-            states[row.ts_code][row.trade_date] = row.state
-        payload = []
-        for code in chunk:
-            for base in by_code[code]:
-                prior = previous.get((prior_by_date.get(base.trade_date), code))
-                left_events = left_crossings(
-                    base, prior, settings.research_config["left_thresholds"]
-                )
-                events = [
-                    ("LEFT_THRESHOLD_CROSS", f"LEFT_{value}", value, base.left_reversal_score)
-                    for value in left_events
-                ]
-                if is_right_side_new(base):
-                    events.append(("RIGHT_SIDE_NEW", "RIGHT_SIDE_NEW", None, base.right_side_score))
-                for event_type, event_key, threshold, score in events:
-                    payload.append(
-                        {
-                            "event_trade_date": base.trade_date,
-                            "ts_code": code,
-                            "event_type": event_type,
-                            "event_key": event_key,
-                            "threshold_value": threshold,
-                            "source_state": base.state,
-                            "source_score": score,
-                            "algo_version": settings.algo_version,
-                            "trend_calc_version": TREND_CALC_VERSION,
-                            "strategy_config_hash": strategy_hash,
-                            "opportunity_config_hash": opportunity_hash,
-                            "research_version": RESEARCH_VERSION,
-                            "research_config_hash": research_hash,
-                            **transition_outcome(
-                                base.trade_date,
-                                dates,
-                                states[code],
-                                is_right=event_type == "RIGHT_SIDE_NEW",
-                            ),
-                        }
+    def row_batches() -> Iterator[list[dict[str, Any]]]:
+        for offset in range(0, len(codes), 250):
+            chunk = codes[offset : offset + 250]
+            state_rows = (
+                db.execute(
+                    select(
+                        StockStateDaily.ts_code, StockStateDaily.trade_date, StockStateDaily.state
+                    ).where(
+                        StockStateDaily.ts_code.in_(chunk),
+                        StockStateDaily.trade_date.between(dates[0], dates[-1]),
+                        StockStateDaily.algo_version == settings.algo_version,
+                        StockStateDaily.calc_version == TREND_CALC_VERSION,
+                        StockStateDaily.config_hash == strategy_hash,
                     )
-        counts["eval_rows"] += upsert_rows(db, ResearchTransitionEval, payload, TRANSITION_KEY)
+                ).all()
+                if dates else []
+            )
+            states: dict[str, dict[date, str]] = defaultdict(dict)
+            for row in state_rows:
+                states[row.ts_code][row.trade_date] = row.state
+            payload = []
+            for code in chunk:
+                for base in by_code[code]:
+                    prior = previous.get((prior_by_date.get(base.trade_date), code))
+                    left_events = left_crossings(
+                        base, prior, settings.research_config["left_thresholds"]
+                    )
+                    events = [
+                        ("LEFT_THRESHOLD_CROSS", f"LEFT_{value}", value, base.left_reversal_score)
+                        for value in left_events
+                    ]
+                    if is_right_side_new(base):
+                        events.append(
+                            ("RIGHT_SIDE_NEW", "RIGHT_SIDE_NEW", None, base.right_side_score)
+                        )
+                    for event_type, event_key, threshold, score in events:
+                        payload.append(
+                            {
+                                "event_trade_date": base.trade_date,
+                                "ts_code": code,
+                                "event_type": event_type,
+                                "event_key": event_key,
+                                "threshold_value": threshold,
+                                "source_state": base.state,
+                                "source_score": score,
+                                "algo_version": settings.algo_version,
+                                "trend_calc_version": TREND_CALC_VERSION,
+                                "strategy_config_hash": base.source_strategy_config_hash,
+                                "opportunity_config_hash": opportunity_hash,
+                                "research_version": RESEARCH_VERSION,
+                                "research_config_hash": research_hash,
+                                **transition_outcome(
+                                    base.trade_date, dates, states[code],
+                                    is_right=event_type == "RIGHT_SIDE_NEW",
+                                ),
+                            }
+                        )
+            yield payload
+
+    stats = replace_slice_rows_with_stats(
+        db, ResearchTransitionEval, row_batches(), scope_filters=scope_filters,
+        key_columns=TRANSITION_KEY,
+    )
+    counts["eval_rows"] = stats["upserted"]
+    counts["deleted_rows"] = stats["deleted"]
     return counts

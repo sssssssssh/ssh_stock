@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import app.jobs.research_job as research_job
 import app.jobs.scheduler as scheduler_module
 import pytest
+from app.services.job_guard import ResearchQueueConflictError
 
 
 def test_research_job_processes_batches_and_records_progress(monkeypatch) -> None:
@@ -22,6 +23,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
         lambda *args: {
             "base_rows": 3,
             "eval_rows": 3,
+            "deleted_rows": 2,
             "entry_nonexecutable": 1,
             "benchmark_missing": 1,
         },
@@ -32,6 +34,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
         lambda *args: {
             "base_rows": 2,
             "eval_rows": 2,
+            "deleted_rows": 1,
             "benchmark_missing": 0,
         },
     )
@@ -41,6 +44,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
         lambda *args: {
             "base_rows": 3,
             "eval_rows": 1,
+            "deleted_rows": 3,
         },
     )
     monkeypatch.setattr(research_job, "update_job", lambda db, job, **kwargs: calls.append(kwargs))
@@ -51,6 +55,9 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
     assert totals["opportunity_rows"] == 6
     assert totals["theme_rows"] == 4
     assert totals["transition_rows"] == 2
+    assert totals["opportunity_deleted_rows"] == 4
+    assert totals["theme_deleted_rows"] == 2
+    assert totals["transition_deleted_rows"] == 6
     assert calls[-1]["status"] == "SUCCESS"
     assert calls[-1]["metadata"]["progress_pct"] == 100
     assert calls[-1]["metadata"]["warnings"] == ["BENCHMARK_DATA_MISSING"]
@@ -70,6 +77,7 @@ def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
         lambda *args: {
             "base_rows": 2,
             "eval_rows": 0,
+            "deleted_rows": 0,
             "entry_nonexecutable": 0,
             "benchmark_missing": 0,
         },
@@ -97,6 +105,105 @@ def test_research_queue_validates_range_and_modes_before_writing() -> None:
             theme_only=True,
             opportunity_only=True,
         )
+
+
+@pytest.mark.parametrize("status", ("QUEUED", "RUNNING"))
+def test_research_queue_rejects_active_job_atomically(monkeypatch, status) -> None:
+    active = SimpleNamespace(
+        status=status, started_at=datetime.now(UTC), heartbeat_at=datetime.now(UTC)
+    )
+    db = _QueueDb([active])
+    created = []
+    monkeypatch.setattr(research_job, "start_job", lambda *args, **kwargs: created.append(args))
+
+    with pytest.raises(ResearchQueueConflictError, match="active research"):
+        research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
+
+    assert created == []
+    assert db.rollbacks == 1
+
+
+def test_research_queue_recovers_stale_and_stores_lineage_metadata(monkeypatch) -> None:
+    stale = SimpleNamespace(
+        status="RUNNING", started_at=datetime.now(UTC) - timedelta(hours=2),
+        heartbeat_at=datetime.now(UTC) - timedelta(hours=1),
+        finished_at=None, error_message=None,
+    )
+    db = _QueueDb([stale])
+    captured = []
+    monkeypatch.setattr(
+        research_job, "start_job",
+        lambda *args, **kwargs: captured.append(kwargs) or SimpleNamespace(id="new-job"),
+    )
+
+    job = research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
+
+    assert job.id == "new-job"
+    assert stale.status == "FAILED"
+    assert db.commits == 0
+    metadata = captured[0]["metadata"]
+    assert metadata["source_strategy_config_hash"] == metadata["strategy_config_hash"]
+    assert metadata["opportunity_deleted_rows"] == 0
+    assert metadata["theme_deleted_rows"] == 0
+    assert metadata["transition_deleted_rows"] == 0
+
+
+def test_research_queue_uses_postgresql_advisory_lock(monkeypatch) -> None:
+    db = _QueueDb([], dialect="postgresql")
+    monkeypatch.setattr(
+        research_job, "start_job", lambda *args, **kwargs: SimpleNamespace(id="new-job")
+    )
+
+    research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
+
+    assert "pg_advisory_xact_lock" in str(db.statements[0])
+    assert "job_run" in str(db.statements[1])
+
+
+def test_manual_research_queue_rejects_active_production(monkeypatch) -> None:
+    db = _QueueDb([], production_busy=True)
+    monkeypatch.setattr(
+        research_job, "start_job",
+        lambda *args, **kwargs: pytest.fail("busy production must prevent enqueue"),
+    )
+    with pytest.raises(ResearchQueueConflictError, match="production job"):
+        research_job.queue_research_eval(db, date(2026, 5, 1), date(2026, 5, 10))
+    assert db.rollbacks == 1
+
+
+class _QueueDb:
+    def __init__(self, jobs, dialect="sqlite", production_busy=False):
+        self.jobs = jobs
+        self.dialect = dialect
+        self.production_busy = production_busy
+        self.statements = []
+        self.rollbacks = 0
+        self.commits = 0
+
+    def get_bind(self):
+        return SimpleNamespace(dialect=SimpleNamespace(name=self.dialect))
+
+    def execute(self, statement):
+        self.statements.append(statement)
+        rows = [job for job in self.jobs if job.status in {"QUEUED", "RUNNING"}]
+        return SimpleNamespace(
+            scalar_one=lambda: None,
+            scalars=lambda: SimpleNamespace(all=lambda: rows),
+        )
+
+    def scalar(self, statement):
+        if "count(" in str(statement):
+            return int(self.production_busy)
+        return next((job for job in self.jobs if job.status in {"QUEUED", "RUNNING"}), None)
+
+    def add(self, job):
+        pass
+
+    def rollback(self):
+        self.rollbacks += 1
+
+    def commit(self):
+        self.commits += 1
 
 
 def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) -> None:

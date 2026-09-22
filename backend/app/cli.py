@@ -12,6 +12,7 @@ from app.providers.tushare_provider import TushareProvider
 from app.services.factors import FactorService
 from app.services.job_guard import (
     ActiveIngestionJobError,
+    ResearchQueueConflictError,
     create_queued_ingestion_job,
 )
 from app.services.job_worker import run_worker
@@ -45,6 +46,9 @@ def research_eval(
             )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+    except ResearchQueueConflictError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
     typer.echo(f"research_eval queued job_id={job.id}; run worker to execute")
 
 

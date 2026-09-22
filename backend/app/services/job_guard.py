@@ -21,6 +21,11 @@ ACTIVE_JOB_STATUSES = ("QUEUED", "RUNNING")
 RESEARCH_JOB_TYPE = "RESEARCH_EVAL"
 PRODUCTION_MUTATING_JOB_TYPES = ("daily", "sync_basic", "backfill", "recalculate", "catchup")
 INGESTION_ADVISORY_LOCK_KEY = 7_307_202_609_15
+RESEARCH_ADVISORY_LOCK_KEY = 7_307_202_609_19
+
+
+class ResearchQueueConflictError(RuntimeError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,7 @@ def recover_stale_research_jobs(
     queued_stale_hours: float | None = None,
     running_heartbeat_timeout_minutes: float | None = None,
     now: datetime | None = None,
+    commit: bool = True,
 ) -> int:
     jobs = db.execute(
         select(JobRun).where(
@@ -92,6 +98,7 @@ def recover_stale_research_jobs(
         queued_stale_hours=queued_stale_hours,
         running_heartbeat_timeout_minutes=running_heartbeat_timeout_minutes,
         now=now,
+        commit=commit,
     )
 
 
@@ -103,6 +110,7 @@ def _recover_stale_jobs(
     queued_stale_hours: float | None = None,
     running_heartbeat_timeout_minutes: float | None = None,
     now: datetime | None = None,
+    commit: bool = True,
 ) -> int:
     queued_hours = float(
         queued_stale_hours
@@ -145,7 +153,7 @@ def _recover_stale_jobs(
         )
         db.add(job)
         recovered += 1
-    if recovered:
+    if recovered and commit:
         db.commit()
     return recovered
 
@@ -223,3 +231,9 @@ def _acquire_ingestion_advisory_lock(db: Session) -> None:
     db.execute(
         select(func.pg_advisory_xact_lock(INGESTION_ADVISORY_LOCK_KEY))
     ).scalar_one()
+
+
+def _acquire_research_advisory_lock(db: Session) -> None:
+    if db.get_bind().dialect.name != "postgresql":
+        return
+    db.execute(select(func.pg_advisory_xact_lock(RESEARCH_ADVISORY_LOCK_KEY))).scalar_one()

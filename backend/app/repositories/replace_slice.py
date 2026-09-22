@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from sqlalchemy import delete, select, tuple_
@@ -43,6 +43,33 @@ def replace_slice_rows(
         key_columns,
         update_columns=update_columns,
     )
+
+
+def replace_slice_rows_with_stats(
+    db: Session,
+    model: type,
+    row_batches: Iterable[Sequence[dict[str, Any]]],
+    *,
+    scope_filters: Sequence[Any],
+    key_columns: Sequence[str],
+) -> dict[str, int]:
+    """Reconcile one scope while streaming upserts in bounded batches."""
+    if not key_columns:
+        raise ValueError("key_columns must not be empty")
+    columns = [getattr(model, name) for name in key_columns]
+    existing_keys = {
+        tuple(row) for row in db.execute(select(*columns).where(*scope_filters)).all()
+    }
+    current_keys: set[tuple[Any, ...]] = set()
+    upserted = 0
+    for rows in row_batches:
+        current_keys.update(tuple(row[column] for column in key_columns) for row in rows)
+        upserted += upsert_rows(db, model, rows, key_columns)
+    stale_keys = existing_keys - current_keys
+    _delete_stale_keys(
+        db, model, columns=columns, scope_filters=scope_filters, stale_keys=stale_keys
+    )
+    return {"upserted": upserted, "deleted": len(stale_keys)}
 
 
 def _delete_stale_keys(

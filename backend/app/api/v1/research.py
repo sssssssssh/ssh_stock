@@ -18,6 +18,7 @@ from app.models.market_data import (
 )
 from app.services.analysis_identity import SIGNAL_CALC_VERSION
 from app.services.calc_metadata import config_hash
+from app.services.job_guard import ResearchQueueConflictError
 from app.services.research import analytics
 
 router = APIRouter()
@@ -47,6 +48,8 @@ def enqueue_research_eval(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ResearchQueueConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return envelope({"id": str(job.id), "status": job.status}, {"accepted": True})
 
 

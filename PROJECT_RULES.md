@@ -243,3 +243,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Context Analytics 必须明确 Universe：LEFT/RIGHT 使用对应事件，TREND/POSITION 使用 S4/S5；Opportunity Bucket 按研究类型筛选，不能在对应 Tab 默认混用全部 Opportunity。
 - Research 执行必须避开 active Production mutating job；Research 运行时 Worker 不得认领 Production mutating job。
 - Score bucket 按数值排序，UNKNOWN 最后；bounded 0~100 score 的 100 分归入最后一个 0~100 分段，非 bounded 动量保留负数分段。
+- Research batch 的 current identity + base_dates 是 authoritative slice；重跑必须删除当前 Slice 已失效的 Opportunity、Theme 与 Transition 行，不能只 upsert，且其它 strategy/opportunity/research 身份不得互删。
+- `StockOpportunityDaily` 与 `ThemeFactorDaily` 必须记录 `source_strategy_config_hash`；旧行 `legacy-unverified` 不得进入 current Research。Research 写入的策略身份必须来自已过滤验证的源行，不得只根据运行时配置推断。
+- Research LEFT Context 依赖的生产 `left_reversal.strong_score` 必须在 `research.left_thresholds` 中。
+- Research queue 创建必须持独立 advisory lock 完成 stale recovery、active-check 与入队，防止多 Scheduler/API 重复排队。

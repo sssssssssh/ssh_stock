@@ -651,6 +651,7 @@ class ThemeFactorDaily(Base):
     data_coverage: Mapped[float | None] = mapped_column(Float)
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -695,6 +696,7 @@ class StockOpportunityDaily(Base):
     reason_codes: Mapped[dict | None] = mapped_column(JSONB)
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

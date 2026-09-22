@@ -96,7 +96,10 @@ class OpportunityService:
             calc_version=OPPORTUNITY_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
-        rows = [{**_clean(row), **metadata} for row in frame.to_dict("records")]
+        rows = [
+            {**_clean(row), **metadata, "source_strategy_config_hash": strategy_hash}
+            for row in frame.to_dict("records")
+        ]
         count = replace_slice_rows(
             self.db,
             StockOpportunityDaily,
@@ -120,15 +123,18 @@ class OpportunityService:
         calc_version: str,
         hash_value: str,
     ) -> pd.DataFrame:
-        rows = (
-            self.db.execute(
-                select(model).where(
-                    model.trade_date >= start,
-                    model.trade_date <= end,
-                    model.calc_version == calc_version,
-                    model.config_hash == hash_value,
-                )
+        filters = [
+            model.trade_date >= start,
+            model.trade_date <= end,
+            model.calc_version == calc_version,
+            model.config_hash == hash_value,
+        ]
+        if model is ThemeFactorDaily:
+            filters.append(
+                ThemeFactorDaily.source_strategy_config_hash == config_hash(self.settings.strategy)
             )
+        rows = (
+            self.db.execute(select(model).where(*filters))
             .scalars()
             .all()
         )

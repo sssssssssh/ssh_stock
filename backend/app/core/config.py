@@ -53,7 +53,7 @@ class Settings(BaseSettings):
             "research", {}
         )
         _validate_opportunity_weights(opportunity_config)
-        _validate_research_config(research_config)
+        _validate_research_config(research_config, opportunity_config)
         app_section = app_config.get("app", {})
         if isinstance(app_section, dict):
             settings.app_name = app_section.get("name", settings.app_name)
@@ -66,7 +66,9 @@ class Settings(BaseSettings):
         return settings
 
 
-def _validate_research_config(config: dict[str, Any]) -> None:
+def _validate_research_config(
+    config: dict[str, Any], opportunity_config: dict[str, Any] | None = None
+) -> None:
     if not isinstance(config, dict):
         raise ValueError("research config must be a mapping")
     for key in ("version", "eval_version", "benchmark_code"):
@@ -96,6 +98,13 @@ def _validate_research_config(config: dict[str, Any]) -> None:
             raise ValueError(f"research.{key} must be strictly increasing valid integers")
     if config["horizons"] != [5, 10, 20, 60] or config["transition_horizons"] != [5, 10, 20]:
         raise ValueError("research v1 schema supports fixed 5/10/20/60 and 5/10/20 horizons")
+    if opportunity_config is not None:
+        strong_score = opportunity_config.get("left_reversal", {}).get("strong_score")
+        if strong_score not in config["left_thresholds"]:
+            raise ValueError(
+                "research.left_thresholds must contain production "
+                f"left_reversal.strong_score={strong_score}"
+            )
     if config.get("stock", {}).get("entry_basis") != "NEXT_OPEN":
         raise ValueError("research.stock.entry_basis must be NEXT_OPEN")
     theme = config.get("theme", {})

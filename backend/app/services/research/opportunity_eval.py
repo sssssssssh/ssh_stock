@@ -16,7 +16,7 @@ from app.models.market_data import (
     StockTradeStatusDaily,
     TradeCalendar,
 )
-from app.repositories.upsert import upsert_rows
+from app.repositories.replace_slice import replace_slice_rows_with_stats
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
@@ -131,6 +131,17 @@ def evaluate_opportunity_batch(
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
     research = settings.research_config
+    scope_filters = (
+        OpportunityForwardEval.trade_date.in_(base_dates),
+        OpportunityForwardEval.algo_version == settings.algo_version,
+        OpportunityForwardEval.strategy_config_hash == strategy_hash,
+        OpportunityForwardEval.opportunity_calc_version == OPPORTUNITY_CALC_VERSION,
+        OpportunityForwardEval.opportunity_config_hash == opportunity_hash,
+        OpportunityForwardEval.research_version == RESEARCH_VERSION,
+        OpportunityForwardEval.research_config_hash == research_hash,
+        OpportunityForwardEval.eval_version == RESEARCH_EVAL_VERSION,
+        OpportunityForwardEval.entry_basis == research["stock"]["entry_basis"],
+    )
     bases = (
         db.execute(
             select(StockOpportunityDaily).where(
@@ -138,14 +149,27 @@ def evaluate_opportunity_batch(
                 StockOpportunityDaily.algo_version == settings.algo_version,
                 StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
                 StockOpportunityDaily.config_hash == opportunity_hash,
+                StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
                 StockOpportunityDaily.state.in_(STATES),
             )
         )
         .scalars()
         .all()
     )
+    counts = {
+        "base_rows": len(bases),
+        "eval_rows": 0,
+        "deleted_rows": 0,
+        "entry_nonexecutable": 0,
+        "benchmark_missing": 0,
+    }
     if not bases:
-        return {"base_rows": 0, "eval_rows": 0, "entry_nonexecutable": 0, "benchmark_missing": 0}
+        stats = replace_slice_rows_with_stats(
+            db, OpportunityForwardEval, (), scope_filters=scope_filters,
+            key_columns=OPPORTUNITY_KEY,
+        )
+        counts["deleted_rows"] = stats["deleted"]
+        return counts
     latest = db.scalar(select(func.max(StockDaily.trade_date)))
     dates = future_dates(db, base_dates, latest)
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
@@ -157,50 +181,52 @@ def evaluate_opportunity_batch(
         )
     ).all()
     regimes = {row.trade_date: row.regime for row in market_rows}
-    counts = {
-        "base_rows": len(bases),
-        "eval_rows": 0,
-        "entry_nonexecutable": 0,
-        "benchmark_missing": 0,
-    }
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)
     codes = sorted(by_code)
-    for offset in range(0, len(codes), 250):
-        chunk = codes[offset : offset + 250]
-        rows_by_code = _stock_rows(db, chunk, dates, strategy_hash)
-        payload = []
-        for code in chunk:
-            stock_rows = rows_by_code.get(code, {})
-            for base in by_code[code]:
-                forward = evaluate_stock_forward(base.trade_date, dates, stock_rows, benchmark)
-                counts["entry_nonexecutable"] += forward["entry_executable"] is False
-                counts["benchmark_missing"] += any(
-                    forward[f"ret{h}"] is not None and forward[f"benchmark_ret{h}"] is None
-                    for h in (5, 10, 20, 60)
-                )
-                payload.append(
-                    {
-                        "trade_date": base.trade_date,
-                        "ts_code": code,
-                        "algo_version": base.algo_version,
-                        "strategy_config_hash": strategy_hash,
-                        "opportunity_calc_version": base.calc_version,
-                        "opportunity_config_hash": opportunity_hash,
-                        "research_version": RESEARCH_VERSION,
-                        "research_config_hash": research_hash,
-                        "eval_version": RESEARCH_EVAL_VERSION,
-                        "entry_basis": research["stock"]["entry_basis"],
-                        "benchmark_code": research["benchmark_code"],
-                        "market_regime": regimes.get(base.trade_date),
-                        **{key: getattr(base, key) for key in SNAPSHOT_COLUMNS},
-                        **forward,
-                    }
-                )
-        counts["eval_rows"] += upsert_rows(db, OpportunityForwardEval, payload, OPPORTUNITY_KEY)
-        if progress:
-            progress(counts["eval_rows"])
+    def row_batches() -> Iterator[list[dict[str, Any]]]:
+        for offset in range(0, len(codes), 250):
+            chunk = codes[offset : offset + 250]
+            rows_by_code = _stock_rows(db, chunk, dates, strategy_hash)
+            payload = []
+            for code in chunk:
+                stock_rows = rows_by_code.get(code, {})
+                for base in by_code[code]:
+                    forward = evaluate_stock_forward(base.trade_date, dates, stock_rows, benchmark)
+                    counts["entry_nonexecutable"] += forward["entry_executable"] is False
+                    counts["benchmark_missing"] += any(
+                        forward[f"ret{h}"] is not None and forward[f"benchmark_ret{h}"] is None
+                        for h in (5, 10, 20, 60)
+                    )
+                    payload.append(
+                        {
+                            "trade_date": base.trade_date,
+                            "ts_code": code,
+                            "algo_version": base.algo_version,
+                            "strategy_config_hash": base.source_strategy_config_hash,
+                            "opportunity_calc_version": base.calc_version,
+                            "opportunity_config_hash": opportunity_hash,
+                            "research_version": RESEARCH_VERSION,
+                            "research_config_hash": research_hash,
+                            "eval_version": RESEARCH_EVAL_VERSION,
+                            "entry_basis": research["stock"]["entry_basis"],
+                            "benchmark_code": research["benchmark_code"],
+                            "market_regime": regimes.get(base.trade_date),
+                            **{key: getattr(base, key) for key in SNAPSHOT_COLUMNS},
+                            **forward,
+                        }
+                    )
+            yield payload
+
+    stats = replace_slice_rows_with_stats(
+        db, OpportunityForwardEval, row_batches(), scope_filters=scope_filters,
+        key_columns=OPPORTUNITY_KEY,
+    )
+    counts["eval_rows"] = stats["upserted"]
+    counts["deleted_rows"] = stats["deleted"]
+    if progress:
+        progress(counts["eval_rows"])
     return counts
 
 

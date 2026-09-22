@@ -4,6 +4,7 @@ import app.api.v1.research as research_api
 import pytest
 from app.core.db import get_db
 from app.main import app
+from app.services.job_guard import ResearchQueueConflictError
 from fastapi.testclient import TestClient
 
 
@@ -86,3 +87,18 @@ def test_research_type_is_validated_and_passed_to_analytics(monkeypatch, path) -
     assert valid.status_code == 200
     assert valid.json()["meta"]["research_type"] == "TREND"
     assert "TREND" in calls[0][0] or calls[0][1].get("research_type") == "TREND"
+
+
+def test_duplicate_research_queue_returns_conflict(monkeypatch) -> None:
+    def reject(*args, **kwargs):
+        raise ResearchQueueConflictError("active research job exists")
+
+    monkeypatch.setattr(research_api, "queue_research_eval", reject)
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        response = TestClient(app).post(
+            "/api/v1/research/evaluate", json={"start": "2026-05-01", "end": "2026-05-10"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 409
