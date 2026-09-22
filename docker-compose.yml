@@ -1,39 +1,21 @@
 services:
-  postgres:
-    image: postgres:17
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: stock_db
-      POSTGRES_USER: stock
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stock}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "127.0.0.1:5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stock -d stock_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-
   migration:
     build: .
     command: python -m alembic upgrade head
-    env_file: .env
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://stock:stock@postgres:5432/stock_db}
-    depends_on:
-      postgres:
-        condition: service_healthy
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
     restart: "no"
 
   backend:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://stock:stock@postgres:5432/stock_db}
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -53,9 +35,10 @@ services:
     build: .
     command: python -m app.cli worker
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://stock:stock@postgres:5432/stock_db}
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -64,12 +47,10 @@ services:
     build: .
     command: python -m app.cli scheduler
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql+psycopg://stock:stock@postgres:5432/stock_db}
+      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
-
-volumes:
-  pg_data:
