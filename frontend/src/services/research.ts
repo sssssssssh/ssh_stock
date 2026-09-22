@@ -11,6 +11,7 @@ import type {
 } from "../types";
 
 export type ResearchWindow = { start: string; end: string };
+export type ResearchType = "ALL" | "LEFT" | "RIGHT" | "TREND" | "POSITION";
 
 function query(window: ResearchWindow, extra: Record<string, string> = {}): string {
   return new URLSearchParams({ ...window, ...extra }).toString();
@@ -48,16 +49,16 @@ export function fetchTrendTopN(window: ResearchWindow): Promise<TrendTopNRow[]> 
   return request(`/research/trends/topn?${query(window)}`);
 }
 
-export function fetchOpportunityBuckets(window: ResearchWindow, field: string): Promise<ResearchBucketRow[]> {
-  return request(`/research/opportunities/buckets?${query(window, { field })}`);
+export function fetchOpportunityBuckets(window: ResearchWindow, field: string, researchType: ResearchType = "ALL"): Promise<ResearchBucketRow[]> {
+  return request(`/research/opportunities/buckets?${query(window, { field, research_type: researchType })}`);
 }
 
 export function fetchPositionStats(window: ResearchWindow): Promise<PositionStatsRow[]> {
   return request(`/research/positions/stats?${query(window)}`);
 }
 
-export function fetchContext(window: ResearchWindow, groupBy: string): Promise<ResearchBucketRow[]> {
-  return request(`/research/context?${query(window, { group_by: groupBy })}`);
+export function fetchContext(window: ResearchWindow, groupBy: string, researchType: ResearchType = "ALL"): Promise<ResearchBucketRow[]> {
+  return request(`/research/context?${query(window, { group_by: groupBy, research_type: researchType })}`);
 }
 
 export function queueResearchEvaluation(window: ResearchWindow): Promise<{ id: string; status: string }> {

@@ -7,6 +7,7 @@ from app.services.job_guard import (
     ActiveIngestionJobError,
     find_active_ingestion_job,
     recover_stale_ingestion_jobs,
+    recover_stale_research_jobs,
     reject_if_active_ingestion_job,
 )
 
@@ -29,6 +30,11 @@ class _FakeDb:
 
     def execute(self, _stmt):
         active = [row for row in self.rows if row.status in {"QUEUED", "RUNNING"}]
+        sql = str(_stmt.compile(compile_kwargs={"literal_binds": True}))
+        if "RESEARCH_EVAL" in sql:
+            active = [row for row in active if row.job_type == "RESEARCH_EVAL"]
+        else:
+            active = [row for row in active if row.job_type != "RESEARCH_EVAL"]
         return _FakeResult(active)
 
     def add(self, _row):
@@ -85,3 +91,21 @@ def test_find_active_job_ignores_recovered_stale_jobs() -> None:
 
     assert active is None
     assert stale.status == "FAILED"
+
+
+def test_research_stale_recovery_keeps_fresh_running() -> None:
+    now = datetime(2026, 9, 22, tzinfo=UTC)
+    stale_running = _job("RUNNING", now - timedelta(hours=2))
+    stale_running.job_type = "RESEARCH_EVAL"
+    stale_running.heartbeat_at = now - timedelta(minutes=30)
+    stale_queued = _job("QUEUED", now - timedelta(hours=25))
+    stale_queued.job_type = "RESEARCH_EVAL"
+    fresh = _job("RUNNING", now - timedelta(hours=1))
+    fresh.job_type = "RESEARCH_EVAL"
+    fresh.heartbeat_at = now - timedelta(minutes=2)
+    db = _FakeDb([stale_running, stale_queued, fresh])
+
+    assert recover_stale_research_jobs(db, now=now) == 2
+    assert stale_running.status == "FAILED"
+    assert stale_queued.status == "FAILED"
+    assert fresh.status == "RUNNING"

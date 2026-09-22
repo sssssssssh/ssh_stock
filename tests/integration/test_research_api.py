@@ -65,3 +65,24 @@ def test_research_bucket_whitelist_rejects_unknown_field() -> None:
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("path", ("/research/context", "/research/opportunities/buckets"))
+def test_research_type_is_validated_and_passed_to_analytics(monkeypatch, path) -> None:
+    calls = []
+    service = "context_stats" if path.endswith("context") else "bucket_stats"
+    monkeypatch.setattr(
+        research_api.analytics, service,
+        lambda *args, **kwargs: calls.append((args, kwargs)) or [],
+    )
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        client = TestClient(app)
+        invalid = client.get(f"/api/v1{path}?research_type=INVALID")
+        valid = client.get(f"/api/v1{path}?research_type=TREND")
+    finally:
+        app.dependency_overrides.clear()
+    assert invalid.status_code == 422
+    assert valid.status_code == 200
+    assert valid.json()["meta"]["research_type"] == "TREND"
+    assert "TREND" in calls[0][0] or calls[0][1].get("research_type") == "TREND"

@@ -237,3 +237,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Left Threshold 必须逐阈值动态重建 crossing，要求上一真实市场交易日 Opportunity 存在；不能复用生产 `left_reversal_new`。
 - TopN 是 event-level cohort，不是组合资金曲线；状态机参数改变不能靠过滤既有研究结果模拟。
 - `RESEARCH_EVAL` 是独立队列任务；失败只标记自身，不得影响 Daily/CatchUp。近期通过每日 65 交易日回看更新，较早修订靠手工区间重跑。
+- Transition maturity 要求 horizon 内连续完整的当前版本 `StockStateDaily`；缺失 State 属于 UNKNOWN，不得按未转化处理。`days_to_state` 只能在 Day1 起连续可信状态前缀中计算。
+- Research Job 的 stale QUEUED/RUNNING 必须恢复；Worker 和 Scheduler 均须清理 stale Research。
+- Research Forward Eval 自然键必须包含 Production strategy identity、calc version、opportunity/research identity；不同 `strategy_config_hash` 结果不得互相覆盖。Transition 与 Forward Eval 关联必须匹配完整 strategy/opportunity/research identity。
+- Context Analytics 必须明确 Universe：LEFT/RIGHT 使用对应事件，TREND/POSITION 使用 S4/S5；Opportunity Bucket 按研究类型筛选，不能在对应 Tab 默认混用全部 Opportunity。
+- Research 执行必须避开 active Production mutating job；Research 运行时 Worker 不得认领 Production mutating job。
+- Score bucket 按数值排序，UNKNOWN 最后；bounded 0~100 score 的 100 分归入最后一个 0~100 分段，非 bounded 动量保留负数分段。

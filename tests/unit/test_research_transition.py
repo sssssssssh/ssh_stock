@@ -45,13 +45,37 @@ def test_right_transition_uses_market_day_offsets_and_independent_failures() -> 
 
 def test_unmatured_transition_does_not_create_false_20_day_rate() -> None:
     dates = _days(9)
-    result = transition_outcome(dates[0], dates, {dates[3]: "S4"}, is_right=True)
+    result = transition_outcome(dates[0], dates, {day: "S4" for day in dates[1:]}, is_right=True)
     assert result["mature5"] is True
     assert result["mature10"] is False
     assert result["mature20"] is False
     assert result["reached_s4plus_5"] is True
     assert result["reached_s4plus_20"] is None
     assert result["fell_below_s3_20"] is None
+
+
+def test_transition_maturity_requires_continuous_current_state_rows() -> None:
+    dates = _days(21)
+    complete = {day: "S2" for day in dates[1:]}
+    result = transition_outcome(dates[0], dates, complete, is_right=False)
+    assert [result[f"mature{h}"] for h in (5, 10, 20)] == [True, True, True]
+
+    missing_day3 = {**complete, dates[2]: "S3", dates[4]: "S3"}
+    del missing_day3[dates[3]]
+    result = transition_outcome(dates[0], dates, missing_day3, is_right=False)
+    assert [result[f"mature{h}"] for h in (5, 10, 20)] == [False, False, False]
+    assert result["state5"] is None
+    assert result["reached_s3_5"] is None
+    assert result["days_to_s3"] == 2
+
+    missing_day3[dates[2]] = "S2"
+    result = transition_outcome(dates[0], dates, missing_day3, is_right=False)
+    assert result["days_to_s3"] is None
+
+    missing_day7 = dict(complete)
+    del missing_day7[dates[7]]
+    result = transition_outcome(dates[0], dates, missing_day7, is_right=False)
+    assert [result[f"mature{h}"] for h in (5, 10, 20)] == [True, False, False]
 
 
 def test_right_side_new_requires_consistent_state_transition() -> None:

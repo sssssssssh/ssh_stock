@@ -41,6 +41,12 @@ def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
             self.statement = statement
             return _ScalarResult(job)
 
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+        def scalar(self, statement):
+            return 0
+
         def add(self, row):
             return None
 
@@ -58,6 +64,33 @@ def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
     assert job.worker_id == "worker-a"
     assert job.heartbeat_at is not None
     assert db.commits == 1
+
+
+def test_worker_claim_filters_opposing_job_type_when_busy(monkeypatch) -> None:
+    class Db:
+        def __init__(self):
+            self.statement = None
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+        def execute(self, statement):
+            self.statement = statement
+            return _ScalarResult(None)
+
+    for research_allowed, production_allowed, excluded in (
+        (False, True, "RESEARCH_EVAL"),
+        (True, False, "recalculate"),
+    ):
+        monkeypatch.setattr(
+            worker_module, "research_can_run", lambda db, value=research_allowed: value
+        )
+        monkeypatch.setattr(
+            worker_module, "production_can_run", lambda db, value=production_allowed: value
+        )
+        db = Db()
+        assert claim_next_job(db, "worker-a") is None
+        assert excluded not in db.statement.compile().params["job_type_1"]
 
 
 def test_atomic_job_guard_uses_postgresql_advisory_lock() -> None:

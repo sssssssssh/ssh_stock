@@ -4,11 +4,17 @@ from datetime import date
 from statistics import mean, median
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session
 
 from app.models.market_data import OpportunityForwardEval, ResearchTransitionEval, ThemeForwardEval
-from app.services.analysis_identity import RESEARCH_EVAL_VERSION, RESEARCH_VERSION
+from app.services.analysis_identity import (
+    OPPORTUNITY_CALC_VERSION,
+    RESEARCH_EVAL_VERSION,
+    RESEARCH_VERSION,
+    THEME_CALC_VERSION,
+    TREND_CALC_VERSION,
+)
 from app.services.calc_metadata import config_hash
 
 HORIZONS = (5, 10, 20, 60)
@@ -32,7 +38,18 @@ OPPORTUNITY_BUCKETS = (
     "primary_theme_heat",
 )
 THEME_GROUPS = ("lifecycle",)
-THEME_BUCKETS = ("heat_score", "heat_momentum1", "heat_momentum3")
+THEME_BUCKETS = (
+    "heat_score", "moneyflow_score", "limit_strength_score", "heat_momentum1", "heat_momentum3"
+)
+BUCKET_FIELDS = {
+    **{field: {"bounded_100": True} for field in OPPORTUNITY_BUCKETS},
+    "heat_score": {"bounded_100": True},
+    "moneyflow_score": {"bounded_100": True},
+    "limit_strength_score": {"bounded_100": True},
+    "heat_momentum1": {"bounded_100": False},
+    "heat_momentum3": {"bounded_100": False},
+}
+RESEARCH_TYPES = ("ALL", "LEFT", "RIGHT", "TREND", "POSITION")
 
 
 class Cohort:
@@ -136,11 +153,17 @@ def _identity_filters(model: type, settings: Any) -> list[Any]:
     ]
     if model is OpportunityForwardEval or model is ThemeForwardEval:
         filters.append(model.eval_version == RESEARCH_EVAL_VERSION)
+        filters.append(model.strategy_config_hash == config_hash(settings.strategy))
     filters.append(model.opportunity_config_hash == config_hash(settings.opportunity_config))
     if model is OpportunityForwardEval or model is ResearchTransitionEval:
         filters.append(model.algo_version == settings.algo_version)
+    if model is OpportunityForwardEval:
+        filters.append(model.opportunity_calc_version == OPPORTUNITY_CALC_VERSION)
+    if model is ThemeForwardEval:
+        filters.append(model.theme_calc_version == THEME_CALC_VERSION)
     if model is ResearchTransitionEval:
         filters.append(model.strategy_config_hash == config_hash(settings.strategy))
+        filters.append(model.trend_calc_version == TREND_CALC_VERSION)
     return filters
 
 
@@ -242,23 +265,77 @@ def bucket_stats(
     *,
     model: type,
     field: str,
+    research_type: str = "ALL",
 ) -> list[dict[str, Any]]:
     allowed = OPPORTUNITY_BUCKETS if model is OpportunityForwardEval else THEME_BUCKETS
     if field not in allowed:
         raise ValueError(f"unsupported bucket field: {field}")
+    if research_type not in RESEARCH_TYPES:
+        raise ValueError(f"unsupported research_type: {research_type}")
+    bucket_states = {
+        "LEFT": ("S1", "S2"), "RIGHT": ("S3",),
+        "TREND": ("S4", "S5"), "POSITION": ("S4", "S5"),
+    }
+    extra = (
+        (OpportunityForwardEval.state.in_(bucket_states[research_type]),)
+        if model is OpportunityForwardEval and research_type != "ALL"
+        else ()
+    )
     size = settings.research_config["score_bucket_size"]
-    groups: dict[str, Cohort] = {}
-    for row in _read_rows(db, model, settings, start, end, columns=(field,)):
+    groups: dict[int | None, Cohort] = {}
+    for row in _read_rows(db, model, settings, start, end, columns=(field,), extra_filters=extra):
         score = row[field]
-        lower = int(float(score) // size) * size if score is not None else None
-        label = f"{lower}-{lower + size}" if lower is not None else "UNKNOWN"
-        groups.setdefault(label, Cohort(settings.research_config["min_sample_warning"])).add(row)
-    return [
-        {"group": label, **cohort.result()}
-        for label, cohort in sorted(
-            groups.items(), key=lambda item: (item[0] == "UNKNOWN", item[0])
-        )
-    ]
+        if score is None:
+            lower = None
+        elif BUCKET_FIELDS[field]["bounded_100"] and float(score) == 100:
+            lower = ((100 - 1) // size) * size
+        else:
+            lower = int(float(score) // size) * size
+        groups.setdefault(lower, Cohort(settings.research_config["min_sample_warning"])).add(row)
+    result = []
+    for lower, cohort in sorted(
+        groups.items(), key=lambda item: (item[0] is None, item[0] or 0)
+    ):
+        if lower is None:
+            label = "UNKNOWN"
+        else:
+            upper = min(lower + size, 100) if BUCKET_FIELDS[field]["bounded_100"] else lower + size
+            label = f"{lower}-{upper}"
+        result.append({"group": label, **cohort.result()})
+    return result
+
+
+def _universe_filters(settings: Any, research_type: str) -> tuple[Any, ...]:
+    if research_type not in RESEARCH_TYPES:
+        raise ValueError(f"unsupported research_type: {research_type}")
+    forward = OpportunityForwardEval
+    if research_type == "ALL":
+        return ()
+    if research_type in {"TREND", "POSITION"}:
+        return (forward.state.in_(("S4", "S5")),)
+    if research_type == "LEFT":
+        event_type = "LEFT_THRESHOLD_CROSS"
+        event_key = f"LEFT_{settings.opportunity_config['left_reversal']['strong_score']}"
+    else:
+        event_type = "RIGHT_SIDE_NEW"
+        event_key = "RIGHT_SIDE_NEW"
+    event = ResearchTransitionEval
+    return (
+        exists(
+            select(event.id).where(
+                event.event_trade_date == forward.trade_date,
+                event.ts_code == forward.ts_code,
+                event.algo_version == forward.algo_version,
+                event.strategy_config_hash == forward.strategy_config_hash,
+                event.opportunity_config_hash == forward.opportunity_config_hash,
+                event.research_version == forward.research_version,
+                event.research_config_hash == forward.research_config_hash,
+                event.event_type == event_type,
+                event.event_key == event_key,
+                event.trend_calc_version == TREND_CALC_VERSION,
+            )
+        ),
+    )
 
 
 def topn_stats(
@@ -315,6 +392,7 @@ def context_stats(
     start: date | None,
     end: date | None,
     group_by: str,
+    research_type: str = "ALL",
 ) -> list[dict[str, Any]]:
     if group_by not in {
         "market_regime",
@@ -324,7 +402,10 @@ def context_stats(
     }:
         raise ValueError(f"unsupported group_by: {group_by}")
     return grouped_stats(
-        _read_rows(db, OpportunityForwardEval, settings, start, end, columns=(group_by,)),
+        _read_rows(
+            db, OpportunityForwardEval, settings, start, end,
+            columns=(group_by,), extra_filters=_universe_filters(settings, research_type),
+        ),
         group_by,
         settings.research_config["min_sample_warning"],
     )
@@ -385,6 +466,8 @@ def transition_stats(
             (forward.trade_date == transition.event_trade_date)
             & (forward.ts_code == transition.ts_code)
             & (forward.algo_version == transition.algo_version)
+            & (forward.strategy_config_hash == transition.strategy_config_hash)
+            & (forward.opportunity_calc_version == OPPORTUNITY_CALC_VERSION)
             & (forward.opportunity_config_hash == transition.opportunity_config_hash)
             & (forward.research_version == transition.research_version)
             & (forward.research_config_hash == transition.research_config_hash)

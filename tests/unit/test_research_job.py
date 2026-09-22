@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import app.jobs.research_job as research_job
@@ -7,6 +7,7 @@ import pytest
 
 
 def test_research_job_processes_batches_and_records_progress(monkeypatch) -> None:
+    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
     settings = SimpleNamespace(research_config={"batch_trade_days": 20})
     monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -56,6 +57,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
 
 
 def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
+    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
     monkeypatch.setattr(
         research_job,
         "get_settings",
@@ -106,6 +108,8 @@ def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) 
         ),
     )
     calls = []
+    monkeypatch.setattr(scheduler_module, "recover_stale_research_jobs", lambda db: 0)
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: True)
     monkeypatch.setattr(
         scheduler_module,
         "queue_research_eval",
@@ -113,3 +117,76 @@ def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) 
     )
     assert scheduler_module.run_scheduled_research(db, dates[0]) is True
     assert calls == [(dates[-1], dates[0], {"mode": "scheduler"})]
+
+
+def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch) -> None:
+    calls = []
+    monkeypatch.setattr(
+        scheduler_module, "recover_stale_research_jobs", lambda db: calls.append("recover")
+    )
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: False)
+    monkeypatch.setattr(
+        scheduler_module, "queue_research_eval", lambda *args, **kwargs: calls.append("queue")
+    )
+    assert scheduler_module.run_scheduled_research(object(), date(2026, 9, 22)) is False
+    assert calls == ["recover"]
+
+
+def test_scheduler_requeues_after_recovering_stale_research(monkeypatch) -> None:
+    now = datetime.now(UTC)
+    job = SimpleNamespace(
+        job_type="RESEARCH_EVAL", status="RUNNING",
+        started_at=now - timedelta(hours=2),
+        heartbeat_at=now - timedelta(minutes=30),
+        finished_at=None, error_message=None,
+    )
+    dates = [date(2026, 9, 21), date(2026, 9, 18)]
+
+    class Db:
+        def execute(self, statement):
+            rows = [job] if "job_run" in str(statement) and job.status == "RUNNING" else dates
+            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+
+        def scalar(self, statement):
+            if "job_run" in str(statement):
+                return int(job.status in {"QUEUED", "RUNNING"})
+            return dates[0]
+
+        def add(self, value):
+            pass
+
+        def commit(self):
+            pass
+
+    calls = []
+    monkeypatch.setattr(
+        scheduler_module, "queue_research_eval", lambda *args, **kwargs: calls.append(args)
+    )
+    assert scheduler_module.run_scheduled_research(Db(), dates[0]) is True
+    assert job.status == "FAILED"
+    assert len(calls) == 1
+
+
+def test_research_worker_defers_when_production_queued_after_claim(monkeypatch) -> None:
+    monkeypatch.setattr(research_job, "research_can_run", lambda db: False)
+
+    class Db:
+        def __init__(self):
+            self.commits = 0
+
+        def add(self, job):
+            pass
+
+        def commit(self):
+            self.commits += 1
+
+    db = Db()
+    job = SimpleNamespace(
+        status="RUNNING", step="claimed", worker_id="worker-a",
+        heartbeat_at=date(2026, 9, 22),
+    )
+    assert research_job.run_research_eval(db, job) == {}
+    assert (job.status, job.step, job.worker_id, job.heartbeat_at) == (
+        "QUEUED", "waiting for production jobs", None, None
+    )
+    assert db.commits == 1

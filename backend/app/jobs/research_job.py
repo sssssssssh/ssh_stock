@@ -8,6 +8,7 @@ from app.models.job import JobRun
 from app.repositories.job_run import start_job, update_job
 from app.services.analysis_identity import RESEARCH_VERSION
 from app.services.calc_metadata import config_hash
+from app.services.job_guard import research_can_run
 from app.services.research.opportunity_eval import evaluate_opportunity_batch, trade_batches
 from app.services.research.theme_eval import evaluate_theme_batch
 from app.services.research.transition_eval import evaluate_transition_batch
@@ -59,6 +60,14 @@ def queue_research_eval(
 
 
 def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
+    if not research_can_run(db):
+        job.status = "QUEUED"
+        job.step = "waiting for production jobs"
+        job.worker_id = None
+        job.heartbeat_at = None
+        db.add(job)
+        db.commit()
+        return {}
     settings = get_settings()
     metadata = dict(job.job_metadata or {})
     start, end = date.fromisoformat(metadata["start"]), date.fromisoformat(metadata["end"])

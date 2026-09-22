@@ -77,9 +77,10 @@ def transition_outcome(
         future = []
     else:
         future = market_dates[market_dates.index(event_date) + 1 :]
-    observed = future[:20]
-    for offset, day in enumerate(observed, start=1):
-        state = states.get(day)
+    for offset, day in enumerate(future[:20], start=1):
+        if day not in states:
+            break
+        state = states[day]
         if state == "S3" and result["days_to_s3"] is None:
             result["days_to_s3"] = offset
         if state in {"S4", "S5"} and result["days_to_s4plus"] is None:
@@ -87,10 +88,10 @@ def transition_outcome(
         if state == "S5" and result["days_to_s5"] is None:
             result["days_to_s5"] = offset
     for horizon in (5, 10, 20):
-        mature = len(future) >= horizon
+        mature = len(future) >= horizon and all(day in states for day in future[:horizon])
         result[f"mature{horizon}"] = mature
         result[f"state{horizon}"] = states.get(future[horizon - 1]) if mature else None
-        window = [states.get(day) for day in future[:horizon]] if mature else []
+        window = [states[day] for day in future[:horizon]] if mature else []
         for target, matches in (
             ("s3", {"S3"}),
             ("s4plus", {"S4", "S5"}),
@@ -100,7 +101,7 @@ def transition_outcome(
                 any(state in matches for state in window) if mature else None
             )
     if result["mature20"]:
-        window20 = [states.get(day) for day in future[:20]]
+        window20 = [states[day] for day in future[:20]]
         result["hit_s0_20"] = "S0" in window20
         result["hit_s6_20"] = "S6" in window20
         result["fell_below_s3_20"] = (

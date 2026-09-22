@@ -13,6 +13,8 @@ from app.models.market_data import StockDaily, TradeCalendar
 from app.services.job_guard import (
     ActiveIngestionJobError,
     create_queued_ingestion_job,
+    recover_stale_research_jobs,
+    research_can_run,
 )
 
 
@@ -101,6 +103,9 @@ def run_scheduled_basic_info(db, provider: object | None) -> bool:
 
 
 def run_scheduled_research(db, target_date: date) -> bool:
+    recover_stale_research_jobs(db)
+    if not research_can_run(db):
+        return False
     active = db.scalar(
         select(func.count())
         .select_from(JobRun)

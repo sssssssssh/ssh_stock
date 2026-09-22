@@ -108,6 +108,7 @@ def opportunity_research_stats(
 @router.get("/opportunities/buckets")
 def opportunity_research_buckets(
     field: str = "opportunity_score",
+    research_type: str = "ALL",
     start: date | None = None,
     end: date | None = None,
     db: Session = Depends(get_db),
@@ -115,11 +116,14 @@ def opportunity_research_buckets(
     meta = _research_meta(start, end)
     if field not in analytics.OPPORTUNITY_BUCKETS:
         raise HTTPException(status_code=422, detail="unsupported bucket field")
+    if research_type not in analytics.RESEARCH_TYPES:
+        raise HTTPException(status_code=422, detail="unsupported research_type")
     return envelope(
         analytics.bucket_stats(
-            db, get_settings(), start, end, model=OpportunityForwardEval, field=field
+            db, get_settings(), start, end, model=OpportunityForwardEval, field=field,
+            research_type=research_type,
         ),
-        {**meta, "field": field},
+        {**meta, "field": field, "research_type": research_type},
     )
 
 
@@ -226,6 +230,7 @@ def theme_lifecycle(
 @router.get("/context")
 def research_context(
     group_by: str = "market_regime",
+    research_type: str = "ALL",
     start: date | None = None,
     end: date | None = None,
     db: Session = Depends(get_db),
@@ -238,9 +243,11 @@ def research_context(
         "extension_risk",
     }:
         raise HTTPException(status_code=422, detail="unsupported group_by")
+    if research_type not in analytics.RESEARCH_TYPES:
+        raise HTTPException(status_code=422, detail="unsupported research_type")
     return envelope(
-        analytics.context_stats(db, get_settings(), start, end, group_by),
-        {**meta, "group_by": group_by},
+        analytics.context_stats(db, get_settings(), start, end, group_by, research_type),
+        {**meta, "group_by": group_by, "research_type": research_type},
     )
 
 

@@ -3,15 +3,22 @@ from types import SimpleNamespace
 
 import pytest
 from app.core.config import get_settings
-from app.models.market_data import OpportunityForwardEval, ThemeForwardEval
+from app.models.market_data import (
+    OpportunityForwardEval,
+    ResearchTransitionEval,
+    ThemeForwardEval,
+)
 from app.services.analysis_identity import RESEARCH_EVAL_VERSION, RESEARCH_VERSION
 from app.services.calc_metadata import config_hash
 from app.services.research.analytics import (
     Cohort,
     _quantile,
+    bucket_stats,
+    context_stats,
     grouped_stats,
     research_status,
     topn_stats,
+    transition_stats,
 )
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -88,6 +95,7 @@ def test_topn_ties_are_stable_by_code_for_stock_and_theme() -> None:
     common = {
         "trade_date": day,
         "opportunity_config_hash": opportunity_hash,
+        "strategy_config_hash": config_hash(settings.strategy),
         "research_version": RESEARCH_VERSION,
         "research_config_hash": research_hash,
         "eval_version": RESEARCH_EVAL_VERSION,
@@ -148,3 +156,117 @@ def test_status_uses_theme_evaluation_date_when_stock_eval_is_empty() -> None:
 
     result = research_status(Db(), get_settings())
     assert result["latest_evaluated_market_date"] == date(2026, 9, 18)
+
+
+def test_strategy_identity_and_context_event_universes_do_not_mix() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    ResearchTransitionEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 1, 5)
+    strategy_hash = config_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    research_hash = config_hash(settings.research_config)
+    common = {
+        "trade_date": day,
+        "algo_version": settings.algo_version,
+        "opportunity_calc_version": "opportunity_v1",
+        "opportunity_config_hash": opportunity_hash,
+        "research_version": RESEARCH_VERSION,
+        "research_config_hash": research_hash,
+        "eval_version": RESEARCH_EVAL_VERSION,
+        "entry_basis": "NEXT_OPEN",
+        "benchmark_code": "000300.SH",
+        "mature5": True,
+        "entry_executable": True,
+        "exit_executable5": True,
+        "ret5": 0.1,
+    }
+    samples = (
+        ("LEFT.SZ", "S2", "LEFT_REVERSAL", "LEFT_ONLY", strategy_hash),
+        ("RIGHT.SZ", "S3", "RIGHT_SIDE_NEW", "RIGHT_ONLY", strategy_hash),
+        ("TREND.SZ", "S4", "TREND", "TREND_ONLY", strategy_hash),
+        ("POSITION.SZ", "S5", "STRONG_TREND", "POSITION_ONLY", strategy_hash),
+        ("LEFT.SZ", "S2", "LEFT_REVERSAL", "OLD_STRATEGY", "old-strategy-hash"),
+    )
+    with Session(engine) as db:
+        for index, (code, state, stage, regime, source_hash) in enumerate(samples, start=1):
+            db.add(OpportunityForwardEval(
+                id=index, ts_code=code, state=state, opportunity_stage=stage,
+                market_regime=regime, strategy_config_hash=source_hash, **common,
+            ))
+        for index, (code, kind, key, state) in enumerate((
+            ("LEFT.SZ", "LEFT_THRESHOLD_CROSS", "LEFT_75", "S2"),
+            ("RIGHT.SZ", "RIGHT_SIDE_NEW", "RIGHT_SIDE_NEW", "S3"),
+        ), start=1):
+            db.add(ResearchTransitionEval(
+                id=index, event_trade_date=day, ts_code=code, event_type=kind, event_key=key,
+                source_state=state, algo_version=settings.algo_version,
+                trend_calc_version="trend_v1", strategy_config_hash=strategy_hash,
+                opportunity_config_hash=opportunity_hash, research_version=RESEARCH_VERSION,
+                research_config_hash=research_hash,
+            ))
+        db.commit()
+        assert context_stats(db, settings, day, day, "market_regime", "LEFT")[0][
+            "group"
+        ] == "LEFT_ONLY"
+        assert context_stats(db, settings, day, day, "market_regime", "RIGHT")[0][
+            "group"
+        ] == "RIGHT_ONLY"
+        assert {row["group"] for row in context_stats(
+            db, settings, day, day, "market_regime", "TREND"
+        )} == {"TREND_ONLY", "POSITION_ONLY"}
+        assert {row["group"] for row in context_stats(
+            db, settings, day, day, "market_regime", "POSITION"
+        )} == {"TREND_ONLY", "POSITION_ONLY"}
+        assert sum(row["event_count"] for row in context_stats(
+            db, settings, day, day, "market_regime", "ALL"
+        )) == 4
+        assert next(row for row in transition_stats(
+            db, settings, day, day, left=True
+        ) if row["group"] == "LEFT_75")["event_count"] == 1
+
+
+def test_bucket_numeric_order_bounded_100_and_negative_momentum() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    ThemeForwardEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 1, 5)
+    common = {
+        "trade_date": day,
+        "strategy_config_hash": config_hash(settings.strategy),
+        "opportunity_config_hash": config_hash(settings.opportunity_config),
+        "research_version": RESEARCH_VERSION,
+        "research_config_hash": config_hash(settings.research_config),
+        "eval_version": RESEARCH_EVAL_VERSION,
+        "benchmark_code": "000300.SH",
+    }
+    with Session(engine) as db:
+        for index, score in enumerate((0, 9.9, 10, 99.9, 100, None)):
+            db.add(OpportunityForwardEval(
+                id=index + 1, ts_code=f"{index}.SZ", algo_version=settings.algo_version,
+                opportunity_calc_version="opportunity_v1", entry_basis="NEXT_OPEN",
+                state="S4" if index < 5 else "S2", opportunity_stage="TREND",
+                trend_rank_score=score, **common,
+            ))
+        for index, score in enumerate((-15, -5, 5)):
+            db.add(ThemeForwardEval(
+                id=index + 1, theme_code=f"{index}.TI", theme_calc_version="theme_v1",
+                entry_basis="NEXT_CLOSE", heat_momentum3=score, **common,
+            ))
+        db.commit()
+        buckets = bucket_stats(
+            db, settings, day, day, model=OpportunityForwardEval,
+            field="trend_rank_score", research_type="TREND",
+        )
+        assert [row["group"] for row in buckets] == [
+            "0-10", "10-20", "90-100"
+        ]
+        assert [row["event_count"] for row in buckets] == [2, 1, 2]
+        assert [row["group"] for row in bucket_stats(
+            db, settings, day, day, model=OpportunityForwardEval, field="trend_rank_score"
+        )] == ["0-10", "10-20", "90-100", "UNKNOWN"]
+        assert [row["group"] for row in bucket_stats(
+            db, settings, day, day, model=ThemeForwardEval, field="heat_momentum3"
+        )] == ["-20--10", "-10-0", "0-10"]

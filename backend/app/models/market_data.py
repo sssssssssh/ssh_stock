@@ -747,6 +747,8 @@ class OpportunityForwardEval(_ResearchForwardFields, Base):
             "trade_date",
             "ts_code",
             "algo_version",
+            "strategy_config_hash",
+            "opportunity_calc_version",
             "opportunity_config_hash",
             "research_version",
             "research_config_hash",
@@ -764,6 +766,7 @@ class OpportunityForwardEval(_ResearchForwardFields, Base):
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     opportunity_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     research_version: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -801,6 +804,8 @@ class ThemeForwardEval(_ResearchForwardFields, Base):
         UniqueConstraint(
             "trade_date",
             "theme_code",
+            "strategy_config_hash",
+            "theme_calc_version",
             "opportunity_config_hash",
             "research_version",
             "research_config_hash",
@@ -815,6 +820,7 @@ class ThemeForwardEval(_ResearchForwardFields, Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     theme_code: Mapped[str] = mapped_column(String(32), nullable=False)
+    strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     theme_calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     opportunity_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     research_version: Mapped[str] = mapped_column(String(32), nullable=False)

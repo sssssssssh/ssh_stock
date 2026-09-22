@@ -42,6 +42,8 @@ SNAPSHOT_COLUMNS = (
 THEME_KEY = (
     "trade_date",
     "theme_code",
+    "strategy_config_hash",
+    "theme_calc_version",
     "opportunity_config_hash",
     "research_version",
     "research_config_hash",
@@ -58,6 +60,7 @@ def evaluate_theme_batch(
     progress: Callable[[int], None] | None = None,
 ) -> dict[str, int]:
     research = settings.research_config
+    strategy_hash = config_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(research)
     bases = (
@@ -118,6 +121,7 @@ def evaluate_theme_batch(
                     {
                         "trade_date": base.trade_date,
                         "theme_code": code,
+                        "strategy_config_hash": strategy_hash,
                         "theme_calc_version": base.calc_version,
                         "opportunity_config_hash": opportunity_hash,
                         "research_version": RESEARCH_VERSION,

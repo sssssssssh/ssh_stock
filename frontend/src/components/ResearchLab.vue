@@ -91,19 +91,19 @@ async function refresh(): Promise<void> {
         ]);
         break;
       case "left":
-        groups = await Promise.all([fetchLeftThresholds(window), fetchContext(window, "market_regime")]);
+        groups = await Promise.all([fetchLeftThresholds(window), fetchContext(window, "market_regime", "LEFT")]);
         break;
       case "right":
-        groups = await Promise.all([fetchRightTransitions(window), fetchContext(window, "market_regime")]);
+        groups = await Promise.all([fetchRightTransitions(window), fetchContext(window, "market_regime", "RIGHT")]);
         break;
       case "trend":
         groups = await Promise.all([
-          fetchTrendTopN(window), fetchOpportunityBuckets(window, "trend_rank_score"),
-          fetchContext(window, "market_regime")
+          fetchTrendTopN(window), fetchOpportunityBuckets(window, "trend_rank_score", "TREND"),
+          fetchContext(window, "market_regime", "TREND")
         ]);
         break;
       default:
-        groups = await Promise.all([fetchPositionStats(window), fetchContext(window, "extension_risk")]);
+        groups = await Promise.all([fetchPositionStats(window), fetchContext(window, "extension_risk", "POSITION")]);
     }
     if (current !== requestId) return;
     status.value = nextStatus;

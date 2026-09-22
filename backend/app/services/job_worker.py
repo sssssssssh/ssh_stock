@@ -23,7 +23,15 @@ from app.providers.logging_provider import LoggingMarketDataProvider
 from app.providers.tushare_provider import TushareProvider
 from app.repositories.job_run import touch_job_heartbeat, update_job
 from app.services.dirty import recover_stale_processing_ranges
-from app.services.job_guard import recover_stale_ingestion_jobs, scheduler_setting
+from app.services.job_guard import (
+    PRODUCTION_MUTATING_JOB_TYPES,
+    _acquire_ingestion_advisory_lock,
+    production_can_run,
+    recover_stale_ingestion_jobs,
+    recover_stale_research_jobs,
+    research_can_run,
+    scheduler_setting,
+)
 from app.services.quality.history_quality import (
     HistoricalDataQualityService,
     HistoricalQualitySummary,
@@ -46,12 +54,20 @@ def worker_identity() -> str:
 
 
 def claim_next_job(db: Session, worker_id: str) -> uuid.UUID | None:
+    _acquire_ingestion_advisory_lock(db)
+    allowed = list(WORKER_JOB_TYPES)
+    if not research_can_run(db):
+        allowed.remove(RESEARCH_JOB_TYPE)
+    if not production_can_run(db):
+        allowed = [
+            job_type for job_type in allowed if job_type not in PRODUCTION_MUTATING_JOB_TYPES
+        ]
     job = (
         db.execute(
             select(JobRun)
             .where(
                 JobRun.status == "QUEUED",
-                JobRun.job_type.in_(WORKER_JOB_TYPES),
+                JobRun.job_type.in_(allowed),
             )
             .order_by(JobRun.started_at, JobRun.id)
             .with_for_update(skip_locked=True)
@@ -181,14 +197,17 @@ def run_worker() -> None:
             now = time.monotonic()
             if now - last_recovery >= recovery_interval:
                 recovered_jobs = recover_stale_ingestion_jobs(db)
+                recovered_research = recover_stale_research_jobs(db)
                 recovered_dirty = recover_stale_processing_ranges(
                     db,
                     stale_minutes=float(scheduler_setting("dirty_processing_timeout_minutes", 30)),
                 )
                 logger.info(
-                    "worker recovery id={} recovered_jobs={} recovered_dirty={}",
+                    "worker recovery id={} recovered_jobs={} "
+                    "recovered_research={} recovered_dirty={}",
                     worker_id,
                     recovered_jobs,
+                    recovered_research,
                     recovered_dirty,
                 )
                 last_recovery = now

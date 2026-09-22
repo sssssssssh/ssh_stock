@@ -18,6 +18,8 @@ INGESTION_JOB_TYPES = (
     "catchup",
 )
 ACTIVE_JOB_STATUSES = ("QUEUED", "RUNNING")
+RESEARCH_JOB_TYPE = "RESEARCH_EVAL"
+PRODUCTION_MUTATING_JOB_TYPES = ("daily", "sync_basic", "backfill", "recalculate", "catchup")
 INGESTION_ADVISORY_LOCK_KEY = 7_307_202_609_15
 
 
@@ -61,6 +63,47 @@ def recover_stale_ingestion_jobs(
     running_heartbeat_timeout_minutes: float | None = None,
     now: datetime | None = None,
 ) -> int:
+    return _recover_stale_jobs(
+        db,
+        active_ingestion_jobs(db),
+        stale_job_hours=stale_job_hours,
+        queued_stale_hours=queued_stale_hours,
+        running_heartbeat_timeout_minutes=running_heartbeat_timeout_minutes,
+        now=now,
+    )
+
+
+def recover_stale_research_jobs(
+    db: Session,
+    *,
+    queued_stale_hours: float | None = None,
+    running_heartbeat_timeout_minutes: float | None = None,
+    now: datetime | None = None,
+) -> int:
+    jobs = db.execute(
+        select(JobRun).where(
+            JobRun.job_type == RESEARCH_JOB_TYPE,
+            JobRun.status.in_(ACTIVE_JOB_STATUSES),
+        )
+    ).scalars().all()
+    return _recover_stale_jobs(
+        db,
+        jobs,
+        queued_stale_hours=queued_stale_hours,
+        running_heartbeat_timeout_minutes=running_heartbeat_timeout_minutes,
+        now=now,
+    )
+
+
+def _recover_stale_jobs(
+    db: Session,
+    jobs: list[JobRun],
+    *,
+    stale_job_hours: float | None = None,
+    queued_stale_hours: float | None = None,
+    running_heartbeat_timeout_minutes: float | None = None,
+    now: datetime | None = None,
+) -> int:
     queued_hours = float(
         queued_stale_hours
         or stale_job_hours
@@ -75,7 +118,7 @@ def recover_stale_ingestion_jobs(
     if current.tzinfo is None:
         current = current.replace(tzinfo=UTC)
     recovered = 0
-    for job in active_ingestion_jobs(db):
+    for job in jobs:
         original_status = job.status
         reference_at = (
             (getattr(job, "heartbeat_at", None) or job.started_at)
@@ -105,6 +148,24 @@ def recover_stale_ingestion_jobs(
     if recovered:
         db.commit()
     return recovered
+
+
+def research_can_run(db: Session) -> bool:
+    return not bool(db.scalar(
+        select(func.count()).select_from(JobRun).where(
+            JobRun.job_type.in_(PRODUCTION_MUTATING_JOB_TYPES),
+            JobRun.status.in_(ACTIVE_JOB_STATUSES),
+        )
+    ))
+
+
+def production_can_run(db: Session) -> bool:
+    return not bool(db.scalar(
+        select(func.count()).select_from(JobRun).where(
+            JobRun.job_type == RESEARCH_JOB_TYPE,
+            JobRun.status == "RUNNING",
+        )
+    ))
 
 
 def find_active_ingestion_job(
