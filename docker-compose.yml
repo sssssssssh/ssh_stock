@@ -20,7 +20,7 @@ services:
       migration:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:9034:8000"
     healthcheck:
       test:
         - CMD
