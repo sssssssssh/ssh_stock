@@ -289,6 +289,69 @@ def test_theme_member_normalizer_keeps_all_members_when_flags_are_empty() -> Non
     assert all(row["is_new"] is None for row in rows)
 
 
+def test_theme_member_normalizer_applies_is_new_per_theme() -> None:
+    rows = normalize_theme_members(
+        pd.DataFrame(
+            [
+                {"ts_code": "A.TI", "con_code": "000001.SZ", "is_new": "Y"},
+                {"ts_code": "A.TI", "con_code": "000002.SZ", "is_new": "N"},
+                {"ts_code": "B.TI", "con_code": "000003.SZ", "is_new": None},
+                {"ts_code": "B.TI", "con_code": "000004.SZ", "is_new": None},
+            ]
+        ),
+        date(2026, 9, 23),
+    )
+
+    by_theme = {
+        theme_code: [row for row in rows if row["theme_code"] == theme_code]
+        for theme_code in {row["theme_code"] for row in rows}
+    }
+    assert [row["ts_code"] for row in by_theme["A.TI"]] == ["000001.SZ"]
+    assert by_theme["A.TI"][0]["is_new"] is True
+    assert {row["ts_code"] for row in by_theme["B.TI"]} == {
+        "000003.SZ",
+        "000004.SZ",
+    }
+    assert all(row["is_new"] is None for row in by_theme["B.TI"])
+
+
+def test_theme_member_normalizer_all_n_does_not_filter_unflagged_theme() -> None:
+    rows = normalize_theme_members(
+        pd.DataFrame(
+            [
+                {"ts_code": "A.TI", "con_code": "000001.SZ", "is_new": "N"},
+                {"ts_code": "A.TI", "con_code": "000002.SZ", "is_new": "N"},
+                {"ts_code": "B.TI", "con_code": "000003.SZ", "is_new": None},
+                {"ts_code": "B.TI", "con_code": "000004.SZ", "is_new": ""},
+            ]
+        ),
+        date(2026, 9, 23),
+    )
+
+    assert {row["theme_code"] for row in rows} == {"B.TI"}
+    assert {row["ts_code"] for row in rows} == {"000003.SZ", "000004.SZ"}
+    assert all(row["is_new"] is None for row in rows)
+
+
+def test_theme_member_normalizer_drops_missing_required_codes() -> None:
+    rows = normalize_theme_members(
+        pd.DataFrame(
+            [
+                {"ts_code": None, "con_code": "000001.SZ", "is_new": "Y"},
+                {"ts_code": "", "con_code": "000002.SZ", "is_new": "Y"},
+                {"ts_code": "A.TI", "con_code": None, "is_new": "Y"},
+                {"ts_code": "A.TI", "con_code": "", "is_new": "Y"},
+                {"ts_code": "B.TI", "con_code": "000003.SZ", "is_new": None},
+            ]
+        ),
+        date(2026, 9, 23),
+    )
+
+    assert [(row["theme_code"], row["ts_code"]) for row in rows] == [
+        ("B.TI", "000003.SZ")
+    ]
+
+
 def test_complete_member_snapshot_is_pass(monkeypatch) -> None:
     codes = ["A.TI", "B.TI", "C.TI"]
     db = _SnapshotDb([(code, 1) for code in codes])

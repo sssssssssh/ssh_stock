@@ -86,6 +86,39 @@ def test_stock_limit_persists_only_target_stock_universe(monkeypatch) -> None:
     assert len(diagnostics["extra_source_codes"]) == 100
 
 
+def test_stock_limit_empty_universe_refuses_destructive_reconcile(monkeypatch) -> None:
+    target = date(2026, 9, 4)
+    quality = []
+    _patch_dependencies(monkeypatch, [], quality)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    StockLimitDaily.__table__.create(engine)
+
+    with Session(engine) as db:
+        db.add(
+            StockLimitDaily(
+                trade_date=target,
+                ts_code="000001.SZ",
+                pre_close=10,
+                up_limit=11,
+                down_limit=9,
+            )
+        )
+        db.commit()
+
+        with pytest.raises(ValueError, match="authoritative universe is empty"):
+            IngestionService(db, _Provider(_frame([], target))).sync_stock_limit(target)
+
+        stored = db.execute(
+            select(StockLimitDaily).where(
+                StockLimitDaily.trade_date == target,
+                StockLimitDaily.ts_code == "000001.SZ",
+            )
+        ).scalar_one_or_none()
+
+    assert stored is not None
+    assert quality == []
+
+
 def test_stock_limit_low_coverage_still_blocks(monkeypatch) -> None:
     target = date(2026, 9, 4)
     expected = [f"{index:06}.SZ" for index in range(100)]

@@ -769,6 +769,10 @@ function metadataText(job: JobRun) {
   const stage = typeof job.metadata.stage === "string" ? job.metadata.stage : null;
   const current =
     typeof job.metadata.current_trade_date === "string" ? job.metadata.current_trade_date : null;
+  const deferredDate =
+    typeof job.metadata.deferred_trade_date === "string"
+      ? job.metadata.deferred_trade_date
+      : null;
   const completed =
     typeof job.metadata.completed_open_days === "number" ? job.metadata.completed_open_days : null;
   const currentIndex =
@@ -786,7 +790,10 @@ function metadataText(job: JobRun) {
     typeof job.metadata.factor_chunk_end === "string" ? job.metadata.factor_chunk_end : null;
   const skippedRawDays =
     typeof job.metadata.skipped_raw_days === "number" ? job.metadata.skipped_raw_days : 0;
-  const isDailyStage = stage === "daily" || Boolean(job.step?.startsWith("30 sync daily"));
+  const isDailyStage =
+    stage === "daily" ||
+    stage === "eod_deferred" ||
+    Boolean(job.step?.startsWith("30 sync daily"));
   const datePart = start && end ? `${start} 到 ${end}` : job.target_trade_date || "--";
   const stagePart = stage && stage !== "daily" ? ` / ${jobStageText(job)}` : "";
   const chunkPart = factorChunkIndex !== null && factorChunkCount !== null
@@ -805,7 +812,10 @@ function metadataText(job: JobRun) {
     : "";
   const totalPart = !isDailyStage && total !== null ? ` / 覆盖 ${total} 个交易日` : "";
   const currentPart = isDailyStage && current ? ` / 当前 ${current}` : "";
-  return `${datePart}${stagePart}${chunkPart}${chunkDatePart}${progressPart}${skippedPart}${totalPart}${currentPart}`;
+  const deferredPart = stage === "eod_deferred" && deferredDate
+    ? ` / 待更新 ${deferredDate}`
+    : "";
+  return `${datePart}${stagePart}${chunkPart}${chunkDatePart}${progressPart}${skippedPart}${totalPart}${currentPart}${deferredPart}`;
 }
 
 function jobStageText(job: JobRun) {
@@ -824,6 +834,7 @@ function jobStageText(job: JobRun) {
     sectors: "计算行业热度",
     states: "计算趋势状态与策略信号",
     signal_eval: "评估信号后验",
+    eod_deferred: "历史数据已完成，今日 EOD 数据待更新",
     success: "任务完成"
   };
   return map[stage] || jobStepText(job);
@@ -851,6 +862,9 @@ function jobStepText(job: JobRun) {
   if (step.startsWith("100 calculate market score")) return "100 计算市场温度";
   if (step.startsWith("110 calculate sector heat")) return "110 计算行业热度";
   if (step.startsWith("120 calculate trend states")) return "120 计算趋势状态与策略信号";
+  if (step.startsWith("175 raw sync complete; current EOD deferred")) {
+    return "175 历史数据已完成，今日 EOD 数据待更新";
+  }
   if (step.startsWith("180 sync basic info complete")) return "180 基础信息同步完成";
   if (step.startsWith("180 raw sync complete")) return "180 原始数据拉取完成";
   if (step.startsWith("180 mark SUCCESS")) return "180 任务完成";

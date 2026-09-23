@@ -148,4 +148,71 @@ def test_backfill_defers_current_eod_and_keeps_completed_history(monkeypatch) ->
     assert final["metadata"]["deferred_trade_date"] == "2026-09-23"
     assert final["metadata"]["deferred_reason"] == "EOD_NOT_READY"
     assert final["metadata"]["completed_open_days"] == 1
+    assert final["metadata"]["open_days"] == 2
+    assert final["metadata"]["progress_pct"] < 100
     assert db.rollbacks == 0
+
+
+def test_backfill_full_completion_reports_one_hundred_percent(monkeypatch) -> None:
+    target = date(2026, 9, 22)
+    calendar = pd.DataFrame([
+        {"cal_date": "20260922", "is_open": 1, "exchange": "SSE"},
+    ])
+
+    class Result:
+        def scalar_one(self):
+            return 1
+
+    class Db(_Db):
+        def execute(self, statement):
+            return Result()
+
+    class Provider:
+        def get_trade_calendar(self, start, end):
+            return calendar
+
+    class Completeness:
+        trade_date = target
+        is_complete = True
+        stock_daily = SimpleNamespace(is_acceptable=True)
+        index_daily = SimpleNamespace(status="PASS")
+
+        def dataset(self, name):
+            return SimpleNamespace(status="PASS", is_acceptable=True)
+
+        def as_metadata(self):
+            return {"current_day_datasets": {}}
+
+    class FakeIngestion:
+        def sync_theme_daily(self, trade_date):
+            return 0
+
+        def sync_theme_optional_sources(self, trade_date):
+            return {}
+
+    updates = []
+    monkeypatch.setattr(backfill_module, "ensure_stock_basic_ready", lambda db: None)
+    monkeypatch.setattr(backfill_module, "_any_index_daily_incomplete", lambda *args: False)
+    monkeypatch.setattr(
+        backfill_module, "upsert_rows", lambda db, model, rows, keys: len(rows)
+    )
+    monkeypatch.setattr(
+        backfill_module,
+        "check_raw_completeness",
+        lambda db, trade_date, **kwargs: Completeness(),
+    )
+    monkeypatch.setattr(
+        backfill_module, "update_job", lambda db, job, **kwargs: updates.append(kwargs)
+    )
+    runner = BackfillJob(Db(), Provider())
+    runner.ingestion = FakeIngestion()
+
+    runner.run(target, target, job=SimpleNamespace(id="job-id"))
+
+    final = updates[-1]
+    assert final["status"] == "SUCCESS"
+    assert final["step"] == "180 raw sync complete"
+    assert final["metadata"]["stage"] == "success"
+    assert final["metadata"]["completed_open_days"] == 1
+    assert final["metadata"]["open_days"] == 1
+    assert final["metadata"]["progress_pct"] == 100

@@ -255,25 +255,37 @@ def normalize_themes(df: pd.DataFrame, seen_date: date) -> list[dict[str, Any]]:
 
 
 def normalize_theme_members(df: pd.DataFrame, snapshot_date: date) -> list[dict[str, Any]]:
-    source = df
-    has_valid_flags = False
-    if "is_new" in df.columns:
-        flags = df["is_new"].astype("string").str.strip().str.upper()
-        has_valid_flags = bool(flags.isin(["Y", "N"]).any())
-        if has_valid_flags:
-            source = df[flags == "Y"]
-    rows = [
-        {
-            "snapshot_date": snapshot_date,
-            "theme_code": item.get("ts_code"),
-            "ts_code": item.get("con_code"),
-            "stock_name": item.get("con_name"),
-            "is_new": True if has_valid_flags else None,
-            "source": "THS",
-        }
-        for item in source.to_dict("records")
-    ]
-    return [row for row in rows if row["theme_code"] and row["ts_code"]]
+    if df.empty or "ts_code" not in df.columns:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for theme_code, group in df.groupby("ts_code", dropna=False, sort=False):
+        if theme_code is None or pd.isna(theme_code) or not str(theme_code).strip():
+            continue
+
+        source = group
+        has_valid_flags = False
+        if "is_new" in group.columns:
+            flags = group["is_new"].astype("string").str.strip().str.upper()
+            has_valid_flags = bool(flags.isin(["Y", "N"]).any())
+            if has_valid_flags:
+                source = group[flags == "Y"]
+
+        for item in source.to_dict("records"):
+            stock_code = item.get("con_code")
+            if stock_code is None or pd.isna(stock_code) or not str(stock_code).strip():
+                continue
+            rows.append(
+                {
+                    "snapshot_date": snapshot_date,
+                    "theme_code": theme_code,
+                    "ts_code": stock_code,
+                    "stock_name": item.get("con_name"),
+                    "is_new": True if has_valid_flags else None,
+                    "source": "THS",
+                }
+            )
+    return rows
 
 
 def normalize_theme_daily(df: pd.DataFrame) -> list[dict[str, Any]]:

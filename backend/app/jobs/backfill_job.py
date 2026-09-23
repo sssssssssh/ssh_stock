@@ -230,6 +230,12 @@ class BackfillJob:
                     "skipped_dataset_count": skipped_dataset_count,
                 }
             )
+            final_progress = 100
+            if deferred_trade_date is not None:
+                final_progress = round(
+                    completed_open_days / len(open_dates) * 100,
+                    1,
+                )
 
             update_job(
                 self.db,
@@ -245,7 +251,7 @@ class BackfillJob:
                     **metadata,
                     "completed_open_days": completed_open_days,
                     "stage": "eod_deferred" if deferred_trade_date else "success",
-                    "progress_pct": 100,
+                    "progress_pct": final_progress,
                 },
             )
             logger.info("backfill job success start={} end={} rows={}", start, end, total_rows)

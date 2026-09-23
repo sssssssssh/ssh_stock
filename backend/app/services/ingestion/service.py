@@ -505,6 +505,11 @@ class IngestionService:
             df = self.provider.get_stock_limit(trade_date)
             source_rows = normalize_stock_limit(df)
             expected_codes = expected_stock_daily_codes(self.db, trade_date)
+            if not expected_codes:
+                raise ValueError(
+                    f"stk_limit authoritative universe is empty for {trade_date}; "
+                    "destructive reconciliation refused"
+                )
             target_rows = [
                 row for row in source_rows if str(row["ts_code"]) in expected_codes
             ]

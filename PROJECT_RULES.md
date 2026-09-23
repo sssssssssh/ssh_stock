@@ -236,6 +236,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - THS 成员按题材分片调用；空结果和 Provider 异常最多额外重试一次并复用限速器。诊断必须结构化记录 empty、failed 和 warning codes，禁止硬编码异常题材白名单。
 - 成员快照阈值固定在 `config/opportunity.yaml`：warning 0.95、error 0.90。低于 error 或结构错误为 `ERROR`；可接受 partial 为 `WARNING`，只保存成功题材，缺失题材成员派生字段保持 `NULL`。
 - 同日成员快照实行质量单调保护：`WARNING -> PASS` 允许替换，既有 `PASS` 不得被 `WARNING/ERROR` 覆盖，`ERROR` 不得删除既有成员行；BasicInfo 核心数据不因 Theme 快照异常回滚。
+- Theme Member 的 `is_new` 有效性必须在每个 `theme_code` 内独立判断；一个题材的 Y/N 不得导致另一个 `is_new` 全空题材被过滤。
+- `stk_limit` authoritative reconcile 的目标 Universe 不得为空；为空时必须在任何质量写入、DELETE 或 reconcile 前失败，禁止把已有日期切片删除。
+- `EOD_NOT_READY` 保持 `SUCCESS/eod_deferred`，但完成交易日少于请求交易日时 `progress_pct` 必须小于 100，只有完整 Backfill 才能写 100。
 
 ## Milestone 11 研究验证层规则（2026-09-22）
 

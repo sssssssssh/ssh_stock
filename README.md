@@ -1048,3 +1048,6 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - 当且仅当业务当天的 `daily` 尚未形成并返回空数据时，Backfill 记录 `EOD_NOT_READY` 并延迟当天后续 Raw，同一区间已完成的历史日期不会回滚；历史交易日的 `DAILY_EMPTY` 仍为 `ERROR`。
 - Theme Member Snapshot 使用 `config/opportunity.yaml` 的 `member_snapshot.warning_coverage_rate=0.95` 和 `error_coverage_rate=0.90`。`PASS` 是 strict 完整快照；达到错误阈值的 `WARNING` 是 usable partial 快照，可供 ThemeFactor 使用，但缺失题材的成员数、breadth、up rate、new high 和 RPS 字段保持 `NULL`。
 - 同一日期的成员快照只允许质量升级：`WARNING -> PASS` 可完整替换，既有 `PASS` 不会被后续 `WARNING/ERROR` 降级覆盖，`ERROR` 也不会执行破坏性删除。诊断保存在 `data_quality_daily.issue_codes`，包含请求、返回、缺失、失败、Provider 警告及覆盖率。
+- `ths_member.is_new` 按题材独立解释：某题材存在合法 Y/N 时只保留 Y；另一题材该列全空时仍保留其全部返回成员，二者不得互相过滤。
+- `stk_limit` 的目标股票 Universe 为空时任务明确失败，并拒绝任何权威删除或空快照写入，已有涨跌停价数据保持不变。
+- Backfill 遇到当天 `EOD_NOT_READY` 时仍以成功延迟结束，但 `progress_pct` 按已完成交易日计算并小于 100%；页面显示“历史数据已完成，今日 EOD 数据待更新”。
