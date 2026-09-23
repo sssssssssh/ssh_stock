@@ -23,6 +23,7 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
+      DOCKER_DATABASE_URL: postgresql+psycopg://stock:stock@postgres:5432/stock_db
       TUSHARE_TOKEN: test-token
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +38,9 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python -m pytest
       - run: python -m ruff check backend tests migrations
+      - run: cp .env.example .env
+      - run: docker compose config
+      - run: docker compose build
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

@@ -34,6 +34,21 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    legacy_columns = [sa.column(name) for name in OLD_KEY]
+    legacy_table = sa.table(TABLE, *legacy_columns)
+    columns = [legacy_table.c[name] for name in OLD_KEY]
+    collision = op.get_bind().execute(
+        sa.select(*columns)
+        .group_by(*columns)
+        .having(sa.func.count() > 1)
+        .limit(1)
+    ).first()
+    if collision is not None:
+        raise RuntimeError(
+            "Cannot downgrade 0020: versioned research_transition_eval rows would "
+            "collide under the legacy identity. Back up or clean duplicate OLD_KEY "
+            "groups first."
+        )
     op.drop_constraint(CONSTRAINT, TABLE, type_="unique")
     op.create_unique_constraint(CONSTRAINT, TABLE, OLD_KEY)
     op.drop_column(TABLE, "opportunity_calc_version")

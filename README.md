@@ -986,6 +986,8 @@ Research Job 支持过期 QUEUED/RUNNING 恢复；调度和 Worker 会避开 act
 
 Research Job 入队时保存完整配置与计算版本身份。若在 Worker 真正执行前配置或计算版本变化，旧 QUEUED Job 会以 `RESEARCH_IDENTITY_CHANGED_SINCE_QUEUE` 失败，必须重新创建任务；不会用新配置执行旧任务。`0020_transition_calc_lineage` 给 Transition 增加机会计算版本并扩展自然键，旧行标为 `legacy-unverified`，不会作为当前版本展示；迁移只改表结构，不重算研究数据。
 
+LEFT/RIGHT Context 事件只与相同 `opportunity_calc_version` 的股票 Forward Eval 关联，不复用旧计算版本的穿越事件。0020 降级到 0019 时，若同一旧版 Transition 自然键下已有多个计算版本结果，迁移会明确拒绝回退且不删除数据；需先备份并人工清理冲突版本。CI 额外检查 `docker compose config` 和 `docker compose build`，不启动 Compose 服务。
+
 已知限制：Theme 成员 PIT 只从首份 PASS 成员快照后可信，历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
 
 ## Milestone 10：热点题材与机会池（2026-09-17）

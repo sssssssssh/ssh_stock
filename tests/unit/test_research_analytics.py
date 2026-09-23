@@ -1,6 +1,7 @@
 from datetime import date
 from types import SimpleNamespace
 
+import app.services.research.analytics as research_analytics
 import pytest
 from app.core.config import get_settings
 from app.models.market_data import (
@@ -263,6 +264,56 @@ def test_transition_calc_versions_coexist_but_only_current_version_is_read() -> 
         assert db.query(ResearchTransitionEval).count() == 3
         results = transition_stats(db, settings, day, day, left=True)
     assert next(row for row in results if row["group"] == "LEFT_75")["event_count"] == 1
+
+
+@pytest.mark.parametrize(
+    ("research_type", "event_type", "event_key", "state", "stage"),
+    (
+        ("LEFT", "LEFT_THRESHOLD_CROSS", "LEFT_75", "S2", "LEFT_REVERSAL"),
+        ("RIGHT", "RIGHT_SIDE_NEW", "RIGHT_SIDE_NEW", "S3", "RIGHT_SIDE_NEW"),
+    ),
+)
+def test_context_requires_matching_opportunity_calc_version(
+    monkeypatch, research_type, event_type, event_key, state, stage,
+) -> None:
+    monkeypatch.setattr(research_analytics, "OPPORTUNITY_CALC_VERSION", "opportunity_v2")
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    ResearchTransitionEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 1, 5)
+    identity = {
+        "algo_version": settings.algo_version,
+        "strategy_config_hash": config_hash(settings.strategy),
+        "opportunity_config_hash": config_hash(settings.opportunity_config),
+        "research_version": RESEARCH_VERSION,
+        "research_config_hash": config_hash(settings.research_config),
+    }
+    with Session(engine) as db:
+        db.add(OpportunityForwardEval(
+            id=1, trade_date=day, ts_code="A.SZ", opportunity_calc_version="opportunity_v2",
+            eval_version=RESEARCH_EVAL_VERSION, entry_basis="NEXT_OPEN",
+            benchmark_code="000300.SH", state=state, opportunity_stage=stage,
+            market_regime="CURRENT", **identity,
+        ))
+        db.add(ResearchTransitionEval(
+            id=1, event_trade_date=day, ts_code="A.SZ", event_type=event_type,
+            event_key=event_key, source_state=state, trend_calc_version="trend_v1",
+            opportunity_calc_version="opportunity_v1", **identity,
+        ))
+        db.commit()
+        assert context_stats(db, settings, day, day, "market_regime", research_type) == []
+
+        db.add(ResearchTransitionEval(
+            id=2, event_trade_date=day, ts_code="A.SZ", event_type=event_type,
+            event_key=event_key, source_state=state, trend_calc_version="trend_v1",
+            opportunity_calc_version="opportunity_v2", **identity,
+        ))
+        db.commit()
+        results = context_stats(db, settings, day, day, "market_regime", research_type)
+    assert len(results) == 1
+    assert results[0]["group"] == "CURRENT"
+    assert results[0]["event_count"] == 1
 
 
 def test_bucket_numeric_order_bounded_100_and_negative_momentum() -> None:

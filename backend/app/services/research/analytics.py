@@ -328,6 +328,7 @@ def _universe_filters(settings: Any, research_type: str) -> tuple[Any, ...]:
                 event.ts_code == forward.ts_code,
                 event.algo_version == forward.algo_version,
                 event.strategy_config_hash == forward.strategy_config_hash,
+                event.opportunity_calc_version == forward.opportunity_calc_version,
                 event.opportunity_config_hash == forward.opportunity_config_hash,
                 event.research_version == forward.research_version,
                 event.research_config_hash == forward.research_config_hash,

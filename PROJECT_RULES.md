@@ -251,3 +251,6 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - ResearchTransitionEval identity 必须包含 trend_calc_version 与 opportunity_calc_version。
 - stale Research recovery 的持久化不能因为后续 queue conflict rollback。
 - Docker Compose 只管理 migration/backend/worker/scheduler，数据库使用外部 PostgreSQL。
+- LEFT/RIGHT Context 的 Transition EXISTS 必须与 OpportunityForwardEval 匹配 opportunity_calc_version，禁止跨 Opportunity calc version 复用旧事件。
+- 0020 downgrade 如果多个新版本 Transition 会在 legacy natural key 下冲突，必须明确拒绝回退，禁止静默删除研究历史。
+- CI 必须验证 docker compose config 与 docker compose build。
