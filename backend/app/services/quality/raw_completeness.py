@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Any
 
@@ -246,6 +246,7 @@ def check_raw_completeness(
         job_id=job_id,
         persist=persist,
         preserve_existing_detail_counts=True,
+        preserve_existing_issue_details=True,
     )
     adj_factor = _coverage_dataset(
         db,
@@ -315,6 +316,8 @@ def check_raw_completeness(
         persist=persist,
         invalid_codes=invalid_limit_codes,
         preserve_existing_detail_counts=True,
+        preserve_existing_issue_details=True,
+        source_warnings=_quality_source_warnings(db, trade_date, "stk_limit"),
     )
     return RawCompletenessResult(
         trade_date=trade_date,
@@ -392,6 +395,8 @@ def _coverage_dataset(
     persist: bool,
     invalid_codes: set[str] | None = None,
     preserve_existing_detail_counts: bool = False,
+    preserve_existing_issue_details: bool = False,
+    source_warnings: list[str] | None = None,
 ) -> RawDatasetCompleteness:
     invalid_codes = invalid_codes or set()
     result = check_daily_coverage(
@@ -402,13 +407,19 @@ def _coverage_dataset(
         error_coverage_rate=error_coverage_rate,
         dataset=dataset,
     )
+    if source_warnings and result.status == "PASS":
+        result = replace(result, status="WARNING", warning_count=1)
     if persist:
+        issue_codes = _invalid_issue_codes(invalid_codes)
+        if source_warnings:
+            issue_codes["source_warnings"] = source_warnings
         persist_coverage_result(
             db,
             result,
             job_id=job_id,
-            extra_issue_codes=_invalid_issue_codes(invalid_codes),
+            extra_issue_codes=issue_codes,
             preserve_existing_detail_counts=preserve_existing_detail_counts,
+            preserve_existing_issue_details=preserve_existing_issue_details,
         )
     return RawDatasetCompleteness(
         dataset=dataset,
@@ -421,6 +432,19 @@ def _coverage_dataset(
         invalid_count=len(invalid_codes),
         invalid_codes=_top_invalid_codes(invalid_codes),
     )
+
+
+def _quality_source_warnings(db: Session, trade_date: date, dataset: str) -> list[str]:
+    issue_codes = db.execute(
+        select(DataQualityDaily.issue_codes).where(
+            DataQualityDaily.trade_date == trade_date,
+            DataQualityDaily.dataset == dataset,
+        )
+    ).scalar_one_or_none()
+    if not isinstance(issue_codes, dict):
+        return []
+    warnings = issue_codes.get("source_warnings", [])
+    return [str(item) for item in warnings] if isinstance(warnings, list) else []
 
 
 def _index_daily_dataset(

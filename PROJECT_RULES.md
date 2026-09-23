@@ -206,7 +206,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 ## Milestone 10 题材与机会池规则（2026-09-17）
 
 - SW Sector 与 THS Theme 是两个独立维度，禁止把同花顺概念写入 `sector/sector_member`。
-- `theme_member_snapshot` 只保存实际同步当天的完整快照；历史查询必须使用 `trade_date` 之前最近一份 `data_quality_daily.status=PASS` 的快照。禁止用当前成员回填历史。
+- `theme_member_snapshot` 只保存实际同步当天的真实快照，禁止用当前成员回填历史。完整性审计使用 strict `PASS` 快照；ThemeFactor/Opportunity 可使用达到成员错误覆盖阈值的 usable `WARNING` 快照，并必须隔离缺失题材。
 - Theme 和 Opportunity 参数只允许放在 `config/opportunity.yaml`，使用 `theme_v1/opportunity_v1 + opportunity config hash`；Factor/Market/Sector/Trend 继续使用既有 strategy hash 和版本。
 - `moneyflow_cnt_ths`、`limit_cpt_list` 缺失时对应指标必须为 NULL，Heat 按可用权重归一化；`data_coverage < 0.50` 时禁止生成 Heat。
 - Left Pool 仅允许 `eligible=true AND state IN (S1,S2)`；Right Side 复用 S3；Trend Pool 复用 S4/S5，不新增或修改状态机。
@@ -215,17 +215,27 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 行业热榜 API/UI 默认只显示 SW L1；题材与机会 API 的 latest date 必须匹配当前版本和独立配置哈希，并支持显式历史日期。
 - Theme Daily ERROR 不允许参与 Theme Heat，也不得删除或覆盖旧可信 Theme Raw/ThemeFactor；只有 PASS/WARNING 日期可以生成 ThemeFactor。
 - Theme Raw 成功权威快照的新增、修改和删除必须创建 Dirty Range；Provider ERROR、权限错误和瞬时错误禁止 destructive reconcile。
-- THS Member Snapshot 的 `is_new` 存在有效 Y/N 时只保存 Y；列缺失或全空时保存全部，Catalog 成员数大于 0 但 current member 为空时必须报 `CURRENT_MEMBER_EMPTY`。
+- THS Member Snapshot 的 `is_new` 存在有效 Y/N 时只保存 Y；列缺失或全空时保存全部。Catalog 成员数大于 0 但 current member 为空时必须报 `CURRENT_MEMBER_EMPTY` 并隔离该题材；不得伪造 0 成员，也不得在整体覆盖率仍可用时丢弃其他正常题材。
 - CatchUp Analysis Complete 必须检查当前 `opportunity_config_hash` 的 ThemeFactor（源可用时）与 Opportunity（State 存在时），不得让旧哈希结果垫高完成度。
 - Strategy config hash 与 Opportunity config hash 必须分离；Provider runtime Safe Limit 不得进入任一策略哈希。
 - `ThemeFactorDaily.source_coverage` 表示 Theme Daily 源覆盖率，`data_coverage` 表示 Heat 特征覆盖率，禁止混用。
-- Theme Catalog 日更，Theme Member Snapshot 周更；历史 Theme/Opportunity 查询只允许加载 start 前最近 PASS 快照与区间内 PASS 快照。
+- Theme Catalog 日更，Theme Member Snapshot 周更。管理、审计及明确要求完整成员的查询只加载 strict `PASS`；ThemeFactor/Opportunity 加载 start 前最近 usable 快照与区间内 usable 快照，其中 `WARNING` 覆盖率必须不低于 `member_snapshot.error_coverage_rate`。
 - 禁止使用 `Theme.is_active` 直接构造历史 Theme Board universe；有 `list_date` 时必须以它为历史下界，只有缺失时才用代表系统首次观察的 `first_seen_date`。有值的 `last_seen_date` 是历史上界且只能表示最后一次真实出现在 Catalog 的日期，发现消失时不能改写。Board 历史回填不得伪造第一份 PASS 快照之前的成员 PIT。
 - ThemeFactor 完整性的应有行数必须基于源质量 PASS/WARNING 当天实际落库的 `ThemeDaily` 行数；`DataQualityDaily.actual_rows` 可能包含源 extra 代码，不能直接作为衍生结果分母。源 ERROR/权限不可用仍跳过 ThemeFactor 完整性检查。
 - Theme Raw 只在源质量可信（PASS/WARNING）时执行 destructive reconciliation；ERROR/TRANSIENT_ERROR/PERMISSION_UNAVAILABLE 不得删除旧 Raw。CatchUp 必须区分 Core Raw 与 Theme Raw 修复，Theme 缺失/ERROR/TRANSIENT_ERROR 可重试，权限不可用可降级且不无限重试。
 - Moneyflow 三日滚动不得使用非可信日期的旧 Raw；`SOURCE_EMPTY` 不得伪装为零。`left_reversal_new` 必须同时检查上一真实交易日的 state 与 score，缺上一日记录不能标新。Lifecycle STARTING/DIVERGENCE 必须使用显式配置阈值。
-- `ths_member` 运行时安全阈值设为 6000，依据当前代理单题材已正常返回 5536 行、无筛选请求在 6000 行附近出现疑似截断的只读实测；这是代理侧经验保护阈值，不宣称 Tushare 官方上限。达到或超过阈值必须使整份成员快照失败；代理行为变化时重新核验，不得把目录 `count` 当成精确行数。
+- `ths_member` 运行时安全阈值设为 6000，依据当前代理单题材已正常返回 5536 行、无筛选请求在 6000 行附近出现疑似截断的只读实测；这是代理侧经验保护阈值，不宣称 Tushare 官方上限。达到阈值必须记录题材级 `POSSIBLE_TRUNCATION`，最终状态由结构校验和快照覆盖率判定，禁止让单个警告无条件丢弃整份快照；不得把目录 `count` 当成精确行数。
 - Theme Raw repair 失败不得阻断已判定为 `analysis_required` 的 Opportunity/Core Analysis 补算；Theme 是增强数据源，失败时允许降级 Opportunity。
+
+## Milestone 11.2.3 Raw 与 Theme 快照可靠性规则（2026-09-23）
+
+- `stk_limit` 必须区分 source rows 和当日目标股票 rows；覆盖率、重复键检查、权威对账及入库均以目标股票 Universe 为准。额外证券只记录诊断并从目标表清理。
+- Provider `POSSIBLE_TRUNCATION` 属于 source warning。目标覆盖率达到 warning 阈值时质量为 `WARNING` 且 Backfill 可继续；低覆盖、目标内重复键、必填字段缺失和非法涨跌停价仍为 `ERROR`。
+- 二次 RawCompleteness 校验必须保留采集阶段的 source warning 与诊断，不得把可信 `WARNING` 提升为 `PASS` 或覆盖既有 issue metadata。
+- 业务当天 `daily` 空结果必须转换为 `EOD_NOT_READY`，Backfill 保留已完成历史日期并延迟当天剩余 Raw；历史交易日空结果仍写 `DAILY_EMPTY/ERROR`。
+- THS 成员按题材分片调用；空结果和 Provider 异常最多额外重试一次并复用限速器。诊断必须结构化记录 empty、failed 和 warning codes，禁止硬编码异常题材白名单。
+- 成员快照阈值固定在 `config/opportunity.yaml`：warning 0.95、error 0.90。低于 error 或结构错误为 `ERROR`；可接受 partial 为 `WARNING`，只保存成功题材，缺失题材成员派生字段保持 `NULL`。
+- 同日成员快照实行质量单调保护：`WARNING -> PASS` 允许替换，既有 `PASS` 不得被 `WARNING/ERROR` 覆盖，`ERROR` 不得删除既有成员行；BasicInfo 核心数据不因 Theme 快照异常回滚。
 
 ## Milestone 11 研究验证层规则（2026-09-22）
 

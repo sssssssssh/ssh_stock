@@ -1,8 +1,9 @@
 from datetime import date
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.market_data import DataQualityDaily, Theme, ThemeDaily
 
 
@@ -48,14 +49,46 @@ def theme_raw_needs_repair(db: Session, trade_date: date) -> bool:
     return int(actual_rows) < expected_present
 
 
-def latest_valid_theme_member_snapshot(db: Session, trade_date: date) -> date | None:
+def _member_snapshot_status_filter(strict: bool):
+    if strict:
+        return DataQualityDaily.status == "PASS"
+    threshold = float(
+        get_settings()
+        .opportunity_config.get("theme_quality", {})
+        .get("member_snapshot", {})
+        .get("error_coverage_rate", 0.90)
+    )
+    return or_(
+        DataQualityDaily.status == "PASS",
+        and_(
+            DataQualityDaily.status == "WARNING",
+            DataQualityDaily.coverage_rate >= threshold,
+        ),
+    )
+
+
+def latest_strict_theme_member_snapshot(db: Session, trade_date: date) -> date | None:
     return db.execute(
         select(func.max(DataQualityDaily.trade_date)).where(
             DataQualityDaily.trade_date <= trade_date,
             DataQualityDaily.dataset == "ths_theme_member_snapshot",
-            DataQualityDaily.status == "PASS",
+            _member_snapshot_status_filter(True),
         )
     ).scalar_one_or_none()
+
+
+def latest_usable_theme_member_snapshot(db: Session, trade_date: date) -> date | None:
+    return db.execute(
+        select(func.max(DataQualityDaily.trade_date)).where(
+            DataQualityDaily.trade_date <= trade_date,
+            DataQualityDaily.dataset == "ths_theme_member_snapshot",
+            _member_snapshot_status_filter(False),
+        )
+    ).scalar_one_or_none()
+
+
+def latest_valid_theme_member_snapshot(db: Session, trade_date: date) -> date | None:
+    return latest_strict_theme_member_snapshot(db, trade_date)
 
 
 def theme_source_status(db: Session, trade_date: date, dataset: str) -> str | None:
@@ -67,12 +100,15 @@ def theme_source_status(db: Session, trade_date: date, dataset: str) -> str | No
     ).scalar_one_or_none()
 
 
-def required_theme_snapshot_dates(db: Session, start: date, end: date) -> list[date]:
+def required_theme_snapshot_dates(
+    db: Session, start: date, end: date, strict: bool = True
+) -> list[date]:
+    status_filter = _member_snapshot_status_filter(strict)
     prior = db.execute(
         select(func.max(DataQualityDaily.trade_date)).where(
             DataQualityDaily.trade_date < start,
             DataQualityDaily.dataset == "ths_theme_member_snapshot",
-            DataQualityDaily.status == "PASS",
+            status_filter,
         )
     ).scalar_one_or_none()
     dates = list(
@@ -82,7 +118,7 @@ def required_theme_snapshot_dates(db: Session, start: date, end: date) -> list[d
                 DataQualityDaily.trade_date >= start,
                 DataQualityDaily.trade_date <= end,
                 DataQualityDaily.dataset == "ths_theme_member_snapshot",
-                DataQualityDaily.status == "PASS",
+                status_filter,
             )
             .order_by(DataQualityDaily.trade_date)
         )
@@ -92,3 +128,11 @@ def required_theme_snapshot_dates(db: Session, start: date, end: date) -> list[d
     if prior is not None:
         dates.insert(0, prior)
     return dates
+
+
+def required_strict_theme_snapshot_dates(db: Session, start: date, end: date) -> list[date]:
+    return required_theme_snapshot_dates(db, start, end, True)
+
+
+def required_usable_theme_snapshot_dates(db: Session, start: date, end: date) -> list[date]:
+    return required_theme_snapshot_dates(db, start, end, False)

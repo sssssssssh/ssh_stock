@@ -380,7 +380,7 @@ def test_lifecycle_explicit_thresholds() -> None:
     ) != "DIVERGENCE"
 
 
-def test_configured_member_safe_limit_rejects_shard() -> None:
+def test_configured_member_safe_limit_records_shard_warning() -> None:
     provider = TushareProvider.__new__(TushareProvider)
     provider.provider_name = "tushare"
     provider._safe_limits = {"ths_member": 2}
@@ -397,14 +397,19 @@ def test_configured_member_safe_limit_rejects_shard() -> None:
         return frame
 
     provider._call = call
-    with pytest.raises(RuntimeError, match="POSSIBLE_TRUNCATION"):
-        provider.get_ths_concept_members(["A.TI", "B.TI"])
+    result = provider.get_ths_concept_members(["A.TI", "B.TI"])
+    assert result.attrs["theme_member_diagnostics"]["warning_codes"] == {
+        "A.TI": "POSSIBLE_TRUNCATION",
+        "B.TI": "POSSIBLE_TRUNCATION",
+    }
 
 
-def test_member_shard_warning_marks_whole_snapshot_error(monkeypatch) -> None:
+def test_member_snapshot_provider_failure_records_error(monkeypatch) -> None:
     class Db:
         def execute(self, statement):
-            return SimpleNamespace(all=lambda: [("A.TI", 2)])
+            if statement.is_select and "theme.constituent_count" in str(statement):
+                return SimpleNamespace(all=lambda: [("A.TI", 2)])
+            return SimpleNamespace(scalar_one_or_none=lambda: None)
 
         def rollback(self):
             pass

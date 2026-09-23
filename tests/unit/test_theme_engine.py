@@ -233,3 +233,53 @@ def test_theme_heat_degrades_when_member_snapshot_is_unavailable() -> None:
     assert result["breadth20"].isna().all()
     assert set(result["data_coverage"]) == {0.5}
     assert result["heat_score"].notna().all()
+
+
+def test_partial_snapshot_keeps_missing_theme_member_metrics_null() -> None:
+    target = date(2026, 9, 23)
+    daily = pd.DataFrame([
+        {"trade_date": target, "theme_code": code, "close": 100, "turnover_rate": 1}
+        for code in ("A.TI", "B.TI")
+    ])
+    members = pd.DataFrame([
+        {"snapshot_date": target, "theme_code": "A.TI", "ts_code": "000001.SZ"}
+    ])
+    factors = pd.DataFrame([{
+        "trade_date": target,
+        "ts_code": "000001.SZ",
+        "eligible": True,
+        "adj_close": 11,
+        "ma20": 10,
+        "ma60": 9,
+        "return1": 0.01,
+        "breakout20": True,
+        "rps60": 80,
+    }])
+    result = calculate_theme_factors(
+        daily,
+        members,
+        factors,
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        {target},
+        set(),
+        set(),
+        target,
+        target,
+        ThemeConfig("000300.SH", 1, {"breadth20": 1.0}),
+    ).set_index("theme_code")
+
+    assert result.loc["A.TI", "member_count"] == 1
+    assert result.loc["A.TI", "breadth20"] == 1
+    for column in (
+        "member_snapshot_date",
+        "member_count",
+        "eligible_member_count",
+        "breadth20",
+        "breadth60",
+        "up_rate",
+        "new_high20_rate",
+        "rps60_median",
+    ):
+        assert pd.isna(result.loc["B.TI", column])

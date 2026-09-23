@@ -988,7 +988,7 @@ Research Job 入队时保存完整配置与计算版本身份。若在 Worker �
 
 LEFT/RIGHT Context 事件只与相同 `opportunity_calc_version` 的股票 Forward Eval 关联，不复用旧计算版本的穿越事件。0020 降级到 0019 时，若同一旧版 Transition 自然键下已有多个计算版本结果，迁移会明确拒绝回退且不删除数据；需先备份并人工清理冲突版本。CI 额外检查 `docker compose config` 和 `docker compose build`，不启动 Compose 服务。
 
-已知限制：Theme 成员 PIT 只从首份 PASS 成员快照后可信，历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
+已知限制：Theme 成员 PIT 的完整全量语义只从首份 PASS 快照后可信；达到质量阈值的 WARNING 快照只对实际返回成员证据的题材可用，缺失题材保持未知。历史 Theme Board 受 THS 仍可发现的代码范围限制；重叠样本相关，未计手续费、滑点或仓位，也不做统计显著性检验。应分年份人工验证，避免按单一区间过拟合。研究层不自动调整生产阈值，也不把改动状态机的参数过滤视为新策略回测。
 
 ## Milestone 10：热点题材与机会池（2026-09-17）
 
@@ -1007,14 +1007,14 @@ python -m app.cli backfill --start 2026-05-01 --end 2026-09-16
 # 在“数据”页面对同一区间执行“开始补算”
 ```
 
-`sync-basic` 会同步 THS Concept Catalog，并把当天真实 `ths_member` 保存为成员快照。历史 PIT 可信度只从系统第一份完整 `PASS` 快照开始；系统绝不会用当前成员回填更早日期。更早日期仍可计算题材 OHLC、资金、涨停等自身指标，但成员 breadth 和股票题材上下文保持 `NULL`。
+`sync-basic` 会同步 THS Concept Catalog，并把当天真实 `ths_member` 保存为成员快照。完整 PIT 可信度从系统第一份 `PASS` 快照开始；达到阈值的 `WARNING` 只提供已成功题材的局部 PIT。系统绝不会用当前成员回填更早日期；任何快照之前的日期仍可计算题材 OHLC、资金、涨停等自身指标，但成员 breadth 和股票题材上下文保持 `NULL`。
 
 Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 是可选增强源。无权限或暂时不可用时只降低 Theme Heat 的 `data_coverage`，可用权重自动归一化，不会让核心日更失败，也不会把缺失值当作 0。Provider smoke 现在输出五个 THS 接口状态和 `theme_capability`（`FULL/NO_LIMIT_DATA/NO_MONEYFLOW/BASIC_ONLY`）。
 
 收口后的运行规则：
 
 - Theme Catalog 在 Daily 和 CatchUp 启动时日更一次；Theme Member Snapshot 仍由每周 `sync-basic` 采集，不能用当前成员回填历史。
-- `ths_member.is_new` 至少出现一个有效 Y/N 时只保存 Y；该列缺失或全空时兼容保存全部。Catalog 声明成员数大于 0 但过滤后为空时记录 `CURRENT_MEMBER_EMPTY` 并拒绝快照。
+- `ths_member.is_new` 至少出现一个有效 Y/N 时只保存 Y；该列缺失或全空时兼容保存全部。成员按题材分片获取，空结果或异常额外重试一次；仍失败的题材记录为 `CURRENT_MEMBER_EMPTY`/missing 并隔离，不伪造 0 成员。整体覆盖率达到阈值时保存正常题材并把快照标为 `WARNING`。
 - `ths_theme_daily` 只有 PASS/WARNING 才允许生成 ThemeFactor；ERROR 会保留旧 Raw 和旧 ThemeFactor。`source_coverage` 表示源题材覆盖率，`data_coverage` 表示 Heat 特征可用权重比例，两者不可混用。
 - Theme Daily、Moneyflow、Limit 的成功权威快照发生新增、修改或删除时都会建立 Dirty Range；Provider 错误时禁止删除旧 Raw。
 - `config/strategy.yaml` 继续控制 Factor/Market/Sector/Trend；`config/opportunity.yaml` 控制 Theme 生命周期、仓位阈值和 Opportunity 综合权重。修改后者会使 CatchUp 识别旧 Opportunity 哈希并补算。
@@ -1035,9 +1035,16 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 ### Milestone 10 历史正确性（2026-09-21）
 
 - `Theme.is_active` 只表示当前是否仍在 THS Catalog。历史 Board universe 优先以 `list_date` 为下界，只有缺失时才以系统首次观察日 `first_seen_date` 为保守下界；有值的 `last_seen_date` 是最后一次真实出现在 Catalog 的日期和历史上界。Catalog 观察日使用实际运行日，不把历史 Backfill 截止日期伪装成观察日，也不因发现下架而改写 `last_seen_date`。历史 `ths_theme_daily.expected_rows` 使用该日 Board universe，不使用今天的 active 数量。
-- 历史 Theme Member PIT 从首份 `PASS` 的 `ThemeMemberSnapshot` 才可信。首次运行前已经永久下架、且当前 THS 接口不可发现的题材无法可靠恢复；历史板块数据可回溯范围受当前可发现题材代码限制。空库 Backfill 会先尝试同步当前 Catalog，但不会把当前成员冒充历史成员。
-- Board 日行情历史可依 `list_date` 回填，但这不证明历史成员归属；成员广度和股票-题材归属仍只从第一份 PASS 成员快照起可信。Opportunity Quality 在 Theme Daily 源质量为 PASS/WARNING 时，以当天实际落库的 `ThemeDaily` 行数作为 ThemeFactor 应有行数；源 `actual_rows` 可包含 extra 代码，不能充当衍生结果分母。源 ERROR 等不可用状态仍跳过该项检查。
+- 历史 Theme Member PIT 的完整全量语义从首份 `PASS` 的 `ThemeMemberSnapshot` 才可信；usable `WARNING` 只证明成功题材的局部成员关系。首次运行前已经永久下架、且当前 THS 接口不可发现的题材无法可靠恢复；历史板块数据可回溯范围受当前可发现题材代码限制。空库 Backfill 会先尝试同步当前 Catalog，但不会把当前成员冒充历史成员。
+- Board 日行情历史可依 `list_date` 回填，但这不证明历史成员归属；成员广度和股票-题材归属从首份 usable 成员快照起仅对有成员证据的题材可用，缺失题材保持 `NULL`。Opportunity Quality 在 Theme Daily 源质量为 PASS/WARNING 时，以当天实际落库的 `ThemeDaily` 行数作为 ThemeFactor 应有行数；源 `actual_rows` 可包含 extra 代码，不能充当衍生结果分母。源 ERROR 等不可用状态仍跳过该项检查。
 - CatchUp 将 Core Raw Repair 和 Theme Raw Repair 分开。Theme Daily 缺失、`ERROR`、`TRANSIENT_ERROR` 会在候选窗口内重试，修复成功后向后重算 ThemeFactor 与 Opportunity；`PERMISSION_UNAVAILABLE` 降级且不重复重试。Theme 源错误不会删除旧可信 Raw，也不会阻塞已判定需要补算的 Core Analysis 或 Opportunity；Theme 修复失败时 Opportunity 仍可降级计算。
 - `net_amount_3d` 只在当前日和前两个市场交易日的 Moneyflow 质量均可信且该题材三日都有数值时生成。`ERROR` 日期的旧 Raw 不参与滚动；`SOURCE_EMPTY` 不解释为全题材净流入 0，相应特征为 `NULL`。
 - `left_reversal_new` 要求上一真实交易日有记录：今天 S1/S2 且分数达强信号阈值，昨天非 S1/S2 或昨天分数低于强信号阈值。缺失昨天记录不判为首次触发。生命周期 `STARTING` 和 `DIVERGENCE` 分别使用 `config/opportunity.yaml` 中显式的 `starting`、`divergence_min_heat`。
-- `provider.tushare.safe_limits.ths_member=6000` 是当前代理侧经验保护阈值，不是 Tushare 官方单次返回上限：单题材已正常返回 5536 行，无筛选请求在 6000 行附近出现疑似截断。任一题材返回行数达到或超过 6000 时标记 `POSSIBLE_TRUNCATION`，整份成员快照拒绝写入并记 `ERROR`。代理行为变化时需重新核验阈值。
+- `provider.tushare.safe_limits.ths_member=6000` 是当前代理侧经验保护阈值，不是 Tushare 官方单次返回上限：达到阈值的题材记录 `POSSIBLE_TRUNCATION`，由成员分片诊断和快照覆盖率共同判定 `WARNING/ERROR`，不会仅因该警告丢弃其他正常题材。代理行为变化时需重新核验阈值。
+
+### Milestone 11.2.3 Raw 与 Theme 快照可靠性（2026-09-23）
+
+- `stk_limit` 将 Provider 全量返回与目标 A 股 Universe 分开：覆盖率和入库都只针对当日目标股票，额外证券只进入诊断。高覆盖率下的 `POSSIBLE_TRUNCATION` 是可追溯 `WARNING`，不会单独阻断 Backfill；低覆盖、重复自然键、必填字段或涨跌停价非法仍是 `ERROR`。
+- 当且仅当业务当天的 `daily` 尚未形成并返回空数据时，Backfill 记录 `EOD_NOT_READY` 并延迟当天后续 Raw，同一区间已完成的历史日期不会回滚；历史交易日的 `DAILY_EMPTY` 仍为 `ERROR`。
+- Theme Member Snapshot 使用 `config/opportunity.yaml` 的 `member_snapshot.warning_coverage_rate=0.95` 和 `error_coverage_rate=0.90`。`PASS` 是 strict 完整快照；达到错误阈值的 `WARNING` 是 usable partial 快照，可供 ThemeFactor 使用，但缺失题材的成员数、breadth、up rate、new high 和 RPS 字段保持 `NULL`。
+- 同一日期的成员快照只允许质量升级：`WARNING -> PASS` 可完整替换，既有 `PASS` 不会被后续 `WARNING/ERROR` 降级覆盖，`ERROR` 也不会执行破坏性删除。诊断保存在 `data_quality_daily.issue_codes`，包含请求、返回、缺失、失败、Provider 警告及覆盖率。

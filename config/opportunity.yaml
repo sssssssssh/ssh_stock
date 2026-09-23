@@ -27,6 +27,9 @@ theme_quality:
   daily:
     warning_coverage_rate: 0.90
     error_coverage_rate: 0.75
+  member_snapshot:
+    warning_coverage_rate: 0.95
+    error_coverage_rate: 0.90
 
 left_reversal:
   watch_score: 60

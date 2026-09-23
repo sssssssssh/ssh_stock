@@ -4,9 +4,10 @@ from datetime import date, timedelta
 
 import pandas as pd
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.core.config import get_settings
 from app.models.market_data import (
     DataQualityDaily,
@@ -145,6 +146,14 @@ class ThemeDailyQualityError(ValueError):
     pass
 
 
+class EodDataNotReadyError(RuntimeError):
+    pass
+
+
+class ThemeMemberSnapshotQualityError(ValueError):
+    pass
+
+
 class IngestionService:
     def __init__(self, db: Session, provider: MarketDataProvider) -> None:
         self.db = db
@@ -179,6 +188,8 @@ class IngestionService:
     def sync_daily(self, trade_date: date, job_id: uuid.UUID | None = None) -> int:
         try:
             df = self.provider.get_daily(trade_date)
+            if df.empty and trade_date == business_today():
+                raise EodDataNotReadyError(f"EOD_NOT_READY trade_date={trade_date}")
             issues = check_raw_daily(df, min_rows=0)
             fatal = [issue for issue in issues if issue.severity == "ERROR"]
             rows = normalize_stock_daily(df)
@@ -492,16 +503,42 @@ class IngestionService:
     def sync_stock_limit(self, trade_date: date, job_id: uuid.UUID | None = None) -> int:
         try:
             df = self.provider.get_stock_limit(trade_date)
-            rows = normalize_stock_limit(df)
-            issues = _raw_frame_issues(
-                df,
-                rows,
-                key_columns=["trade_date", "ts_code"],
-            )
+            source_rows = normalize_stock_limit(df)
             expected_codes = expected_stock_daily_codes(self.db, trade_date)
+            target_rows = [
+                row for row in source_rows if str(row["ts_code"]) in expected_codes
+            ]
+            extra_source_codes = sorted(
+                {str(row["ts_code"]) for row in source_rows} - expected_codes
+            )
+            source_warnings = []
+            if warning := df.attrs.get("provider_warning"):
+                source_warnings.append(str(warning))
+            fatal_issues: list[str] = []
+            invalid_required_count = sum(
+                1
+                for item in df.to_dict("records")
+                if _is_missing_required(item.get("trade_date"))
+                or _is_missing_required(item.get("ts_code"))
+            )
+            if len(source_rows) != len(df.index) or invalid_required_count:
+                fatal_issues.append("INVALID_REQUIRED_FIELDS")
+            duplicate_count = _duplicate_count(target_rows, ["trade_date", "ts_code"])
+            if duplicate_count:
+                fatal_issues.append("DUPLICATE_NATURAL_KEY")
+            invalid_limit_rows = [
+                row
+                for row in target_rows
+                if row["up_limit"] is None
+                or row["up_limit"] <= 0
+                or row["down_limit"] is None
+                or row["down_limit"] <= 0
+            ]
+            if invalid_limit_rows:
+                fatal_issues.append("INVALID_LIMIT_VALUE")
             valid_codes = {
                 str(row["ts_code"])
-                for row in rows
+                for row in target_rows
                 if row["up_limit"] is not None
                 and row["up_limit"] > 0
                 and row["down_limit"] is not None
@@ -519,33 +556,42 @@ class IngestionService:
                 ),
                 dataset="stk_limit",
             )
-            if issues:
+            if fatal_issues:
                 quality = replace(
                     quality,
                     status="ERROR",
                     warning_count=0,
-                    error_count=max(1, quality.error_count),
+                    error_count=max(1, len(fatal_issues)),
                 )
+            elif source_warnings and quality.status == "PASS":
+                quality = replace(quality, status="WARNING", warning_count=1)
             persist_coverage_result(
                 self.db,
                 quality,
-                duplicate_count=_duplicate_count(rows, ["trade_date", "ts_code"]),
-                null_count=sum(
-                    1 for row in rows if row["up_limit"] is None or row["down_limit"] is None
-                ),
+                duplicate_count=duplicate_count,
+                null_count=len(invalid_limit_rows),
                 job_id=job_id,
-                extra_issue_codes={"raw_issues": issues},
+                extra_issue_codes={
+                    "source_warnings": source_warnings,
+                    "source_row_count": len(df.index),
+                    "normalized_row_count": len(source_rows),
+                    "target_row_count": len(target_rows),
+                    "extra_source_count": len(source_rows) - len(target_rows),
+                    "extra_source_codes": extra_source_codes[:100],
+                    "fatal_issues": fatal_issues,
+                },
             )
             if quality.status == "ERROR":
                 self.db.commit()
                 raise ValueError(
                     "stk_limit quality check failed: "
-                    f"coverage={quality.coverage_rate} issues={issues}"
+                    f"coverage={quality.coverage_rate} fatal_issues={fatal_issues} "
+                    f"source_warnings={source_warnings}"
                 )
             dirty_dates = reconcile_daily_snapshot(
                 self.db,
                 StockLimitDaily,
-                rows,
+                target_rows,
                 trade_date=trade_date,
                 conflict_columns=["trade_date", "ts_code"],
                 compare_columns=LIMIT_VALUE_COLUMNS,
@@ -553,7 +599,7 @@ class IngestionService:
             count = upsert_rows(
                 self.db,
                 StockLimitDaily,
-                rows,
+                target_rows,
                 ["trade_date", "ts_code"],
                 update_columns=LIMIT_VALUE_COLUMNS + ["updated_at"],
             )
@@ -565,7 +611,16 @@ class IngestionService:
                 source_job_id=job_id,
             )
             self.db.commit()
-            logger.info("synced stk_limit trade_date={} rows={}", trade_date, count)
+            logger.info(
+                "synced stk_limit trade_date={} status={} rows={} source_rows={} "
+                "extra_source={} warnings={}",
+                trade_date,
+                quality.status,
+                count,
+                len(source_rows),
+                len(source_rows) - len(target_rows),
+                source_warnings,
+            )
             return count
         except Exception:
             self.db.rollback()
@@ -745,30 +800,115 @@ class IngestionService:
             else:
                 theme_counts[str(row[0])] = row[1]
         theme_codes = list(theme_counts)
+        requested_codes = {
+            code for code, count in theme_counts.items() if count is None or count > 0
+        }
+        existing_quality = self.db.execute(
+            select(DataQualityDaily).where(
+                DataQualityDaily.trade_date == snapshot_date,
+                DataQualityDaily.dataset == "ths_theme_member_snapshot",
+            )
+        ).scalar_one_or_none()
         try:
             if not theme_codes:
                 raise ValueError("no active THS themes; sync catalog first")
-            frame = self.provider.get_ths_concept_members(theme_codes)
+            frame = self.provider.get_ths_concept_members(sorted(requested_codes))
             rows = normalize_theme_members(frame, snapshot_date)
-            if frame.attrs.get("provider_warning"):
-                raise ValueError("THS theme member snapshot invalid or possibly truncated")
-            requested_codes = {
-                code for code, count in theme_counts.items() if count is None or count > 0
-            }
             returned_codes = {str(row["theme_code"]) for row in rows}
             missing = sorted(requested_codes - returned_codes)
-            if missing:
-                raise ValueError(f"CURRENT_MEMBER_EMPTY themes={missing[:20]}")
-            if not returned_codes.issubset(set(theme_codes)):
-                unexpected = sorted(returned_codes - requested_codes)
-                raise ValueError(
-                    "THS theme member snapshot incomplete "
-                    f"unexpected={unexpected[:20]}"
-                )
+            unexpected = sorted(returned_codes - requested_codes)
+            diagnostics = frame.attrs.get("theme_member_diagnostics", {})
+            failed_themes = {
+                str(code): str(error)[:500]
+                for code, error in dict(diagnostics.get("failed_codes", {})).items()
+            }
+            warning_themes = {
+                str(code): str(warning)[:500]
+                for code, warning in dict(diagnostics.get("warning_codes", {})).items()
+            }
+            if frame.attrs.get("provider_warning") == "POSSIBLE_TRUNCATION":
+                warning_themes["__batch__"] = "POSSIBLE_TRUNCATION"
+            duplicate_count = _duplicate_count(
+                rows, ["snapshot_date", "theme_code", "ts_code"]
+            )
             unique = {
                 (row["snapshot_date"], row["theme_code"], row["ts_code"]): row for row in rows
             }
             rows = list(unique.values())
+            quality_config = self.settings.opportunity_config.get("theme_quality", {}).get(
+                "member_snapshot", {}
+            )
+            warning_threshold = float(quality_config.get("warning_coverage_rate", 0.95))
+            error_threshold = float(quality_config.get("error_coverage_rate", 0.90))
+            coverage = (
+                len(returned_codes & requested_codes) / len(requested_codes)
+                if requested_codes
+                else None
+            )
+            fatal_issues = []
+            if unexpected:
+                fatal_issues.append("UNEXPECTED_THEME_CODE")
+            if duplicate_count:
+                fatal_issues.append("DUPLICATE_NATURAL_KEY")
+            if not frame.empty and not {"ts_code", "con_code"} <= set(frame.columns):
+                fatal_issues.append("INVALID_REQUIRED_FIELDS")
+            if fatal_issues or coverage is None or coverage < error_threshold:
+                status = "ERROR"
+            elif coverage < warning_threshold or missing or failed_themes or warning_themes:
+                status = "WARNING"
+            else:
+                status = "PASS"
+            issue_metadata = {
+                "snapshot_mode": "FULL" if status == "PASS" else "PARTIAL",
+                "requested_theme_count": len(requested_codes),
+                "returned_theme_count": len(returned_codes & requested_codes),
+                "missing_theme_count": len(missing),
+                "missing_theme_codes": missing[:100],
+                "failed_theme_count": len(failed_themes),
+                "failed_themes": dict(list(sorted(failed_themes.items()))[:100]),
+                "provider_warning_theme_count": len(warning_themes),
+                "provider_warning_themes": dict(
+                    list(sorted(warning_themes.items()))[:100]
+                ),
+                "member_row_count": len(rows),
+                "coverage_rate": coverage,
+                "fatal_issues": fatal_issues,
+                "unexpected_theme_codes": unexpected[:100],
+                "issues": ["CURRENT_MEMBER_EMPTY"] if missing else [],
+            }
+            if _preserve_existing_theme_snapshot(existing_quality, status, coverage):
+                existing_count = int(
+                    self.db.execute(
+                        select(func.count())
+                        .select_from(ThemeMemberSnapshot)
+                        .where(ThemeMemberSnapshot.snapshot_date == snapshot_date)
+                    ).scalar_one()
+                )
+                logger.warning(
+                    "kept better THS theme member snapshot date={} existing_status={} "
+                    "new_status={} new_coverage={}",
+                    snapshot_date,
+                    existing_quality.status,
+                    status,
+                    coverage,
+                )
+                return existing_count
+            if status == "ERROR":
+                _persist_theme_quality(
+                    self.db,
+                    snapshot_date,
+                    "ths_theme_member_snapshot",
+                    len(requested_codes),
+                    len(returned_codes & requested_codes),
+                    status,
+                    missing_codes=missing,
+                    issue_metadata=issue_metadata,
+                )
+                self.db.commit()
+                raise ThemeMemberSnapshotQualityError(
+                    "THS theme member snapshot ERROR "
+                    f"coverage={coverage} missing={len(missing)} fatal={fatal_issues}"
+                )
             self.db.execute(
                 delete(ThemeMemberSnapshot).where(
                     ThemeMemberSnapshot.snapshot_date == snapshot_date
@@ -784,19 +924,49 @@ class IngestionService:
                 self.db,
                 snapshot_date,
                 "ths_theme_member_snapshot",
-                len(theme_codes),
-                len({row["theme_code"] for row in rows}),
-                "PASS",
+                len(requested_codes),
+                len(returned_codes & requested_codes),
+                status,
+                missing_codes=missing,
+                issue_metadata=issue_metadata,
             )
             self.db.commit()
+            logger.info(
+                "THS theme member snapshot {} date={} requested={} returned={} "
+                "missing={} rows={}",
+                status,
+                snapshot_date,
+                len(requested_codes),
+                len(returned_codes & requested_codes),
+                len(missing),
+                count,
+            )
             return count
+        except ThemeMemberSnapshotQualityError:
+            raise
         except Exception as exc:
             self.db.rollback()
+            if _preserve_existing_theme_snapshot(existing_quality, "ERROR", None):
+                existing_count = int(
+                    self.db.execute(
+                        select(func.count())
+                        .select_from(ThemeMemberSnapshot)
+                        .where(ThemeMemberSnapshot.snapshot_date == snapshot_date)
+                    ).scalar_one()
+                )
+                logger.warning(
+                    "kept existing THS theme member snapshot after fetch failure "
+                    "date={} status={} error={}",
+                    snapshot_date,
+                    existing_quality.status,
+                    exc,
+                )
+                return existing_count
             _persist_theme_quality(
                 self.db,
                 snapshot_date,
                 "ths_theme_member_snapshot",
-                len(theme_codes),
+                len(requested_codes),
                 0,
                 "ERROR",
                 error=str(exc),
@@ -983,24 +1153,56 @@ def _persist_theme_quality(
     *,
     error: str | None = None,
     extra_codes: list[str] | None = None,
+    missing_codes: list[str] | None = None,
+    issue_metadata: dict[str, object] | None = None,
 ) -> None:
     coverage = actual_rows / expected_rows if expected_rows else None
-    persist_coverage_result(
+    missing_codes = missing_codes or []
+    issue_codes: dict[str, object] = {
+        "missing_codes": missing_codes[:100],
+        "extra_codes": (extra_codes or [])[:100],
+    }
+    if error:
+        issue_codes["source_error"] = error[:1000]
+    if issue_metadata:
+        issue_codes.update(issue_metadata)
+    is_error = status in {"ERROR", "PERMISSION_UNAVAILABLE", "TRANSIENT_ERROR"}
+    upsert_rows(
         db,
-        CoverageResult(
-            trade_date=trade_date,
-            dataset=dataset,
-            expected_rows=expected_rows,
-            actual_rows=actual_rows,
-            coverage_rate=coverage,
-            missing_codes=[],
-            extra_codes=extra_codes or [],
-            status=status,
-            error_count=1
-            if status in {"ERROR", "PERMISSION_UNAVAILABLE", "TRANSIENT_ERROR"}
-            else 0,
-        ),
-        extra_issue_codes={"source_error": error[:1000]} if error else None,
+        DataQualityDaily,
+        [{
+            "trade_date": trade_date,
+            "dataset": dataset,
+            "expected_rows": expected_rows,
+            "actual_rows": actual_rows,
+            "coverage_rate": coverage,
+            "missing_count": len(missing_codes),
+            "duplicate_count": 0,
+            "null_count": 0,
+            "warning_count": 1 if status == "WARNING" else 0,
+            "error_count": 1 if is_error else 0,
+            "status": status,
+            "issue_codes": issue_codes,
+        }],
+        ["trade_date", "dataset"],
+    )
+
+
+def _preserve_existing_theme_snapshot(
+    existing: DataQualityDaily | None,
+    new_status: str,
+    new_coverage: float | None,
+) -> bool:
+    if existing is None:
+        return False
+    rank = {"ERROR": 0, "WARNING": 1, "PASS": 2}
+    existing_rank = rank.get(existing.status, 0)
+    new_rank = rank.get(new_status, 0)
+    if new_rank < existing_rank:
+        return True
+    return (
+        new_status == existing.status == "WARNING"
+        and float(new_coverage or 0) < float(existing.coverage_rate or 0)
     )
 
 
@@ -1052,6 +1254,10 @@ def _raw_frame_issues(
 def _duplicate_count(rows: list[dict[str, object]], key_columns: list[str]) -> int:
     keys = [tuple(row.get(column) for column in key_columns) for row in rows]
     return len(keys) - len(set(keys))
+
+
+def _is_missing_required(value: object) -> bool:
+    return value is None or bool(pd.isna(value)) or not str(value).strip()
 
 
 def _deduplicate_sector_member_rows(

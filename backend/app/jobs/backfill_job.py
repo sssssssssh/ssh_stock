@@ -12,7 +12,7 @@ from app.models.market_data import IndexDaily, Theme, TradeCalendar
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.repositories.upsert import upsert_rows
-from app.services.ingestion import IngestionService
+from app.services.ingestion import EodDataNotReadyError, IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
 from app.services.quality.raw_completeness import (
     RawCompletenessResult,
@@ -118,6 +118,8 @@ class BackfillJob:
             skipped_raw_days = 0
             synced_dataset_count = 0
             skipped_dataset_count = 0
+            completed_open_days = 0
+            deferred_trade_date: date | None = None
             for index, current in enumerate(open_dates, 1):
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
                 try:
@@ -160,6 +162,7 @@ class BackfillJob:
                             "skipped_dataset_count": skipped_dataset_count,
                         },
                     )
+                    completed_open_days = index
                     continue
 
                 for dataset in RAW_DATASET_STEPS:
@@ -192,7 +195,18 @@ class BackfillJob:
                         },
                     )
                     sync_method = getattr(self.ingestion, method_name)
-                    total_rows += sync_method(current, job_id=job.id)
+                    try:
+                        total_rows += sync_method(current, job_id=job.id)
+                    except EodDataNotReadyError:
+                        deferred_trade_date = current
+                        metadata = {
+                            **metadata,
+                            "deferred_trade_date": current.isoformat(),
+                            "deferred_reason": "EOD_NOT_READY",
+                            "stage": "eod_deferred",
+                        }
+                        logger.info("backfill deferred current EOD trade_date={}", current)
+                        break
                     synced_dataset_count += 1
                     completeness = check_raw_completeness(
                         self.db,
@@ -202,13 +216,16 @@ class BackfillJob:
                         persist=True,
                     )
 
+                if deferred_trade_date is not None:
+                    break
                 if not completeness.is_complete:
                     raise ValueError(_raw_incomplete_error(completeness))
+                completed_open_days = index
             metadata = _clear_daily_progress(
                 {
                     **metadata,
-                    "completed_open_days": len(open_dates),
-                    "current_open_day_index": len(open_dates),
+                    "completed_open_days": completed_open_days,
+                    "current_open_day_index": completed_open_days,
                     "synced_dataset_count": synced_dataset_count,
                     "skipped_dataset_count": skipped_dataset_count,
                 }
@@ -218,12 +235,16 @@ class BackfillJob:
                 self.db,
                 job,
                 status="SUCCESS",
-                step="180 raw sync complete",
+                step=(
+                    "175 raw sync complete; current EOD deferred"
+                    if deferred_trade_date is not None
+                    else "180 raw sync complete"
+                ),
                 row_count=total_rows,
                 metadata={
                     **metadata,
-                    "completed_open_days": len(open_dates),
-                    "stage": "success",
+                    "completed_open_days": completed_open_days,
+                    "stage": "eod_deferred" if deferred_trade_date else "success",
                     "progress_pct": 100,
                 },
             )

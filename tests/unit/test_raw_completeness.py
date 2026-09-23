@@ -9,6 +9,24 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 
+def test_source_warning_keeps_high_coverage_dataset_at_warning() -> None:
+    result = raw_module._coverage_dataset(
+        object(),
+        date(2026, 9, 4),
+        "stk_limit",
+        {"A", "B"},
+        {"A", "B"},
+        warning_coverage_rate=0.98,
+        error_coverage_rate=0.95,
+        job_id=None,
+        persist=False,
+        source_warnings=["POSSIBLE_TRUNCATION"],
+    )
+
+    assert result.status == "WARNING"
+    assert result.is_acceptable is True
+
+
 @pytest.fixture(autouse=True)
 def _m9_raw_quality(monkeypatch):
     monkeypatch.setattr(
@@ -24,6 +42,7 @@ def _m9_raw_quality(monkeypatch):
             extra_codes=[],
         ),
     )
+    monkeypatch.setattr(raw_module, "_quality_source_warnings", lambda *args: [])
 
 
 def test_raw_completeness_requires_dataset_coverage(monkeypatch) -> None:

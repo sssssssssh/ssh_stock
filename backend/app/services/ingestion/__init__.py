@@ -1,4 +1,3 @@
-from app.services.ingestion.service import IngestionService
+from app.services.ingestion.service import EodDataNotReadyError, IngestionService
 
-__all__ = ["IngestionService"]
-
+__all__ = ["EodDataNotReadyError", "IngestionService"]

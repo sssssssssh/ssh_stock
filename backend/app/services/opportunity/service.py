@@ -50,7 +50,7 @@ class OpportunityService:
         lookback_start = start - timedelta(days=190)
         strategy_hash = config_hash(self.settings.strategy)
         opportunity_hash = config_hash(self.settings.opportunity_config)
-        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end)
+        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end, False)
         frame = calculate_opportunities(
             factors=self._versioned_frame(
                 StockFactorDaily, lookback_start, end, FACTOR_CALC_VERSION, strategy_hash

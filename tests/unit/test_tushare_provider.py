@@ -120,11 +120,13 @@ def test_ths_member_safe_limit_boundary(row_count, expected_warning) -> None:
         return frame
 
     provider._call = call
+    result = provider.get_ths_concept_members(["A.TI"])
+    assert len(result) == row_count
+    warning_codes = result.attrs["theme_member_diagnostics"]["warning_codes"]
     if expected_warning:
-        with pytest.raises(RuntimeError, match="POSSIBLE_TRUNCATION theme_code=A.TI"):
-            provider.get_ths_concept_members(["A.TI"])
+        assert warning_codes == {"A.TI": "POSSIBLE_TRUNCATION"}
     else:
-        assert len(provider.get_ths_concept_members(["A.TI"])) == row_count
+        assert warning_codes == {}
 
 
 def test_tushare_provider_fetches_index_daily_range(monkeypatch) -> None:

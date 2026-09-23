@@ -364,22 +364,52 @@ class TushareProvider:
 
     def get_ths_concept_members(self, concept_codes: list[str]) -> pd.DataFrame:
         frames: list[pd.DataFrame] = []
+        empty_codes: list[str] = []
+        failed_codes: dict[str, str] = {}
+        warning_codes: dict[str, str] = {}
         for code in concept_codes:
-            frame = self._call(
-                "ths_member",
-                ts_code=code,
-                fields="ts_code,con_code,con_name,weight,in_date,out_date,is_new",
-            )
-            if frame.attrs.get("provider_warning"):
-                raise RuntimeError(f"ths_member POSSIBLE_TRUNCATION theme_code={code}")
-            required = {"ts_code", "con_code"}
-            if not required <= set(frame.columns):
-                raise RuntimeError(
-                    f"ths_member schema invalid theme_code={code} "
-                    f"missing={sorted(required - set(frame.columns))}"
-                )
+            frame: pd.DataFrame | None = None
+            last_error: Exception | None = None
+            for _attempt in range(2):
+                try:
+                    candidate = self._call(
+                        "ths_member",
+                        ts_code=code,
+                        fields="ts_code,con_code,con_name,weight,in_date,out_date,is_new",
+                    )
+                except Exception as exc:
+                    last_error = exc
+                    continue
+                last_error = None
+                required = {"ts_code", "con_code"}
+                if not candidate.empty and not required <= set(candidate.columns):
+                    raise RuntimeError(
+                        f"ths_member schema invalid theme_code={code} "
+                        f"missing={sorted(required - set(candidate.columns))}"
+                    )
+                if candidate.empty:
+                    continue
+                frame = candidate
+                break
+            if frame is None:
+                if last_error is not None:
+                    failed_codes[code] = _compact_error(last_error)
+                else:
+                    empty_codes.append(code)
+                continue
+            if warning := frame.attrs.get("provider_warning"):
+                warning_codes[code] = str(warning)
             frames.append(frame)
-        return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        result.attrs["theme_member_diagnostics"] = {
+            "requested_codes": list(concept_codes),
+            "empty_codes": empty_codes,
+            "failed_codes": failed_codes,
+            "warning_codes": warning_codes,
+        }
+        if empty_codes or failed_codes or warning_codes:
+            result.attrs["provider_warning"] = "PARTIAL_THEME_MEMBER_FETCH"
+        return result
 
     def get_ths_daily(self, trade_date: date) -> pd.DataFrame:
         return self._call(

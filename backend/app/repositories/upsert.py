@@ -13,6 +13,7 @@ def upsert_rows(
     conflict_columns: Sequence[str],
     update_columns: Sequence[str] | None = None,
     preserve_existing_on_null_columns: Sequence[str] | None = None,
+    merge_json_columns: Sequence[str] | None = None,
     max_parameters: int = 60000,
 ) -> int:
     payload = list(rows)
@@ -27,6 +28,7 @@ def upsert_rows(
 
     chunk_size = _chunk_size(payload, max_parameters)
     preserve_columns = set(preserve_existing_on_null_columns or [])
+    json_merge_columns = set(merge_json_columns or [])
     for start in range(0, len(payload), chunk_size):
         batch = payload[start : start + chunk_size]
         stmt = insert(table).values(batch)
@@ -38,6 +40,11 @@ def upsert_rows(
                     update_map[col] = case(
                         (excluded_value.is_(None), table.c[col]),
                         else_=excluded_value,
+                    )
+                elif col in json_merge_columns:
+                    update_map[col] = case(
+                        (table.c[col].is_(None), excluded_value),
+                        else_=table.c[col].op("||")(excluded_value),
                     )
                 else:
                     update_map[col] = excluded_value

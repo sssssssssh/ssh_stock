@@ -166,6 +166,7 @@ def persist_coverage_result(
     job_id: uuid.UUID | None = None,
     extra_issue_codes: dict[str, Any] | None = None,
     preserve_existing_detail_counts: bool = False,
+    preserve_existing_issue_details: bool = False,
 ) -> None:
     issue_codes: dict[str, Any] = {
         "missing_codes": result.missing_codes,
@@ -211,6 +212,7 @@ def persist_coverage_result(
         rows,
         ["trade_date", "dataset"],
         update_columns=update_columns,
+        merge_json_columns=["issue_codes"] if preserve_existing_issue_details else None,
     )
 
 

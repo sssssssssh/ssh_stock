@@ -50,7 +50,7 @@ class ThemeFactorService:
         theme_daily = self._frame(ThemeDaily, lookback_start, end)
         if not theme_daily.empty:
             theme_daily = theme_daily[theme_daily["trade_date"].isin(usable_dates)]
-        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end)
+        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end, False)
         rows = calculate_theme_factors(
             theme_daily=theme_daily,
             members=self._members(snapshot_dates),

@@ -6,6 +6,7 @@ from app.models.job import JobRun
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.services.ingestion import IngestionService
+from app.services.quality.theme_quality import theme_source_status
 
 
 class BasicInfoJob:
@@ -67,7 +68,14 @@ class BasicInfoJob:
             try:
                 total_rows += self.ingestion.sync_ths_themes(snapshot_date)
                 total_rows += self.ingestion.sync_ths_theme_member_snapshot(snapshot_date)
-                metadata = {**metadata, "theme_sync_status": "PASS"}
+                member_status = theme_source_status(
+                    self.db, snapshot_date, "ths_theme_member_snapshot"
+                )
+                metadata = {
+                    **metadata,
+                    "theme_sync_status": member_status or "ERROR",
+                    "theme_member_snapshot_status": member_status,
+                }
             except Exception as exc:
                 self.db.rollback()
                 metadata = {

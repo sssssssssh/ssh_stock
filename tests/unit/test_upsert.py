@@ -1,7 +1,7 @@
 from datetime import date
 from unittest.mock import Mock
 
-from app.models.market_data import StockDaily
+from app.models.market_data import DataQualityDaily, StockDaily
 from app.repositories.upsert import _chunk_size, upsert_rows
 from sqlalchemy.dialects import postgresql
 
@@ -41,3 +41,25 @@ def test_upsert_can_preserve_existing_value_on_null() -> None:
 
     assert "CASE WHEN (excluded.close IS NULL)" in sql
     assert "THEN stock_daily.close" in sql
+
+
+def test_upsert_can_merge_existing_json_diagnostics() -> None:
+    db = Mock()
+
+    upsert_rows(
+        db,
+        DataQualityDaily,
+        [{
+            "trade_date": date(2026, 9, 4),
+            "dataset": "stk_limit",
+            "status": "WARNING",
+            "issue_codes": {"missing_codes": []},
+        }],
+        ["trade_date", "dataset"],
+        update_columns=["status", "issue_codes"],
+        merge_json_columns=["issue_codes"],
+    )
+
+    stmt = db.execute.call_args.args[0]
+    sql = str(stmt.compile(dialect=postgresql.dialect()))
+    assert "data_quality_daily.issue_codes || excluded.issue_codes" in sql

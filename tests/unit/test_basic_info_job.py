@@ -46,6 +46,7 @@ class _FakeIngestion:
 
 def test_basic_info_job_syncs_metadata_only(monkeypatch) -> None:
     monkeypatch.setattr(basic_info_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(basic_info_job_module, "theme_source_status", lambda *args: "PASS")
     provider = SimpleNamespace(calls=[])
     job = SimpleNamespace(
         id=uuid4(),
@@ -72,3 +73,20 @@ def test_basic_info_job_syncs_metadata_only(monkeypatch) -> None:
     assert job.status == "SUCCESS"
     assert job.step == "180 sync basic info complete"
     assert job.row_count == 57
+
+
+def test_basic_info_job_reports_usable_partial_theme_snapshot(monkeypatch) -> None:
+    monkeypatch.setattr(basic_info_job_module, "IngestionService", _FakeIngestion)
+    monkeypatch.setattr(basic_info_job_module, "theme_source_status", lambda *args: "WARNING")
+    provider = SimpleNamespace(calls=[])
+    job = SimpleNamespace(
+        id=uuid4(), job_type="sync_basic", target_trade_date=None,
+        started_at=None, heartbeat_at=None, finished_at=None, status="QUEUED",
+        step=None, row_count=0, error_message=None, job_metadata={},
+    )
+
+    BasicInfoJob(_FakeDb(), provider).run(job=job)
+
+    assert job.status == "SUCCESS"
+    assert job.job_metadata["theme_sync_status"] == "WARNING"
+    assert job.job_metadata["theme_member_snapshot_status"] == "WARNING"
