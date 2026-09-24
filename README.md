@@ -1051,3 +1051,5 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - `ths_member.is_new` 按题材独立解释：某题材存在合法 Y/N 时只保留 Y；另一题材该列全空时仍保留其全部返回成员，二者不得互相过滤。
 - `stk_limit` 的目标股票 Universe 为空时任务明确失败，并拒绝任何权威删除或空快照写入，已有涨跌停价数据保持不变。
 - Backfill 遇到当天 `EOD_NOT_READY` 时仍以成功延迟结束，但 `progress_pct` 按已完成交易日计算并小于 100%；页面显示“历史数据已完成，今日 EOD 数据待更新”。
+- `stk_limit` 将可证明的 IPO 无涨跌幅限制日视为有效 Raw：SSE/SZSE 为上市起前 5 个市场交易日，BSE 为上市首个市场交易日。判定批量读取 `stock_basic` 与 `trade_calendar`，保留 Provider 返回的 `99999.99/0` 等原始值，并在质量诊断记录 exemption 代码和原因。
+- 价格特殊值本身不能证明 exemption。缺少上市日期、交易日历不完整、交易所元数据冲突或不在 IPO 窗口内时仍写 `INVALID_LIMIT_VALUE/ERROR`；RawCompleteness 复用完全相同的判定，不能把合法入库数据二次判错。

@@ -239,6 +239,8 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Theme Member 的 `is_new` 有效性必须在每个 `theme_code` 内独立判断；一个题材的 Y/N 不得导致另一个 `is_new` 全空题材被过滤。
 - `stk_limit` authoritative reconcile 的目标 Universe 不得为空；为空时必须在任何质量写入、DELETE 或 reconcile 前失败，禁止把已有日期切片删除。
 - `EOD_NOT_READY` 保持 `SUCCESS/eod_deferred`，但完成交易日少于请求交易日时 `progress_pct` 必须小于 100，只有完整 Backfill 才能写 100。
+- 合法 IPO 无涨跌幅限制日属于有效 `stk_limit` Raw：SSE/SZSE 只允许上市起前 5 个开市日，BSE 只允许上市首个开市日，必须依据 `stock_basic.list_date/exchange` 与连续 `trade_calendar` 证据批量判定，禁止硬编码证券代码或仅凭 `down_limit=0` 放行。
+- Price Limit exemption 不得改写 Provider 原始值，也不得进入策略配置或配置哈希。证据缺失、交易所元数据冲突、普通日期的 0/NULL/负值继续 `INVALID_LIMIT_VALUE/ERROR`；Ingestion 与 RawCompleteness 必须调用同一判定语义并持久化 exemption/unclassified 诊断。
 
 ## Milestone 11 研究验证层规则（2026-09-22）
 

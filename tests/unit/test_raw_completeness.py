@@ -3,7 +3,14 @@ from datetime import date
 import app.services.quality.daily_quality as daily_quality_module
 import app.services.quality.raw_completeness as raw_module
 import pytest
-from app.models.market_data import IndexDaily, StockAdjFactor, StockDailyBasic
+from app.models.market_data import (
+    IndexDaily,
+    StockAdjFactor,
+    StockBasic,
+    StockDailyBasic,
+    StockLimitDaily,
+    TradeCalendar,
+)
 from app.services.quality.raw_completeness import RawDatasetCompleteness, check_raw_completeness
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -25,6 +32,126 @@ def test_source_warning_keeps_high_coverage_dataset_at_warning() -> None:
 
     assert result.status == "WARNING"
     assert result.is_acceptable is True
+
+
+def _patch_non_limit_completeness(monkeypatch, expected_codes: set[str]) -> None:
+    original_valid_codes = raw_module._valid_codes_for_date
+    monkeypatch.setattr(
+        raw_module,
+        "expected_stock_daily_codes",
+        lambda db, trade_date: expected_codes,
+    )
+    monkeypatch.setattr(
+        raw_module,
+        "_codes_for_date",
+        lambda db, model, column, trade_date: expected_codes,
+    )
+
+    def valid_codes(db, model, column, trade_date, **kwargs):
+        if model is StockLimitDaily:
+            return original_valid_codes(db, model, column, trade_date, **kwargs)
+        if model is IndexDaily:
+            return {"000300.SH"}, set()
+        return expected_codes, set()
+
+    monkeypatch.setattr(raw_module, "_valid_codes_for_date", valid_codes)
+
+
+def test_raw_completeness_counts_price_limit_exempt_stock_as_valid(monkeypatch) -> None:
+    target = date(2026, 9, 23)
+    expected = {"000001.SZ", "920025.BJ"}
+    persisted = []
+    _patch_non_limit_completeness(monkeypatch, expected)
+    monkeypatch.setattr(
+        raw_module,
+        "persist_coverage_result",
+        lambda db, result, **kwargs: persisted.append((result.dataset, result, kwargs)),
+    )
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    StockBasic.__table__.create(engine)
+    TradeCalendar.__table__.create(engine)
+    StockLimitDaily.__table__.create(engine)
+
+    with Session(engine) as db:
+        db.add(StockBasic(ts_code="920025.BJ", exchange="BSE", list_date=target))
+        db.add(TradeCalendar(cal_date=target, is_open=True, exchange="SSE"))
+        db.add_all([
+            StockLimitDaily(
+                trade_date=target,
+                ts_code="000001.SZ",
+                up_limit=11,
+                down_limit=9,
+            ),
+            StockLimitDaily(
+                trade_date=target,
+                ts_code="920025.BJ",
+                up_limit=99999.99,
+                down_limit=0,
+            ),
+        ])
+        db.commit()
+
+        result = check_raw_completeness(
+            db,
+            target,
+            strategy={"benchmark": {"market_indices": ["000300.SH"]}},
+            persist=True,
+        )
+
+    stk_limit_persist = next(item for item in persisted if item[0] == "stk_limit")
+    assert result.stk_limit is not None
+    assert result.stk_limit.status == "PASS"
+    assert result.stk_limit.actual_rows == 2
+    assert result.stk_limit.coverage_rate == 1.0
+    assert result.stk_limit.invalid_count == 0
+    assert stk_limit_persist[2]["extra_issue_codes"]["price_limit_exempt_codes"] == [
+        "920025.BJ"
+    ]
+
+
+def test_raw_completeness_rejects_unclassified_zero_down_limit(monkeypatch) -> None:
+    listing_day = date(2026, 9, 23)
+    target = date(2026, 9, 24)
+    expected = {"000001.SZ", "920025.BJ"}
+    _patch_non_limit_completeness(monkeypatch, expected)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    StockBasic.__table__.create(engine)
+    TradeCalendar.__table__.create(engine)
+    StockLimitDaily.__table__.create(engine)
+
+    with Session(engine) as db:
+        db.add(
+            StockBasic(ts_code="920025.BJ", exchange="BSE", list_date=listing_day)
+        )
+        db.add_all([
+            TradeCalendar(cal_date=listing_day, is_open=True, exchange="SSE"),
+            TradeCalendar(cal_date=target, is_open=True, exchange="SSE"),
+            StockLimitDaily(
+                trade_date=target,
+                ts_code="000001.SZ",
+                up_limit=11,
+                down_limit=9,
+            ),
+            StockLimitDaily(
+                trade_date=target,
+                ts_code="920025.BJ",
+                up_limit=99999.99,
+                down_limit=0,
+            ),
+        ])
+        db.commit()
+
+        result = check_raw_completeness(
+            db,
+            target,
+            strategy={"benchmark": {"market_indices": ["000300.SH"]}},
+        )
+
+    assert result.stk_limit is not None
+    assert result.stk_limit.status == "ERROR"
+    assert result.stk_limit.actual_rows == 1
+    assert result.stk_limit.coverage_rate == 0.5
+    assert result.stk_limit.invalid_codes == ["920025.BJ"]
 
 
 @pytest.fixture(autouse=True)

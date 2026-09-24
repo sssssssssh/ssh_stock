@@ -18,6 +18,7 @@ from app.models.market_data import (
     StockSuspendDaily,
     TradeCalendar,
 )
+from app.services.price_limit import validate_price_limit_rows
 from app.services.quality.daily_quality import (
     CoverageResult,
     check_daily_coverage,
@@ -304,6 +305,33 @@ def check_raw_completeness(
         trade_date,
         positive_columns=[StockLimitDaily.up_limit, StockLimitDaily.down_limit],
     )
+    limit_issue_codes: dict[str, object] = {}
+    if invalid_limit_codes:
+        invalid_limit_rows = [
+            {
+                "ts_code": row.ts_code,
+                "up_limit": row.up_limit,
+                "down_limit": row.down_limit,
+            }
+            for row in db.execute(
+                select(
+                    StockLimitDaily.ts_code,
+                    StockLimitDaily.up_limit,
+                    StockLimitDaily.down_limit,
+                ).where(
+                    StockLimitDaily.trade_date == trade_date,
+                    StockLimitDaily.ts_code.in_(sorted(invalid_limit_codes)),
+                )
+            ).all()
+        ]
+        limit_validation = validate_price_limit_rows(
+            db,
+            trade_date=trade_date,
+            rows=invalid_limit_rows,
+        )
+        valid_limit_codes |= limit_validation.exempt_valid_codes
+        invalid_limit_codes = set(limit_validation.invalid_codes)
+        limit_issue_codes = limit_validation.issue_codes()
     stk_limit = _coverage_dataset(
         db,
         trade_date,
@@ -318,6 +346,7 @@ def check_raw_completeness(
         preserve_existing_detail_counts=True,
         preserve_existing_issue_details=True,
         source_warnings=_quality_source_warnings(db, trade_date, "stk_limit"),
+        extra_issue_codes=limit_issue_codes,
     )
     return RawCompletenessResult(
         trade_date=trade_date,
@@ -397,6 +426,7 @@ def _coverage_dataset(
     preserve_existing_detail_counts: bool = False,
     preserve_existing_issue_details: bool = False,
     source_warnings: list[str] | None = None,
+    extra_issue_codes: dict[str, object] | None = None,
 ) -> RawDatasetCompleteness:
     invalid_codes = invalid_codes or set()
     result = check_daily_coverage(
@@ -411,6 +441,8 @@ def _coverage_dataset(
         result = replace(result, status="WARNING", warning_count=1)
     if persist:
         issue_codes = _invalid_issue_codes(invalid_codes)
+        if extra_issue_codes:
+            issue_codes.update(extra_issue_codes)
         if source_warnings:
             issue_codes["source_warnings"] = source_warnings
         persist_coverage_result(

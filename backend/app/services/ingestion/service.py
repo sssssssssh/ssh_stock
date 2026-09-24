@@ -54,6 +54,7 @@ from app.services.ingestion.normalizers import (
     normalize_themes,
     normalize_trade_calendar,
 )
+from app.services.price_limit import validate_price_limit_rows
 from app.services.quality.daily_quality import (
     CoverageResult,
     check_daily_coverage,
@@ -531,24 +532,14 @@ class IngestionService:
             duplicate_count = _duplicate_count(target_rows, ["trade_date", "ts_code"])
             if duplicate_count:
                 fatal_issues.append("DUPLICATE_NATURAL_KEY")
-            invalid_limit_rows = [
-                row
-                for row in target_rows
-                if row["up_limit"] is None
-                or row["up_limit"] <= 0
-                or row["down_limit"] is None
-                or row["down_limit"] <= 0
-            ]
-            if invalid_limit_rows:
+            limit_validation = validate_price_limit_rows(
+                self.db,
+                trade_date=trade_date,
+                rows=target_rows,
+            )
+            if limit_validation.invalid_codes:
                 fatal_issues.append("INVALID_LIMIT_VALUE")
-            valid_codes = {
-                str(row["ts_code"])
-                for row in target_rows
-                if row["up_limit"] is not None
-                and row["up_limit"] > 0
-                and row["down_limit"] is not None
-                and row["down_limit"] > 0
-            }
+            valid_codes = limit_validation.valid_codes
             quality = check_daily_coverage(
                 trade_date=trade_date,
                 actual_codes=valid_codes,
@@ -574,7 +565,7 @@ class IngestionService:
                 self.db,
                 quality,
                 duplicate_count=duplicate_count,
-                null_count=len(invalid_limit_rows),
+                null_count=len(limit_validation.invalid_codes),
                 job_id=job_id,
                 extra_issue_codes={
                     "source_warnings": source_warnings,
@@ -584,6 +575,7 @@ class IngestionService:
                     "extra_source_count": len(source_rows) - len(target_rows),
                     "extra_source_codes": extra_source_codes[:100],
                     "fatal_issues": fatal_issues,
+                    **limit_validation.issue_codes(),
                 },
             )
             if quality.status == "ERROR":
@@ -591,7 +583,8 @@ class IngestionService:
                 raise ValueError(
                     "stk_limit quality check failed: "
                     f"coverage={quality.coverage_rate} fatal_issues={fatal_issues} "
-                    f"source_warnings={source_warnings}"
+                    f"source_warnings={source_warnings} "
+                    f"invalid_limit_codes={sorted(limit_validation.invalid_codes)[:100]}"
                 )
             dirty_dates = reconcile_daily_snapshot(
                 self.db,
