@@ -343,6 +343,7 @@ def check_raw_completeness(
         job_id=job_id,
         persist=persist,
         invalid_codes=invalid_limit_codes,
+        force_error_on_invalid=True,
         preserve_existing_detail_counts=True,
         preserve_existing_issue_details=True,
         source_warnings=_quality_source_warnings(db, trade_date, "stk_limit"),
@@ -423,6 +424,7 @@ def _coverage_dataset(
     job_id: uuid.UUID | None,
     persist: bool,
     invalid_codes: set[str] | None = None,
+    force_error_on_invalid: bool = False,
     preserve_existing_detail_counts: bool = False,
     preserve_existing_issue_details: bool = False,
     source_warnings: list[str] | None = None,
@@ -439,6 +441,8 @@ def _coverage_dataset(
     )
     if source_warnings and result.status == "PASS":
         result = replace(result, status="WARNING", warning_count=1)
+    if invalid_codes and force_error_on_invalid:
+        result = replace(result, status="ERROR", error_count=max(result.error_count, 1))
     if persist:
         issue_codes = _invalid_issue_codes(invalid_codes)
         if extra_issue_codes:
@@ -535,11 +539,7 @@ def _index_daily_dataset(
 
 
 def _codes_for_date(db: Session, model: type, column: Any, trade_date: date) -> set[str]:
-    return set(
-        db.execute(select(model.ts_code).where(column == trade_date))
-        .scalars()
-        .all()
-    )
+    return set(db.execute(select(model.ts_code).where(column == trade_date)).scalars().all())
 
 
 def _valid_codes_for_date(
@@ -562,14 +562,10 @@ def _valid_codes_for_date(
 
     validity = and_(*validity_checks)
     valid_codes = set(
-        db.execute(select(model.ts_code).where(column == trade_date, validity))
-        .scalars()
-        .all()
+        db.execute(select(model.ts_code).where(column == trade_date, validity)).scalars().all()
     )
     invalid_codes = set(
-        db.execute(select(model.ts_code).where(column == trade_date, ~validity))
-        .scalars()
-        .all()
+        db.execute(select(model.ts_code).where(column == trade_date, ~validity)).scalars().all()
     )
     return valid_codes, invalid_codes
 

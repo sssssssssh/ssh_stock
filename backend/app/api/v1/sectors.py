@@ -9,8 +9,7 @@ from app.api.v1.common import clamp_limit, clamp_offset, envelope, iso, latest_d
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.market_data import Sector, SectorFactorDaily
-from app.services.analysis_identity import SECTOR_CALC_VERSION
-from app.services.calc_metadata import config_hash
+from app.services.analysis_identity import SECTOR_CALC_VERSION, analysis_strategy_hash
 
 router = APIRouter()
 
@@ -24,7 +23,7 @@ def heat(
     offset: int = 0,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    hash_value = config_hash(get_settings().strategy)
+    hash_value = analysis_strategy_hash(get_settings().strategy)
     target = trade_date or latest_date(
         db,
         SectorFactorDaily.trade_date,
@@ -106,7 +105,7 @@ def overview(
     trade_date: date | None = None,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    hash_value = config_hash(get_settings().strategy)
+    hash_value = analysis_strategy_hash(get_settings().strategy)
     target = trade_date or latest_date(
         db,
         SectorFactorDaily.trade_date,
@@ -154,7 +153,7 @@ def history(
     if not db.get(Sector, sector_id):
         raise HTTPException(status_code=404, detail="sector not found")
 
-    hash_value = config_hash(get_settings().strategy)
+    hash_value = analysis_strategy_hash(get_settings().strategy)
     row_limit = clamp_limit(limit, default=240, maximum=1000)
     stmt = (
         select(SectorFactorDaily)

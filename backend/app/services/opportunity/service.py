@@ -28,10 +28,11 @@ from app.services.analysis_identity import (
     SECTOR_CALC_VERSION,
     THEME_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.opportunity.engine import OpportunityConfig, calculate_opportunities
-from app.services.quality.theme_quality import required_theme_snapshot_dates
+from app.services.quality.theme_quality import historical_theme_members
 
 
 class OpportunityService:
@@ -48,9 +49,24 @@ class OpportunityService:
     ) -> int:
         version = algo_version or self.settings.algo_version
         lookback_start = start - timedelta(days=190)
-        strategy_hash = config_hash(self.settings.strategy)
+        strategy_hash = analysis_strategy_hash(self.settings.strategy)
         opportunity_hash = config_hash(self.settings.opportunity_config)
-        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end, False)
+        market_trade_dates = list(
+            self.db.execute(
+                select(TradeCalendar.cal_date)
+                .where(
+                    TradeCalendar.cal_date >= lookback_start,
+                    TradeCalendar.cal_date <= end,
+                    TradeCalendar.is_open.is_(True),
+                )
+                .order_by(TradeCalendar.cal_date)
+            )
+            .scalars()
+            .all()
+        )
+        theme_members, valid_snapshots, _ = historical_theme_members(
+            self.db, market_trade_dates
+        )
         frame = calculate_opportunities(
             factors=self._versioned_frame(
                 StockFactorDaily, lookback_start, end, FACTOR_CALC_VERSION, strategy_hash
@@ -64,7 +80,7 @@ class OpportunityService:
                 SectorFactorDaily, lookback_start, end, SECTOR_CALC_VERSION, strategy_hash
             ),
             themes=self._all_frame(Theme),
-            theme_members=self._theme_members(snapshot_dates),
+            theme_members=theme_members,
             theme_factors=self._versioned_frame(
                 ThemeFactorDaily,
                 lookback_start,
@@ -72,24 +88,12 @@ class OpportunityService:
                 THEME_CALC_VERSION,
                 opportunity_hash,
             ),
-            valid_snapshots=set(snapshot_dates),
+            valid_snapshots=valid_snapshots,
             start=start,
             end=end,
             algo_version=version,
             config=OpportunityConfig.from_dict(self.settings.opportunity_config),
-            market_trade_dates=list(
-                self.db.execute(
-                    select(TradeCalendar.cal_date)
-                    .where(
-                        TradeCalendar.cal_date >= lookback_start,
-                        TradeCalendar.cal_date <= end,
-                        TradeCalendar.is_open.is_(True),
-                    )
-                    .order_by(TradeCalendar.cal_date)
-                )
-                .scalars()
-                .all()
-            ),
+            market_trade_dates=market_trade_dates,
         )
         metadata = calculation_metadata(
             config=self.settings.opportunity_config,
@@ -131,13 +135,10 @@ class OpportunityService:
         ]
         if model is ThemeFactorDaily:
             filters.append(
-                ThemeFactorDaily.source_strategy_config_hash == config_hash(self.settings.strategy)
+                ThemeFactorDaily.source_strategy_config_hash
+                == analysis_strategy_hash(self.settings.strategy)
             )
-        rows = (
-            self.db.execute(select(model).where(*filters))
-            .scalars()
-            .all()
-        )
+        rows = self.db.execute(select(model).where(*filters)).scalars().all()
         return _models_frame(rows, model)
 
     def _states(self, start: date, end: date, algo_version: str, hash_value: str) -> pd.DataFrame:
@@ -167,7 +168,9 @@ class OpportunityService:
                 select(ThemeMemberSnapshot).where(
                     ThemeMemberSnapshot.snapshot_date.in_(snapshot_dates)
                 )
-            ).scalars().all(),
+            )
+            .scalars()
+            .all(),
             ThemeMemberSnapshot,
         )
 

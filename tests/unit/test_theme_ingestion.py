@@ -8,11 +8,47 @@ from app.providers.tushare_provider import TushareProvider
 from app.services.ingestion.normalizers import (
     normalize_theme_daily,
     normalize_theme_limit,
+    normalize_theme_member_intervals,
     normalize_theme_members,
     normalize_theme_moneyflow,
     normalize_themes,
 )
 from app.services.ingestion.service import IngestionService, ThemeMemberSnapshotQualityError
+
+
+def test_theme_member_intervals_use_only_explicit_source_dates() -> None:
+    rows = normalize_theme_member_intervals(
+        pd.DataFrame(
+            [
+                {
+                    "ts_code": "885001.TI",
+                    "con_code": "000001.SZ",
+                    "in_date": "20200102",
+                    "out_date": None,
+                    "is_new": "Y",
+                },
+                {
+                    "ts_code": "885001.TI",
+                    "con_code": "000002.SZ",
+                    "in_date": None,
+                    "out_date": None,
+                    "is_new": "Y",
+                },
+            ]
+        )
+    )
+
+    assert rows == [
+        {
+            "theme_code": "885001.TI",
+            "ts_code": "000001.SZ",
+            "valid_from": date(2020, 1, 2),
+            "valid_to": None,
+            "source": "THS",
+            "source_is_new": True,
+            "quality_flag": "RELIABLE",
+        }
+    ]
 
 
 class _SnapshotResult:

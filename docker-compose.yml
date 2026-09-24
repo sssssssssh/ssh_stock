@@ -1,21 +1,22 @@
+x-app-common: &app-common
+  image: ssh-stock-app:local
+  build:
+    context: .
+  env_file:
+    - .env
+  environment:
+    DATABASE_URL: ${DOCKER_DATABASE_URL}
+
 services:
   migration:
-    build: .
+    <<: *app-common
     command: python -m alembic upgrade head
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL}
     restart: "no"
 
   backend:
-    build: .
+    <<: *app-common
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -32,25 +33,33 @@ services:
       retries: 12
 
   worker:
-    build: .
+    <<: *app-common
     command: python -m app.cli worker
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
 
   scheduler:
-    build: .
+    <<: *app-common
     command: python -m app.cli scheduler
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DOCKER_DATABASE_URL}
     depends_on:
       migration:
         condition: service_completed_successfully
+
+  frontend:
+    image: ssh-stock-frontend:local
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1}:${FRONTEND_PORT:-5173}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 12

@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -11,7 +12,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
-from app.services.calc_metadata import config_hash
+from app.services.analysis_identity import analysis_strategy_hash
 from app.services.dirty import (
     latest_raw_trade_date,
     repairable_dirty_ranges,
@@ -76,10 +77,7 @@ def list_jobs(
     )
     total_stmt = select(func.count()).select_from(JobRun).where(*filters)
     return envelope(
-        [
-            _job_payload(row)
-            for row in rows
-        ],
+        [_job_payload(row) for row in rows],
         {"limit": row_limit, "offset": row_offset, "total": scalar_count(db, total_stmt)},
     )
 
@@ -167,7 +165,7 @@ def enqueue_recalculate_job(
         end = latest
         dirty_range_ids = [row.id for row in dirty_ranges]
     settings = get_settings()
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     job = _enqueue_job(
         db,
         "recalculate",
@@ -213,6 +211,27 @@ def enqueue_validate_data_job(
     return envelope(_job_payload(job), {"accepted": True})
 
 
+@router.post("/{job_id}/cancel")
+def cancel_job(job_id: UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
+    job = db.get(JobRun, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if job.status == "QUEUED":
+        job.status = "CANCELLED"
+        job.cancel_requested = True
+        job.finished_at = datetime.now(UTC)
+        job.step = "cancelled before execution"
+    elif job.status == "RUNNING":
+        job.cancel_requested = True
+        job.step = "cancellation requested"
+    elif job.status != "CANCELLED":
+        raise HTTPException(status_code=409, detail="job is already finished")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return envelope(_job_payload(job))
+
+
 def _enqueue_job(
     db: Session,
     job_type: str,
@@ -238,9 +257,7 @@ def _load_dirty_ranges(db: Session, dirty_range_ids: list[int]) -> list[DataDirt
     if not dirty_range_ids:
         return []
     return list(
-        db.execute(
-            select(DataDirtyRange).where(DataDirtyRange.id.in_(dirty_range_ids))
-        )
+        db.execute(select(DataDirtyRange).where(DataDirtyRange.id.in_(dirty_range_ids)))
         .scalars()
         .all()
     )
@@ -250,9 +267,7 @@ def _job_payload(row: JobRun) -> dict[str, Any]:
     return {
         "id": str(row.id),
         "job_type": row.job_type,
-        "target_trade_date": row.target_trade_date.isoformat()
-        if row.target_trade_date
-        else None,
+        "target_trade_date": row.target_trade_date.isoformat() if row.target_trade_date else None,
         "started_at": row.started_at.isoformat() if row.started_at else None,
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         "heartbeat_at": row.heartbeat_at.isoformat() if row.heartbeat_at else None,
@@ -261,5 +276,6 @@ def _job_payload(row: JobRun) -> dict[str, Any]:
         "step": row.step,
         "row_count": row.row_count,
         "error_message": row.error_message,
+        "cancel_requested": row.cancel_requested,
         "metadata": row.job_metadata,
     }

@@ -24,8 +24,10 @@ from app.services.analysis_identity import (
     RESEARCH_EVAL_VERSION,
     RESEARCH_VERSION,
     TRADE_STATUS_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.theme_quality import theme_context_availability
 from app.services.research.forward_eval import evaluate_stock_forward
 
 STATES = ("S1", "S2", "S3", "S4", "S5")
@@ -127,7 +129,7 @@ def evaluate_opportunity_batch(
     *,
     progress: Callable[[int], None] | None = None,
 ) -> dict[str, int]:
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
     research = settings.research_config
@@ -165,7 +167,10 @@ def evaluate_opportunity_batch(
     }
     if not bases:
         stats = replace_slice_rows_with_stats(
-            db, OpportunityForwardEval, (), scope_filters=scope_filters,
+            db,
+            OpportunityForwardEval,
+            (),
+            scope_filters=scope_filters,
             key_columns=OPPORTUNITY_KEY,
         )
         counts["deleted_rows"] = stats["deleted"]
@@ -181,10 +186,12 @@ def evaluate_opportunity_batch(
         )
     ).all()
     regimes = {row.trade_date: row.regime for row in market_rows}
+    theme_context = theme_context_availability(db, base_dates)
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)
     codes = sorted(by_code)
+
     def row_batches() -> Iterator[list[dict[str, Any]]]:
         for offset in range(0, len(codes), 250):
             chunk = codes[offset : offset + 250]
@@ -213,6 +220,12 @@ def evaluate_opportunity_batch(
                             "entry_basis": research["stock"]["entry_basis"],
                             "benchmark_code": research["benchmark_code"],
                             "market_regime": regimes.get(base.trade_date),
+                            "theme_context_available": bool(
+                                theme_context.get(base.trade_date, {}).get("available", False)
+                            ),
+                            "theme_context_coverage": theme_context.get(
+                                base.trade_date, {}
+                            ).get("coverage"),
                             **{key: getattr(base, key) for key in SNAPSHOT_COLUMNS},
                             **forward,
                         }
@@ -220,7 +233,10 @@ def evaluate_opportunity_batch(
             yield payload
 
     stats = replace_slice_rows_with_stats(
-        db, OpportunityForwardEval, row_batches(), scope_filters=scope_filters,
+        db,
+        OpportunityForwardEval,
+        row_batches(),
+        scope_filters=scope_filters,
         key_columns=OPPORTUNITY_KEY,
     )
     counts["eval_rows"] = stats["upserted"]

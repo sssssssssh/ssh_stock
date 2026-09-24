@@ -20,6 +20,10 @@ import SectorHeatPanel from "./components/SectorHeat.vue";
 import StockPool from "./components/StockPool.vue";
 import ThemeDetail from "./components/ThemeDetail.vue";
 import ThemeHeatTable from "./components/ThemeHeatTable.vue";
+import LoginView from "./components/LoginView.vue";
+import ChangePasswordView from "./components/ChangePasswordView.vue";
+import UserMenu from "./components/UserMenu.vue";
+import { fetchCurrentUser, logout } from "./services/auth";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -37,6 +41,7 @@ import {
   fetchRightSidePool,
   fetchSectorHeat,
   fetchSystemStatus,
+  fetchSystemRuntime,
   fetchThemeHeat,
   fetchThemeOverview,
   fetchTrendPool
@@ -53,8 +58,10 @@ import type {
   SectorHeat,
   StockPoolItem,
   SystemStatus,
+  SystemRuntime,
   ThemeHeat,
-  ThemeOverview
+  ThemeOverview,
+  AuthUser
 } from "./types";
 
 type ViewKey = "overview" | "data" | "long" | "short";
@@ -74,6 +81,9 @@ use([
 ]);
 
 const loading = ref(true);
+const authLoading = ref(true);
+const authUser = ref<AuthUser | null>(null);
+const showChangePassword = ref(false);
 const submittingBasicInfo = ref(false);
 const submittingIngestion = ref(false);
 const submittingRecalculation = ref(false);
@@ -103,6 +113,7 @@ const klineLoading = ref(false);
 const klineError = ref("");
 const nowMs = ref(Date.now());
 const status = ref<SystemStatus | null>(null);
+const runtime = ref<SystemRuntime | null>(null);
 const summary = ref<DashboardSummary | null>(null);
 const sectorHeat = ref<SectorHeat[]>([]);
 const dataCoverage = ref<DataCoverageRow[]>([]);
@@ -258,6 +269,7 @@ async function loadData() {
   try {
     const [
       nextStatus,
+      nextRuntime,
       nextSummary,
       nextDataCoverage,
       nextDataCalendar,
@@ -273,6 +285,7 @@ async function loadData() {
       nextTrendOpportunities
     ] = await Promise.all([
       fetchSystemStatus(),
+      fetchSystemRuntime(),
       fetchDashboardSummary(),
       fetchDataCoverage(),
       fetchDataCalendar(monthStartIso(calendarMonth.value), monthEndIso(calendarMonth.value)),
@@ -288,6 +301,7 @@ async function loadData() {
       fetchOpportunityTrends()
     ]);
     status.value = nextStatus;
+    runtime.value = nextRuntime;
     summary.value = nextSummary;
     dataCoverage.value = nextDataCoverage;
     dataCalendar.value = nextDataCalendar;
@@ -623,7 +637,8 @@ function lineSeries(name: string, data: Array<number | null>) {
 
 window.addEventListener("resize", handleResize);
 
-onMounted(() => {
+function startWorkspace() {
+  if (jobPollTimer) return;
   void loadData();
   jobPollTimer = window.setInterval(() => {
     void refreshJobStatus();
@@ -631,10 +646,63 @@ onMounted(() => {
   elapsedTimer = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 1000);
+}
+
+function stopWorkspace() {
+  if (jobPollTimer) window.clearInterval(jobPollTimer);
+  if (elapsedTimer) window.clearInterval(elapsedTimer);
+  jobPollTimer = undefined;
+  elapsedTimer = undefined;
+}
+
+function handleAuthenticated(user: AuthUser) {
+  authUser.value = user;
+  showChangePassword.value = user.must_change_password;
+  if (!user.must_change_password) startWorkspace();
+}
+
+async function handleLogout() {
+  try {
+    await logout();
+  } finally {
+    stopWorkspace();
+    authUser.value = null;
+    showChangePassword.value = false;
+  }
+}
+
+function handlePasswordChanged() {
+  stopWorkspace();
+  authUser.value = null;
+  showChangePassword.value = false;
+}
+
+function handleAuthRequired() {
+  stopWorkspace();
+  authUser.value = null;
+  showChangePassword.value = false;
+}
+
+function handlePasswordRequired() {
+  showChangePassword.value = true;
+}
+
+onMounted(async () => {
+  window.addEventListener("auth-required", handleAuthRequired);
+  window.addEventListener("password-change-required", handlePasswordRequired);
+  try {
+    handleAuthenticated(await fetchCurrentUser());
+  } catch {
+    authUser.value = null;
+  } finally {
+    authLoading.value = false;
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
+  window.removeEventListener("auth-required", handleAuthRequired);
+  window.removeEventListener("password-change-required", handlePasswordRequired);
   if (jobPollTimer) {
     window.clearInterval(jobPollTimer);
   }
@@ -788,6 +856,30 @@ function metadataText(job: JobRun) {
     typeof job.metadata.factor_chunk_start === "string" ? job.metadata.factor_chunk_start : null;
   const factorChunkEnd =
     typeof job.metadata.factor_chunk_end === "string" ? job.metadata.factor_chunk_end : null;
+  const themeChunkIndex =
+    typeof job.metadata.theme_chunk_index === "number" ? job.metadata.theme_chunk_index : null;
+  const themeChunkCount =
+    typeof job.metadata.theme_chunk_count === "number" ? job.metadata.theme_chunk_count : null;
+  const themeChunkStart =
+    typeof job.metadata.theme_chunk_start === "string" ? job.metadata.theme_chunk_start : null;
+  const themeChunkEnd =
+    typeof job.metadata.theme_chunk_end === "string" ? job.metadata.theme_chunk_end : null;
+  const opportunityChunkIndex =
+    typeof job.metadata.opportunity_chunk_index === "number"
+      ? job.metadata.opportunity_chunk_index
+      : null;
+  const opportunityChunkCount =
+    typeof job.metadata.opportunity_chunk_count === "number"
+      ? job.metadata.opportunity_chunk_count
+      : null;
+  const opportunityChunkStart =
+    typeof job.metadata.opportunity_chunk_start === "string"
+      ? job.metadata.opportunity_chunk_start
+      : null;
+  const opportunityChunkEnd =
+    typeof job.metadata.opportunity_chunk_end === "string"
+      ? job.metadata.opportunity_chunk_end
+      : null;
   const skippedRawDays =
     typeof job.metadata.skipped_raw_days === "number" ? job.metadata.skipped_raw_days : 0;
   const isDailyStage =
@@ -798,10 +890,14 @@ function metadataText(job: JobRun) {
   const stagePart = stage && stage !== "daily" ? ` / ${jobStageText(job)}` : "";
   const chunkPart = factorChunkIndex !== null && factorChunkCount !== null
     ? ` / 因子分块 ${factorChunkIndex}/${factorChunkCount}`
-    : "";
-  const chunkDatePart = factorChunkStart && factorChunkEnd
-    ? `：${factorChunkStart} 到 ${factorChunkEnd}`
-    : "";
+    : themeChunkIndex !== null && themeChunkCount !== null
+      ? ` / 题材分块 ${themeChunkIndex}/${themeChunkCount}`
+      : opportunityChunkIndex !== null && opportunityChunkCount !== null
+        ? ` / 机会池分块 ${opportunityChunkIndex}/${opportunityChunkCount}`
+        : "";
+  const chunkStart = factorChunkStart || themeChunkStart || opportunityChunkStart;
+  const chunkEnd = factorChunkEnd || themeChunkEnd || opportunityChunkEnd;
+  const chunkDatePart = chunkStart && chunkEnd ? `：${chunkStart} 到 ${chunkEnd}` : "";
   const progressPart = isDailyStage && currentIndex !== null && total !== null
     ? ` / 第 ${currentIndex}/${total} 个交易日`
     : isDailyStage && completed !== null && total !== null
@@ -832,7 +928,10 @@ function jobStageText(job: JobRun) {
     factors: "计算个股因子",
     market: "计算市场温度",
     sectors: "计算行业热度",
+    themes: "计算题材热度",
     states: "计算趋势状态与策略信号",
+    opportunities: "计算机会池",
+    cross_table_quality: "校验跨表质量",
     signal_eval: "评估信号后验",
     eod_deferred: "历史数据已完成，今日 EOD 数据待更新",
     success: "任务完成"
@@ -861,7 +960,10 @@ function jobStepText(job: JobRun) {
   if (step.startsWith("90 calculate stock factors")) return "90 计算个股因子";
   if (step.startsWith("100 calculate market score")) return "100 计算市场温度";
   if (step.startsWith("110 calculate sector heat")) return "110 计算行业热度";
+  if (step.startsWith("115 theme heat")) return "115 计算题材热度分块";
   if (step.startsWith("120 calculate trend states")) return "120 计算趋势状态与策略信号";
+  if (step.startsWith("130 opportunities")) return "130 计算机会池分块";
+  if (step.startsWith("180 validate cross table quality")) return "180 校验跨表质量";
   if (step.startsWith("175 raw sync complete; current EOD deferred")) {
     return "175 历史数据已完成，今日 EOD 数据待更新";
   }
@@ -906,10 +1008,30 @@ function rowCountHint(job: JobRun) {
   if (stage === "factors" && typeof job.metadata.factor_chunk_index === "number") {
     return "当前因子分块完成后更新行数";
   }
+  if (stage === "themes" && typeof job.metadata.theme_chunk_index === "number") {
+    return "当前题材分块完成后更新行数";
+  }
+  if (
+    stage === "opportunities" &&
+    typeof job.metadata.opportunity_chunk_index === "number"
+  ) {
+    return "当前机会池分块完成后更新行数";
+  }
   if (stage === "daily" && job.metadata.current_day_action === "skip") {
     return "该交易日原始数据已完整，已跳过重复拉取";
   }
-  if (["factors", "market", "sectors", "states", "signal_eval"].includes(stage)) {
+  if (
+    [
+      "factors",
+      "market",
+      "sectors",
+      "themes",
+      "states",
+      "opportunities",
+      "cross_table_quality",
+      "signal_eval"
+    ].includes(stage)
+  ) {
     return "当前计算阶段完成后更新行数";
   }
   return "";
@@ -940,7 +1062,16 @@ function statusLabel(status: string) {
 </script>
 
 <template>
-  <main class="workspace-shell">
+  <main v-if="authLoading" class="auth-shell"><div class="auth-loading">正在确认登录状态</div></main>
+  <LoginView v-else-if="!authUser" @authenticated="handleAuthenticated" />
+  <ChangePasswordView
+    v-else-if="showChangePassword"
+    :username="authUser.username"
+    :required="authUser.must_change_password"
+    @changed="handlePasswordChanged"
+    @cancel="showChangePassword = false"
+  />
+  <main v-else class="workspace-shell">
     <aside class="side-nav">
       <div class="brand-block">
         <div class="brand-logo">空</div>
@@ -979,9 +1110,16 @@ function statusLabel(status: string) {
           <h2>{{ activeNav?.label || "总览" }}</h2>
           <p>{{ activeNav?.description || "市场状态与后验表现" }}</p>
         </div>
-        <button class="refresh-button" :disabled="loading" @click="loadData">
-          {{ loading ? "刷新中" : "刷新" }}
-        </button>
+        <div class="topbar-actions">
+          <button class="refresh-button" :disabled="loading" @click="loadData">
+            {{ loading ? "刷新中" : "刷新" }}
+          </button>
+          <UserMenu
+            :username="authUser.username"
+            @change-password="showChangePassword = true"
+            @logout="handleLogout"
+          />
+        </div>
       </header>
 
       <div v-if="errorMessage" class="error-strip">{{ errorMessage }}</div>
@@ -1049,6 +1187,12 @@ function statusLabel(status: string) {
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">
+        <section class="runtime-strip" aria-label="运行状态">
+          <div><span>Worker 心跳</span><strong>{{ runtime?.worker_heartbeat || "--" }}</strong></div>
+          <div><span>当前任务</span><strong>{{ runtime?.active_job?.step || "无" }}</strong></div>
+          <div><span>排队 / 运行</span><strong>{{ runtime?.queued_count ?? 0 }} / {{ runtime?.running_count ?? 0 }}</strong></div>
+          <div><span>Raw / 分析 / 机会</span><strong>{{ runtime?.latest_raw_date || "--" }} / {{ runtime?.latest_analysis_date || "--" }} / {{ runtime?.latest_opportunity_date || "--" }}</strong></div>
+        </section>
         <article class="panel action-panel" :class="{ collapsed: collapsedDataPanels.recalc }">
           <div class="panel-title coverage-title">
             <div>

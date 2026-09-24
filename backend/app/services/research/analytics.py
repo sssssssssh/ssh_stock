@@ -14,6 +14,7 @@ from app.services.analysis_identity import (
     RESEARCH_VERSION,
     THEME_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 
@@ -39,7 +40,11 @@ OPPORTUNITY_BUCKETS = (
 )
 THEME_GROUPS = ("lifecycle",)
 THEME_BUCKETS = (
-    "heat_score", "moneyflow_score", "limit_strength_score", "heat_momentum1", "heat_momentum3"
+    "heat_score",
+    "moneyflow_score",
+    "limit_strength_score",
+    "heat_momentum1",
+    "heat_momentum3",
 )
 BUCKET_FIELDS = {
     **{field: {"bounded_100": True} for field in OPPORTUNITY_BUCKETS},
@@ -153,7 +158,7 @@ def _identity_filters(model: type, settings: Any) -> list[Any]:
     ]
     if model is OpportunityForwardEval or model is ThemeForwardEval:
         filters.append(model.eval_version == RESEARCH_EVAL_VERSION)
-        filters.append(model.strategy_config_hash == config_hash(settings.strategy))
+        filters.append(model.strategy_config_hash == analysis_strategy_hash(settings.strategy))
     filters.append(model.opportunity_config_hash == config_hash(settings.opportunity_config))
     if model is OpportunityForwardEval or model is ResearchTransitionEval:
         filters.append(model.algo_version == settings.algo_version)
@@ -162,7 +167,7 @@ def _identity_filters(model: type, settings: Any) -> list[Any]:
     if model is ThemeForwardEval:
         filters.append(model.theme_calc_version == THEME_CALC_VERSION)
     if model is ResearchTransitionEval:
-        filters.append(model.strategy_config_hash == config_hash(settings.strategy))
+        filters.append(model.strategy_config_hash == analysis_strategy_hash(settings.strategy))
         filters.append(model.trend_calc_version == TREND_CALC_VERSION)
         filters.append(model.opportunity_calc_version == OPPORTUNITY_CALC_VERSION)
     return filters
@@ -274,8 +279,10 @@ def bucket_stats(
     if research_type not in RESEARCH_TYPES:
         raise ValueError(f"unsupported research_type: {research_type}")
     bucket_states = {
-        "LEFT": ("S1", "S2"), "RIGHT": ("S3",),
-        "TREND": ("S4", "S5"), "POSITION": ("S4", "S5"),
+        "LEFT": ("S1", "S2"),
+        "RIGHT": ("S3",),
+        "TREND": ("S4", "S5"),
+        "POSITION": ("S4", "S5"),
     }
     extra = (
         (OpportunityForwardEval.state.in_(bucket_states[research_type]),)
@@ -294,9 +301,7 @@ def bucket_stats(
             lower = int(float(score) // size) * size
         groups.setdefault(lower, Cohort(settings.research_config["min_sample_warning"])).add(row)
     result = []
-    for lower, cohort in sorted(
-        groups.items(), key=lambda item: (item[0] is None, item[0] or 0)
-    ):
+    for lower, cohort in sorted(groups.items(), key=lambda item: (item[0] is None, item[0] or 0)):
         if lower is None:
             label = "UNKNOWN"
         else:
@@ -405,8 +410,13 @@ def context_stats(
         raise ValueError(f"unsupported group_by: {group_by}")
     return grouped_stats(
         _read_rows(
-            db, OpportunityForwardEval, settings, start, end,
-            columns=(group_by,), extra_filters=_universe_filters(settings, research_type),
+            db,
+            OpportunityForwardEval,
+            settings,
+            start,
+            end,
+            columns=(group_by,),
+            extra_filters=_universe_filters(settings, research_type),
         ),
         group_by,
         settings.research_config["min_sample_warning"],

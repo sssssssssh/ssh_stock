@@ -10,6 +10,7 @@ import type {
   SectorHeat,
   StockPoolItem,
   SystemStatus,
+  SystemRuntime,
   ThemeHeat,
   ThemeOverview
 } from "../types";
@@ -17,11 +18,19 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
-  const body = (await response.json().catch(() => null)) as ApiEnvelope<T> | { detail?: string } | null;
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, credentials: "include" });
+  const body = (await response.json().catch(() => null)) as
+    | ApiEnvelope<T>
+    | { detail?: string | { code?: string } }
+    | null;
   if (!response.ok) {
     const detail = body && "detail" in body ? body.detail : null;
-    throw new Error(detail || `HTTP ${response.status}`);
+    const code = typeof detail === "object" && detail ? detail.code : null;
+    if (response.status === 401) window.dispatchEvent(new Event("auth-required"));
+    if (response.status === 403 && code === "PASSWORD_CHANGE_REQUIRED") {
+      window.dispatchEvent(new Event("password-change-required"));
+    }
+    throw new Error(code || (typeof detail === "string" ? detail : `HTTP ${response.status}`));
   }
   if (!body || !("code" in body) || body.code !== 0) {
     throw new Error((body && "message" in body && body.message) || "API_ERROR");
@@ -31,6 +40,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchSystemStatus(): Promise<SystemStatus> {
   return request<SystemStatus>("/system/status");
+}
+
+export function fetchSystemRuntime(): Promise<SystemRuntime> {
+  return request<SystemRuntime>("/system/runtime");
 }
 
 export function fetchDashboardSummary(): Promise<DashboardSummary> {

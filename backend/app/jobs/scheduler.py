@@ -9,7 +9,13 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.jobs.research_job import RESEARCH_JOB_TYPE, queue_research_eval
 from app.models.job import JobRun
-from app.models.market_data import StockDaily, TradeCalendar
+from app.models.market_data import StockDaily, StockOpportunityDaily, StockStateDaily, TradeCalendar
+from app.services.analysis_identity import (
+    OPPORTUNITY_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
+from app.services.calc_metadata import config_hash
 from app.services.job_guard import (
     ActiveIngestionJobError,
     ResearchQueueConflictError,
@@ -17,6 +23,7 @@ from app.services.job_guard import (
     recover_stale_research_jobs,
     research_can_run,
 )
+from app.services.retention import run_retention
 
 
 def run_scheduler() -> None:
@@ -44,6 +51,17 @@ def run_scheduler() -> None:
         "cron",
         id="weekly_basic_refresh",
         **cron_trigger_kwargs(basic_cron),
+    )
+
+    def cleanup_retention() -> None:
+        with SessionLocal() as db:
+            logger.info("retention cleanup result={}", run_retention(db))
+
+    scheduler.add_job(
+        cleanup_retention,
+        "cron",
+        id="daily_retention",
+        **cron_trigger_kwargs("15 3 * * *"),
     )
     research_runtime = settings.app_config.get("research", {})
     if research_runtime.get("enabled", False):
@@ -117,12 +135,44 @@ def run_scheduled_research(db, target_date: date) -> bool:
     )
     if active:
         return False
+    expected_latest = db.scalar(
+        select(func.max(TradeCalendar.cal_date)).where(
+            TradeCalendar.is_open.is_(True), TradeCalendar.cal_date <= target_date
+        )
+    )
+    if expected_latest is None:
+        return False
+    settings = get_settings()
     latest_raw = db.scalar(
         select(func.max(StockDaily.trade_date)).where(StockDaily.trade_date <= target_date)
     )
-    if latest_raw is None:
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    latest_state = db.scalar(
+        select(func.max(StockStateDaily.trade_date)).where(
+            StockStateDaily.algo_version == settings.algo_version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == strategy_hash,
+        )
+    )
+    latest_opportunity = db.scalar(
+        select(func.max(StockOpportunityDaily.trade_date)).where(
+            StockOpportunityDaily.algo_version == settings.algo_version,
+            StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
+            StockOpportunityDaily.config_hash == opportunity_hash,
+        )
+    )
+    if not _research_sources_current(
+        expected_latest, latest_raw, latest_state, latest_opportunity
+    ):
+        logger.warning(
+            "RESEARCH_SOURCE_STALE expected={} raw={} state={} opportunity={}",
+            expected_latest,
+            latest_raw,
+            latest_state,
+            latest_opportunity,
+        )
         return False
-    settings = get_settings()
     open_dates = (
         db.execute(
             select(TradeCalendar.cal_date)
@@ -143,6 +193,18 @@ def run_scheduled_research(db, target_date: date) -> bool:
     except ResearchQueueConflictError:
         return False
     return True
+
+
+def _research_sources_current(
+    expected_latest: date,
+    latest_raw: date | None,
+    latest_state: date | None,
+    latest_opportunity: date | None,
+) -> bool:
+    return all(
+        source_date is not None and source_date >= expected_latest
+        for source_date in (latest_raw, latest_state, latest_opportunity)
+    )
 
 
 def _scheduler_today(timezone: ZoneInfo) -> date:

@@ -24,6 +24,7 @@ from app.models.market_data import (
     Theme,
     ThemeDaily,
     ThemeLimitDaily,
+    ThemeMemberInterval,
     ThemeMemberSnapshot,
     ThemeMoneyflowDaily,
     TradeCalendar,
@@ -49,6 +50,7 @@ from app.services.ingestion.normalizers import (
     normalize_stock_suspend,
     normalize_theme_daily,
     normalize_theme_limit,
+    normalize_theme_member_intervals,
     normalize_theme_members,
     normalize_theme_moneyflow,
     normalize_themes,
@@ -812,6 +814,7 @@ class IngestionService:
                 raise ValueError("no active THS themes; sync catalog first")
             frame = self.provider.get_ths_concept_members(sorted(requested_codes))
             rows = normalize_theme_members(frame, snapshot_date)
+            interval_rows = normalize_theme_member_intervals(frame)
             returned_codes = {str(row["theme_code"]) for row in rows}
             missing = sorted(requested_codes - returned_codes)
             unexpected = sorted(returned_codes - requested_codes)
@@ -918,6 +921,13 @@ class IngestionService:
                 rows,
                 ["snapshot_date", "theme_code", "ts_code"],
             )
+            if interval_rows:
+                upsert_rows(
+                    self.db,
+                    ThemeMemberInterval,
+                    interval_rows,
+                    ["theme_code", "ts_code", "valid_from"],
+                )
             _persist_theme_quality(
                 self.db,
                 snapshot_date,

@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.job import JobRun, ProviderApiLog
@@ -43,7 +43,7 @@ def update_job(
     now = datetime.now(UTC)
     if status is not None:
         job.status = status
-        if status in {"SUCCESS", "PARTIAL", "FAILED"}:
+        if status in {"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"}:
             job.finished_at = now
     if status == "RUNNING" or (status is None and job.status == "RUNNING"):
         job.heartbeat_at = now
@@ -79,6 +79,22 @@ def touch_job_heartbeat(
     )
     db.commit()
     return result.rowcount == 1
+
+
+def cancel_requested(db: Session, job_id: object) -> bool:
+    result = db.execute(select(JobRun.cancel_requested).where(JobRun.id == job_id))
+    scalar = getattr(result, "scalar_one_or_none", None)
+    return bool(scalar()) if callable(scalar) else False
+
+
+def finish_cancelled(db: Session, job: JobRun, *, metadata: dict[str, Any] | None = None) -> None:
+    update_job(
+        db,
+        job,
+        status="CANCELLED",
+        step="cancelled by user",
+        metadata=metadata if metadata is not None else dict(job.job_metadata or {}),
+    )
 
 
 def log_provider_call(

@@ -198,7 +198,7 @@ def test_research_identity_drift_fails_before_trade_batches(monkeypatch, changed
     queued = research_job.current_research_identity(queued_settings)
     current_settings = queued_settings.model_copy(deep=True)
     if changed == "strategy":
-        current_settings.strategy["identity_test"] = "changed"
+        current_settings.strategy.setdefault("trend", {})["identity_test"] = "changed"
     elif changed == "research_config":
         current_settings.research_config["identity_test"] = "changed"
     else:

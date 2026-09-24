@@ -538,6 +538,26 @@ class ThemeMemberSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ThemeMemberInterval(Base):
+    __tablename__ = "theme_member_interval"
+    __table_args__ = (
+        PrimaryKeyConstraint("theme_code", "ts_code", "valid_from"),
+        Index("idx_theme_member_interval_stock_dates", "ts_code", "valid_from", "valid_to"),
+    )
+
+    theme_code: Mapped[str] = mapped_column(ForeignKey("theme.theme_code"))
+    ts_code: Mapped[str] = mapped_column(String(16))
+    valid_from: Mapped[date] = mapped_column(Date)
+    valid_to: Mapped[date | None] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_is_new: Mapped[bool | None] = mapped_column(Boolean)
+    quality_flag: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ThemeDaily(Base):
     __tablename__ = "theme_daily"
     __table_args__ = (
@@ -798,6 +818,8 @@ class OpportunityForwardEval(_ResearchForwardFields, Base):
     primary_theme_heat: Mapped[float | None] = mapped_column(Float)
     primary_theme_lifecycle: Mapped[str | None] = mapped_column(String(32))
     hot_theme_count: Mapped[int | None] = mapped_column(Integer)
+    theme_context_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    theme_context_coverage: Mapped[float | None] = mapped_column(Float)
 
 
 class ThemeForwardEval(_ResearchForwardFields, Base):
@@ -850,6 +872,8 @@ class ThemeForwardEval(_ResearchForwardFields, Base):
     rps60_median: Mapped[float | None] = mapped_column(Float)
     source_coverage: Mapped[float | None] = mapped_column(Float)
     data_coverage: Mapped[float | None] = mapped_column(Float)
+    theme_context_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    theme_context_coverage: Mapped[float | None] = mapped_column(Float)
 
 
 class ResearchTransitionEval(Base):

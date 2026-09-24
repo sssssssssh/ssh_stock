@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from app.core.config import get_settings
 from app.models.market_data import StockOpportunityDaily, ThemeFactorDaily
+from app.services.analysis_identity import analysis_strategy_hash
 from app.services.calc_metadata import config_hash
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
@@ -81,13 +82,13 @@ def test_research_filters_unverified_or_old_source_lineage(
         _sql(stmt) for stmt in db.statements if f"FROM {source_table}" in str(stmt)
     )
     assert f"{source_table}.source_strategy_config_hash" in source_sql
-    assert config_hash(settings.strategy) in source_sql
-    assert "legacy-unverified" != config_hash(settings.strategy)
+    assert analysis_strategy_hash(settings.strategy) in source_sql
+    assert "legacy-unverified" != analysis_strategy_hash(settings.strategy)
     assert result["base_rows"] == 0
     assert result["deleted_rows"] == 1
     assert calls
     scope_sql = _sql(select(1).where(*calls[0]["scope_filters"]))
-    assert config_hash(settings.strategy) in scope_sql
+    assert analysis_strategy_hash(settings.strategy) in scope_sql
     assert config_hash(settings.opportunity_config) in scope_sql
     assert config_hash(settings.research_config) in scope_sql
 
@@ -103,7 +104,7 @@ def test_current_source_lineage_is_copied_into_forward_result(
     monkeypatch, module, source_model, source_code, code_field
 ) -> None:
     settings = get_settings()
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     values = {column.name: None for column in source_model.__table__.columns}
     values.update({
         "trade_date": date(2026, 5, 10), code_field: source_code,
@@ -156,7 +157,9 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
             pass
 
     monkeypatch.setattr(
-        opportunity_service_module, "required_theme_snapshot_dates", lambda *args: []
+        opportunity_service_module,
+        "historical_theme_members",
+        lambda *args: (pd.DataFrame(), set(), {}),
     )
     monkeypatch.setattr(
         opportunity_service_module, "calculate_opportunities",
@@ -174,10 +177,16 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
     monkeypatch.setattr(opportunity, "_all_frame", lambda *args: pd.DataFrame())
     monkeypatch.setattr(opportunity, "_theme_members", lambda *args: pd.DataFrame())
     opportunity.recalc(day, day)
-    assert captured[0]["source_strategy_config_hash"] == config_hash(settings.strategy)
+    assert captured[0]["source_strategy_config_hash"] == analysis_strategy_hash(
+        settings.strategy
+    )
 
     captured.clear()
-    monkeypatch.setattr(theme_service_module, "required_theme_snapshot_dates", lambda *args: [])
+    monkeypatch.setattr(
+        theme_service_module,
+        "historical_theme_members",
+        lambda *args: (pd.DataFrame(), set(), {}),
+    )
     monkeypatch.setattr(
         theme_service_module, "calculate_theme_factors",
         lambda **kwargs: pd.DataFrame([{"trade_date": day, "theme_code": "885001.TI"}]),
@@ -196,7 +205,9 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
     monkeypatch.setattr(theme, "_pass_dates", lambda *args, **kwargs: set())
     monkeypatch.setattr(theme, "_open_trade_dates", lambda *args: [day])
     theme.recalc(day, day)
-    assert captured[0]["source_strategy_config_hash"] == config_hash(settings.strategy)
+    assert captured[0]["source_strategy_config_hash"] == analysis_strategy_hash(
+        settings.strategy
+    )
 
 
 def test_opportunity_reads_only_current_lineage_theme_factors() -> None:
@@ -216,7 +227,7 @@ def test_opportunity_reads_only_current_lineage_theme_factors() -> None:
     )
     sql = _sql(db.statement)
     assert "theme_factor_daily.source_strategy_config_hash" in sql
-    assert config_hash(service.settings.strategy) in sql
+    assert analysis_strategy_hash(service.settings.strategy) in sql
 
 
 def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> None:
@@ -225,7 +236,7 @@ def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> 
         trade_date=date(2026, 5, 10), ts_code="000001.SZ",
         state="S2", left_reversal_score=80, opportunity_stage="LEFT_REVERSAL",
         previous_state="S1", right_side_score=None,
-        source_strategy_config_hash=config_hash(settings.strategy),
+        source_strategy_config_hash=analysis_strategy_hash(settings.strategy),
     )
     db = _ResearchDb(base)
     monkeypatch.setattr(transition_eval, "future_dates", lambda *args: [base.trade_date])
@@ -243,4 +254,4 @@ def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> 
     assert len(source_queries) == 2
     for sql in source_queries:
         assert "stock_opportunity_daily.source_strategy_config_hash" in sql
-        assert config_hash(settings.strategy) in sql
+        assert analysis_strategy_hash(settings.strategy) in sql

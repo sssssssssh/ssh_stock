@@ -10,7 +10,12 @@ from app.core.config import get_settings
 from app.models.job import JobRun
 from app.models.market_data import IndexDaily, Theme, TradeCalendar
 from app.providers.base import MarketDataProvider
-from app.repositories.job_run import start_job, update_job
+from app.repositories.job_run import (
+    cancel_requested,
+    finish_cancelled,
+    start_job,
+    update_job,
+)
 from app.repositories.upsert import upsert_rows
 from app.services.ingestion import EodDataNotReadyError, IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
@@ -121,6 +126,17 @@ class BackfillJob:
             completed_open_days = 0
             deferred_trade_date: date | None = None
             for index, current in enumerate(open_dates, 1):
+                try:
+                    should_cancel = cancel_requested(self.db, job.id)
+                except AttributeError:
+                    should_cancel = bool(getattr(job, "cancel_requested", False))
+                if should_cancel:
+                    finish_cancelled(
+                        self.db,
+                        job,
+                        metadata={**metadata, "stage": "cancelled"},
+                    )
+                    return
                 metadata = _daily_progress(metadata, current, index, len(open_dates))
                 try:
                     total_rows += self.ingestion.sync_theme_daily(current)

@@ -4,12 +4,18 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.db import SessionLocal, get_db
+from app.services.auth.bootstrap import bootstrap_admin
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version=settings.algo_version)
+
+    @app.on_event("startup")
+    def initialize_admin() -> None:
+        with SessionLocal() as db:
+            bootstrap_admin(db)
 
     @app.get("/health")
     def health(db: Session = Depends(get_db)) -> dict[str, str]:

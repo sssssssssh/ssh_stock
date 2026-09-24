@@ -34,6 +34,29 @@ def test_source_warning_keeps_high_coverage_dataset_at_warning() -> None:
     assert result.is_acceptable is True
 
 
+def test_forced_invalid_value_is_error_despite_high_coverage() -> None:
+    expected = {f"{index:06d}.SZ" for index in range(1000)}
+    invalid = "000999.SZ"
+
+    result = raw_module._coverage_dataset(
+        object(),
+        date(2026, 9, 24),
+        "stk_limit",
+        expected,
+        expected - {invalid},
+        warning_coverage_rate=0.98,
+        error_coverage_rate=0.95,
+        job_id=None,
+        persist=False,
+        invalid_codes={invalid},
+        force_error_on_invalid=True,
+    )
+
+    assert result.coverage_rate == 0.999
+    assert result.status == "ERROR"
+    assert result.is_acceptable is False
+
+
 def _patch_non_limit_completeness(monkeypatch, expected_codes: set[str]) -> None:
     original_valid_codes = raw_module._valid_codes_for_date
     monkeypatch.setattr(

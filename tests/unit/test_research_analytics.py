@@ -9,7 +9,11 @@ from app.models.market_data import (
     ResearchTransitionEval,
     ThemeForwardEval,
 )
-from app.services.analysis_identity import RESEARCH_EVAL_VERSION, RESEARCH_VERSION
+from app.services.analysis_identity import (
+    RESEARCH_EVAL_VERSION,
+    RESEARCH_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.calc_metadata import config_hash
 from app.services.research.analytics import (
     Cohort,
@@ -96,7 +100,7 @@ def test_topn_ties_are_stable_by_code_for_stock_and_theme() -> None:
     common = {
         "trade_date": day,
         "opportunity_config_hash": opportunity_hash,
-        "strategy_config_hash": config_hash(settings.strategy),
+        "strategy_config_hash": analysis_strategy_hash(settings.strategy),
         "research_version": RESEARCH_VERSION,
         "research_config_hash": research_hash,
         "eval_version": RESEARCH_EVAL_VERSION,
@@ -165,7 +169,7 @@ def test_strategy_identity_and_context_event_universes_do_not_mix() -> None:
     ResearchTransitionEval.__table__.create(engine)
     settings = get_settings()
     day = date(2026, 1, 5)
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
     common = {
@@ -237,7 +241,7 @@ def test_transition_calc_versions_coexist_but_only_current_version_is_read() -> 
     day = date(2026, 1, 5)
     identity = {
         "algo_version": settings.algo_version,
-        "strategy_config_hash": config_hash(settings.strategy),
+        "strategy_config_hash": analysis_strategy_hash(settings.strategy),
         "opportunity_config_hash": config_hash(settings.opportunity_config),
         "research_version": RESEARCH_VERSION,
         "research_config_hash": config_hash(settings.research_config),
@@ -284,7 +288,7 @@ def test_context_requires_matching_opportunity_calc_version(
     day = date(2026, 1, 5)
     identity = {
         "algo_version": settings.algo_version,
-        "strategy_config_hash": config_hash(settings.strategy),
+        "strategy_config_hash": analysis_strategy_hash(settings.strategy),
         "opportunity_config_hash": config_hash(settings.opportunity_config),
         "research_version": RESEARCH_VERSION,
         "research_config_hash": config_hash(settings.research_config),
@@ -324,7 +328,7 @@ def test_bucket_numeric_order_bounded_100_and_negative_momentum() -> None:
     day = date(2026, 1, 5)
     common = {
         "trade_date": day,
-        "strategy_config_hash": config_hash(settings.strategy),
+        "strategy_config_hash": analysis_strategy_hash(settings.strategy),
         "opportunity_config_hash": config_hash(settings.opportunity_config),
         "research_version": RESEARCH_VERSION,
         "research_config_hash": config_hash(settings.research_config),

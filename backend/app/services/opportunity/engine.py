@@ -314,21 +314,40 @@ def _industry_context(
     member_values["valid_to"] = pd.to_datetime(member_values["valid_to"], errors="coerce").dt.date
     factor_values = factors.copy()
     factor_values["trade_date"] = pd.to_datetime(factor_values["trade_date"]).dt.date
-    for index, row in result.iterrows():
-        matching = member_values[
-            (member_values["ts_code"] == row["ts_code"])
-            & (member_values["valid_from"] <= row["trade_date"])
-            & (member_values["valid_to"].isna() | (member_values["valid_to"] >= row["trade_date"]))
-        ]
-        candidates = factor_values[
-            (factor_values["trade_date"] == row["trade_date"])
-            & factor_values["sector_id"].isin(matching["sector_id"])
-        ].sort_values("heat_score", ascending=False)
-        if not candidates.empty:
-            top = candidates.iloc[0]
-            result.at[index, "industry_sector_id"] = top["sector_id"]
-            result.at[index, "industry_heat"] = top["heat_score"]
-            result.at[index, "industry_lifecycle"] = top.get("lifecycle")
+    left = result[["trade_date", "ts_code"]].copy()
+    left["_row_id"] = range(len(left))
+    candidates = left.merge(member_values, on="ts_code", how="left")
+    candidates = candidates[
+        (candidates["valid_from"] <= candidates["trade_date"])
+        & (
+            candidates["valid_to"].isna()
+            | (candidates["valid_to"] >= candidates["trade_date"])
+        )
+    ].merge(
+        factor_values[["trade_date", "sector_id", "heat_score", "lifecycle"]],
+        on=["trade_date", "sector_id"],
+        how="inner",
+    )
+    if candidates.empty:
+        return result
+    top = (
+        candidates.sort_values(
+            ["_row_id", "heat_score", "sector_id"],
+            ascending=[True, False, True],
+        )
+        .drop_duplicates("_row_id")
+        .set_index("_row_id")
+    )
+    positions = top.index.to_numpy(dtype=int)
+    result.iloc[positions, result.columns.get_loc("industry_sector_id")] = top[
+        "sector_id"
+    ].to_numpy()
+    result.iloc[positions, result.columns.get_loc("industry_heat")] = top[
+        "heat_score"
+    ].to_numpy()
+    result.iloc[positions, result.columns.get_loc("industry_lifecycle")] = top[
+        "lifecycle"
+    ].to_numpy()
     return result
 
 
@@ -354,30 +373,58 @@ def _theme_context(
     member_values, factor_values = members.copy(), factors.copy()
     member_values["snapshot_date"] = pd.to_datetime(member_values["snapshot_date"]).dt.date
     factor_values["trade_date"] = pd.to_datetime(factor_values["trade_date"]).dt.date
-    names = dict(zip(themes.get("theme_code", []), themes.get("name", []), strict=False))
-    for trade_date, day_indexes in result.groupby("trade_date").groups.items():
-        available = [snapshot for snapshot in valid_snapshots if snapshot <= trade_date]
-        if not available:
-            continue
-        snapshot = max(available)
-        day_members = member_values[member_values["snapshot_date"] == snapshot]
-        day_factors = factor_values[factor_values["trade_date"] == trade_date]
-        for index in day_indexes:
-            codes = day_members.loc[
-                day_members["ts_code"] == result.at[index, "ts_code"], "theme_code"
-            ]
-            candidates = day_factors[day_factors["theme_code"].isin(codes)].sort_values(
-                "heat_score", ascending=False
-            )
-            if candidates.empty:
-                continue
-            top = candidates.iloc[0]
-            code = top["theme_code"]
-            result.at[index, "primary_theme_code"] = code
-            result.at[index, "primary_theme_name"] = names.get(code)
-            result.at[index, "primary_theme_heat"] = top["heat_score"]
-            result.at[index, "primary_theme_lifecycle"] = top.get("lifecycle")
-            result.at[index, "hot_theme_count"] = int((candidates["heat_score"] >= 60).sum())
+    snapshots = pd.DataFrame({"snapshot_date": sorted(valid_snapshots)})
+    if snapshots.empty:
+        return result
+    dates = pd.DataFrame({"trade_date": sorted(result["trade_date"].unique())})
+    assignment = pd.merge_asof(
+        dates.assign(_merge_date=pd.to_datetime(dates["trade_date"])).sort_values(
+            "_merge_date"
+        ),
+        snapshots.assign(
+            _merge_date=pd.to_datetime(snapshots["snapshot_date"])
+        ).sort_values("_merge_date"),
+        on="_merge_date",
+        direction="backward",
+    ).drop(columns="_merge_date")
+    left = result[["trade_date", "ts_code"]].copy()
+    left["_row_id"] = range(len(left))
+    candidates = (
+        left.merge(assignment, on="trade_date", how="left")
+        .merge(
+            member_values[["snapshot_date", "theme_code", "ts_code"]],
+            on=["snapshot_date", "ts_code"],
+            how="inner",
+        )
+        .merge(
+            factor_values[["trade_date", "theme_code", "heat_score", "lifecycle"]],
+            on=["trade_date", "theme_code"],
+            how="inner",
+        )
+    )
+    if candidates.empty:
+        return result
+    candidates["hot_theme_count"] = candidates.groupby("_row_id")["heat_score"].transform(
+        lambda values: int((values >= 60).sum())
+    )
+    top = (
+        candidates.sort_values(
+            ["_row_id", "heat_score", "theme_code"], ascending=[True, False, True]
+        )
+        .drop_duplicates("_row_id")
+        .merge(themes[["theme_code", "name"]], on="theme_code", how="left")
+        .set_index("_row_id")
+    )
+    positions = top.index.to_numpy(dtype=int)
+    assignments = {
+        "primary_theme_code": "theme_code",
+        "primary_theme_name": "name",
+        "primary_theme_heat": "heat_score",
+        "primary_theme_lifecycle": "lifecycle",
+        "hot_theme_count": "hot_theme_count",
+    }
+    for target, source in assignments.items():
+        result.iloc[positions, result.columns.get_loc(target)] = top[source].to_numpy()
     return result
 
 

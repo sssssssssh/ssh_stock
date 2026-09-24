@@ -21,9 +21,12 @@ from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
     SECTOR_CALC_VERSION,
+    SIGNAL_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_config,
+    analysis_strategy_hash,
 )
-from app.services.calc_metadata import calculation_metadata, config_hash
+from app.services.calc_metadata import calculation_metadata
 from app.services.trend.engine import (
     TrendConfig,
     calculate_stock_states,
@@ -64,14 +67,11 @@ class TrendService:
             config=config,
         )
         state_metadata = calculation_metadata(
-            config=self.settings.strategy,
-            calc_version="trend_v1",
+            config=analysis_strategy_config(self.settings.strategy),
+            calc_version=TREND_CALC_VERSION,
             calc_run_id=run_id,
         )
-        state_rows = [
-            {**_clean_row(row), **state_metadata}
-            for row in states.to_dict("records")
-        ]
+        state_rows = [{**_clean_row(row), **state_metadata} for row in states.to_dict("records")]
         _ensure_unique_rows(state_rows, ["trade_date", "ts_code", "algo_version"])
         state_count = replace_slice_rows(
             self.db,
@@ -87,14 +87,11 @@ class TrendService:
 
         signals = generate_strategy_signals(states, config)
         signal_metadata = calculation_metadata(
-            config=self.settings.strategy,
-            calc_version="signal_v1",
+            config=analysis_strategy_config(self.settings.strategy),
+            calc_version=SIGNAL_CALC_VERSION,
             calc_run_id=run_id,
         )
-        signal_rows = [
-            {**_clean_row(row), **signal_metadata}
-            for row in signals.to_dict("records")
-        ]
+        signal_rows = [{**_clean_row(row), **signal_metadata} for row in signals.to_dict("records")]
         _ensure_unique_rows(
             signal_rows,
             ["trade_date", "ts_code", "signal_type", "algo_version"],
@@ -131,7 +128,7 @@ class TrendService:
         return {"states": state_count, "signals": signal_count}
 
     def _read_factors(self, start: date, end: date) -> pd.DataFrame:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(
                 StockFactorDaily.trade_date,
@@ -173,7 +170,7 @@ class TrendService:
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_market(self, start: date, end: date) -> pd.DataFrame:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(MarketDaily.trade_date, MarketDaily.market_score)
             .where(
@@ -197,7 +194,7 @@ class TrendService:
         return pd.DataFrame(self.db.execute(stmt).mappings().all())
 
     def _read_sector_factors(self, start: date, end: date) -> pd.DataFrame:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(
                 SectorFactorDaily.trade_date,
@@ -218,7 +215,7 @@ class TrendService:
     def _read_previous_states(
         self, start: date, target_start: date, algo_version: str
     ) -> pd.DataFrame:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(
                 StockStateDaily.trade_date,

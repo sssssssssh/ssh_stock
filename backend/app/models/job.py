@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Date, DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,7 @@ class JobRun(Base):
     step: Mapped[str | None] = mapped_column(String(64))
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(String(2048))
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     job_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 

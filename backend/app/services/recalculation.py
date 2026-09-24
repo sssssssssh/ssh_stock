@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange, TradeCalendar
-from app.repositories.job_run import update_job
+from app.repositories.job_run import cancel_requested, finish_cancelled, update_job
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    THEME_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.calc_metadata import config_hash
 from app.services.dirty import (
     mark_dirty_ranges_failed,
@@ -39,7 +48,7 @@ def run_recalculation(
 ) -> None:
     dirty_ranges = dirty_ranges or []
     settings = get_settings()
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     metadata: dict[str, Any] = {
         "source": mode,
@@ -51,12 +60,12 @@ def run_recalculation(
         "config_hash": hash_value,
         "strategy_config_hash": hash_value,
         "opportunity_config_hash": opportunity_hash,
-        "factor_calc_version": "factor_v1",
-        "market_calc_version": "market_v1",
-        "sector_calc_version": "sector_v1",
-        "theme_calc_version": "theme_v1",
-        "trend_calc_version": "trend_v1",
-        "opportunity_calc_version": "opportunity_v1",
+        "factor_calc_version": FACTOR_CALC_VERSION,
+        "market_calc_version": MARKET_CALC_VERSION,
+        "sector_calc_version": SECTOR_CALC_VERSION,
+        "theme_calc_version": THEME_CALC_VERSION,
+        "trend_calc_version": TREND_CALC_VERSION,
+        "opportunity_calc_version": OPPORTUNITY_CALC_VERSION,
         "dirty_range_ids": [row.id for row in dirty_ranges],
         "dirty_start_date": start.isoformat() if mode == "dirty_repair" else None,
         "recalc_end_date": end.isoformat() if mode == "dirty_repair" else None,
@@ -92,6 +101,8 @@ def run_recalculation(
         factor_chunks = _month_chunks(analysis_start, end)
         factor_service = FactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
+            if _stop_if_cancelled(db, job, metadata):
+                return
             start_progress = round(8 + ((index - 1) / len(factor_chunks)) * 52, 1)
             chunk_metadata = {
                 **metadata,
@@ -142,15 +153,31 @@ def run_recalculation(
         )
         total_rows += SectorService(db).recalc(analysis_start, end, calc_run_id=job.id)
 
-        update_job(
-            db,
-            job,
-            step="115 calculate theme heat",
-            row_count=total_rows,
-            metadata={**metadata, "stage": "themes", "progress_pct": 84},
-        )
-        total_rows += ThemeFactorService(db).recalc(start, end, calc_run_id=job.id)
+        theme_chunks = _month_chunks(start, end)
+        theme_service = ThemeFactorService(db)
+        for index, (chunk_start, chunk_end) in enumerate(theme_chunks, start=1):
+            if _stop_if_cancelled(db, job, metadata):
+                return
+            metadata = {
+                **metadata,
+                "stage": "themes",
+                "progress_pct": round(82 + (index / len(theme_chunks)) * 4, 1),
+                "theme_chunk_index": index,
+                "theme_chunk_count": len(theme_chunks),
+                "theme_chunk_start": chunk_start.isoformat(),
+                "theme_chunk_end": chunk_end.isoformat(),
+            }
+            update_job(
+                db,
+                job,
+                step=f"115 theme heat {chunk_start}..{chunk_end}",
+                row_count=total_rows,
+                metadata=metadata,
+            )
+            total_rows += theme_service.recalc(chunk_start, chunk_end, calc_run_id=job.id)
 
+        if _stop_if_cancelled(db, job, metadata):
+            return
         update_job(
             db,
             job,
@@ -161,14 +188,30 @@ def run_recalculation(
         trend_rows = TrendService(db).recalc(analysis_start, end, calc_run_id=job.id)
         total_rows += trend_rows["states"] + trend_rows["signals"]
 
-        update_job(
-            db,
-            job,
-            step="130 calculate opportunities",
-            row_count=total_rows,
-            metadata={**metadata, "stage": "opportunities", "progress_pct": 92},
-        )
-        total_rows += OpportunityService(db).recalc(start, end, calc_run_id=job.id)
+        opportunity_chunks = _month_chunks(start, end)
+        opportunity_service = OpportunityService(db)
+        for index, (chunk_start, chunk_end) in enumerate(opportunity_chunks, start=1):
+            if _stop_if_cancelled(db, job, metadata):
+                return
+            metadata = {
+                **metadata,
+                "stage": "opportunities",
+                "progress_pct": round(90 + (index / len(opportunity_chunks)) * 3, 1),
+                "opportunity_chunk_index": index,
+                "opportunity_chunk_count": len(opportunity_chunks),
+                "opportunity_chunk_start": chunk_start.isoformat(),
+                "opportunity_chunk_end": chunk_end.isoformat(),
+            }
+            update_job(
+                db,
+                job,
+                step=f"130 opportunities {chunk_start}..{chunk_end}",
+                row_count=total_rows,
+                metadata=metadata,
+            )
+            total_rows += opportunity_service.recalc(
+                chunk_start, chunk_end, calc_run_id=job.id
+            )
 
         update_job(
             db,
@@ -279,6 +322,17 @@ def validate_recalculation_raw_prerequisites(
         )
 
 
+def _stop_if_cancelled(db: Session, job: JobRun, metadata: dict[str, Any]) -> bool:
+    try:
+        requested = cancel_requested(db, job.id)
+    except AttributeError:
+        requested = bool(getattr(job, "cancel_requested", False))
+    if not requested:
+        return False
+    finish_cancelled(db, job, metadata={**metadata, "stage": "cancelled"})
+    return True
+
+
 def _factor_warmup_start(
     db: Session,
     start: date,
@@ -342,7 +396,7 @@ def create_recalculation_job(
             "end": end.isoformat(),
             "evaluate_signals": evaluate_signals,
             "calc_run_id": str(job_id) if job_id else None,
-            "config_hash": config_hash(settings.strategy),
+            "config_hash": analysis_strategy_hash(settings.strategy),
             "dirty_range_ids": [row.id for row in dirty_ranges],
             "progress_pct": 0,
         },

@@ -214,6 +214,64 @@ def test_api_enqueue_handlers_no_longer_accept_background_tasks() -> None:
     )
 
 
+def test_cancel_queued_job_finishes_without_worker() -> None:
+    job = worker_module.JobRun(
+        job_type="backfill",
+        status="QUEUED",
+        row_count=0,
+        job_metadata={},
+    )
+    job.id = uuid4()
+
+    class Db:
+        def get(self, model, key):
+            return job
+
+        def add(self, row):
+            return None
+
+        def commit(self):
+            return None
+
+        def refresh(self, row):
+            return None
+
+    response = jobs_api.cancel_job(job.id, Db())
+
+    assert response["data"]["status"] == "CANCELLED"
+    assert job.cancel_requested is True
+    assert job.finished_at is not None
+
+
+def test_cancel_running_job_requests_safe_stop() -> None:
+    job = worker_module.JobRun(
+        job_type="recalculate",
+        status="RUNNING",
+        row_count=0,
+        job_metadata={},
+    )
+    job.id = uuid4()
+
+    class Db:
+        def get(self, model, key):
+            return job
+
+        def add(self, row):
+            return None
+
+        def commit(self):
+            return None
+
+        def refresh(self, row):
+            return None
+
+    response = jobs_api.cancel_job(job.id, Db())
+
+    assert response["data"]["status"] == "RUNNING"
+    assert response["data"]["cancel_requested"] is True
+    assert job.step == "cancellation requested"
+
+
 def test_update_job_refreshes_running_heartbeat() -> None:
     job = SimpleNamespace(
         status="QUEUED",

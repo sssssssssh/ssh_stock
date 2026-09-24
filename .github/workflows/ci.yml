@@ -37,10 +37,11 @@ jobs:
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
       - run: python -m pytest
-      - run: python -m ruff check backend tests migrations
+      - run: python -m ruff check backend tests migrations scripts
       - run: cp .env.example .env
       - run: docker compose config
       - run: docker compose build
+      - run: docker run --rm ssh-stock-frontend:local nginx -t
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

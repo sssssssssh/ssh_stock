@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.repositories.job_run import start_job, update_job
+from app.repositories.job_run import (
+    cancel_requested,
+    finish_cancelled,
+    start_job,
+    update_job,
+)
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
@@ -16,6 +21,7 @@ from app.services.analysis_identity import (
     THEME_CALC_VERSION,
     TRADE_STATUS_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 from app.services.job_guard import (
@@ -50,7 +56,7 @@ RESEARCH_IDENTITY_KEYS = (
 
 
 def current_research_identity(settings: Any) -> dict[str, str]:
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     return {
         "algo_version": settings.algo_version,
         "strategy_config_hash": strategy_hash,
@@ -88,10 +94,12 @@ def queue_research_eval(
     _acquire_research_advisory_lock(db)
     recovered = recover_stale_research_jobs(db, commit=False)
     active = db.scalar(
-        select(JobRun).where(
+        select(JobRun)
+        .where(
             JobRun.job_type == RESEARCH_JOB_TYPE,
             JobRun.status.in_(("QUEUED", "RUNNING")),
-        ).limit(1)
+        )
+        .limit(1)
     )
     if active is not None or not research_can_run(db):
         if recovered:
@@ -140,12 +148,13 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
     settings = get_settings()
     metadata = dict(job.job_metadata or {})
     current_identity = current_research_identity(settings)
-    changed = [
-        key for key in RESEARCH_IDENTITY_KEYS if metadata.get(key) != current_identity[key]
-    ]
+    changed = [key for key in RESEARCH_IDENTITY_KEYS if metadata.get(key) != current_identity[key]]
     if changed:
         update_job(
-            db, job, status="FAILED", step="research identity changed since queue",
+            db,
+            job,
+            status="FAILED",
+            step="research identity changed since queue",
             error_message="RESEARCH_IDENTITY_CHANGED_SINCE_QUEUE: " + ", ".join(changed),
             metadata={**metadata, "identity_changed_fields": changed},
         )
@@ -167,6 +176,13 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
     }
     update_job(db, job, status="RUNNING", step="research evaluation started", metadata=metadata)
     for index, dates in enumerate(batches, start=1):
+        try:
+            should_cancel = cancel_requested(db, job.id)
+        except AttributeError:
+            should_cancel = bool(getattr(job, "cancel_requested", False))
+        if should_cancel:
+            finish_cancelled(db, job, metadata={**metadata, "stage": "cancelled"})
+            return totals
         if not metadata.get("theme_only") and not metadata.get("transition_only"):
             result = evaluate_opportunity_batch(db, dates, settings)
             totals["opportunity_base_rows"] += result["base_rows"]

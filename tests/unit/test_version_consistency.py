@@ -15,7 +15,7 @@ from app.models.market_data import (
     StockFactorDaily,
     StockStateDaily,
 )
-from app.services.calc_metadata import config_hash
+from app.services.analysis_identity import analysis_strategy_hash
 from app.services.quality.daily_quality import record_cross_table_quality
 from app.services.trend.service import TrendService
 
@@ -131,5 +131,5 @@ def test_trend_service_writes_state_and_signal_run_metadata(monkeypatch) -> None
     assert state_row["calc_version"] == "trend_v1"
     assert signal_row["calc_version"] == "signal_v1"
     assert state_row["calc_run_id"] == signal_row["calc_run_id"] == run_id
-    expected_hash = config_hash(service.settings.strategy)
+    expected_hash = analysis_strategy_hash(service.settings.strategy)
     assert state_row["config_hash"] == signal_row["config_hash"] == expected_hash

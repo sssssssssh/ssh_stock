@@ -20,9 +20,13 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows
-from app.services.analysis_identity import FACTOR_CALC_VERSION, THEME_CALC_VERSION
-from app.services.calc_metadata import calculation_metadata, config_hash
-from app.services.quality.theme_quality import required_theme_snapshot_dates
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    THEME_CALC_VERSION,
+    analysis_strategy_hash,
+)
+from app.services.calc_metadata import calculation_metadata
+from app.services.quality.theme_quality import historical_theme_members
 from app.services.theme.engine import ThemeConfig, calculate_theme_factors
 
 
@@ -50,15 +54,18 @@ class ThemeFactorService:
         theme_daily = self._frame(ThemeDaily, lookback_start, end)
         if not theme_daily.empty:
             theme_daily = theme_daily[theme_daily["trade_date"].isin(usable_dates)]
-        snapshot_dates = required_theme_snapshot_dates(self.db, lookback_start, end, False)
+        market_trade_dates = self._open_trade_dates(lookback_start, end)
+        members, valid_snapshots, _ = historical_theme_members(
+            self.db, market_trade_dates
+        )
         rows = calculate_theme_factors(
             theme_daily=theme_daily,
-            members=self._members(snapshot_dates),
+            members=members,
             factors=self._factors(lookback_start, end),
             index_daily=self._frame(IndexDaily, lookback_start, end),
             moneyflow=self._frame(ThemeMoneyflowDaily, lookback_start, end),
             limits=self._frame(ThemeLimitDaily, lookback_start, end),
-            valid_snapshots=set(snapshot_dates),
+            valid_snapshots=valid_snapshots,
             moneyflow_pass_dates=self._pass_dates("ths_theme_moneyflow", end, allow_empty=False),
             limit_pass_dates=self._pass_dates("ths_theme_limit", end),
             start=start,
@@ -66,25 +73,25 @@ class ThemeFactorService:
             config=ThemeConfig.from_configs(
                 self.settings.strategy, self.settings.opportunity_config
             ),
-            market_trade_dates=self._open_trade_dates(lookback_start, end),
+            market_trade_dates=market_trade_dates,
         )
         metadata = calculation_metadata(
             config=self.settings.opportunity_config,
             calc_version=THEME_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
-        strategy_hash = config_hash(self.settings.strategy)
+        strategy_hash = analysis_strategy_hash(self.settings.strategy)
         payload = []
         for row in rows.to_dict("records"):
             clean_row = _clean(row)
-            clean_row["source_coverage"] = source_quality[clean_row["trade_date"]][
-                "coverage_rate"
-            ]
-            payload.append({
-                **clean_row,
-                **metadata,
-                "source_strategy_config_hash": strategy_hash,
-            })
+            clean_row["source_coverage"] = source_quality[clean_row["trade_date"]]["coverage_rate"]
+            payload.append(
+                {
+                    **clean_row,
+                    **metadata,
+                    "source_strategy_config_hash": strategy_hash,
+                }
+            )
         count = replace_slice_rows(
             self.db,
             ThemeFactorDaily,
@@ -138,7 +145,7 @@ class ThemeFactorService:
         )
 
     def _factors(self, start: date, end: date) -> pd.DataFrame:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         rows = (
             self.db.execute(
                 select(StockFactorDaily).where(

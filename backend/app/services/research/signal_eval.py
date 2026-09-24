@@ -20,8 +20,8 @@ from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
     TRADE_STATUS_CALC_VERSION,
+    analysis_strategy_hash,
 )
-from app.services.calc_metadata import config_hash
 
 
 def evaluate_forward_returns(
@@ -207,7 +207,7 @@ class SignalEvaluationService:
         if entry_basis not in {"SIGNAL_CLOSE", "NEXT_OPEN", "NEXT_CLOSE"}:
             raise ValueError(f"unsupported entry_basis: {entry_basis}")
         version = algo_version or self.settings.algo_version
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(
                 StrategySignal.id,
@@ -314,7 +314,7 @@ class SignalEvaluationService:
     ) -> list[dict[str, Any]]:
         if not market_dates:
             return []
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         factor_join = and_(
             StockFactorDaily.trade_date == StockTradeStatusDaily.trade_date,
             StockFactorDaily.ts_code == StockTradeStatusDaily.ts_code,
@@ -353,7 +353,7 @@ class SignalEvaluationService:
         return list(self.db.execute(stmt).mappings().all())
 
     def _read_forward_factor_rows(self, ts_code: str, trade_date: date) -> list[dict[str, Any]]:
-        hash_value = config_hash(self.settings.strategy)
+        hash_value = analysis_strategy_hash(self.settings.strategy)
         stmt = (
             select(
                 StockFactorDaily.trade_date,

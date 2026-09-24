@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     log_level: str = "INFO"
+    bootstrap_admin_username: str = "admin"
+    bootstrap_admin_password: str = Field(default="123456", repr=False)
+    auth_session_hours: int = 168
+    auth_cookie_secure: bool = False
 
     app_name: str = "空间"
     algo_version: str = "v1.0"

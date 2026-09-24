@@ -17,7 +17,11 @@ from app.models.market_data import (
 )
 from app.services.analysis_identity import OPPORTUNITY_CALC_VERSION, THEME_CALC_VERSION
 from app.services.calc_metadata import config_hash
-from app.services.quality.theme_quality import latest_valid_theme_member_snapshot
+from app.services.quality.theme_quality import (
+    latest_usable_theme_member_snapshot,
+    theme_factor_member_snapshot,
+    theme_member_snapshot_meta,
+)
 
 router = APIRouter()
 
@@ -137,6 +141,10 @@ def overview(
         top_members["left"] = _member_opportunities(
             db, theme_code, target, None, 10, 0, pool="left"
         )
+    snapshot_meta = theme_member_snapshot_meta(
+        db,
+        _member_snapshot_for_factor(db, target, theme_hash, theme_code) if target else None,
+    )
     return envelope(
         {
             "theme": _model_payload(theme),
@@ -144,8 +152,12 @@ def overview(
             "history": history,
             "member_distribution": member_distribution,
             "top_members": top_members,
+            "member_snapshot": snapshot_meta,
         },
-        {"trade_date": target.isoformat() if target else None},
+        {
+            "trade_date": target.isoformat() if target else None,
+            **snapshot_meta,
+        },
     )
 
 
@@ -172,14 +184,16 @@ def members(
     row_limit, row_offset = clamp_limit(limit, default=30), clamp_offset(offset)
     if not target:
         return envelope([], _meta(None, row_limit, row_offset, 0))
-    rows = _member_opportunities(db, theme_code, target, stage, row_limit, row_offset)
-    snapshot = latest_valid_theme_member_snapshot(db, target)
-    total = _member_count(db, theme_code, target, stage)
+    snapshot = _member_snapshot_for_factor(db, target, hash_value, theme_code)
+    rows = _member_opportunities(
+        db, theme_code, target, stage, row_limit, row_offset, snapshot=snapshot
+    )
+    total = _member_count(db, theme_code, target, stage, snapshot=snapshot)
     return envelope(
         rows,
         {
             **_meta(target, row_limit, row_offset, total),
-            "member_snapshot_date": snapshot.isoformat() if snapshot else None,
+            **theme_member_snapshot_meta(db, snapshot),
         },
     )
 
@@ -193,11 +207,14 @@ def _member_opportunities(
     offset: int,
     *,
     pool: str | None = None,
+    snapshot: date | None = None,
 ) -> list[dict[str, Any]]:
-    snapshot = latest_valid_theme_member_snapshot(db, target)
+    settings = get_settings()
+    snapshot = snapshot or _member_snapshot_for_factor(
+        db, target, config_hash(settings.opportunity_config), theme_code
+    )
     if snapshot is None:
         return []
-    settings = get_settings()
     filters = [
         ThemeMemberSnapshot.snapshot_date == snapshot,
         ThemeMemberSnapshot.theme_code == theme_code,
@@ -250,11 +267,20 @@ def _member_opportunities(
     return rows
 
 
-def _member_count(db: Session, theme_code: str, target: date, stage: str | None) -> int:
-    snapshot = latest_valid_theme_member_snapshot(db, target)
+def _member_count(
+    db: Session,
+    theme_code: str,
+    target: date,
+    stage: str | None,
+    *,
+    snapshot: date | None = None,
+) -> int:
+    settings = get_settings()
+    snapshot = snapshot or _member_snapshot_for_factor(
+        db, target, config_hash(settings.opportunity_config), theme_code
+    )
     if snapshot is None:
         return 0
-    settings = get_settings()
     filters = [
         ThemeMemberSnapshot.snapshot_date == snapshot,
         ThemeMemberSnapshot.theme_code == theme_code,
@@ -276,6 +302,22 @@ def _member_count(db: Session, theme_code: str, target: date, stage: str | None)
             .where(*filters)
         ).scalar_one()
     )
+
+
+def _member_snapshot_for_factor(
+    db: Session,
+    target: date,
+    hash_value: str,
+    theme_code: str,
+) -> date | None:
+    snapshot = theme_factor_member_snapshot(
+        db,
+        target,
+        calc_version=THEME_CALC_VERSION,
+        config_hash=hash_value,
+        theme_code=theme_code,
+    )
+    return snapshot if snapshot is not None else latest_usable_theme_member_snapshot(db, target)
 
 
 def _meta(target: date | None, limit: int, offset: int, total: int) -> dict[str, Any]:

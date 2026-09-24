@@ -123,40 +123,72 @@ def calculate_theme_factors(
     if not members.empty:
         members = members.copy()
         members["snapshot_date"] = pd.to_datetime(members["snapshot_date"]).dt.date
-    breadth_rows = []
-    for trade_date in sorted(daily["trade_date"].unique()):
-        snapshot_date, snapshot_members = _latest_snapshot_members(
-            members, valid_snapshots, trade_date
+    snapshots = pd.DataFrame({"member_snapshot_date": sorted(valid_snapshots)})
+    trade_dates = pd.DataFrame({"trade_date": sorted(daily["trade_date"].unique())})
+    assignment = (
+        pd.merge_asof(
+            trade_dates.assign(_merge_date=pd.to_datetime(trade_dates["trade_date"])),
+            snapshots.assign(
+                _merge_date=pd.to_datetime(snapshots["member_snapshot_date"])
+            ),
+            on="_merge_date",
+            direction="backward",
+        ).drop(columns="_merge_date")
+        if not snapshots.empty
+        else pd.DataFrame(columns=["trade_date", "member_snapshot_date"])
+    )
+    member_values = (
+        members.rename(columns={"snapshot_date": "member_snapshot_date"})
+        if not members.empty
+        else pd.DataFrame(columns=["member_snapshot_date", "theme_code", "ts_code"])
+    )
+    expanded = (
+        daily[["trade_date", "theme_code"]]
+        .drop_duplicates()
+        .merge(assignment, on="trade_date", how="left")
+        .merge(
+            member_values[["member_snapshot_date", "theme_code", "ts_code"]],
+            on=["member_snapshot_date", "theme_code"],
+            how="inner",
         )
-        if snapshot_date is None:
-            continue
-        day_factors = factor_df[
-            (factor_df["trade_date"] == trade_date) & factor_df["eligible"].fillna(False)
-        ]
-        merged = snapshot_members.merge(day_factors, on="ts_code", how="left")
-        for theme_code, group in merged.groupby("theme_code"):
-            eligible = group[group["eligible"].fillna(False)]
-            breadth_rows.append(
-                {
-                    "trade_date": trade_date,
-                    "theme_code": theme_code,
-                    "member_snapshot_date": snapshot_date,
-                    "member_count": int(group["ts_code"].nunique()),
-                    "eligible_member_count": int(eligible["ts_code"].nunique()),
-                    "breadth20": (eligible["adj_close"] > eligible["ma20"]).mean()
-                    if not eligible.empty
-                    else None,
-                    "breadth60": (eligible["adj_close"] > eligible["ma60"]).mean()
-                    if not eligible.empty
-                    else None,
-                    "up_rate": (eligible["return1"] > 0).mean() if not eligible.empty else None,
-                    "new_high20_rate": eligible["breakout20"].fillna(False).mean()
-                    if not eligible.empty
-                    else None,
-                    "rps60_median": eligible["rps60"].median() if not eligible.empty else None,
-                }
+        .merge(factor_df, on=["trade_date", "ts_code"], how="left")
+    )
+    group_keys = ["trade_date", "theme_code", "member_snapshot_date"]
+    if expanded.empty:
+        breadth = pd.DataFrame()
+    else:
+        counts = (
+            expanded.groupby(group_keys, as_index=False)["ts_code"]
+            .nunique()
+            .rename(columns={"ts_code": "member_count"})
+        )
+        eligible = expanded[expanded["eligible"].fillna(False)].copy()
+        if eligible.empty:
+            breadth = counts
+            breadth["eligible_member_count"] = 0
+            for column in (
+                "breadth20",
+                "breadth60",
+                "up_rate",
+                "new_high20_rate",
+                "rps60_median",
+            ):
+                breadth[column] = np.nan
+        else:
+            eligible["above_ma20"] = eligible["adj_close"] > eligible["ma20"]
+            eligible["above_ma60"] = eligible["adj_close"] > eligible["ma60"]
+            eligible["up"] = eligible["return1"] > 0
+            eligible["new_high20"] = eligible["breakout20"].fillna(False)
+            metrics = eligible.groupby(group_keys, as_index=False).agg(
+                eligible_member_count=("ts_code", "nunique"),
+                breadth20=("above_ma20", "mean"),
+                breadth60=("above_ma60", "mean"),
+                up_rate=("up", "mean"),
+                new_high20_rate=("new_high20", "mean"),
+                rps60_median=("rps60", "median"),
             )
-    breadth = pd.DataFrame(breadth_rows)
+            breadth = counts.merge(metrics, on=group_keys, how="left")
+            breadth["eligible_member_count"] = breadth["eligible_member_count"].fillna(0)
     if not breadth.empty:
         daily = daily.merge(breadth, on=["trade_date", "theme_code"], how="left")
     else:

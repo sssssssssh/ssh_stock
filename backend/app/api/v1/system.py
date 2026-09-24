@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.common import envelope
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.models.job import JobRun
 from app.models.market_data import (
     DataQualityDaily,
     IndexDaily,
@@ -27,10 +28,14 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
     OPPORTUNITY_CALC_VERSION,
+    SECTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
     THEME_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 
@@ -42,11 +47,61 @@ def _latest_date(db: Session, stmt: Select[tuple[Any]]) -> str | None:
     return value.isoformat() if value else None
 
 
+@router.get("/runtime")
+def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
+    settings = get_settings()
+    active = db.scalar(
+        select(JobRun)
+        .where(JobRun.status == "RUNNING")
+        .order_by(JobRun.started_at)
+        .limit(1)
+    )
+    counts = dict(
+        db.execute(
+            select(JobRun.status, func.count())
+            .where(JobRun.status.in_(("QUEUED", "RUNNING")))
+            .group_by(JobRun.status)
+        ).all()
+    )
+    latest_worker_heartbeat = db.scalar(select(func.max(JobRun.heartbeat_at)))
+    scheduler = settings.app_config.get("app", {}).get("scheduler", {})
+    research = settings.app_config.get("research", {})
+    return envelope(
+        {
+            "worker_heartbeat": latest_worker_heartbeat.isoformat()
+            if latest_worker_heartbeat
+            else None,
+            "active_job": {
+                "id": str(active.id),
+                "job_type": active.job_type,
+                "step": active.step,
+                "started_at": active.started_at.isoformat() if active.started_at else None,
+            }
+            if active
+            else None,
+            "queued_count": int(counts.get("QUEUED", 0)),
+            "running_count": int(counts.get("RUNNING", 0)),
+            "scheduler_cron": {
+                "daily": scheduler.get("daily_cron", "10 18 * * 1-5"),
+                "basic_info": scheduler.get("basic_info_cron", "30 9 * * 6"),
+                "research": research.get("daily_cron", "30 19 * * 1-5"),
+            },
+            "latest_raw_date": _latest_date(db, select(func.max(StockDaily.trade_date))),
+            "latest_analysis_date": _latest_date(
+                db, select(func.max(StockStateDaily.trade_date))
+            ),
+            "latest_opportunity_date": _latest_date(
+                db, select(func.max(StockOpportunityDaily.trade_date))
+            ),
+        }
+    )
+
+
 @router.get("/status")
 def status(db: Session = Depends(get_db)) -> dict[str, Any]:
     settings = get_settings()
     version = settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     return {
         "code": 0,
@@ -64,21 +119,21 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
             "latest_factor_date": _latest_date(
                 db,
                 select(func.max(StockFactorDaily.trade_date)).where(
-                    StockFactorDaily.calc_version == "factor_v1",
+                    StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
                     StockFactorDaily.config_hash == hash_value,
                 ),
             ),
             "latest_market_date": _latest_date(
                 db,
                 select(func.max(MarketDaily.trade_date)).where(
-                    MarketDaily.calc_version == "market_v1",
+                    MarketDaily.calc_version == MARKET_CALC_VERSION,
                     MarketDaily.config_hash == hash_value,
                 ),
             ),
             "latest_sector_factor_date": _latest_date(
                 db,
                 select(func.max(SectorFactorDaily.trade_date)).where(
-                    SectorFactorDaily.calc_version == "sector_v1",
+                    SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
                     SectorFactorDaily.config_hash == hash_value,
                 ),
             ),
@@ -104,9 +159,7 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
                     SignalForwardEval.algo_version == version
                 ),
             ),
-            "latest_theme_daily_date": _latest_date(
-                db, select(func.max(ThemeDaily.trade_date))
-            ),
+            "latest_theme_daily_date": _latest_date(db, select(func.max(ThemeDaily.trade_date))),
             "latest_theme_factor_date": _latest_date(
                 db,
                 select(func.max(ThemeFactorDaily.trade_date)).where(
@@ -144,7 +197,7 @@ def data_coverage(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     date_stmt = select(StockDaily.trade_date).distinct().order_by(desc(StockDaily.trade_date))
     if start:
@@ -180,7 +233,7 @@ def data_coverage(
         StockFactorDaily.trade_date,
         coverage_start,
         coverage_end,
-        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
         StockFactorDaily.config_hash == hash_value,
     )
     market_counts = _counts_by_date(
@@ -188,7 +241,7 @@ def data_coverage(
         MarketDaily.trade_date,
         coverage_start,
         coverage_end,
-        MarketDaily.calc_version == "market_v1",
+        MarketDaily.calc_version == MARKET_CALC_VERSION,
         MarketDaily.config_hash == hash_value,
     )
     sector_counts = _counts_by_date(
@@ -196,7 +249,7 @@ def data_coverage(
         SectorFactorDaily.trade_date,
         coverage_start,
         coverage_end,
-        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
         SectorFactorDaily.config_hash == hash_value,
     )
     state_counts = _counts_by_date(
@@ -224,9 +277,7 @@ def data_coverage(
         coverage_end,
         SignalForwardEval.algo_version == version,
     )
-    theme_daily_counts = _counts_by_date(
-        db, ThemeDaily.trade_date, coverage_start, coverage_end
-    )
+    theme_daily_counts = _counts_by_date(db, ThemeDaily.trade_date, coverage_start, coverage_end)
     theme_factor_counts = _counts_by_date(
         db,
         ThemeFactorDaily.trade_date,
@@ -299,7 +350,7 @@ def data_calendar(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     if end < start:
         return envelope(
@@ -332,7 +383,7 @@ def data_calendar(
         StockFactorDaily.trade_date,
         start,
         end,
-        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
         StockFactorDaily.config_hash == hash_value,
     )
     market_counts = _counts_by_date(
@@ -340,7 +391,7 @@ def data_calendar(
         MarketDaily.trade_date,
         start,
         end,
-        MarketDaily.calc_version == "market_v1",
+        MarketDaily.calc_version == MARKET_CALC_VERSION,
         MarketDaily.config_hash == hash_value,
     )
     sector_counts = _counts_by_date(
@@ -348,7 +399,7 @@ def data_calendar(
         SectorFactorDaily.trade_date,
         start,
         end,
-        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
         SectorFactorDaily.config_hash == hash_value,
     )
     state_counts = _counts_by_date(
@@ -508,16 +559,13 @@ def _counts_by_date(
 
 
 def _quality_status_by_date(db: Session, start: date, end: date) -> dict[date, str]:
-    rows = (
-        db.execute(
-            select(DataQualityDaily.trade_date, DataQualityDaily.status)
-            .where(DataQualityDaily.trade_date >= start, DataQualityDaily.trade_date <= end)
-            .where(DataQualityDaily.status.in_(["ERROR", "WARNING"]))
-            .where(~DataQualityDaily.dataset.like("ths_theme%"))
-            .order_by(DataQualityDaily.trade_date)
-        )
-        .all()
-    )
+    rows = db.execute(
+        select(DataQualityDaily.trade_date, DataQualityDaily.status)
+        .where(DataQualityDaily.trade_date >= start, DataQualityDaily.trade_date <= end)
+        .where(DataQualityDaily.status.in_(["ERROR", "WARNING"]))
+        .where(~DataQualityDaily.dataset.like("ths_theme%"))
+        .order_by(DataQualityDaily.trade_date)
+    ).all()
     priority = {"ERROR": 2, "WARNING": 1}
     result: dict[date, str] = {}
     for trade_date, status in rows:

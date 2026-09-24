@@ -280,3 +280,46 @@ def test_run_recalculation_warms_all_analysis_but_validates_requested_range(
     assert ("raw", warmup_start, end, None) in calls
     assert ("quality", requested_start, end, job.id) in calls
     assert ("signal", requested_start, end, None) in calls
+
+
+def test_recalculation_chunks_theme_and_opportunity_by_month(monkeypatch) -> None:
+    calls = []
+
+    class ScalarService(_SuccessfulScalarService):
+        label = ""
+
+        def recalc(self, start, end, calc_run_id=None):
+            calls.append((self.label, start, end))
+            return 1
+
+    class ThemeService(ScalarService):
+        label = "theme"
+
+    class OpportunityService(ScalarService):
+        label = "opportunity"
+
+    _patch_successful_calculators(monkeypatch)
+    monkeypatch.setattr(recalculation_module, "ThemeFactorService", ThemeService)
+    monkeypatch.setattr(recalculation_module, "OpportunityService", OpportunityService)
+    monkeypatch.setattr(
+        recalculation_module,
+        "validate_cross_table_range",
+        lambda *args, **kwargs: SimpleNamespace(has_error=False, as_metadata=lambda: {}),
+    )
+
+    recalculation_module.run_recalculation(
+        _FakeDb(),
+        _job(),
+        date(2026, 8, 31),
+        date(2026, 9, 1),
+        evaluate_signals=False,
+    )
+
+    assert [call[1:] for call in calls if call[0] == "theme"] == [
+        (date(2026, 8, 31), date(2026, 8, 31)),
+        (date(2026, 9, 1), date(2026, 9, 1)),
+    ]
+    assert [call[1:] for call in calls if call[0] == "opportunity"] == [
+        (date(2026, 8, 31), date(2026, 8, 31)),
+        (date(2026, 9, 1), date(2026, 9, 1)),
+    ]

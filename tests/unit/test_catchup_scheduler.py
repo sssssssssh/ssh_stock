@@ -12,6 +12,7 @@ from app.jobs.catchup_job import (
     is_analysis_complete,
 )
 from app.jobs.scheduler import (
+    _research_sources_current,
     cron_trigger_kwargs,
     run_scheduled_basic_info,
     run_scheduled_catchup,
@@ -221,7 +222,9 @@ def test_catchup_candidate_window_ignores_older_history(monkeypatch) -> None:
 
 def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
     calls = {}
-    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+    monkeypatch.setattr(
+        catchup_module, "analysis_strategy_hash", lambda strategy: "current_hash"
+    )
 
     def count_matching(db, model, *criteria):
         text = " ".join(
@@ -733,6 +736,50 @@ def test_raw_sync_quality_error_commits_before_raise(monkeypatch) -> None:
     assert db.commits == 1
 
 
+def test_catchup_defers_current_day_eod_not_ready(monkeypatch) -> None:
+    target = date(2026, 9, 24)
+    calls = []
+
+    class FakeIngestion:
+        def sync_stock_st(self, trade_date):
+            calls.append("stock_st")
+
+        def sync_suspend_daily(self, trade_date):
+            calls.append("suspend_d")
+
+        def sync_daily(self, trade_date):
+            raise catchup_module.EodDataNotReadyError("EOD_NOT_READY")
+
+    db = SimpleNamespace(rollback=lambda: calls.append("rollback"))
+    job = CatchUpJob.__new__(CatchUpJob)
+    job.db = db
+    job.ingestion = FakeIngestion()
+    monkeypatch.setattr(catchup_module, "business_today", lambda: target)
+
+    assert job._sync_and_validate_raw_date(target) is False
+    assert calls == ["stock_st", "suspend_d", "rollback"]
+
+
+def test_catchup_historical_eod_not_ready_remains_error(monkeypatch) -> None:
+    class FakeIngestion:
+        def sync_stock_st(self, trade_date):
+            pass
+
+        def sync_suspend_daily(self, trade_date):
+            pass
+
+        def sync_daily(self, trade_date):
+            raise catchup_module.EodDataNotReadyError("EOD_NOT_READY")
+
+    job = CatchUpJob.__new__(CatchUpJob)
+    job.db = SimpleNamespace(rollback=lambda: None)
+    job.ingestion = FakeIngestion()
+    monkeypatch.setattr(catchup_module, "business_today", lambda: date(2026, 9, 24))
+
+    with pytest.raises(catchup_module.EodDataNotReadyError):
+        job._sync_and_validate_raw_date(date(2026, 9, 23))
+
+
 def test_dirty_repair_not_run_without_open_dirty_ranges(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(catchup_module, "repairable_dirty_ranges", lambda *args, **kwargs: [])
@@ -835,6 +882,19 @@ def test_historical_theme_repair_recalculates_to_latest_raw(monkeypatch) -> None
 
     assert ("theme_repair", repair_date) in events
     assert ("recalculate", repair_date, latest, "catchup_analysis") in events
+
+
+def test_research_sources_must_all_reach_expected_trade_date() -> None:
+    expected = date(2026, 9, 24)
+
+    assert _research_sources_current(expected, expected, expected, expected)
+    assert not _research_sources_current(
+        expected,
+        expected,
+        date(2026, 9, 23),
+        expected,
+    )
+    assert not _research_sources_current(expected, expected, expected, None)
 
 
 @pytest.mark.parametrize(

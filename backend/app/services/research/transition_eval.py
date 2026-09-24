@@ -17,6 +17,7 @@ from app.services.analysis_identity import (
     OPPORTUNITY_CALC_VERSION,
     RESEARCH_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 from app.services.research.opportunity_eval import STATES, future_dates
@@ -114,7 +115,7 @@ def transition_outcome(
 
 
 def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any) -> dict[str, int]:
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
     scope_filters = (
@@ -183,6 +184,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
         by_code[base.ts_code].append(base)
     counts = {"base_rows": len(bases), "eval_rows": 0, "deleted_rows": 0}
     codes = sorted(by_code)
+
     def row_batches() -> Iterator[list[dict[str, Any]]]:
         for offset in range(0, len(codes), 250):
             chunk = codes[offset : offset + 250]
@@ -198,7 +200,8 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
                         StockStateDaily.config_hash == strategy_hash,
                     )
                 ).all()
-                if dates else []
+                if dates
+                else []
             )
             states: dict[str, dict[date, str]] = defaultdict(dict)
             for row in state_rows:
@@ -236,7 +239,9 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
                                 "research_version": RESEARCH_VERSION,
                                 "research_config_hash": research_hash,
                                 **transition_outcome(
-                                    base.trade_date, dates, states[code],
+                                    base.trade_date,
+                                    dates,
+                                    states[code],
                                     is_right=event_type == "RIGHT_SIDE_NEW",
                                 ),
                             }
@@ -244,7 +249,10 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
             yield payload
 
     stats = replace_slice_rows_with_stats(
-        db, ResearchTransitionEval, row_batches(), scope_filters=scope_filters,
+        db,
+        ResearchTransitionEval,
+        row_batches(),
+        scope_filters=scope_filters,
         key_columns=TRANSITION_KEY,
     )
     counts["eval_rows"] = stats["upserted"]

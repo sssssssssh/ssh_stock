@@ -26,6 +26,7 @@ from app.services.analysis_identity import (
     SIGNAL_CALC_VERSION,
     THEME_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 
@@ -41,7 +42,7 @@ def summary(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,

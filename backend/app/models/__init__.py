@@ -1,3 +1,4 @@
+from app.models.auth import AppUser, AuthSession
 from app.models.base import Base
 from app.models.job import JobRun, ProviderApiLog
 from app.models.market_data import (
@@ -23,6 +24,7 @@ from app.models.market_data import (
     ThemeDaily,
     ThemeFactorDaily,
     ThemeLimitDaily,
+    ThemeMemberInterval,
     ThemeMemberSnapshot,
     ThemeMoneyflowDaily,
     TradeCalendar,
@@ -30,6 +32,8 @@ from app.models.market_data import (
 
 __all__ = [
     "Base",
+    "AppUser",
+    "AuthSession",
     "IndexDaily",
     "JobRun",
     "MarketDaily",
@@ -55,6 +59,7 @@ __all__ = [
     "ThemeFactorDaily",
     "ThemeLimitDaily",
     "ThemeMemberSnapshot",
+    "ThemeMemberInterval",
     "ThemeMoneyflowDaily",
     "StockOpportunityDaily",
 ]

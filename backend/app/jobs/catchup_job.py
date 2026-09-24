@@ -17,14 +17,20 @@ from app.models.market_data import (
 )
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job
-from app.services.analysis_identity import TREND_CALC_VERSION
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.calc_metadata import config_hash
 from app.services.dirty import (
     latest_raw_trade_date,
     repairable_dirty_ranges,
     unresolved_dirty_ranges,
 )
-from app.services.ingestion import IngestionService
+from app.services.ingestion import EodDataNotReadyError, IngestionService
 from app.services.job_guard import scheduler_setting
 from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
 from app.services.quality.opportunity_quality import check_opportunity_quality
@@ -45,6 +51,8 @@ class CatchUpPlan:
     refresh_dates: list[date]
     skipped: bool
     reason: str | None = None
+    deferred_trade_date: date | None = None
+    deferred_reason: str | None = None
 
     @property
     def required_dates(self) -> list[date]:
@@ -102,19 +110,19 @@ class CatchUpJob:
             )
             return plan
 
+        deferred_trade_date = None
         for current in plan.raw_required_dates:
             logger.info("catch-up raw-only repair trade_date={}", current)
-            self._sync_and_validate_raw_date(current)
+            if self._sync_and_validate_raw_date(current) is False:
+                deferred_trade_date = current
 
         repaired_theme_dates = [
-            current
-            for current in theme_repair_dates
-            if self._sync_theme_raw_best_effort(current)
+            current for current in theme_repair_dates if self._sync_theme_raw_best_effort(current)
         ]
         analysis_dates = list(plan.analysis_required_dates)
-        recalc_dates = sorted(
-            set(plan.raw_required_dates + analysis_dates + repaired_theme_dates)
-        )
+        recalc_dates = sorted(set(plan.raw_required_dates + analysis_dates + repaired_theme_dates))
+        if deferred_trade_date is not None:
+            recalc_dates = [item for item in recalc_dates if item != deferred_trade_date]
         if recalc_dates:
             latest = latest_raw_trade_date(self.db)
             if latest is None:
@@ -140,6 +148,16 @@ class CatchUpJob:
             len(plan.analysis_required_dates),
             len(plan.refresh_dates),
         )
+        if deferred_trade_date is not None:
+            return CatchUpPlan(
+                raw_required_dates=plan.raw_required_dates,
+                analysis_required_dates=plan.analysis_required_dates,
+                refresh_dates=plan.refresh_dates,
+                skipped=plan.skipped,
+                reason=plan.reason,
+                deferred_trade_date=deferred_trade_date,
+                deferred_reason="EOD_NOT_READY",
+            )
         return plan
 
     def _run_analysis_repair(self, start: date, end: date, *, mode: str) -> None:
@@ -168,10 +186,17 @@ class CatchUpJob:
             mode=mode,
         )
 
-    def _sync_and_validate_raw_date(self, trade_date: date) -> None:
+    def _sync_and_validate_raw_date(self, trade_date: date) -> bool:
         self.ingestion.sync_stock_st(trade_date)
         self.ingestion.sync_suspend_daily(trade_date)
-        self.ingestion.sync_daily(trade_date)
+        try:
+            self.ingestion.sync_daily(trade_date)
+        except EodDataNotReadyError:
+            if trade_date != business_today():
+                raise
+            self.db.rollback()
+            logger.info("catch-up deferred current EOD trade_date={}", trade_date)
+            return False
         self.ingestion.sync_adj_factor(trade_date)
         self.ingestion.sync_daily_basic(trade_date)
         self.ingestion.sync_index_daily(trade_date)
@@ -189,6 +214,7 @@ class CatchUpJob:
                 f"raw completeness failed: trade_date={trade_date} statuses={statuses}"
             )
         TradeStatusService(self.db).recalc(trade_date, trade_date)
+        return True
 
     def _refresh_raw_only(self, trade_date: date) -> None:
         self._sync_and_validate_raw_date(trade_date)
@@ -218,9 +244,10 @@ class CatchUpJob:
         try:
             if sync_daily:
                 self.ingestion.sync_theme_daily(trade_date)
-                repaired = theme_source_status(
-                    self.db, trade_date, "ths_theme_daily"
-                ) in {"PASS", "WARNING"}
+                repaired = theme_source_status(self.db, trade_date, "ths_theme_daily") in {
+                    "PASS",
+                    "WARNING",
+                }
         except Exception as exc:
             self.db.rollback()
             logger.warning("catch-up theme daily repair failed date={} error={}", trade_date, exc)
@@ -343,9 +370,7 @@ def analysis_complete_dates(
     settings = get_settings()
     resolved_strategy = strategy if strategy is not None else settings.strategy
     resolved_opportunity = (
-        opportunity_config
-        if opportunity_config is not None
-        else settings.opportunity_config
+        opportunity_config if opportunity_config is not None else settings.opportunity_config
     )
     return {
         trade_date
@@ -412,7 +437,7 @@ def is_analysis_complete(
     quality = check_opportunity_quality(
         db,
         trade_date,
-        strategy_hash=config_hash(strategy),
+        strategy_hash=analysis_strategy_hash(strategy),
         opportunity_hash=config_hash(resolved_opportunity),
         algo_version=algo_version,
         config=resolved_opportunity,
@@ -427,13 +452,13 @@ def is_core_analysis_complete(
     strategy: dict,
     algo_version: str,
 ) -> bool:
-    current_config_hash = config_hash(strategy)
+    current_config_hash = analysis_strategy_hash(strategy)
     stock_daily_count = _count_matching(db, StockDaily, StockDaily.trade_date == trade_date)
     factor_count = _count_matching(
         db,
         StockFactorDaily,
         StockFactorDaily.trade_date == trade_date,
-        StockFactorDaily.calc_version == "factor_v1",
+        StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
         StockFactorDaily.config_hash == current_config_hash,
     )
     if (
@@ -452,7 +477,7 @@ def is_core_analysis_complete(
         db,
         MarketDaily,
         MarketDaily.trade_date == trade_date,
-        MarketDaily.calc_version == "market_v1",
+        MarketDaily.calc_version == MARKET_CALC_VERSION,
         MarketDaily.config_hash == current_config_hash,
     )
     if market_count < 1:
@@ -462,7 +487,7 @@ def is_core_analysis_complete(
         db,
         SectorFactorDaily,
         SectorFactorDaily.trade_date == trade_date,
-        SectorFactorDaily.calc_version == "sector_v1",
+        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
         SectorFactorDaily.config_hash == current_config_hash,
     )
     if sector_count < 1:

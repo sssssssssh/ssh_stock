@@ -12,8 +12,10 @@ from app.services.analysis_identity import (
     RESEARCH_EVAL_VERSION,
     RESEARCH_VERSION,
     THEME_CALC_VERSION,
+    analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.theme_quality import theme_context_availability
 from app.services.research.forward_eval import evaluate_theme_forward
 from app.services.research.opportunity_eval import benchmark_lookup, future_dates
 
@@ -60,7 +62,7 @@ def evaluate_theme_batch(
     progress: Callable[[int], None] | None = None,
 ) -> dict[str, int]:
     research = settings.research_config
-    strategy_hash = config_hash(settings.strategy)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(research)
     scope_filters = (
@@ -97,24 +99,32 @@ def evaluate_theme_batch(
     latest = db.scalar(select(func.max(ThemeDaily.trade_date)))
     dates = future_dates(db, base_dates, latest)
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
+    theme_context = theme_context_availability(db, base_dates)
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.theme_code].append(base)
     codes = sorted(by_code)
+
     def row_batches() -> Iterator[list[dict[str, Any]]]:
         for offset in range(0, len(codes), 250):
             chunk = codes[offset : offset + 250]
             raw = (
                 db.execute(
                     select(
-                        ThemeDaily.theme_code, ThemeDaily.trade_date, ThemeDaily.close,
-                        ThemeDaily.high, ThemeDaily.low,
+                        ThemeDaily.theme_code,
+                        ThemeDaily.trade_date,
+                        ThemeDaily.close,
+                        ThemeDaily.high,
+                        ThemeDaily.low,
                     ).where(
                         ThemeDaily.theme_code.in_(chunk),
                         ThemeDaily.trade_date.between(dates[0], dates[-1]),
                     )
-                ).mappings().all()
-                if dates else []
+                )
+                .mappings()
+                .all()
+                if dates
+                else []
             )
             lookup: dict[str, dict[date, dict[str, Any]]] = defaultdict(dict)
             for row in raw:
@@ -141,6 +151,12 @@ def evaluate_theme_batch(
                             "eval_version": RESEARCH_EVAL_VERSION,
                             "entry_basis": research["theme"]["entry_basis"],
                             "benchmark_code": research["benchmark_code"],
+                            "theme_context_available": bool(
+                                theme_context.get(base.trade_date, {}).get("available", False)
+                            ),
+                            "theme_context_coverage": theme_context.get(
+                                base.trade_date, {}
+                            ).get("coverage"),
                             **{key: getattr(base, key) for key in SNAPSHOT_COLUMNS},
                             **forward,
                         }

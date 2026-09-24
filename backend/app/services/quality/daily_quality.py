@@ -21,8 +21,13 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.upsert import upsert_rows
-from app.services.analysis_identity import TREND_CALC_VERSION
-from app.services.calc_metadata import config_hash
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.universe import is_stock_active_on
 
 
@@ -73,8 +78,7 @@ class CrossTableRangeResult:
             "cross_table_error_days": self.error_days,
             "cross_table_error_dates": [day.isoformat() for day in self.error_dates[:100]],
             "cross_table_error_datasets": {
-                day: datasets
-                for day, datasets in list(self.error_datasets.items())[:100]
+                day: datasets for day, datasets in list(self.error_datasets.items())[:100]
             },
         }
 
@@ -225,7 +229,7 @@ def record_cross_table_quality(
 ) -> CrossTableQualityResult:
     settings = get_settings()
     strategy = strategy or settings.strategy
-    hash_value = config_hash(strategy)
+    hash_value = analysis_strategy_hash(strategy)
     algo_version = settings.algo_version
     counts = {
         "stock_daily": _count_date(db, StockDaily, StockDaily.trade_date, trade_date),
@@ -238,7 +242,7 @@ def record_cross_table_quality(
             StockFactorDaily,
             StockFactorDaily.trade_date,
             trade_date,
-            StockFactorDaily.calc_version == "factor_v1",
+            StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
             StockFactorDaily.config_hash == hash_value,
         ),
         "stock_state_daily": _count_date(
@@ -255,7 +259,7 @@ def record_cross_table_quality(
             SectorFactorDaily,
             SectorFactorDaily.trade_date,
             trade_date,
-            SectorFactorDaily.calc_version == "sector_v1",
+            SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
             SectorFactorDaily.config_hash == hash_value,
         ),
         "market_daily": _count_date(
@@ -263,7 +267,7 @@ def record_cross_table_quality(
             MarketDaily,
             MarketDaily.trade_date,
             trade_date,
-            MarketDaily.calc_version == "market_v1",
+            MarketDaily.calc_version == MARKET_CALC_VERSION,
             MarketDaily.config_hash == hash_value,
         ),
     }
@@ -316,9 +320,7 @@ def record_cross_table_quality(
         counts["stock_factor_daily"],
         counts["stock_state_daily"],
         job_id,
-        warning_coverage_rate=_cross_table_threshold(
-            strategy, "state_vs_factor", "warning", 0.98
-        ),
+        warning_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "warning", 0.98),
         error_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "error", 0.90),
     )
     return CrossTableQualityResult(
@@ -466,9 +468,7 @@ def _count_date(
 ) -> int:
     return int(
         db.execute(
-            select(func.count())
-            .select_from(model)
-            .where(column == trade_date, *criteria)
+            select(func.count()).select_from(model).where(column == trade_date, *criteria)
         ).scalar_one()
     )
 

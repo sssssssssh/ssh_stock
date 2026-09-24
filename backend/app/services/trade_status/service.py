@@ -18,6 +18,10 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows
+from app.services.analysis_identity import (
+    TRADE_STATUS_CALC_VERSION,
+    analysis_strategy_config,
+)
 from app.services.calc_metadata import calculation_metadata
 from app.services.trade_status.engine import calculate_trade_status_rows
 
@@ -48,13 +52,11 @@ class TradeStatusService:
             stock_st=self._read_range(StockStDaily, start, end),
             suspend_daily=self._read_range(StockSuspendDaily, start, end),
             stock_limit=self._read_range(StockLimitDaily, start, end),
-            exclude_st=bool(
-                self.settings.strategy.get("universe", {}).get("exclude_st", True)
-            ),
+            exclude_st=bool(self.settings.strategy.get("universe", {}).get("exclude_st", True)),
         )
         metadata = calculation_metadata(
-            config=self.settings.strategy,
-            calc_version="trade_status_v1",
+            config=analysis_strategy_config(self.settings.strategy),
+            calc_version=TRADE_STATUS_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
         rows = [{**_clean_row(row), **metadata} for row in status.to_dict("records")]
@@ -85,7 +87,9 @@ class TradeStatusService:
                     StockBasic.list_date,
                     StockBasic.delist_date,
                 )
-            ).mappings().all()
+            )
+            .mappings()
+            .all()
         )
 
     def _read_range(self, model: type, start: date, end: date) -> pd.DataFrame:
@@ -95,7 +99,9 @@ class TradeStatusService:
                     model.trade_date >= start,
                     model.trade_date <= end,
                 )
-            ).mappings().all()
+            )
+            .mappings()
+            .all()
         )
 
 

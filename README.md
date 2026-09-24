@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 8。也就是项目骨架、数据库迁移、Tushare 原始数据同步、个股因子、市场温度、行业热度、趋势状态机、策略信号、完整 REST API、Vue 前端、后验评估、研究接口、数据可靠性改造、CLI 和测试。
+当前实现范围：Milestone 0 到 Milestone 11.3。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、管理员 Session 鉴权、Vue/Nginx/Compose 部署、运行状态、任务安全取消和历史题材成员 PIT。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -714,7 +714,7 @@ npm install
 npm run dev
 ```
 
-Docker Compose 只运行 migration、backend、worker 和 scheduler，不运行 PostgreSQL。
+Docker Compose 运行 migration、backend、worker、scheduler 和 frontend，不运行 PostgreSQL。
 
 ## 测试
 
@@ -886,14 +886,14 @@ docker compose up -d --build
 docker compose ps
 ```
 
-先确保外部 PostgreSQL 可访问；Compose 启动顺序为 `migration 完成 -> backend/worker/scheduler`。`migration` 容器只执行一次 `python -m alembic upgrade head`，它只升级表结构，不会重新拉取或重新计算数据。后端健康检查会访问 `/health` 并执行数据库 `SELECT 1`。
+先确保外部 PostgreSQL 可访问；Compose 启动顺序为 `migration 完成 -> backend/worker/scheduler -> frontend`。`migration` 容器只执行一次 `python -m alembic upgrade head`，它只升级表结构，不会重新拉取或重新计算数据。后端健康检查会访问 `/health` 并执行数据库 `SELECT 1`。
 
 常用检查：
 
 ```powershell
 docker compose logs -f migration
 docker compose logs -f backend worker scheduler
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:9034/health
 ```
 
 正常健康响应包含 `{"status":"ok","database":"ok"}`。当前 Compose 只管理应用服务，数据库由外部 PostgreSQL 提供。
@@ -1053,3 +1053,77 @@ Daily/Backfill 会同步 `ths_daily`；`moneyflow_cnt_ths` 与 `limit_cpt_list` 
 - Backfill 遇到当天 `EOD_NOT_READY` 时仍以成功延迟结束，但 `progress_pct` 按已完成交易日计算并小于 100%；页面显示“历史数据已完成，今日 EOD 数据待更新”。
 - `stk_limit` 将可证明的 IPO 无涨跌幅限制日视为有效 Raw：SSE/SZSE 为上市起前 5 个市场交易日，BSE 为上市首个市场交易日。判定批量读取 `stock_basic` 与 `trade_calendar`，保留 Provider 返回的 `99999.99/0` 等原始值，并在质量诊断记录 exemption 代码和原因。
 - 价格特殊值本身不能证明 exemption。缺少上市日期、交易日历不完整、交易所元数据冲突或不在 IPO 窗口内时仍写 `INVALID_LIMIT_VALUE/ERROR`；RawCompleteness 复用完全相同的判定，不能把合法入库数据二次判错。
+
+## Milestone 11.3 登录、部署与研究一致性（2026-09-24）
+
+### 数据库升级与管理员
+
+拉取本版本后先执行：
+
+```powershell
+python -m pip install -r requirements-dev.txt
+$env:PYTHONPATH = "backend"
+python -m alembic upgrade head
+```
+
+`alembic upgrade head` 只升级表结构，不拉取 Raw，也不执行因子或 Research 计算。`0021_admin_auth` 新建管理员和 Session 表；`0022_theme_member_interval` 新建历史题材成员区间，并为研究结果增加题材上下文覆盖字段、为任务增加取消标志。
+
+API 首次启动会在管理员不存在时创建 `.env` 中的 `BOOTSTRAP_ADMIN_USERNAME`，默认 `admin`，初始密码默认 `123456`。首次登录必须修改为至少 8 个字符的新密码；已有管理员不会被启动流程覆盖。生产环境必须修改 `BOOTSTRAP_ADMIN_PASSWORD`，通过 HTTPS 提供页面，并设置：
+
+```dotenv
+AUTH_SESSION_HOURS=168
+AUTH_COOKIE_SECURE=true
+```
+
+忘记密码时在服务器交互式重置，不要把新密码写在命令参数中：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli reset-admin-password
+```
+
+### 本地开发启动
+
+终端 1：
+
+```powershell
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 9034
+```
+
+终端 2：
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m app.cli worker
+```
+
+终端 3：
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+浏览器打开 `http://127.0.0.1:5173`。不要直接打开后端根路径；后端健康检查是 `http://127.0.0.1:9034/health`。需要自动日更时再单独运行 `python -m app.cli scheduler`。
+
+### Compose 生产启动
+
+宿主机只需 Docker Engine 和 Docker Compose，不要求安装 Python、Conda 或 Node.js。`.env` 中的 `DOCKER_DATABASE_URL` 必须能从容器访问外部 PostgreSQL 17。
+
+```bash
+git pull
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=200 backend worker scheduler frontend
+```
+
+浏览器默认打开 `http://127.0.0.1:5173`；对外提供服务时设置 `FRONTEND_BIND=0.0.0.0`，并在云防火墙或反向代理中控制访问。Nginx 提供 SPA 并把同源 `/api/` 代理到 backend。五个服务为 `migration`、`backend`、`worker`、`scheduler`、`frontend`，四个 Python 服务复用同一镜像。
+
+### 部署后的数据处理
+
+本版本改用只包含 `universe/benchmark/factor/right_side/trend/market/sector` 的 Analysis Hash。`raw_quality`、`data_quality` 或 Provider 限流参数变化不再令分析身份失效。升级后不要清库，也不要重拉完整 Raw；对需要保留的历史区间提交一次“开始补算”，完成后再提交 Research Eval，使 Derived 和 Research 生成新身份结果。
+
+题材 API 精确使用 `ThemeFactorDaily.member_snapshot_date`；WARNING 快照在详情页显示“成员快照部分覆盖”。历史研究优先使用有明确 `in_date/out_date` 的成员区间，否则只回退到交易日当时真实存在的快照；两者都没有时记录 Theme Context unavailable，不用今天的成员伪造历史。
+
+数据页展示 Worker heartbeat、当前任务、排队/运行数量以及最新 Raw/分析/机会日期。`POST /api/v1/jobs/{job_id}/cancel` 可直接取消 QUEUED 任务，RUNNING 任务会在 Backfill 日期、Recalculate 分块或 Research batch 安全停止。每天 03:15 清理 Provider 日志、过期任务日志和失效 Session，不清理 Raw、Derived、质量或研究数据。备份与恢复见 `docs/部署与备份.md`。

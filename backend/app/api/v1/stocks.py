@@ -22,8 +22,8 @@ from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
     TREND_CALC_VERSION,
+    analysis_strategy_hash,
 )
-from app.services.calc_metadata import config_hash
 from app.services.realtime_kline import load_realtime_kline
 
 router = APIRouter()
@@ -138,7 +138,7 @@ def overview(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,
@@ -214,7 +214,7 @@ def history(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     if not db.get(StockBasic, ts_code):
         raise HTTPException(status_code=404, detail="stock not found")
 
@@ -250,7 +250,7 @@ def factors(
     if not db.get(StockBasic, ts_code):
         raise HTTPException(status_code=404, detail="stock not found")
 
-    hash_value = config_hash(get_settings().strategy)
+    hash_value = analysis_strategy_hash(get_settings().strategy)
     row_limit = clamp_limit(limit, default=240, maximum=1000)
     stmt = (
         select(StockFactorDaily)
@@ -282,7 +282,7 @@ def _state_pool(
 ) -> dict[str, Any]:
     settings = get_settings()
     version = algo_version or settings.algo_version
-    hash_value = config_hash(settings.strategy)
+    hash_value = analysis_strategy_hash(settings.strategy)
     target = trade_date or latest_date(
         db,
         StockStateDaily.trade_date,

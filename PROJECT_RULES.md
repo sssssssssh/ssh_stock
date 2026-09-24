@@ -11,7 +11,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 8：
+当前已完成 Milestone 0 到 Milestone 11.3：
 
 - 工程骨架
 - 数据库与迁移
@@ -43,11 +43,7 @@
 - Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率、行业历史成分有效期、NULL upsert 保护、dirty range 向后重算、计算版本追踪
 - pytest
 
-当前阶段剩余重点：
-
-- 补充更长历史数据后的真实策略参数校验。
-- 基于更多历史样本扩展后验分桶和导出功能。
-- 生产部署、权限控制和前端配置页。
+当前阶段剩余重点是使用真实长历史样本做策略参数校准；本轮不继续修改生产策略权重、阈值或 S0-S6 定义。
 
 ## 架构规则
 
@@ -265,7 +261,22 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Research Job Queue 时必须冻结完整 Research Identity；执行前 current identity 与 queued identity 不一致时必须失败，不得用新配置执行旧 Job。
 - ResearchTransitionEval identity 必须包含 trend_calc_version 与 opportunity_calc_version。
 - stale Research recovery 的持久化不能因为后续 queue conflict rollback。
-- Docker Compose 只管理 migration/backend/worker/scheduler，数据库使用外部 PostgreSQL。
+- Docker Compose 管理 migration/backend/worker/scheduler/frontend，数据库使用外部 PostgreSQL；四个 Python 服务必须复用同一镜像，frontend 使用固定版本 Node 构建和 Nginx 运行。
 - LEFT/RIGHT Context 的 Transition EXISTS 必须与 OpportunityForwardEval 匹配 opportunity_calc_version，禁止跨 Opportunity calc version 复用旧事件。
 - 0020 downgrade 如果多个新版本 Transition 会在 legacy natural key 下冲突，必须明确拒绝回退，禁止静默删除研究历史。
 - CI 必须验证 docker compose config 与 docker compose build。
+
+## Milestone 11.3 系统一致性规则（2026-09-24）
+
+- 除 `/health` 和 `/api/v1/auth/login` 外，业务 API 默认使用 Router 级 Session 鉴权；浏览器只保存 HttpOnly、SameSite=Strict Cookie，数据库只保存 Session Token 的 SHA-256，不得在前端存密码或 Token。
+- 默认管理员只在不存在时初始化，已有密码不得被启动覆盖；初始密码登录后必须强制改密。密码使用 Argon2，修改或 CLI 重置密码后撤销该用户全部 Session。
+- Production HTTPS 必须设置 `AUTH_COOKIE_SECURE=true`。管理员重置只能交互输入，不得通过命令参数传密码。
+- Derived 和 Research 的策略身份必须使用 `analysis_strategy_hash()`，只包含 `universe/benchmark/factor/right_side/trend/market/sector`；Raw/Data Quality 与 Provider 运行参数不能改变分析身份。
+- 计算版本字符串只允许在 `analysis_identity.py`、migration 和必要测试 fixture 中硬编码；业务代码统一引用版本常量。
+- Theme API 必须优先使用 `ThemeFactorDaily.member_snapshot_date`。可用 WARNING 快照标记为 PARTIAL 并在页面明确展示，不得为了显示完整而回退到旧 PASS。
+- 题材历史成员只使用明确来源日期的 `theme_member_interval`；无可靠 interval 时可使用 `snapshot_date <= trade_date` 的真实 usable snapshot，两者都无证据时必须记录 context unavailable，禁止使用当前成员伪造历史。
+- Research Scheduler 只有在 Raw、State 和 Opportunity 都达到最近应有交易日时才可入队，否则记录 `RESEARCH_SOURCE_STALE`。
+- 当日 `EOD_NOT_READY` 在 CatchUp 中属于 deferred；历史交易日空数据仍是 ERROR。`stk_limit` 任意非 exemption 非法值必须令完整性 ERROR，即使覆盖率超过阈值。
+- ThemeFactor 和 Opportunity 大区间按自然月分块；Trend 保持连续计算，除非有等价性测试证明分块不会破坏 previous state。长任务只允许通过 `cancel_requested` 在安全点结束为 CANCELLED，不通过杀 Worker 实现业务取消。
+- Retention 只清理 90 天前 Provider 日志、180 天前成功/部分/取消任务、365 天前失败任务及失效 30 天后的 Session；不得自动清理 Raw、Derived、DataQuality 或 Research Eval。
+- 外部 PostgreSQL、`.env` 和 `config/*.yaml` 是部署核心资产；升级或恢复流程遵循 `docs/部署与备份.md`。

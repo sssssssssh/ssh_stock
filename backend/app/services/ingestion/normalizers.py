@@ -288,6 +288,37 @@ def normalize_theme_members(df: pd.DataFrame, snapshot_date: date) -> list[dict[
     return rows
 
 
+def normalize_theme_member_intervals(df: pd.DataFrame) -> list[dict[str, Any]]:
+    if df.empty or not {"ts_code", "con_code"} <= set(df.columns):
+        return []
+    rows = []
+    for item in df.to_dict("records"):
+        theme_code, stock_code = item.get("ts_code"), item.get("con_code")
+        valid_from = parse_tushare_date(item.get("in_date"))
+        valid_to = parse_tushare_date(item.get("out_date"))
+        flag = str(item.get("is_new") or "").strip().upper()
+        if not theme_code or not stock_code or valid_from is None:
+            continue
+        if valid_to is not None and valid_to < valid_from:
+            continue
+        rows.append(
+            {
+                "theme_code": theme_code,
+                "ts_code": stock_code,
+                "valid_from": valid_from,
+                "valid_to": valid_to,
+                "source": "THS",
+                "source_is_new": True if flag == "Y" else False if flag == "N" else None,
+                "quality_flag": "RELIABLE",
+            }
+        )
+    return list(
+        {
+            (row["theme_code"], row["ts_code"], row["valid_from"]): row for row in rows
+        }.values()
+    )
+
+
 def normalize_theme_daily(df: pd.DataFrame) -> list[dict[str, Any]]:
     fields = [
         "open", "high", "low", "close", "pre_close", "avg_price", "change",

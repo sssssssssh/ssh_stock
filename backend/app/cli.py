@@ -9,6 +9,7 @@ from app.core.logging import configure_logging
 from app.jobs.research_job import queue_research_eval
 from app.jobs.scheduler import run_scheduler
 from app.providers.tushare_provider import TushareProvider
+from app.services.auth.service import reset_admin_password as reset_admin_password_service
 from app.services.factors import FactorService
 from app.services.job_guard import (
     ActiveIngestionJobError,
@@ -23,6 +24,22 @@ from app.services.sector import SectorService
 from app.services.trend import TrendService
 
 cli = typer.Typer(no_args_is_help=True)
+
+
+@cli.command("reset-admin-password")
+def reset_admin_password() -> None:
+    new_password = typer.prompt(
+        "New password",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    with SessionLocal() as db:
+        try:
+            reset_admin_password_service(db, get_settings().bootstrap_admin_username, new_password)
+        except ValueError as exc:
+            typer.echo(str(exc))
+            raise typer.Exit(code=1) from exc
+    typer.echo("admin password reset; all sessions revoked")
 
 
 @cli.command("research-eval")

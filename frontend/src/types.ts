@@ -5,6 +5,11 @@ export type ApiEnvelope<T> = {
   meta: Record<string, unknown>;
 };
 
+export type AuthUser = {
+  username: string;
+  must_change_password: boolean;
+};
+
 export type SystemStatus = {
   latest_trade_date: string | null;
   latest_raw_date: string | null;
@@ -18,6 +23,17 @@ export type SystemStatus = {
   latest_theme_factor_date: string | null;
   latest_opportunity_date: string | null;
   latest_theme_member_snapshot: string | null;
+};
+
+export type SystemRuntime = {
+  worker_heartbeat: string | null;
+  active_job: { id: string; job_type: string; step: string | null; started_at: string | null } | null;
+  queued_count: number;
+  running_count: number;
+  scheduler_cron: { daily: string; basic_info: string; research: string };
+  latest_raw_date: string | null;
+  latest_analysis_date: string | null;
+  latest_opportunity_date: string | null;
 };
 
 export type DataCoverageRow = {
@@ -242,6 +258,12 @@ export type ThemeOverview = {
   history: ThemeHeat[];
   member_distribution: Array<{ stage: string; count: number }>;
   top_members: Record<string, OpportunityItem[]>;
+  member_snapshot: {
+    member_snapshot_date: string | null;
+    member_snapshot_status: string | null;
+    member_snapshot_coverage: number | null;
+    member_snapshot_mode: "FULL" | "PARTIAL" | null;
+  };
 };
 
 export type ResearchStats = {

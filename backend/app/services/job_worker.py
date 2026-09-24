@@ -146,6 +146,11 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                     "analysis_required_days": len(plan.analysis_required_dates),
                     "refresh_days": len(plan.refresh_dates),
                     "skipped": plan.skipped,
+                    "stage": "eod_deferred" if plan.deferred_trade_date else "success",
+                    "deferred_trade_date": plan.deferred_trade_date.isoformat()
+                    if plan.deferred_trade_date
+                    else None,
+                    "deferred_reason": plan.deferred_reason,
                 },
             )
         elif job.job_type == RESEARCH_JOB_TYPE:
@@ -155,7 +160,7 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
     except Exception as exc:
         db.rollback()
         failed = db.get(JobRun, job_id)
-        if failed is not None and failed.status not in {"SUCCESS", "FAILED"}:
+        if failed is not None and failed.status not in {"SUCCESS", "FAILED", "CANCELLED"}:
             update_job(
                 db,
                 failed,

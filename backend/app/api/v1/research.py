@@ -16,7 +16,7 @@ from app.models.market_data import (
     StrategySignal,
     ThemeForwardEval,
 )
-from app.services.analysis_identity import SIGNAL_CALC_VERSION
+from app.services.analysis_identity import SIGNAL_CALC_VERSION, analysis_strategy_hash
 from app.services.calc_metadata import config_hash
 from app.services.job_guard import ResearchQueueConflictError
 from app.services.research import analytics
@@ -398,7 +398,7 @@ def _read_eval_rows(
     entry_basis: str,
     executable_only: bool,
 ) -> list[dict[str, Any]]:
-    hash_value = config_hash(get_settings().strategy)
+    hash_value = analysis_strategy_hash(get_settings().strategy)
     filters = [
         SignalForwardEval.signal_type == signal_type,
         SignalForwardEval.algo_version == algo_version,
