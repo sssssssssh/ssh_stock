@@ -5,7 +5,6 @@ httpx==0.28.1
 loguru==0.7.3
 numpy==2.3.3
 pandas==3.0.5
-polars==1.44.0
 psycopg[binary]==3.3.4
 pydantic==2.13.4
 pydantic-settings==2.11.0

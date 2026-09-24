@@ -12,9 +12,11 @@ from app.models.market_data import (
     ThemeDaily,
     ThemeFactorDaily,
 )
+from app.services.analysis_filters import (
+    opportunity_identity_filters,
+    theme_factor_identity_filters,
+)
 from app.services.analysis_identity import (
-    OPPORTUNITY_CALC_VERSION,
-    THEME_CALC_VERSION,
     TREND_CALC_VERSION,
 )
 
@@ -50,9 +52,11 @@ def check_opportunity_quality(
         db,
         StockOpportunityDaily,
         StockOpportunityDaily.trade_date == trade_date,
-        StockOpportunityDaily.algo_version == algo_version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == opportunity_hash,
+        *opportunity_identity_filters(
+            algo_version=algo_version,
+            strategy_hash=strategy_hash,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     source_quality = db.execute(
         select(DataQualityDaily.status).where(
@@ -70,8 +74,10 @@ def check_opportunity_quality(
         db,
         ThemeFactorDaily,
         ThemeFactorDaily.trade_date == trade_date,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == opportunity_hash,
+        *theme_factor_identity_filters(
+            strategy_hash=strategy_hash,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     quality = config.get("opportunity_quality", {})
     results = {

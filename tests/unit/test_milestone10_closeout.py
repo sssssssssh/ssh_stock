@@ -120,7 +120,7 @@ def test_hot_rank_one_scores_above_lower_ranks_and_single_rank_is_nonzero() -> N
         pd.DataFrame(),
         moneyflow,
         limits,
-        set(),
+        {},
         {target},
         {target},
         target,

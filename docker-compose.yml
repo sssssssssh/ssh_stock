@@ -6,6 +6,7 @@ x-app-common: &app-common
     - .env
   environment:
     DATABASE_URL: ${DOCKER_DATABASE_URL}
+    TZ: Asia/Shanghai
 
 services:
   migration:
@@ -53,6 +54,8 @@ services:
     build:
       context: ./frontend
     restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
     depends_on:
       backend:
         condition: service_healthy

@@ -13,6 +13,7 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows_with_stats
+from app.services.analysis_filters import opportunity_identity_filters
 from app.services.analysis_identity import (
     OPPORTUNITY_CALC_VERSION,
     RESEARCH_VERSION,
@@ -150,10 +151,11 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
         db.execute(
             select(StockOpportunityDaily).where(
                 StockOpportunityDaily.trade_date.in_(base_dates),
-                StockOpportunityDaily.algo_version == settings.algo_version,
-                StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-                StockOpportunityDaily.config_hash == opportunity_hash,
-                StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
+                *opportunity_identity_filters(
+                    settings,
+                    strategy_hash=strategy_hash,
+                    opportunity_hash=opportunity_hash,
+                ),
                 StockOpportunityDaily.state.in_(STATES),
             )
         )
@@ -168,10 +170,11 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
             db.execute(
                 select(StockOpportunityDaily).where(
                     StockOpportunityDaily.trade_date.in_(prior_dates),
-                    StockOpportunityDaily.algo_version == settings.algo_version,
-                    StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-                    StockOpportunityDaily.config_hash == opportunity_hash,
-                    StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
+                    *opportunity_identity_filters(
+                        settings,
+                        strategy_hash=strategy_hash,
+                        opportunity_hash=opportunity_hash,
+                    ),
                     StockOpportunityDaily.ts_code.in_({base.ts_code for base in bases}),
                 )
             )

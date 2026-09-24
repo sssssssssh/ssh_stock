@@ -63,6 +63,7 @@ import type {
   ThemeOverview,
   AuthUser
 } from "./types";
+import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
 type ViewKey = "overview" | "data" | "long" | "short";
 type PoolTab = "right" | "trend";
@@ -97,12 +98,12 @@ const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
   tasks: false,
   coverage: false
 });
-const backfillStart = ref(daysAgoIso(30));
-const backfillEnd = ref(todayIso());
-const recalcStart = ref(daysAgoIso(180));
-const recalcEnd = ref(todayIso());
+const backfillStart = ref(businessDaysAgoIso(30));
+const backfillEnd = ref(businessTodayIso());
+const recalcStart = ref(businessDaysAgoIso(180));
+const recalcEnd = ref(businessTodayIso());
 const recalcEvaluateSignals = ref(true);
-const calendarMonth = ref(todayIso().slice(0, 7));
+const calendarMonth = ref(businessTodayIso().slice(0, 7));
 const selectedCalendarDate = ref("");
 const coveragePage = ref(1);
 const coveragePageSize = ref(20);
@@ -757,16 +758,6 @@ function reasonText(value: StockPoolItem["reason_codes"]) {
   return Object.keys(value).join(", ");
 }
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function daysAgoIso(days: number) {
-  const current = new Date();
-  current.setDate(current.getDate() - days);
-  return current.toISOString().slice(0, 10);
-}
-
 function monthStartIso(month: string) {
   return `${month}-01`;
 }
@@ -1188,7 +1179,7 @@ function statusLabel(status: string) {
 
       <section v-show="activeView === 'data'" class="view-stack">
         <section class="runtime-strip" aria-label="运行状态">
-          <div><span>Worker 心跳</span><strong>{{ runtime?.worker_heartbeat || "--" }}</strong></div>
+          <div><span>最近任务心跳</span><strong>{{ runtime?.latest_job_heartbeat || runtime?.worker_heartbeat || "--" }}</strong></div>
           <div><span>当前任务</span><strong>{{ runtime?.active_job?.step || "无" }}</strong></div>
           <div><span>排队 / 运行</span><strong>{{ runtime?.queued_count ?? 0 }} / {{ runtime?.running_count ?? 0 }}</strong></div>
           <div><span>Raw / 分析 / 机会</span><strong>{{ runtime?.latest_raw_date || "--" }} / {{ runtime?.latest_analysis_date || "--" }} / {{ runtime?.latest_opportunity_date || "--" }}</strong></div>

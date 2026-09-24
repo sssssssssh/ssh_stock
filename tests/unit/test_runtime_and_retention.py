@@ -47,6 +47,7 @@ def test_runtime_reports_queue_heartbeat_and_latest_dates() -> None:
     payload = runtime(Db())["data"]
 
     assert payload["worker_heartbeat"] == heartbeat.isoformat()
+    assert payload["latest_job_heartbeat"] == heartbeat.isoformat()
     assert payload["active_job"]["job_type"] == "recalculate"
     assert payload["queued_count"] == 2
     assert payload["running_count"] == 1

@@ -27,13 +27,15 @@ from app.models.market_data import (
     ThemeMemberSnapshot,
     TradeCalendar,
 )
+from app.services.analysis_filters import (
+    opportunity_identity_filters,
+    theme_factor_identity_filters,
+)
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
-    OPPORTUNITY_CALC_VERSION,
     SECTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
-    THEME_CALC_VERSION,
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
@@ -63,13 +65,16 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
             .group_by(JobRun.status)
         ).all()
     )
-    latest_worker_heartbeat = db.scalar(select(func.max(JobRun.heartbeat_at)))
+    latest_job_heartbeat = db.scalar(select(func.max(JobRun.heartbeat_at)))
     scheduler = settings.app_config.get("app", {}).get("scheduler", {})
     research = settings.app_config.get("research", {})
     return envelope(
         {
-            "worker_heartbeat": latest_worker_heartbeat.isoformat()
-            if latest_worker_heartbeat
+            "latest_job_heartbeat": latest_job_heartbeat.isoformat()
+            if latest_job_heartbeat
+            else None,
+            "worker_heartbeat": latest_job_heartbeat.isoformat()
+            if latest_job_heartbeat
             else None,
             "active_job": {
                 "id": str(active.id),
@@ -91,7 +96,10 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
                 db, select(func.max(StockStateDaily.trade_date))
             ),
             "latest_opportunity_date": _latest_date(
-                db, select(func.max(StockOpportunityDaily.trade_date))
+                db,
+                select(func.max(StockOpportunityDaily.trade_date)).where(
+                    *opportunity_identity_filters(settings)
+                ),
             ),
         }
     )
@@ -163,16 +171,22 @@ def status(db: Session = Depends(get_db)) -> dict[str, Any]:
             "latest_theme_factor_date": _latest_date(
                 db,
                 select(func.max(ThemeFactorDaily.trade_date)).where(
-                    ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-                    ThemeFactorDaily.config_hash == opportunity_hash,
+                    *theme_factor_identity_filters(
+                        settings,
+                        strategy_hash=hash_value,
+                        opportunity_hash=opportunity_hash,
+                    ),
                 ),
             ),
             "latest_opportunity_date": _latest_date(
                 db,
                 select(func.max(StockOpportunityDaily.trade_date)).where(
-                    StockOpportunityDaily.algo_version == version,
-                    StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-                    StockOpportunityDaily.config_hash == opportunity_hash,
+                    *opportunity_identity_filters(
+                        settings,
+                        algo_version=version,
+                        strategy_hash=hash_value,
+                        opportunity_hash=opportunity_hash,
+                    ),
                 ),
             ),
             "latest_theme_member_snapshot": _latest_date(
@@ -283,17 +297,23 @@ def data_coverage(
         ThemeFactorDaily.trade_date,
         coverage_start,
         coverage_end,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == opportunity_hash,
+        *theme_factor_identity_filters(
+            settings,
+            strategy_hash=hash_value,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     opportunity_counts = _counts_by_date(
         db,
         StockOpportunityDaily.trade_date,
         coverage_start,
         coverage_end,
-        StockOpportunityDaily.algo_version == version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == opportunity_hash,
+        *opportunity_identity_filters(
+            settings,
+            algo_version=version,
+            strategy_hash=hash_value,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     quality_status = _quality_status_by_date(db, coverage_start, coverage_end)
 
@@ -433,17 +453,23 @@ def data_calendar(
         ThemeFactorDaily.trade_date,
         start,
         end,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == opportunity_hash,
+        *theme_factor_identity_filters(
+            settings,
+            strategy_hash=hash_value,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     opportunity_counts = _counts_by_date(
         db,
         StockOpportunityDaily.trade_date,
         start,
         end,
-        StockOpportunityDaily.algo_version == version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == opportunity_hash,
+        *opportunity_identity_filters(
+            settings,
+            algo_version=version,
+            strategy_hash=hash_value,
+            opportunity_hash=opportunity_hash,
+        ),
     )
     theme_source_status = _theme_source_status_by_date(db, start, end)
     quality_status = _quality_status_by_date(db, start, end)

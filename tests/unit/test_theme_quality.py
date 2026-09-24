@@ -1,8 +1,7 @@
 from datetime import date
 from types import SimpleNamespace
 
-import app.api.v1.themes as themes_api
-from app.services.quality.theme_quality import historical_theme_members
+from app.services.theme.membership import resolve_theme_memberships
 
 
 class _Result:
@@ -17,54 +16,47 @@ class _Result:
         return _Result(rows=self._scalars)
 
 
-def test_theme_api_uses_factor_member_snapshot_before_fallback(monkeypatch) -> None:
-    expected = date(2026, 9, 24)
-    monkeypatch.setattr(
-        themes_api,
-        "theme_factor_member_snapshot",
-        lambda *args, **kwargs: expected,
-    )
-    monkeypatch.setattr(
-        themes_api,
-        "latest_usable_theme_member_snapshot",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("factor snapshot must not fall back to an older PASS snapshot")
-        ),
-    )
-
-    assert (
-        themes_api._member_snapshot_for_factor(
-            object(), date(2026, 9, 24), "hash", "885001.TI"
-        )
-        == expected
-    )
-
-
-def test_historical_theme_members_prefers_interval_then_real_snapshot() -> None:
-    interval = SimpleNamespace(
+def test_theme_membership_resolver_prefers_intervals_and_blocks_ended_pairs() -> None:
+    active_interval = SimpleNamespace(
         theme_code="885001.TI",
         ts_code="000001.SZ",
         valid_from=date(2026, 9, 10),
         valid_to=None,
         source="THS",
     )
+    ended_interval = SimpleNamespace(
+        theme_code="885003.TI",
+        ts_code="000003.SZ",
+        valid_from=date(2026, 9, 9),
+        valid_to=date(2026, 9, 9),
+        source="THS",
+    )
     quality = SimpleNamespace(
         trade_date=date(2026, 9, 5), status="WARNING", coverage_rate=0.96
     )
-    snapshot = SimpleNamespace(
-        snapshot_date=date(2026, 9, 5),
-        theme_code="885002.TI",
-        ts_code="000002.SZ",
-        stock_name="B",
-        source="THS",
-    )
+    snapshots = [
+        SimpleNamespace(
+            snapshot_date=date(2026, 9, 5),
+            theme_code="885002.TI",
+            ts_code="000002.SZ",
+            stock_name="B",
+            source="THS",
+        ),
+        SimpleNamespace(
+            snapshot_date=date(2026, 9, 5),
+            theme_code="885003.TI",
+            ts_code="000003.SZ",
+            stock_name="C",
+            source="THS",
+        ),
+    ]
 
     class Db:
         def __init__(self):
             self.results = [
-                _Result(scalars=[interval]),
+                _Result(scalars=[active_interval, ended_interval]),
                 _Result(rows=[quality]),
-                _Result(scalars=[snapshot]),
+                _Result(scalars=snapshots),
             ]
 
         def execute(self, statement):
@@ -72,9 +64,10 @@ def test_historical_theme_members_prefers_interval_then_real_snapshot() -> None:
 
     before_interval = date(2026, 9, 8)
     during_interval = date(2026, 9, 12)
-    frame, valid_dates, context = historical_theme_members(
-        Db(), [before_interval, during_interval]
-    )
+    resolution = resolve_theme_memberships(Db(), [before_interval, during_interval])
+    frame = resolution.members
+    valid_dates = resolution.available_dates
+    context = resolution.context_by_date
 
     assert valid_dates == {before_interval, during_interval}
     assert context[before_interval] == {
@@ -89,10 +82,12 @@ def test_historical_theme_members_prefers_interval_then_real_snapshot() -> None:
         "mode": "INTERVAL_SNAPSHOT",
         "source_snapshot_date": date(2026, 9, 5),
     }
-    assert set(frame.loc[frame["snapshot_date"] == before_interval, "ts_code"]) == {
-        "000002.SZ"
+    assert set(frame.loc[frame["trade_date"] == before_interval, "ts_code"]) == {
+        "000002.SZ",
+        "000003.SZ",
     }
-    assert set(frame.loc[frame["snapshot_date"] == during_interval, "ts_code"]) == {
+    assert set(frame.loc[frame["trade_date"] == during_interval, "ts_code"]) == {
         "000001.SZ",
         "000002.SZ",
     }
+    assert set(frame["membership_source"]) == {"INTERVAL", "SNAPSHOT"}

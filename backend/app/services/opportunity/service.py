@@ -17,7 +17,6 @@ from app.models.market_data import (
     StockStateDaily,
     Theme,
     ThemeFactorDaily,
-    ThemeMemberSnapshot,
     TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows
@@ -32,7 +31,7 @@ from app.services.analysis_identity import (
 )
 from app.services.calc_metadata import calculation_metadata, config_hash
 from app.services.opportunity.engine import OpportunityConfig, calculate_opportunities
-from app.services.quality.theme_quality import historical_theme_members
+from app.services.theme.membership import resolve_theme_memberships
 
 
 class OpportunityService:
@@ -64,9 +63,7 @@ class OpportunityService:
             .scalars()
             .all()
         )
-        theme_members, valid_snapshots, _ = historical_theme_members(
-            self.db, market_trade_dates
-        )
+        theme_members = resolve_theme_memberships(self.db, market_trade_dates).members
         frame = calculate_opportunities(
             factors=self._versioned_frame(
                 StockFactorDaily, lookback_start, end, FACTOR_CALC_VERSION, strategy_hash
@@ -88,7 +85,6 @@ class OpportunityService:
                 THEME_CALC_VERSION,
                 opportunity_hash,
             ),
-            valid_snapshots=valid_snapshots,
             start=start,
             end=end,
             algo_version=version,
@@ -159,21 +155,6 @@ class OpportunityService:
 
     def _all_frame(self, model: type) -> pd.DataFrame:
         return _models_frame(self.db.execute(select(model)).scalars().all(), model)
-
-    def _theme_members(self, snapshot_dates: list[date]) -> pd.DataFrame:
-        if not snapshot_dates:
-            return pd.DataFrame()
-        return _models_frame(
-            self.db.execute(
-                select(ThemeMemberSnapshot).where(
-                    ThemeMemberSnapshot.snapshot_date.in_(snapshot_dates)
-                )
-            )
-            .scalars()
-            .all(),
-            ThemeMemberSnapshot,
-        )
-
 
 def _models_frame(rows: list[Any], model: type) -> pd.DataFrame:
     return pd.DataFrame(

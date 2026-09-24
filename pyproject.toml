@@ -14,7 +14,6 @@ dependencies = [
   "loguru>=0.7.2",
   "numpy>=2.0.0",
   "pandas>=2.2.0",
-  "polars>=1.0.0",
   "psycopg[binary]>=3.2.0",
   "pydantic>=2.8.0",
   "pydantic-settings>=2.4.0",

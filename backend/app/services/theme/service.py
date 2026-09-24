@@ -15,7 +15,6 @@ from app.models.market_data import (
     ThemeDaily,
     ThemeFactorDaily,
     ThemeLimitDaily,
-    ThemeMemberSnapshot,
     ThemeMoneyflowDaily,
     TradeCalendar,
 )
@@ -26,8 +25,8 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
-from app.services.quality.theme_quality import historical_theme_members
 from app.services.theme.engine import ThemeConfig, calculate_theme_factors
+from app.services.theme.membership import resolve_theme_memberships
 
 
 class ThemeFactorService:
@@ -55,17 +54,15 @@ class ThemeFactorService:
         if not theme_daily.empty:
             theme_daily = theme_daily[theme_daily["trade_date"].isin(usable_dates)]
         market_trade_dates = self._open_trade_dates(lookback_start, end)
-        members, valid_snapshots, _ = historical_theme_members(
-            self.db, market_trade_dates
-        )
+        membership = resolve_theme_memberships(self.db, market_trade_dates)
         rows = calculate_theme_factors(
             theme_daily=theme_daily,
-            members=members,
+            members=membership.members,
             factors=self._factors(lookback_start, end),
             index_daily=self._frame(IndexDaily, lookback_start, end),
             moneyflow=self._frame(ThemeMoneyflowDaily, lookback_start, end),
             limits=self._frame(ThemeLimitDaily, lookback_start, end),
-            valid_snapshots=valid_snapshots,
+            membership_context_by_date=membership.context_by_date,
             moneyflow_pass_dates=self._pass_dates("ths_theme_moneyflow", end, allow_empty=False),
             limit_pass_dates=self._pass_dates("ths_theme_limit", end),
             start=start,
@@ -118,28 +115,6 @@ class ThemeFactorService:
         return pd.DataFrame(
             [
                 {column.name: getattr(row, column.name) for column in model.__table__.columns}
-                for row in rows
-            ]
-        )
-
-    def _members(self, snapshot_dates: list[date]) -> pd.DataFrame:
-        if not snapshot_dates:
-            return pd.DataFrame()
-        rows = (
-            self.db.execute(
-                select(ThemeMemberSnapshot).where(
-                    ThemeMemberSnapshot.snapshot_date.in_(snapshot_dates)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        return pd.DataFrame(
-            [
-                {
-                    column.name: getattr(row, column.name)
-                    for column in ThemeMemberSnapshot.__table__.columns
-                }
                 for row in rows
             ]
         )

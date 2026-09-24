@@ -6,9 +6,11 @@ from uuid import uuid4
 import app.api.v1.jobs as jobs_api
 import app.services.job_guard as guard_module
 import app.services.job_worker as worker_module
+import pytest
 from app.repositories.job_run import touch_job_heartbeat, update_job
-from app.services.dirty import recover_stale_processing_ranges
+from app.services.dirty import recover_stale_processing_ranges, reopen_dirty_ranges_after_cancel
 from app.services.job_worker import claim_next_job, execute_claimed_job
+from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 
 
@@ -243,9 +245,10 @@ def test_cancel_queued_job_finishes_without_worker() -> None:
     assert job.finished_at is not None
 
 
-def test_cancel_running_job_requests_safe_stop() -> None:
+@pytest.mark.parametrize("job_type", ["backfill", "recalculate", "RESEARCH_EVAL"])
+def test_cancel_running_job_requests_safe_stop(job_type: str) -> None:
     job = worker_module.JobRun(
-        job_type="recalculate",
+        job_type=job_type,
         status="RUNNING",
         row_count=0,
         job_metadata={},
@@ -270,6 +273,52 @@ def test_cancel_running_job_requests_safe_stop() -> None:
     assert response["data"]["status"] == "RUNNING"
     assert response["data"]["cancel_requested"] is True
     assert job.step == "cancellation requested"
+
+
+def test_cancel_running_unsupported_job_returns_conflict() -> None:
+    job = worker_module.JobRun(
+        job_type="validate_data",
+        status="RUNNING",
+        row_count=0,
+        job_metadata={},
+    )
+    job.id = uuid4()
+
+    class Db:
+        def get(self, model, key):
+            return job
+
+    with pytest.raises(HTTPException) as exc_info:
+        jobs_api.cancel_job(job.id, Db())
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail["code"] == "JOB_TYPE_NOT_CANCELLABLE_WHILE_RUNNING"
+
+
+def test_dirty_range_cancel_reopens_without_consuming_retry() -> None:
+    failed_at = datetime(2026, 9, 1, tzinfo=UTC)
+    row = SimpleNamespace(
+        status="PROCESSING",
+        retry_count=2,
+        last_failed_at=failed_at,
+        processing_started_at=datetime.now(UTC),
+        resolved_at=failed_at,
+    )
+
+    class Db:
+        def add(self, value):
+            return None
+
+        def commit(self):
+            return None
+
+    reopen_dirty_ranges_after_cancel(Db(), [row])
+
+    assert row.status == "OPEN"
+    assert row.processing_started_at is None
+    assert row.resolved_at is None
+    assert row.retry_count == 2
+    assert row.last_failed_at == failed_at
 
 
 def test_update_job_refreshes_running_heartbeat() -> None:

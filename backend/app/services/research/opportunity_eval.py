@@ -17,6 +17,7 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.repositories.replace_slice import replace_slice_rows_with_stats
+from app.services.analysis_filters import opportunity_identity_filters
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
@@ -27,8 +28,8 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
-from app.services.quality.theme_quality import theme_context_availability
 from app.services.research.forward_eval import evaluate_stock_forward
+from app.services.theme.membership import resolve_theme_memberships
 
 STATES = ("S1", "S2", "S3", "S4", "S5")
 SNAPSHOT_COLUMNS = (
@@ -148,10 +149,11 @@ def evaluate_opportunity_batch(
         db.execute(
             select(StockOpportunityDaily).where(
                 StockOpportunityDaily.trade_date.in_(base_dates),
-                StockOpportunityDaily.algo_version == settings.algo_version,
-                StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-                StockOpportunityDaily.config_hash == opportunity_hash,
-                StockOpportunityDaily.source_strategy_config_hash == strategy_hash,
+                *opportunity_identity_filters(
+                    settings,
+                    strategy_hash=strategy_hash,
+                    opportunity_hash=opportunity_hash,
+                ),
                 StockOpportunityDaily.state.in_(STATES),
             )
         )
@@ -186,7 +188,7 @@ def evaluate_opportunity_batch(
         )
     ).all()
     regimes = {row.trade_date: row.regime for row in market_rows}
-    theme_context = theme_context_availability(db, base_dates)
+    theme_context = resolve_theme_memberships(db, base_dates).context_by_date
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)

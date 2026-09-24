@@ -26,6 +26,7 @@ export type SystemStatus = {
 };
 
 export type SystemRuntime = {
+  latest_job_heartbeat: string | null;
   worker_heartbeat: string | null;
   active_job: { id: string; job_type: string; step: string | null; started_at: string | null } | null;
   queued_count: number;
@@ -258,6 +259,12 @@ export type ThemeOverview = {
   history: ThemeHeat[];
   member_distribution: Array<{ stage: string; count: number }>;
   top_members: Record<string, OpportunityItem[]>;
+  member_context: {
+    member_context_available: boolean;
+    member_context_mode: "INTERVAL" | "SNAPSHOT" | "INTERVAL_SNAPSHOT" | "UNAVAILABLE";
+    member_context_coverage: number | null;
+    source_snapshot_date: string | null;
+  };
   member_snapshot: {
     member_snapshot_date: string | null;
     member_snapshot_status: string | null;

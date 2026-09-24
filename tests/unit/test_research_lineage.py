@@ -158,8 +158,8 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
 
     monkeypatch.setattr(
         opportunity_service_module,
-        "historical_theme_members",
-        lambda *args: (pd.DataFrame(), set(), {}),
+        "resolve_theme_memberships",
+        lambda *args: SimpleNamespace(members=pd.DataFrame(), context_by_date={}),
     )
     monkeypatch.setattr(
         opportunity_service_module, "calculate_opportunities",
@@ -175,7 +175,6 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
     monkeypatch.setattr(opportunity, "_versioned_frame", lambda *args: pd.DataFrame())
     monkeypatch.setattr(opportunity, "_states", lambda *args: pd.DataFrame())
     monkeypatch.setattr(opportunity, "_all_frame", lambda *args: pd.DataFrame())
-    monkeypatch.setattr(opportunity, "_theme_members", lambda *args: pd.DataFrame())
     opportunity.recalc(day, day)
     assert captured[0]["source_strategy_config_hash"] == analysis_strategy_hash(
         settings.strategy
@@ -184,8 +183,8 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
     captured.clear()
     monkeypatch.setattr(
         theme_service_module,
-        "historical_theme_members",
-        lambda *args: (pd.DataFrame(), set(), {}),
+        "resolve_theme_memberships",
+        lambda *args: SimpleNamespace(members=pd.DataFrame(), context_by_date={}),
     )
     monkeypatch.setattr(
         theme_service_module, "calculate_theme_factors",
@@ -200,7 +199,6 @@ def test_production_services_write_current_strategy_lineage(monkeypatch) -> None
         day: {"status": "PASS", "coverage_rate": 1.0}
     })
     monkeypatch.setattr(theme, "_frame", lambda *args: pd.DataFrame())
-    monkeypatch.setattr(theme, "_members", lambda *args: pd.DataFrame())
     monkeypatch.setattr(theme, "_factors", lambda *args: pd.DataFrame())
     monkeypatch.setattr(theme, "_pass_dates", lambda *args, **kwargs: set())
     monkeypatch.setattr(theme, "_open_trade_dates", lambda *args: [day])

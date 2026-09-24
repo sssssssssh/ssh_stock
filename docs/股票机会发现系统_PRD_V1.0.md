@@ -1225,3 +1225,11 @@ Milestone 8、Raw 数据层、数据拉取层和自动运行层正式封版；�
 - 题材详情与实际因子计算使用同一成员快照，partial 快照必须明确提示。历史研究只使用真实历史成员区间或当时已存在的快照，并记录上下文是否可用及覆盖率。
 - Research 自动任务只在 Raw、状态和机会池都更新到最近应有交易日时运行；不得研究落后的生产快照。
 - 本里程碑不调整 Left/Right/Trend/Opportunity 权重、阈值、S0-S6 定义或 Research thresholds。
+
+## Milestone 11.3.1：Theme PIT 与运行正确性收尾（2026-09-24）
+
+- 同一历史交易日的题材成员由统一 Resolver 提供给 ThemeFactor、Opportunity、题材详情、机会筛选和 Research；返回 INTERVAL、SNAPSHOT、INTERVAL_SNAPSHOT 或 UNAVAILABLE 口径及覆盖率。
+- 未知退出状态的区间只保留诊断，不作为可靠 PIT；已明确结束的区间优先于旧快照，防止退出成员重新出现。
+- 当前 ThemeFactor/Opportunity 必须同时匹配生产策略身份；仅 opportunity hash 相同但策略 hash 过期的数据不展示、不计质量完整性，也不能触发 Research。
+- 运行中任务只在实现安全检查点的三类任务上允许取消；Dirty Repair 取消后可再次执行且不消耗失败重试。
+- 前端默认业务日期和所有容器显示时区统一为 Asia/Shanghai；“心跳”明确表示最近任务心跳，不声称 Worker 进程存活。

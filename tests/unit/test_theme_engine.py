@@ -1,29 +1,7 @@
 from datetime import date, timedelta
 
 import pandas as pd
-from app.services.theme.engine import (
-    ThemeConfig,
-    _latest_snapshot_members,
-    calculate_theme_factors,
-)
-
-
-def test_theme_member_snapshot_uses_latest_pass_without_future_leakage() -> None:
-    members = pd.DataFrame(
-        [
-            {"snapshot_date": date(2026, 9, 1), "theme_code": "T", "ts_code": "A"},
-            {"snapshot_date": date(2026, 9, 1), "theme_code": "T", "ts_code": "B"},
-            {"snapshot_date": date(2026, 9, 8), "theme_code": "T", "ts_code": "C"},
-        ]
-    )
-
-    snapshot, rows = _latest_snapshot_members(
-        members, {date(2026, 9, 1), date(2026, 9, 8)}, date(2026, 9, 5)
-    )
-
-    assert snapshot == date(2026, 9, 1)
-    assert set(rows["ts_code"]) == {"A", "B"}
-    assert _latest_snapshot_members(members, {date(2026, 9, 1)}, date(2026, 8, 31))[0] is None
+from app.services.theme.engine import ThemeConfig, calculate_theme_factors
 
 
 def test_theme_heat_renormalizes_missing_optional_component() -> None:
@@ -57,7 +35,7 @@ def test_theme_heat_renormalizes_missing_optional_component() -> None:
         index_daily=index_daily,
         moneyflow=pd.DataFrame(),
         limits=pd.DataFrame(),
-        valid_snapshots=set(),
+        membership_context_by_date={},
         moneyflow_pass_dates=set(),
         limit_pass_dates=set(),
         start=dates[-1],
@@ -88,9 +66,9 @@ def test_theme_heat_is_null_below_half_coverage() -> None:
         pd.DataFrame(),
         pd.DataFrame(),
         pd.DataFrame(),
-        set(),
-        set(),
-        set(),
+        {},
+        {},
+        {},
         target,
         target,
         config,
@@ -139,7 +117,7 @@ def test_theme_heat_uses_all_available_optional_sources() -> None:
         pd.DataFrame(),
         moneyflow,
         limits,
-        set(),
+        {},
         {target},
         {target},
         target,
@@ -180,7 +158,7 @@ def test_theme_heat_degrades_when_limit_source_is_unavailable() -> None:
         pd.DataFrame(),
         moneyflow,
         pd.DataFrame(),
-        set(),
+        {},
         {target},
         set(),
         target,
@@ -221,7 +199,7 @@ def test_theme_heat_degrades_when_member_snapshot_is_unavailable() -> None:
         pd.DataFrame(),
         pd.DataFrame(),
         pd.DataFrame(),
-        set(),
+        {},
         set(),
         set(),
         dates[-1],
@@ -242,7 +220,7 @@ def test_partial_snapshot_keeps_missing_theme_member_metrics_null() -> None:
         for code in ("A.TI", "B.TI")
     ])
     members = pd.DataFrame([
-        {"snapshot_date": target, "theme_code": "A.TI", "ts_code": "000001.SZ"}
+        {"trade_date": target, "theme_code": "A.TI", "ts_code": "000001.SZ"}
     ])
     factors = pd.DataFrame([{
         "trade_date": target,
@@ -262,7 +240,14 @@ def test_partial_snapshot_keeps_missing_theme_member_metrics_null() -> None:
         pd.DataFrame(),
         pd.DataFrame(),
         pd.DataFrame(),
-        {target},
+        {
+            target: {
+                "source_snapshot_date": target,
+                "mode": "SNAPSHOT",
+                "available": True,
+                "coverage": 1.0,
+            }
+        },
         set(),
         set(),
         target,
@@ -272,8 +257,8 @@ def test_partial_snapshot_keeps_missing_theme_member_metrics_null() -> None:
 
     assert result.loc["A.TI", "member_count"] == 1
     assert result.loc["A.TI", "breadth20"] == 1
+    assert result.loc["B.TI", "member_snapshot_date"] == target
     for column in (
-        "member_snapshot_date",
         "member_count",
         "eligible_member_count",
         "breadth20",

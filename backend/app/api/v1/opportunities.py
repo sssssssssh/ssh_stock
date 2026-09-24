@@ -13,11 +13,9 @@ from app.models.market_data import (
     StockBasic,
     StockFactorDaily,
     StockOpportunityDaily,
-    ThemeMemberSnapshot,
 )
-from app.services.analysis_identity import OPPORTUNITY_CALC_VERSION
-from app.services.calc_metadata import config_hash
-from app.services.quality.theme_quality import latest_valid_theme_member_snapshot
+from app.services.analysis_filters import opportunity_identity_filters
+from app.services.theme.membership import resolve_theme_memberships
 
 router = APIRouter()
 
@@ -115,14 +113,11 @@ def _pool(
     order_by: Any,
 ) -> dict[str, Any]:
     settings = get_settings()
-    version = settings.algo_version
-    hash_value = config_hash(settings.opportunity_config)
+    identity = opportunity_identity_filters(settings)
     target = target_date or latest_date(
         db,
         StockOpportunityDaily.trade_date,
-        StockOpportunityDaily.algo_version == version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == hash_value,
+        *identity,
     )
     row_limit, row_offset = clamp_limit(limit, default=30), clamp_offset(offset)
     if not target:
@@ -131,24 +126,29 @@ def _pool(
         )
     filters = [
         StockOpportunityDaily.trade_date == target,
-        StockOpportunityDaily.algo_version == version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == hash_value,
+        *identity,
         *extra_filters,
     ]
+    membership_context: dict[str, object] | None = None
     if theme_code:
-        snapshot_date = latest_valid_theme_member_snapshot(db, target)
-        if snapshot_date is None:
+        resolution = resolve_theme_memberships(db, [target])
+        membership_context = resolution.context_by_date.get(target)
+        members = resolution.members
+        codes = (
+            set(
+                members.loc[
+                    (members["trade_date"] == target)
+                    & (members["theme_code"] == theme_code),
+                    "ts_code",
+                ].astype(str)
+            )
+            if not members.empty
+            else set()
+        )
+        if not codes:
             filters.append(false())
         else:
-            filters.append(
-                StockOpportunityDaily.ts_code.in_(
-                    select(ThemeMemberSnapshot.ts_code).where(
-                        ThemeMemberSnapshot.snapshot_date == snapshot_date,
-                        ThemeMemberSnapshot.theme_code == theme_code,
-                    )
-                )
-            )
+            filters.append(StockOpportunityDaily.ts_code.in_(codes))
     if sector_id is not None:
         filters.append(StockOpportunityDaily.industry_sector_id == sector_id)
     query = (
@@ -189,6 +189,14 @@ def _pool(
             "limit": row_limit,
             "offset": row_offset,
             "total": total,
+            "member_context_available": (
+                bool(membership_context.get("available", False))
+                if membership_context is not None
+                else None
+            ),
+            "member_context_mode": (
+                membership_context.get("mode") if membership_context is not None else None
+            ),
         },
     )
 

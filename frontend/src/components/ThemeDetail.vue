@@ -12,14 +12,14 @@ defineEmits<{ close: [] }>();
       <div v-if="loading" class="empty-block">加载中</div>
       <template v-else-if="data">
         <div
-          v-if="data.member_snapshot.member_snapshot_mode === 'PARTIAL'"
+          v-if="data.member_context.member_context_mode === 'INTERVAL_SNAPSHOT' || data.member_context.member_context_mode === 'SNAPSHOT'"
           class="snapshot-warning"
           role="status"
         >
-          <strong>成员快照部分覆盖</strong>
+          <strong>成员口径使用历史快照{{ data.member_context.member_context_mode === "INTERVAL_SNAPSHOT" ? "补充" : "" }}</strong>
           <span>
-            {{ data.member_snapshot.member_snapshot_date || "--" }} ·
-            {{ data.member_snapshot.member_snapshot_coverage == null ? "--" : `${(data.member_snapshot.member_snapshot_coverage * 100).toFixed(1)}%` }}
+            {{ data.member_context.source_snapshot_date || "--" }} ·
+            {{ data.member_context.member_context_coverage == null ? "--" : `${(data.member_context.member_context_coverage * 100).toFixed(1)}%` }}
           </span>
         </div>
         <div class="theme-metrics"><div><span>Heat</span><strong>{{ data.factor?.heat_score?.toFixed(1) || "--" }}</strong></div><div><span>阶段</span><strong>{{ data.factor?.lifecycle || "--" }}</strong></div><div><span>成员覆盖</span><strong>{{ data.factor?.eligible_member_count ?? "--" }}/{{ data.factor?.member_count ?? "--" }}</strong></div><div><span>数据覆盖</span><strong>{{ data.factor?.data_coverage == null ? "--" : `${(data.factor.data_coverage * 100).toFixed(0)}%` }}</strong></div></div>

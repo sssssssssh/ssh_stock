@@ -296,11 +296,13 @@ def normalize_theme_member_intervals(df: pd.DataFrame) -> list[dict[str, Any]]:
         theme_code, stock_code = item.get("ts_code"), item.get("con_code")
         valid_from = parse_tushare_date(item.get("in_date"))
         valid_to = parse_tushare_date(item.get("out_date"))
-        flag = str(item.get("is_new") or "").strip().upper()
+        raw_flag = item.get("is_new")
+        flag = "" if raw_flag is None or pd.isna(raw_flag) else str(raw_flag).strip().upper()
         if not theme_code or not stock_code or valid_from is None:
             continue
         if valid_to is not None and valid_to < valid_from:
             continue
+        quality_flag = "RELIABLE" if valid_to is not None or flag == "Y" else "INCOMPLETE"
         rows.append(
             {
                 "theme_code": theme_code,
@@ -309,7 +311,7 @@ def normalize_theme_member_intervals(df: pd.DataFrame) -> list[dict[str, Any]]:
                 "valid_to": valid_to,
                 "source": "THS",
                 "source_is_new": True if flag == "Y" else False if flag == "N" else None,
-                "quality_flag": "RELIABLE",
+                "quality_flag": quality_flag,
             }
         )
     return list(

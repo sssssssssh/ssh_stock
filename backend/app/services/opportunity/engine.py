@@ -68,7 +68,6 @@ def calculate_opportunities(
     themes: pd.DataFrame,
     theme_members: pd.DataFrame,
     theme_factors: pd.DataFrame,
-    valid_snapshots: set[date],
     start: date,
     end: date,
     algo_version: str,
@@ -91,7 +90,7 @@ def calculate_opportunities(
     open_dates = market_trade_dates or sorted(factors["trade_date"].unique())
     values = _left_scores(values, config, open_dates)
     values = _industry_context(values, sector_members, sector_factors)
-    values = _theme_context(values, themes, theme_members, theme_factors, valid_snapshots)
+    values = _theme_context(values, themes, theme_members, theme_factors)
     values["context_score"] = _weighted_available(
         values,
         {"industry_heat": 0.40, "primary_theme_heat": 0.60},
@@ -356,7 +355,6 @@ def _theme_context(
     themes: pd.DataFrame,
     members: pd.DataFrame,
     factors: pd.DataFrame,
-    valid_snapshots: set[date],
 ) -> pd.DataFrame:
     result = values.copy()
     columns = [
@@ -371,29 +369,14 @@ def _theme_context(
     if members.empty or factors.empty:
         return result
     member_values, factor_values = members.copy(), factors.copy()
-    member_values["snapshot_date"] = pd.to_datetime(member_values["snapshot_date"]).dt.date
+    member_values["trade_date"] = pd.to_datetime(member_values["trade_date"]).dt.date
     factor_values["trade_date"] = pd.to_datetime(factor_values["trade_date"]).dt.date
-    snapshots = pd.DataFrame({"snapshot_date": sorted(valid_snapshots)})
-    if snapshots.empty:
-        return result
-    dates = pd.DataFrame({"trade_date": sorted(result["trade_date"].unique())})
-    assignment = pd.merge_asof(
-        dates.assign(_merge_date=pd.to_datetime(dates["trade_date"])).sort_values(
-            "_merge_date"
-        ),
-        snapshots.assign(
-            _merge_date=pd.to_datetime(snapshots["snapshot_date"])
-        ).sort_values("_merge_date"),
-        on="_merge_date",
-        direction="backward",
-    ).drop(columns="_merge_date")
     left = result[["trade_date", "ts_code"]].copy()
     left["_row_id"] = range(len(left))
     candidates = (
-        left.merge(assignment, on="trade_date", how="left")
-        .merge(
-            member_values[["snapshot_date", "theme_code", "ts_code"]],
-            on=["snapshot_date", "ts_code"],
+        left.merge(
+            member_values[["trade_date", "theme_code", "ts_code"]],
+            on=["trade_date", "ts_code"],
             how="inner",
         )
         .merge(

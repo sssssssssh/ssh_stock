@@ -181,6 +181,15 @@ def mark_dirty_ranges_resolved(db: Session, ranges: list[DataDirtyRange]) -> Non
     db.commit()
 
 
+def reopen_dirty_ranges_after_cancel(db: Session, ranges: list[DataDirtyRange]) -> None:
+    for row in ranges:
+        row.status = "OPEN"
+        row.processing_started_at = None
+        row.resolved_at = None
+        db.add(row)
+    db.commit()
+
+
 def mark_dirty_ranges_failed(
     db: Session,
     ranges: list[DataDirtyRange],

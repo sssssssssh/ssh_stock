@@ -8,6 +8,7 @@ import {
   type ResearchWindow
 } from "../services/research";
 import type { ResearchBucketRow, ResearchHorizonStats, ResearchStatus } from "../types";
+import { businessDaysAgoIso, businessTodayIso } from "../utils/businessTime";
 
 type Tab = "theme" | "left" | "right" | "trend" | "position";
 type Row = ResearchBucketRow & Record<string, unknown>;
@@ -20,11 +21,8 @@ const tabs: Array<{ key: Tab; label: string }> = [
   { key: "position", label: "位置" }
 ];
 const horizonOptions = [5, 10, 20, 60];
-const today = new Date();
-const yearAgo = new Date(today);
-yearAgo.setFullYear(today.getFullYear() - 1);
-const start = ref(yearAgo.toISOString().slice(0, 10));
-const end = ref(today.toISOString().slice(0, 10));
+const start = ref(businessDaysAgoIso(365));
+const end = ref(businessTodayIso());
 const tab = ref<Tab>("theme");
 const horizon = ref(20);
 const status = ref<ResearchStatus | null>(null);

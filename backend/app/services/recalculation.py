@@ -23,6 +23,7 @@ from app.services.dirty import (
     mark_dirty_ranges_failed,
     mark_dirty_ranges_processing,
     mark_dirty_ranges_resolved,
+    reopen_dirty_ranges_after_cancel,
 )
 from app.services.factors import FactorService
 from app.services.market import MarketService
@@ -101,7 +102,7 @@ def run_recalculation(
         factor_chunks = _month_chunks(analysis_start, end)
         factor_service = FactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
-            if _stop_if_cancelled(db, job, metadata):
+            if _stop_if_cancelled(db, job, metadata, dirty_ranges):
                 return
             start_progress = round(8 + ((index - 1) / len(factor_chunks)) * 52, 1)
             chunk_metadata = {
@@ -156,7 +157,7 @@ def run_recalculation(
         theme_chunks = _month_chunks(start, end)
         theme_service = ThemeFactorService(db)
         for index, (chunk_start, chunk_end) in enumerate(theme_chunks, start=1):
-            if _stop_if_cancelled(db, job, metadata):
+            if _stop_if_cancelled(db, job, metadata, dirty_ranges):
                 return
             metadata = {
                 **metadata,
@@ -176,7 +177,7 @@ def run_recalculation(
             )
             total_rows += theme_service.recalc(chunk_start, chunk_end, calc_run_id=job.id)
 
-        if _stop_if_cancelled(db, job, metadata):
+        if _stop_if_cancelled(db, job, metadata, dirty_ranges):
             return
         update_job(
             db,
@@ -191,7 +192,7 @@ def run_recalculation(
         opportunity_chunks = _month_chunks(start, end)
         opportunity_service = OpportunityService(db)
         for index, (chunk_start, chunk_end) in enumerate(opportunity_chunks, start=1):
-            if _stop_if_cancelled(db, job, metadata):
+            if _stop_if_cancelled(db, job, metadata, dirty_ranges):
                 return
             metadata = {
                 **metadata,
@@ -212,6 +213,9 @@ def run_recalculation(
             total_rows += opportunity_service.recalc(
                 chunk_start, chunk_end, calc_run_id=job.id
             )
+
+        if _stop_if_cancelled(db, job, metadata, dirty_ranges):
+            return
 
         update_job(
             db,
@@ -322,13 +326,20 @@ def validate_recalculation_raw_prerequisites(
         )
 
 
-def _stop_if_cancelled(db: Session, job: JobRun, metadata: dict[str, Any]) -> bool:
+def _stop_if_cancelled(
+    db: Session,
+    job: JobRun,
+    metadata: dict[str, Any],
+    dirty_ranges: list[DataDirtyRange] | None = None,
+) -> bool:
     try:
         requested = cancel_requested(db, job.id)
     except AttributeError:
         requested = bool(getattr(job, "cancel_requested", False))
     if not requested:
         return False
+    if dirty_ranges:
+        reopen_dirty_ranges_after_cancel(db, dirty_ranges)
     finish_cancelled(db, job, metadata={**metadata, "stage": "cancelled"})
     return True
 

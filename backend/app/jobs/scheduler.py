@@ -10,8 +10,8 @@ from app.core.db import SessionLocal
 from app.jobs.research_job import RESEARCH_JOB_TYPE, queue_research_eval
 from app.models.job import JobRun
 from app.models.market_data import StockDaily, StockOpportunityDaily, StockStateDaily, TradeCalendar
+from app.services.analysis_filters import opportunity_identity_filters
 from app.services.analysis_identity import (
-    OPPORTUNITY_CALC_VERSION,
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
@@ -157,9 +157,11 @@ def run_scheduled_research(db, target_date: date) -> bool:
     )
     latest_opportunity = db.scalar(
         select(func.max(StockOpportunityDaily.trade_date)).where(
-            StockOpportunityDaily.algo_version == settings.algo_version,
-            StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-            StockOpportunityDaily.config_hash == opportunity_hash,
+            *opportunity_identity_filters(
+                settings,
+                strategy_hash=strategy_hash,
+                opportunity_hash=opportunity_hash,
+            ),
         )
     )
     if not _research_sources_current(

@@ -51,6 +51,40 @@ def test_theme_member_intervals_use_only_explicit_source_dates() -> None:
     ]
 
 
+def test_theme_member_interval_reliability_matrix() -> None:
+    rows = normalize_theme_member_intervals(
+        pd.DataFrame(
+            [
+                {"ts_code": "T", "con_code": "Y", "in_date": "20260101", "is_new": "Y"},
+                {"ts_code": "T", "con_code": "N", "in_date": "20260101", "is_new": "N"},
+                {
+                    "ts_code": "T",
+                    "con_code": "CLOSED",
+                    "in_date": "20260101",
+                    "out_date": "20260201",
+                    "is_new": "N",
+                },
+                {"ts_code": "T", "con_code": "UNKNOWN", "in_date": "20260101"},
+                {"ts_code": "T", "con_code": "NO_IN", "is_new": "Y"},
+                {
+                    "ts_code": "T",
+                    "con_code": "INVALID",
+                    "in_date": "20260201",
+                    "out_date": "20260101",
+                },
+            ]
+        )
+    )
+
+    quality = {row["ts_code"]: row["quality_flag"] for row in rows}
+    assert quality == {
+        "Y": "RELIABLE",
+        "N": "INCOMPLETE",
+        "CLOSED": "RELIABLE",
+        "UNKNOWN": "INCOMPLETE",
+    }
+
+
 class _SnapshotResult:
     def __init__(self, *, rows=None, scalar=None):
         self.rows = rows or []

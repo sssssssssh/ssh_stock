@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.market_data import ThemeDaily, ThemeFactorDaily, ThemeForwardEval
 from app.repositories.replace_slice import replace_slice_rows_with_stats
+from app.services.analysis_filters import theme_factor_identity_filters
 from app.services.analysis_identity import (
     RESEARCH_EVAL_VERSION,
     RESEARCH_VERSION,
@@ -15,9 +16,9 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
-from app.services.quality.theme_quality import theme_context_availability
 from app.services.research.forward_eval import evaluate_theme_forward
 from app.services.research.opportunity_eval import benchmark_lookup, future_dates
+from app.services.theme.membership import resolve_theme_memberships
 
 SNAPSHOT_COLUMNS = (
     "heat_score",
@@ -79,9 +80,11 @@ def evaluate_theme_batch(
         db.execute(
             select(ThemeFactorDaily).where(
                 ThemeFactorDaily.trade_date.in_(base_dates),
-                ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-                ThemeFactorDaily.config_hash == opportunity_hash,
-                ThemeFactorDaily.source_strategy_config_hash == strategy_hash,
+                *theme_factor_identity_filters(
+                    settings,
+                    strategy_hash=strategy_hash,
+                    opportunity_hash=opportunity_hash,
+                ),
                 ThemeFactorDaily.heat_score.is_not(None),
                 ThemeFactorDaily.data_coverage >= research["theme"]["min_data_coverage"],
             )
@@ -99,7 +102,7 @@ def evaluate_theme_batch(
     latest = db.scalar(select(func.max(ThemeDaily.trade_date)))
     dates = future_dates(db, base_dates, latest)
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
-    theme_context = theme_context_availability(db, base_dates)
+    theme_context = resolve_theme_memberships(db, base_dates).context_by_date
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.theme_code].append(base)

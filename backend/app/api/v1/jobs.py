@@ -25,6 +25,7 @@ from app.services.job_guard import (
 )
 
 router = APIRouter()
+CANCELLABLE_RUNNING_JOB_TYPES = {"backfill", "recalculate", "RESEARCH_EVAL"}
 
 
 class DailyJobRequest(BaseModel):
@@ -222,6 +223,16 @@ def cancel_job(job_id: UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
         job.finished_at = datetime.now(UTC)
         job.step = "cancelled before execution"
     elif job.status == "RUNNING":
+        if job.job_type not in CANCELLABLE_RUNNING_JOB_TYPES:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "JOB_TYPE_NOT_CANCELLABLE_WHILE_RUNNING",
+                    "message": (
+                        f"running job type {job.job_type} does not support safe cancellation"
+                    ),
+                },
+            )
         job.cancel_requested = True
         job.step = "cancellation requested"
     elif job.status != "CANCELLED":

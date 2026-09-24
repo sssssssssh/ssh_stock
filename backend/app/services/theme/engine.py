@@ -41,18 +41,6 @@ def _rank(series: pd.Series, dates: pd.Series) -> pd.Series:
     return series.groupby(dates).rank(pct=True, method="average") * 100
 
 
-def _latest_snapshot_members(
-    members: pd.DataFrame,
-    valid_snapshots: set[date],
-    trade_date: date,
-) -> tuple[date | None, pd.DataFrame]:
-    candidates = [value for value in valid_snapshots if value <= trade_date]
-    if not candidates or members.empty:
-        return None, pd.DataFrame()
-    snapshot = max(candidates)
-    return snapshot, members[members["snapshot_date"] == snapshot]
-
-
 def calculate_theme_factors(
     theme_daily: pd.DataFrame,
     members: pd.DataFrame,
@@ -60,7 +48,7 @@ def calculate_theme_factors(
     index_daily: pd.DataFrame,
     moneyflow: pd.DataFrame,
     limits: pd.DataFrame,
-    valid_snapshots: set[date],
+    membership_context_by_date: dict[date, dict[str, object]],
     moneyflow_pass_dates: set[date],
     limit_pass_dates: set[date],
     start: date,
@@ -120,40 +108,22 @@ def calculate_theme_factors(
                 "rps60",
             ]
         )
-    if not members.empty:
-        members = members.copy()
-        members["snapshot_date"] = pd.to_datetime(members["snapshot_date"]).dt.date
-    snapshots = pd.DataFrame({"member_snapshot_date": sorted(valid_snapshots)})
-    trade_dates = pd.DataFrame({"trade_date": sorted(daily["trade_date"].unique())})
-    assignment = (
-        pd.merge_asof(
-            trade_dates.assign(_merge_date=pd.to_datetime(trade_dates["trade_date"])),
-            snapshots.assign(
-                _merge_date=pd.to_datetime(snapshots["member_snapshot_date"])
-            ),
-            on="_merge_date",
-            direction="backward",
-        ).drop(columns="_merge_date")
-        if not snapshots.empty
-        else pd.DataFrame(columns=["trade_date", "member_snapshot_date"])
-    )
-    member_values = (
-        members.rename(columns={"snapshot_date": "member_snapshot_date"})
-        if not members.empty
-        else pd.DataFrame(columns=["member_snapshot_date", "theme_code", "ts_code"])
-    )
+    member_values = members.copy()
+    if member_values.empty:
+        member_values = pd.DataFrame(columns=["trade_date", "theme_code", "ts_code"])
+    if not member_values.empty:
+        member_values["trade_date"] = pd.to_datetime(member_values["trade_date"]).dt.date
     expanded = (
         daily[["trade_date", "theme_code"]]
         .drop_duplicates()
-        .merge(assignment, on="trade_date", how="left")
         .merge(
-            member_values[["member_snapshot_date", "theme_code", "ts_code"]],
-            on=["member_snapshot_date", "theme_code"],
+            member_values[["trade_date", "theme_code", "ts_code"]],
+            on=["trade_date", "theme_code"],
             how="inner",
         )
         .merge(factor_df, on=["trade_date", "ts_code"], how="left")
     )
-    group_keys = ["trade_date", "theme_code", "member_snapshot_date"]
+    group_keys = ["trade_date", "theme_code"]
     if expanded.empty:
         breadth = pd.DataFrame()
     else:
@@ -193,7 +163,6 @@ def calculate_theme_factors(
         daily = daily.merge(breadth, on=["trade_date", "theme_code"], how="left")
     else:
         for column in (
-            "member_snapshot_date",
             "member_count",
             "eligible_member_count",
             "breadth20",
@@ -203,6 +172,11 @@ def calculate_theme_factors(
             "rps60_median",
         ):
             daily[column] = np.nan
+    daily["member_snapshot_date"] = daily["trade_date"].map(
+        lambda current: membership_context_by_date.get(current, {}).get(
+            "source_snapshot_date"
+        )
+    )
     insufficient_members = daily["eligible_member_count"].fillna(0) < config.min_member_count
     daily.loc[
         insufficient_members,

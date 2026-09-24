@@ -1124,6 +1124,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 
 本版本改用只包含 `universe/benchmark/factor/right_side/trend/market/sector` 的 Analysis Hash。`raw_quality`、`data_quality` 或 Provider 限流参数变化不再令分析身份失效。升级后不要清库，也不要重拉完整 Raw；对需要保留的历史区间提交一次“开始补算”，完成后再提交 Research Eval，使 Derived 和 Research 生成新身份结果。
 
-题材 API 精确使用 `ThemeFactorDaily.member_snapshot_date`；WARNING 快照在详情页显示“成员快照部分覆盖”。历史研究优先使用有明确 `in_date/out_date` 的成员区间，否则只回退到交易日当时真实存在的快照；两者都没有时记录 Theme Context unavailable，不用今天的成员伪造历史。
+题材因子、机会池、题材 API、机会 API 和 Research 统一调用 `ThemeMembershipResolver`：可靠历史区间优先，当日此前 usable 快照只补充没有可靠区间证据的成员；已经明确退出的成员不会被旧快照重新加入。页面显示“成员口径”、模式、覆盖率和真实 fallback 快照日期，不再用目标交易日伪造快照日期。
 
-数据页展示 Worker heartbeat、当前任务、排队/运行数量以及最新 Raw/分析/机会日期。`POST /api/v1/jobs/{job_id}/cancel` 可直接取消 QUEUED 任务，RUNNING 任务会在 Backfill 日期、Recalculate 分块或 Research batch 安全停止。每天 03:15 清理 Provider 日志、过期任务日志和失效 Session，不清理 Raw、Derived、质量或研究数据。备份与恢复见 `docs/部署与备份.md`。
+数据页展示最近任务心跳、当前任务、排队/运行数量以及最新 Raw/分析/机会日期。`POST /api/v1/jobs/{job_id}/cancel` 可取消任意 QUEUED 任务；RUNNING 只允许 Backfill、Recalculate 和 Research Eval 在安全点停止，其他任务返回 409。Dirty Repair 主动取消后恢复为 OPEN 且不增加重试次数。每天 03:15 清理 Provider 日志、过期任务日志和失效 Session，不清理 Raw、Derived、质量或研究数据。备份与恢复见 `docs/部署与备份.md`。
+
+浏览器默认日期统一按 `Asia/Shanghai` 生成；Compose 中 backend、worker、scheduler 和 frontend 的 OS 日志时区也统一为上海时区，数据库时间戳仍使用 UTC。前端验证额外执行 `npm run test`。

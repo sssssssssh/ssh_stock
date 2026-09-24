@@ -74,7 +74,6 @@ def _calculate(factors: pd.DataFrame, states: pd.DataFrame) -> pd.DataFrame:
         themes=pd.DataFrame(),
         theme_members=pd.DataFrame(),
         theme_factors=pd.DataFrame(),
-        valid_snapshots=set(),
         start=start,
         end=end,
         algo_version="v1.0",

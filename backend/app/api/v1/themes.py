@@ -13,15 +13,12 @@ from app.models.market_data import (
     StockOpportunityDaily,
     Theme,
     ThemeFactorDaily,
-    ThemeMemberSnapshot,
 )
-from app.services.analysis_identity import OPPORTUNITY_CALC_VERSION, THEME_CALC_VERSION
-from app.services.calc_metadata import config_hash
-from app.services.quality.theme_quality import (
-    latest_usable_theme_member_snapshot,
-    theme_factor_member_snapshot,
-    theme_member_snapshot_meta,
+from app.services.analysis_filters import (
+    opportunity_identity_filters,
+    theme_factor_identity_filters,
 )
+from app.services.theme.membership import resolve_theme_memberships
 
 router = APIRouter()
 
@@ -35,20 +32,19 @@ def theme_list(
     offset: int = 0,
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    hash_value = config_hash(get_settings().opportunity_config)
+    settings = get_settings()
+    identity = theme_factor_identity_filters(settings)
     target = trade_date or latest_date(
         db,
         ThemeFactorDaily.trade_date,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == hash_value,
+        *identity,
     )
     row_limit, row_offset = clamp_limit(limit, default=30), clamp_offset(offset)
     if not target:
         return envelope([], _meta(None, row_limit, row_offset, 0))
     filters = [
         ThemeFactorDaily.trade_date == target,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == hash_value,
+        *identity,
     ]
     if lifecycle:
         filters.append(ThemeFactorDaily.lifecycle == lifecycle)
@@ -93,13 +89,12 @@ def overview(
     if not theme:
         raise HTTPException(status_code=404, detail="theme not found")
     settings = get_settings()
-    theme_hash = config_hash(settings.opportunity_config)
+    theme_identity = theme_factor_identity_filters(settings)
     target = trade_date or latest_date(
         db,
         ThemeFactorDaily.trade_date,
         ThemeFactorDaily.theme_code == theme_code,
-        ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-        ThemeFactorDaily.config_hash == theme_hash,
+        *theme_identity,
     )
     history = []
     factor = None
@@ -110,8 +105,7 @@ def overview(
                 .where(
                     ThemeFactorDaily.theme_code == theme_code,
                     ThemeFactorDaily.trade_date <= target,
-                    ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-                    ThemeFactorDaily.config_hash == theme_hash,
+                    *theme_identity,
                 )
                 .order_by(desc(ThemeFactorDaily.trade_date))
                 .limit(60)
@@ -123,8 +117,12 @@ def overview(
         history = [_model_payload(item) for item in reversed(factors)]
     member_distribution: list[dict[str, Any]] = []
     top_members: dict[str, list[dict[str, Any]]] = {"trend": [], "right": [], "left": []}
+    context_meta = _member_context_meta(None)
     if target:
-        member_rows = _member_opportunities(db, theme_code, target, None, 200, 0)
+        resolution = resolve_theme_memberships(db, [target])
+        member_codes = _theme_member_codes(resolution.members, theme_code, target)
+        context_meta = _member_context_meta(resolution.context_by_date.get(target))
+        member_rows = _member_opportunities(db, member_codes, target, None, 200, 0)
         counts: dict[str, int] = {}
         for row in member_rows:
             stage = str(row["opportunity_stage"])
@@ -133,18 +131,14 @@ def overview(
             {"stage": stage, "count": count} for stage, count in sorted(counts.items())
         ]
         top_members["trend"] = _member_opportunities(
-            db, theme_code, target, None, 10, 0, pool="trend"
+            db, member_codes, target, None, 10, 0, pool="trend"
         )
         top_members["right"] = _member_opportunities(
-            db, theme_code, target, None, 10, 0, pool="right"
+            db, member_codes, target, None, 10, 0, pool="right"
         )
         top_members["left"] = _member_opportunities(
-            db, theme_code, target, None, 10, 0, pool="left"
+            db, member_codes, target, None, 10, 0, pool="left"
         )
-    snapshot_meta = theme_member_snapshot_meta(
-        db,
-        _member_snapshot_for_factor(db, target, theme_hash, theme_code) if target else None,
-    )
     return envelope(
         {
             "theme": _model_payload(theme),
@@ -152,11 +146,12 @@ def overview(
             "history": history,
             "member_distribution": member_distribution,
             "top_members": top_members,
-            "member_snapshot": snapshot_meta,
+            "member_context": context_meta,
+            "member_snapshot": _legacy_snapshot_meta(context_meta),
         },
         {
             "trade_date": target.isoformat() if target else None,
-            **snapshot_meta,
+            **context_meta,
         },
     )
 
@@ -173,55 +168,47 @@ def members(
     if not db.get(Theme, theme_code):
         raise HTTPException(status_code=404, detail="theme not found")
     settings = get_settings()
-    hash_value = config_hash(settings.opportunity_config)
+    opportunity_identity = opportunity_identity_filters(settings)
     target = trade_date or latest_date(
         db,
         StockOpportunityDaily.trade_date,
-        StockOpportunityDaily.algo_version == settings.algo_version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == hash_value,
+        *opportunity_identity,
     )
     row_limit, row_offset = clamp_limit(limit, default=30), clamp_offset(offset)
     if not target:
         return envelope([], _meta(None, row_limit, row_offset, 0))
-    snapshot = _member_snapshot_for_factor(db, target, hash_value, theme_code)
+    resolution = resolve_theme_memberships(db, [target])
+    member_codes = _theme_member_codes(resolution.members, theme_code, target)
     rows = _member_opportunities(
-        db, theme_code, target, stage, row_limit, row_offset, snapshot=snapshot
+        db, member_codes, target, stage, row_limit, row_offset
     )
-    total = _member_count(db, theme_code, target, stage, snapshot=snapshot)
+    total = _member_count(db, member_codes, target, stage)
     return envelope(
         rows,
         {
             **_meta(target, row_limit, row_offset, total),
-            **theme_member_snapshot_meta(db, snapshot),
+            **_member_context_meta(resolution.context_by_date.get(target)),
         },
     )
 
 
 def _member_opportunities(
     db: Session,
-    theme_code: str,
+    member_codes: set[str],
     target: date,
     stage: str | None,
     limit: int,
     offset: int,
     *,
     pool: str | None = None,
-    snapshot: date | None = None,
 ) -> list[dict[str, Any]]:
     settings = get_settings()
-    snapshot = snapshot or _member_snapshot_for_factor(
-        db, target, config_hash(settings.opportunity_config), theme_code
-    )
-    if snapshot is None:
+    if not member_codes:
         return []
     filters = [
-        ThemeMemberSnapshot.snapshot_date == snapshot,
-        ThemeMemberSnapshot.theme_code == theme_code,
+        StockOpportunityDaily.ts_code.in_(member_codes),
         StockOpportunityDaily.trade_date == target,
-        StockOpportunityDaily.algo_version == settings.algo_version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == config_hash(settings.opportunity_config),
+        *opportunity_identity_filters(settings),
     ]
     if stage:
         filters.append(StockOpportunityDaily.opportunity_stage == stage)
@@ -237,11 +224,6 @@ def _member_opportunities(
         order = desc(StockOpportunityDaily.left_reversal_score)
     stmt = (
         select(StockOpportunityDaily, StockBasic.name)
-        .select_from(ThemeMemberSnapshot)
-        .join(
-            StockOpportunityDaily,
-            ThemeMemberSnapshot.ts_code == StockOpportunityDaily.ts_code,
-        )
         .outerjoin(StockBasic, StockOpportunityDaily.ts_code == StockBasic.ts_code)
         .where(*filters)
         .order_by(order)
@@ -269,55 +251,59 @@ def _member_opportunities(
 
 def _member_count(
     db: Session,
-    theme_code: str,
+    member_codes: set[str],
     target: date,
     stage: str | None,
-    *,
-    snapshot: date | None = None,
 ) -> int:
     settings = get_settings()
-    snapshot = snapshot or _member_snapshot_for_factor(
-        db, target, config_hash(settings.opportunity_config), theme_code
-    )
-    if snapshot is None:
+    if not member_codes:
         return 0
     filters = [
-        ThemeMemberSnapshot.snapshot_date == snapshot,
-        ThemeMemberSnapshot.theme_code == theme_code,
+        StockOpportunityDaily.ts_code.in_(member_codes),
         StockOpportunityDaily.trade_date == target,
-        StockOpportunityDaily.algo_version == settings.algo_version,
-        StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-        StockOpportunityDaily.config_hash == config_hash(settings.opportunity_config),
+        *opportunity_identity_filters(settings),
     ]
     if stage:
         filters.append(StockOpportunityDaily.opportunity_stage == stage)
     return int(
         db.execute(
-            select(func.count())
-            .select_from(ThemeMemberSnapshot)
-            .join(
-                StockOpportunityDaily,
-                ThemeMemberSnapshot.ts_code == StockOpportunityDaily.ts_code,
-            )
-            .where(*filters)
+            select(func.count()).select_from(StockOpportunityDaily).where(*filters)
         ).scalar_one()
     )
 
 
-def _member_snapshot_for_factor(
-    db: Session,
-    target: date,
-    hash_value: str,
-    theme_code: str,
-) -> date | None:
-    snapshot = theme_factor_member_snapshot(
-        db,
-        target,
-        calc_version=THEME_CALC_VERSION,
-        config_hash=hash_value,
-        theme_code=theme_code,
-    )
-    return snapshot if snapshot is not None else latest_usable_theme_member_snapshot(db, target)
+def _theme_member_codes(members: Any, theme_code: str, target: date) -> set[str]:
+    if members.empty:
+        return set()
+    rows = members[
+        (members["trade_date"] == target) & (members["theme_code"] == theme_code)
+    ]
+    return set(rows["ts_code"].astype(str))
+
+
+def _member_context_meta(context: dict[str, object] | None) -> dict[str, Any]:
+    context = context or {}
+    snapshot_date = context.get("source_snapshot_date")
+    return {
+        "member_context_available": bool(context.get("available", False)),
+        "member_context_mode": context.get("mode", "UNAVAILABLE"),
+        "member_context_coverage": context.get("coverage"),
+        "source_snapshot_date": snapshot_date.isoformat()
+        if isinstance(snapshot_date, date)
+        else snapshot_date,
+    }
+
+
+def _legacy_snapshot_meta(context: dict[str, Any]) -> dict[str, Any]:
+    mode = context["member_context_mode"]
+    return {
+        "member_snapshot_date": context["source_snapshot_date"],
+        "member_snapshot_status": None,
+        "member_snapshot_coverage": context["member_context_coverage"],
+        "member_snapshot_mode": (
+            "PARTIAL" if mode == "INTERVAL_SNAPSHOT" else "FULL" if mode != "UNAVAILABLE" else None
+        ),
+    }
 
 
 def _meta(target: date | None, limit: int, offset: int, total: int) -> dict[str, Any]:

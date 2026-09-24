@@ -19,12 +19,14 @@ from app.models.market_data import (
     Theme,
     ThemeFactorDaily,
 )
+from app.services.analysis_filters import (
+    opportunity_identity_filters,
+    theme_factor_identity_filters,
+)
 from app.services.analysis_identity import (
     MARKET_CALC_VERSION,
-    OPPORTUNITY_CALC_VERSION,
     SECTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
-    THEME_CALC_VERSION,
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
@@ -84,7 +86,9 @@ def summary(
             "signal_counts": _signal_counts(db, target, version, hash_value),
             "sector_heat_top": industry_top,
             "industry_heat_top": industry_top,
-            "theme_heat_top": _theme_heat_top(db, target, row_limit, opportunity_hash),
+            "theme_heat_top": _theme_heat_top(
+                db, target, row_limit, opportunity_hash, hash_value
+            ),
             "left_reversal_top": _opportunity_pool(
                 db,
                 target,
@@ -92,6 +96,7 @@ def summary(
                 ["LEFT_WATCH", "LEFT_REVERSAL"],
                 row_limit,
                 opportunity_hash,
+                hash_value,
             ),
             "right_side_new": _opportunity_pool(
                 db,
@@ -100,6 +105,7 @@ def summary(
                 ["RIGHT_SIDE_NEW"],
                 row_limit,
                 opportunity_hash,
+                hash_value,
                 desc(StockOpportunityDaily.right_side_score),
             ),
             "trend_leaders": _opportunity_pool(
@@ -109,6 +115,7 @@ def summary(
                 ["TREND", "STRONG_TREND"],
                 row_limit,
                 opportunity_hash,
+                hash_value,
                 desc(StockOpportunityDaily.trend_rank_score),
             ),
         }
@@ -199,7 +206,11 @@ def _sector_heat_top(
 
 
 def _theme_heat_top(
-    db: Session, target: date, row_limit: int, hash_value: str
+    db: Session,
+    target: date,
+    row_limit: int,
+    opportunity_hash: str,
+    strategy_hash: str,
 ) -> list[dict[str, Any]]:
     stmt = (
         select(
@@ -224,8 +235,9 @@ def _theme_heat_top(
         .join(Theme, ThemeFactorDaily.theme_code == Theme.theme_code)
         .where(
             ThemeFactorDaily.trade_date == target,
-            ThemeFactorDaily.calc_version == THEME_CALC_VERSION,
-            ThemeFactorDaily.config_hash == hash_value,
+            *theme_factor_identity_filters(
+                strategy_hash=strategy_hash, opportunity_hash=opportunity_hash
+            ),
         )
         .order_by(ThemeFactorDaily.heat_rank)
         .limit(row_limit)
@@ -240,6 +252,7 @@ def _opportunity_pool(
     stages: list[str],
     row_limit: int,
     hash_value: str,
+    strategy_hash: str,
     order_by: Any = desc(StockOpportunityDaily.left_reversal_score),
 ) -> list[dict[str, Any]]:
     stmt = (
@@ -251,10 +264,12 @@ def _opportunity_pool(
         .outerjoin(StockBasic, StockOpportunityDaily.ts_code == StockBasic.ts_code)
         .where(
             StockOpportunityDaily.trade_date == target,
-            StockOpportunityDaily.algo_version == algo_version,
             StockOpportunityDaily.opportunity_stage.in_(stages),
-            StockOpportunityDaily.calc_version == OPPORTUNITY_CALC_VERSION,
-            StockOpportunityDaily.config_hash == hash_value,
+            *opportunity_identity_filters(
+                algo_version=algo_version,
+                strategy_hash=strategy_hash,
+                opportunity_hash=hash_value,
+            ),
         )
         .order_by(order_by, StockOpportunityDaily.ts_code)
         .limit(row_limit)
