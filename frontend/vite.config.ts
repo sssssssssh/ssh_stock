@@ -7,6 +7,23 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    test: {
+      environment: "happy-dom",
+      coverage: {
+        provider: "v8",
+        include: [
+          "src/services/**/*.ts",
+          "src/utils/**/*.ts",
+          "src/components/{ResearchLab,LoginView,JobCenter}.vue"
+        ],
+        thresholds: {
+          statements: 20,
+          lines: 20,
+          functions: 20,
+          branches: 10
+        }
+      }
+    },
     build: {
       chunkSizeWarningLimit: 700
     },

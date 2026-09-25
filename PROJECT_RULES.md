@@ -314,3 +314,11 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - CI 的后端覆盖率门槛为 70%，不得通过排除关键业务模块或空测试绕过；前端测试必须执行 coverage 模式。
 - 生产 Python 容器必须使用无特权用户。需要写入的数据必须放在显式挂载或授权目录，不得依赖 root 权限。
 - 对既有大模块采用低风险边界拆分：认证限流、Provider 构造、服务心跳与配置类型保持独立；涉及 ORM 元数据初始化顺序的拆分必须另行验证后再做。
+
+## Milestone 12.7 Research 正确性规则
+
+- Horizon Exit 与最终可退出必须调用同一个股票退出校验器；缺 Raw 或 Trade Status 的日期不可视为可成交。
+- Mark Carry Forward 只能在 Entry Date 至目标 Horizon Date 间向前取最近有效价格，禁止未来数据泄漏，并持久化估值来源日期。
+- Research Future Window 必须由批次长度、配置 Horizon 与延迟退出搜索天数计算，不得写死 61、65 或 66。
+- 自动 Research 以目标交易日和完整 Research Identity 判断成功幂等；该限制不适用于手工重跑。
+- Realtime Provider 必须延迟到确认存在缺口后初始化；空响应使用独立负缓存 TTL。

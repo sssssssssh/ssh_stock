@@ -51,8 +51,16 @@ def touch_service_heartbeat(
 
 
 def start_service_heartbeat(
-    service_name: str, *, interval_seconds: float = 45
+    service_name: str, *, interval_seconds: float | None = None
 ) -> tuple[threading.Event, threading.Thread]:
+    interval = interval_seconds
+    if interval is None:
+        interval = float(
+            get_settings()
+            .app_config.get("app", {})
+            .get("scheduler", {})
+            .get("service_heartbeat_interval_seconds", 45)
+        )
     stop = threading.Event()
     instance_id = new_instance_id(service_name)
 
@@ -67,7 +75,7 @@ def start_service_heartbeat(
                     service_name,
                     instance_id,
                 )
-            stop.wait(interval_seconds)
+            stop.wait(interval)
 
     thread = threading.Thread(target=loop, name=f"{service_name}-heartbeat", daemon=True)
     thread.start()

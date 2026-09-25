@@ -87,9 +87,19 @@ def trade_batches(db: Session, start: date, end: date, size: int) -> Iterator[li
         yield dates[index : index + size]
 
 
-def future_dates(db: Session, base_dates: list[date], latest: date | None) -> list[date]:
-    if latest is None:
+def future_dates(
+    db: Session,
+    base_dates: list[date],
+    latest: date | None,
+    *,
+    max_horizon: int,
+    executable_exit_search_days: int,
+) -> list[date]:
+    if latest is None or not base_dates:
         return []
+    required_count = (
+        len(base_dates) + 1 + max_horizon + executable_exit_search_days
+    )
     return (
         db.execute(
             select(TradeCalendar.cal_date)
@@ -99,7 +109,7 @@ def future_dates(db: Session, base_dates: list[date], latest: date | None) -> li
                 TradeCalendar.cal_date <= latest,
             )
             .order_by(TradeCalendar.cal_date)
-            .limit(len(base_dates) + 61)
+            .limit(required_count)
         )
         .scalars()
         .all()
@@ -178,7 +188,13 @@ def evaluate_opportunity_batch(
         counts["deleted_rows"] = stats["deleted"]
         return counts
     latest = db.scalar(select(func.max(StockDaily.trade_date)))
-    dates = future_dates(db, base_dates, latest)
+    dates = future_dates(
+        db,
+        base_dates,
+        latest,
+        max_horizon=max(research["horizons"]),
+        executable_exit_search_days=research["executable_exit_search_days"],
+    )
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
     market_rows = db.execute(
         select(MarketDaily.trade_date, MarketDaily.regime).where(

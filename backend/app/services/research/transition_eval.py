@@ -145,7 +145,13 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
             StockStateDaily.config_hash == strategy_hash,
         )
     )
-    dates = future_dates(db, base_dates, latest)
+    dates = future_dates(
+        db,
+        base_dates,
+        latest,
+        max_horizon=max(settings.research_config["transition_horizons"]),
+        executable_exit_search_days=0,
+    )
     all_dates = ([previous_date] if previous_date else []) + dates
     bases = (
         db.execute(

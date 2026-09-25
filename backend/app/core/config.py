@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     auth_login_max_failures: int = 5
     auth_login_lockout_seconds: int = 60
     realtime_kline_cache_seconds: int = 120
+    realtime_kline_negative_cache_seconds: int = 1800
 
     app_name: str = "空间"
     algo_version: str = "v1.0"
@@ -67,6 +68,8 @@ class Settings(BaseSettings):
                 raise ValueError(f"{field_name.upper()} must be positive")
         if self.realtime_kline_cache_seconds < 0:
             raise ValueError("REALTIME_KLINE_CACHE_SECONDS must be nonnegative")
+        if self.realtime_kline_negative_cache_seconds < 0:
+            raise ValueError("REALTIME_KLINE_NEGATIVE_CACHE_SECONDS must be nonnegative")
         if self.app_env.lower() == "prod":
             if (
                 not self.bootstrap_admin_password
@@ -113,8 +116,8 @@ def _validate_research_config(
     for key in ("version", "eval_version", "benchmark_code"):
         if not isinstance(config.get(key), str) or not config[key].strip():
             raise ValueError(f"research.{key} must be nonempty")
-    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v2":
-        raise ValueError("research schema requires research_v1/research_eval_v2")
+    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v3":
+        raise ValueError("research schema requires research_v1/research_eval_v3")
     for key, upper in (
         ("horizons", 250),
         ("transition_horizons", 250),

@@ -124,7 +124,7 @@ def test_current_source_lineage_is_copied_into_forward_result(
         return {"upserted": len(captured), "deleted": 0}
 
     monkeypatch.setattr(module, "replace_slice_rows_with_stats", capture)
-    monkeypatch.setattr(module, "future_dates", lambda *args: [date(2026, 5, 10)])
+    monkeypatch.setattr(module, "future_dates", lambda *args, **kwargs: [date(2026, 5, 10)])
     monkeypatch.setattr(module, "benchmark_lookup", lambda *args: {})
     if module is opportunity_eval:
         monkeypatch.setattr(module, "_stock_rows", lambda *args: {})
@@ -237,7 +237,9 @@ def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> 
         source_strategy_config_hash=analysis_strategy_hash(settings.strategy),
     )
     db = _ResearchDb(base)
-    monkeypatch.setattr(transition_eval, "future_dates", lambda *args: [base.trade_date])
+    monkeypatch.setattr(
+        transition_eval, "future_dates", lambda *args, **kwargs: [base.trade_date]
+    )
     monkeypatch.setattr(
         transition_eval, "replace_slice_rows_with_stats",
         lambda db, model, batches, **kwargs: {"upserted": sum(map(len, batches)), "deleted": 0},

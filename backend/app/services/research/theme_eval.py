@@ -100,7 +100,13 @@ def evaluate_theme_batch(
         counts["deleted_rows"] = stats["deleted"]
         return counts
     latest = db.scalar(select(func.max(ThemeDaily.trade_date)))
-    dates = future_dates(db, base_dates, latest)
+    dates = future_dates(
+        db,
+        base_dates,
+        latest,
+        max_horizon=max(research["horizons"]),
+        executable_exit_search_days=research["executable_exit_search_days"],
+    )
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
     theme_context = resolve_theme_memberships(db, base_dates).context_by_date
     by_code: dict[str, list[Any]] = defaultdict(list)

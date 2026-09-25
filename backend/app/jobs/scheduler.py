@@ -7,7 +7,12 @@ from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.jobs.research_job import RESEARCH_JOB_TYPE, queue_research_eval
+from app.jobs.research_job import (
+    RESEARCH_IDENTITY_KEYS,
+    RESEARCH_JOB_TYPE,
+    current_research_identity,
+    queue_research_eval,
+)
 from app.models.job import JobRun
 from app.models.market_data import StockDaily, StockOpportunityDaily, StockStateDaily, TradeCalendar
 from app.services.analysis_filters import opportunity_identity_filters
@@ -167,6 +172,9 @@ def run_scheduled_research(db, target_date: date) -> bool:
     recover_stale_research_jobs(db)
     if not research_can_run(db):
         return False
+    settings = get_settings()
+    if scheduled_research_completed(db, target_date, settings):
+        return False
     active = db.scalar(
         select(func.count())
         .select_from(JobRun)
@@ -184,7 +192,6 @@ def run_scheduled_research(db, target_date: date) -> bool:
     )
     if expected_latest is None:
         return False
-    settings = get_settings()
     latest_raw = db.scalar(
         select(func.max(StockDaily.trade_date)).where(StockDaily.trade_date <= target_date)
     )
@@ -237,6 +244,21 @@ def run_scheduled_research(db, target_date: date) -> bool:
     except ResearchQueueConflictError:
         return False
     return True
+
+
+def scheduled_research_completed(db, target_date: date, settings) -> bool:
+    identity = current_research_identity(settings)
+    filters = [
+        JobRun.job_type == RESEARCH_JOB_TYPE,
+        JobRun.target_trade_date == target_date,
+        JobRun.status == "SUCCESS",
+        JobRun.job_metadata["source"].as_string() == "scheduler",
+    ]
+    filters.extend(
+        JobRun.job_metadata[key].as_string() == str(identity[key])
+        for key in RESEARCH_IDENTITY_KEYS
+    )
+    return db.scalar(select(func.count()).select_from(JobRun).where(*filters)) > 0
 
 
 def run_scheduled_eod_retry(db, target_date: date) -> bool:

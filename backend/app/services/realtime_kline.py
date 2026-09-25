@@ -38,6 +38,7 @@ def load_realtime_kline(
     start: date,
     end: date,
     cache_seconds: int = 120,
+    negative_cache_seconds: int = 1800,
 ) -> RealtimeKlineResult:
     local_models = (
         db.execute(
@@ -89,10 +90,10 @@ def load_realtime_kline(
             .all()
         )
         expected_dates -= non_trading_dates
-    if expected_dates and expected_dates <= local_dates:
+    missing_dates = expected_dates - local_dates
+    if not missing_dates:
         return RealtimeKlineResult(source="local", rows=local_rows)
 
-    missing_dates = expected_dates - local_dates
     provider = provider_factory()
     provider_rows: list[dict[str, object]] = []
     for range_start, range_end in _merge_missing_ranges(missing_dates, sorted(open_dates)):
@@ -103,6 +104,7 @@ def load_realtime_kline(
                 range_start,
                 range_end,
                 cache_seconds=cache_seconds,
+                negative_cache_seconds=negative_cache_seconds,
             )
         )
     merged = {row["trade_date"]: row for row in local_rows}
@@ -140,18 +142,20 @@ def _cached_provider_rows(
     end: date,
     *,
     cache_seconds: int,
+    negative_cache_seconds: int,
 ) -> list[dict[str, object]]:
     key = (ts_code, start, end)
     now = monotonic()
-    if cache_seconds > 0:
+    if cache_seconds > 0 or negative_cache_seconds > 0:
         with _cache_lock:
             cached = _range_cache.get(key)
             if cached is not None and cached[0] > now:
                 return [dict(row) for row in cached[1]]
     rows = _provider_rows(provider.get_daily_range(ts_code=ts_code, start=start, end=end), ts_code)
-    if cache_seconds > 0:
+    ttl = cache_seconds if rows else negative_cache_seconds
+    if ttl > 0:
         with _cache_lock:
-            _range_cache[key] = (now + cache_seconds, [dict(row) for row in rows])
+            _range_cache[key] = (now + ttl, [dict(row) for row in rows])
     return rows
 
 

@@ -36,6 +36,11 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
             "entry_executable": True,
             "exit_executable20": True,
             "ret20": 0.10,
+            "mark_ret20": 0.08,
+            "delayed_exit_ret20": 0.09,
+            "delayed_exit_delay_days20": 2,
+            "net_ret20": 0.095,
+            "net_delayed_exit_ret20": 0.085,
             "benchmark_ret20": 0.04,
             "excess_ret20": 0.06,
             "mfe20": 0.20,
@@ -46,6 +51,9 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
             "entry_executable": True,
             "exit_executable20": True,
             "ret20": -0.02,
+            "mark_ret20": -0.03,
+            "delayed_exit_ret20": -0.02,
+            "delayed_exit_delay_days20": 0,
             "benchmark_ret20": None,
             "excess_ret20": None,
             "mfe20": 0.10,
@@ -63,6 +71,13 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
     assert result["entry_executable_count"] == 2
     assert result["return_sample_count"] == 2
     assert result["excess_sample_count"] == 1
+    assert result["mark_sample_count"] == 2
+    assert result["delayed_exit_sample_count"] == 2
+    assert result["net_return_sample_count"] == 1
+    assert result["net_delayed_exit_sample_count"] == 1
+    assert result["delayed_exit_count"] == 1
+    assert result["delayed_exit_rate"] == pytest.approx(0.5)
+    assert result["avg_positive_exit_delay_days"] == pytest.approx(2)
     assert result["avg_return"] == pytest.approx(0.04)
     assert result["avg_excess_return"] == pytest.approx(0.06)
     assert result["win_rate"] == 0.5

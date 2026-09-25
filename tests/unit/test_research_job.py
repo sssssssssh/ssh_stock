@@ -283,6 +283,23 @@ def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) 
     assert calls == [(dates[-1], dates[0], {"mode": "scheduler"})]
 
 
+def test_scheduled_research_completed_is_identity_and_source_aware() -> None:
+    statements = []
+
+    class Db:
+        def scalar(self, statement):
+            statements.append(statement)
+            return 1
+
+    target = date(2026, 9, 25)
+    assert scheduler_module.scheduled_research_completed(Db(), target, get_settings()) is True
+    sql = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
+    assert "SUCCESS" in sql
+    assert "scheduler" in sql
+    assert "research_eval_version" in sql
+    assert "target_trade_date" in sql
+
+
 def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(

@@ -1160,3 +1160,12 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - CI 后端测试启用覆盖率并要求 `backend/app` 不低于 70%；前端 Vitest 同步生成覆盖率报告。
 - Python 生产镜像改用无特权 `appuser` 运行。迁移、Backend、Worker 与 Scheduler 仍复用同一镜像。
 - 配置校验、登录防护、Provider Gateway 与服务心跳保持独立模块，后续修改无需继续扩大核心入口文件。
+
+## Milestone 12.7 Research 与调度正确性收口（2026-09-25）
+
+- 股票正常退出与最终可退出统一校验 Raw、Trade Status、停牌、跌停和价格完整性；Research 身份升级为 `research_eval_v3`，旧 v2 结果保留。
+- 停牌 Horizon 的 Mark Return 使用入场日至目标日之间最近有效复权收盘价，并记录 `mark_trade_dateN`；绝不读取目标日之后价格。
+- Future Window 按批次长度、最大 Horizon 和延迟搜索天数动态计算，消除批次尾部 H60 数据不足。
+- Scheduler 对同一目标交易日和完整 Research Identity 的成功自动任务保持幂等；手工 Research 仍可重跑。
+- Realtime Kline 无缺口时不初始化 Provider，空响应使用默认 1800 秒负缓存；服务心跳周期统一读取配置并保留 30 天。
+- Research UI 使用“最终可退出收益”语义并展示真实延迟率；前端覆盖率门槛为 Statements/Lines/Functions 20%、Branches 10%。

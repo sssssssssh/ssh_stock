@@ -4,7 +4,7 @@ from sqlalchemy import delete, or_
 from sqlalchemy.orm import Session
 
 from app.models.auth import AuthSession
-from app.models.job import JobRun, ProviderApiLog
+from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 
 
 def run_retention(db: Session, *, now: datetime | None = None) -> dict[str, int]:
@@ -34,10 +34,16 @@ def run_retention(db: Session, *, now: datetime | None = None) -> dict[str, int]
             )
         )
     ).rowcount
+    service_heartbeat = db.execute(
+        delete(ServiceHeartbeat).where(
+            ServiceHeartbeat.heartbeat_at < current - timedelta(days=30)
+        )
+    ).rowcount
     db.commit()
     return {
         "provider_api_log": int(provider or 0),
         "successful_jobs": int(successful or 0),
         "failed_jobs": int(failed or 0),
         "auth_sessions": int(sessions or 0),
+        "service_heartbeat": int(service_heartbeat or 0),
     }

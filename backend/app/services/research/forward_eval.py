@@ -7,6 +7,27 @@ from app.services.research.signal_eval import _executable_entry, _executable_exi
 HORIZONS = (5, 10, 20, 60)
 
 
+def _validated_stock_exit(row: dict[str, Any] | None) -> tuple[float | None, str | None]:
+    if row is None or row.get("raw_present") is False:
+        return None, "NO_STOCK_ROW"
+    if row.get("status_present") is False:
+        return None, "TRADE_STATUS_MISSING"
+    return _executable_exit(row)
+
+
+def _mark_price(
+    stock_rows: Mapping[date, dict[str, Any]],
+    dates: Sequence[date],
+    entry_index: int,
+    target_index: int,
+) -> tuple[date | None, float | None]:
+    for index in range(target_index, entry_index - 1, -1):
+        price = stock_rows.get(dates[index], {}).get("adj_close")
+        if _positive(price):
+            return dates[index], float(price)
+    return None, None
+
+
 def _net_return(entry_price: float, exit_price: float, costs: Mapping[str, Any] | None) -> float:
     if not costs or not costs.get("enabled", False):
         return exit_price / entry_price - 1
@@ -55,17 +76,13 @@ def evaluate_stock_forward(
         result[f"mature{horizon}"] = True
         result[f"exit_trade_date{horizon}"] = exit_date
         exit_row = stock_rows.get(exit_date)
-        if exit_row is not None and exit_row.get("raw_present") is False:
-            exit_price, exit_reason = None, "NO_STOCK_ROW"
-        elif exit_row is not None and exit_row.get("status_present") is False:
-            exit_price, exit_reason = None, "TRADE_STATUS_MISSING"
-        else:
-            exit_price, exit_reason = _executable_exit(exit_row)
+        exit_price, exit_reason = _validated_stock_exit(exit_row)
         result[f"exit_executable{horizon}"] = exit_reason is None
         result[f"exit_reason{horizon}"] = exit_reason
-        mark_price = exit_row.get("adj_close") if exit_row else None
-        if entry_price is not None and _positive(mark_price):
-            result[f"mark_ret{horizon}"] = float(mark_price) / entry_price - 1
+        mark_date, mark_price = _mark_price(stock_rows, dates, entry_index, index)
+        if entry_price is not None and mark_price is not None:
+            result[f"mark_trade_date{horizon}"] = mark_date
+            result[f"mark_ret{horizon}"] = mark_price / entry_price - 1
         if entry_price is not None and exit_price is not None:
             result[f"ret{horizon}"] = exit_price / entry_price - 1
             result[f"net_ret{horizon}"] = _net_return(entry_price, exit_price, trading_cost)
@@ -76,7 +93,7 @@ def evaluate_stock_forward(
                     break
                 delayed_date = dates[delayed_index]
                 delayed_row = stock_rows.get(delayed_date)
-                delayed_price, delayed_reason = _executable_exit(delayed_row)
+                delayed_price, delayed_reason = _validated_stock_exit(delayed_row)
                 if delayed_reason is not None or delayed_price is None:
                     continue
                 result[f"delayed_exit_trade_date{horizon}"] = delayed_date
@@ -142,6 +159,7 @@ def evaluate_theme_forward(
         result[f"exit_executable{horizon}"] = exit_reason is None
         result[f"exit_reason{horizon}"] = exit_reason
         if result["entry_price"] is not None and _positive(exit_price):
+            result[f"mark_trade_date{horizon}"] = exit_date
             result[f"mark_ret{horizon}"] = float(exit_price) / result["entry_price"] - 1
         if result["entry_price"] is not None and exit_reason is None:
             result[f"ret{horizon}"] = float(exit_price) / result["entry_price"] - 1
@@ -202,6 +220,7 @@ def _empty_forward(horizons: Sequence[int], dates: Sequence[date]) -> dict[str, 
                 f"exit_reason{horizon}": None,
                 f"ret{horizon}": None,
                 f"mark_ret{horizon}": None,
+                f"mark_trade_date{horizon}": None,
                 f"delayed_exit_trade_date{horizon}": None,
                 f"delayed_exit_price{horizon}": None,
                 f"delayed_exit_delay_days{horizon}": None,

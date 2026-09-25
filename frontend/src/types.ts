@@ -318,6 +318,10 @@ export type ResearchHorizonStats = {
   entry_executable_count: number;
   exit_executable_count: number;
   return_sample_count: number;
+  mark_sample_count: number;
+  delayed_exit_sample_count: number;
+  net_return_sample_count: number;
+  net_delayed_exit_sample_count: number;
   excess_sample_count: number;
   avg_return: number | null;
   median_return: number | null;
@@ -337,10 +341,16 @@ export type ResearchHorizonStats = {
   avg_net_return: number | null;
   avg_net_delayed_exit_return: number | null;
   avg_exit_delay_days: number | null;
+  delayed_exit_count: number;
+  delayed_exit_rate: number | null;
+  avg_positive_exit_delay_days: number | null;
   non_executable_rate: number | null;
   avg_mfe20: number | null;
   avg_mae20: number | null;
   sample_warning: boolean;
+  return_sample_warning: boolean;
+  mark_sample_warning: boolean;
+  delayed_exit_sample_warning: boolean;
 };
 
 export type ResearchBucketRow = {

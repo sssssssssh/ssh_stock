@@ -2,12 +2,45 @@ from datetime import date, timedelta
 
 import pytest
 from app.core.config import _validate_research_config, get_settings
+from app.models.market_data import TradeCalendar
 from app.services.calc_metadata import config_hash
 from app.services.research.forward_eval import evaluate_stock_forward, evaluate_theme_forward
+from app.services.research.opportunity_eval import future_dates
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 
 def _days(count: int) -> list[date]:
     return [date(2026, 1, 1) + timedelta(days=index) for index in range(count)]
+
+
+def test_future_window_covers_batch_tail_h60_and_delay5_without_inventing_dates() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    TradeCalendar.__table__.create(engine)
+    days = _days(100)
+    with Session(engine) as db:
+        db.add_all(
+            TradeCalendar(cal_date=day, exchange="SSE", is_open=True) for day in days
+        )
+        db.commit()
+        result = future_dates(
+            db,
+            days[:20],
+            days[-1],
+            max_horizon=60,
+            executable_exit_search_days=5,
+        )
+        assert len(result) == 86
+        assert result[-1] == days[85]
+        truncated = future_dates(
+            db,
+            days[:20],
+            days[50],
+            max_horizon=60,
+            executable_exit_search_days=5,
+        )
+        assert truncated[-1] == days[50]
+        assert len(truncated) == 51
 
 
 def test_research_hash_is_independent_of_production_hashes() -> None:
@@ -207,6 +240,58 @@ def test_limit_down_keeps_mark_return_and_uses_delayed_executable_exit() -> None
     assert result["delayed_exit_trade_date5"] == days[8]
     assert result["delayed_exit_delay_days5"] == 2
     assert result["delayed_exit_ret5"] == pytest.approx(-0.22)
+
+
+def test_delayed_exit_skips_incomplete_raw_and_status_rows() -> None:
+    days = _days(10)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_suspended": False,
+            "tradable": True,
+            "is_limit_down_close": False,
+        }
+        for day in days
+    }
+    stock[days[6]]["is_limit_down_close"] = True
+    stock[days[7]]["status_present"] = False
+    stock[days[8]]["raw_present"] = False
+    result = evaluate_stock_forward(
+        days[0], days, stock, {}, horizons=(5,), executable_exit_search_days=5
+    )
+
+    assert result["exit_reason5"] == "LIMIT_DOWN"
+    assert result["delayed_exit_trade_date5"] == days[9]
+    assert result["delayed_exit_delay_days5"] == 3
+
+
+def test_suspended_horizon_carries_mark_price_forward_without_lookahead() -> None:
+    days = _days(9)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_suspended": False,
+            "tradable": True,
+        }
+        for day in days
+    }
+    stock[days[5]]["adj_close"] = 80
+    stock[days[6]].update(adj_close=None, is_suspended=True)
+    stock[days[7]]["adj_close"] = 120
+
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+
+    assert result["exit_reason5"] == "SUSPENDED"
+    assert result["mark_trade_date5"] == days[5]
+    assert result["mark_ret5"] == pytest.approx(-0.2)
 
 
 def test_trading_cost_produces_separate_net_returns() -> None:

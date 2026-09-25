@@ -121,11 +121,13 @@ def test_retention_only_targets_operational_tables() -> None:
         "successful_jobs": 2,
         "failed_jobs": 3,
         "auth_sessions": 4,
+        "service_heartbeat": 5,
     }
     assert db.commits == 1
     assert "provider_api_log" in sql
     assert "job_run" in sql
     assert "auth_session" in sql
+    assert "service_heartbeat" in sql
     for protected_table in (
         "stock_daily",
         "stock_factor_daily",

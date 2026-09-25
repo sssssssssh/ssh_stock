@@ -109,6 +109,7 @@ def realtime_kline(
             start=start,
             end=target_end,
             cache_seconds=get_settings().realtime_kline_cache_seconds,
+            negative_cache_seconds=get_settings().realtime_kline_negative_cache_seconds,
         )
     except Exception as exc:
         detail = f"tushare realtime kline failed: {exc}"

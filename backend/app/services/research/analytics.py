@@ -131,6 +131,9 @@ class Cohort:
         excess = self.excess[horizon]
         mark_returns = self.mark_returns[horizon]
         delayed_returns = self.delayed_returns[horizon]
+        net_returns = self.net_returns[horizon]
+        net_delayed_returns = self.net_delayed_returns[horizon]
+        positive_delays = [delay for delay in self.exit_delays[horizon] if delay > 0]
         return {
             "horizon": horizon,
             "event_count": self.event_count,
@@ -138,6 +141,10 @@ class Cohort:
             "entry_executable_count": self.entry[horizon],
             "exit_executable_count": self.exit[horizon],
             "return_sample_count": len(returns),
+            "mark_sample_count": len(mark_returns),
+            "delayed_exit_sample_count": len(delayed_returns),
+            "net_return_sample_count": len(net_returns),
+            "net_delayed_exit_sample_count": len(net_delayed_returns),
             "excess_sample_count": len(excess),
             "avg_return": _mean(returns),
             "median_return": median(returns) if returns else None,
@@ -156,9 +163,14 @@ class Cohort:
                 median(delayed_returns) if delayed_returns else None
             ),
             "delayed_exit_win_rate": _rate(value > 0 for value in delayed_returns),
-            "avg_net_return": _mean(self.net_returns[horizon]),
-            "avg_net_delayed_exit_return": _mean(self.net_delayed_returns[horizon]),
+            "avg_net_return": _mean(net_returns),
+            "avg_net_delayed_exit_return": _mean(net_delayed_returns),
             "avg_exit_delay_days": _mean(self.exit_delays[horizon]),
+            "delayed_exit_count": len(positive_delays),
+            "delayed_exit_rate": (
+                len(positive_delays) / len(delayed_returns) if delayed_returns else None
+            ),
+            "avg_positive_exit_delay_days": _mean(positive_delays),
             "non_executable_rate": (
                 self.non_executable[horizon] / self.entry[horizon]
                 if self.entry[horizon]
@@ -166,6 +178,9 @@ class Cohort:
             ),
             "avg_mfe20": _mean(self.mfe) if horizon == 20 else None,
             "avg_mae20": _mean(self.mae) if horizon == 20 else None,
+            "return_sample_warning": len(returns) < self.min_sample_warning,
+            "mark_sample_warning": len(mark_returns) < self.min_sample_warning,
+            "delayed_exit_sample_warning": len(delayed_returns) < self.min_sample_warning,
             "sample_warning": len(returns) < self.min_sample_warning,
         }
 

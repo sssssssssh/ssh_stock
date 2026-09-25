@@ -141,6 +141,54 @@ def test_realtime_kline_respects_listing_and_suspension_dates() -> None:
     assert result.rows[0]["trade_date"] == dates[2]
 
 
+def test_realtime_kline_before_listing_never_initializes_provider() -> None:
+    db = _session()
+    days = [date(2026, 9, 14), date(2026, 9, 15)]
+    db.add_all([TradeCalendar(cal_date=item, is_open=True, exchange="SSE") for item in days])
+    db.add(
+        StockBasic(
+            ts_code="000001.SZ",
+            symbol="000001",
+            name="test",
+            exchange="SZSE",
+            list_status="L",
+            list_date=date(2026, 9, 16),
+        )
+    )
+    db.commit()
+
+    result = load_realtime_kline(
+        db,
+        lambda: (_ for _ in ()).throw(AssertionError("provider initialized")),
+        ts_code="000001.SZ",
+        start=days[0],
+        end=days[-1],
+    )
+
+    assert result.source == "local"
+    assert result.rows == []
+
+
+def test_realtime_kline_negative_cache_reuses_empty_response() -> None:
+    db = _session()
+    day = date(2026, 9, 14)
+    db.add(TradeCalendar(cal_date=day, is_open=True, exchange="SSE"))
+    db.commit()
+    provider = _Provider([])
+    for _ in range(2):
+        result = load_realtime_kline(
+            db,
+            lambda: provider,
+            ts_code="000001.SZ",
+            start=day,
+            end=day,
+            cache_seconds=0,
+            negative_cache_seconds=1800,
+        )
+        assert result.rows == []
+    assert provider.calls == [("000001.SZ", day, day)]
+
+
 def test_realtime_kline_merges_missing_ranges_and_caches_provider_rows() -> None:
     db = _session()
     dates = [date(2026, 9, day) for day in range(14, 20)]
