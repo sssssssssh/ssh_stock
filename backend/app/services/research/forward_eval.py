@@ -8,10 +8,16 @@ HORIZONS = (5, 10, 20, 60)
 
 
 def _validated_stock_exit(row: dict[str, Any] | None) -> tuple[float | None, str | None]:
-    if row is None or row.get("raw_present") is False:
+    if row is None:
         return None, "NO_STOCK_ROW"
     if row.get("status_present") is False:
         return None, "TRADE_STATUS_MISSING"
+    if row.get("is_suspended") is True:
+        return None, "SUSPENDED"
+    if row.get("is_active") is False:
+        return None, "NOT_ACTIVE"
+    if row.get("raw_present") is False:
+        return None, "NO_STOCK_ROW"
     return _executable_exit(row)
 
 
@@ -26,6 +32,32 @@ def _mark_price(
         if _positive(price):
             return dates[index], float(price)
     return None, None
+
+
+def _stock_extreme_window(
+    stock_rows: Mapping[date, dict[str, Any]],
+    dates: Sequence[date],
+    entry_index: int,
+) -> tuple[list[float], list[float]] | None:
+    entry_close = stock_rows.get(dates[entry_index], {}).get("adj_close")
+    last_close = float(entry_close) if _positive(entry_close) else None
+    highs: list[float] = []
+    lows: list[float] = []
+    for day in dates[entry_index + 1 : entry_index + 21]:
+        row = stock_rows.get(day, {})
+        high, low, close = row.get("adj_high"), row.get("adj_low"), row.get("adj_close")
+        if _positive(high) and _positive(low):
+            highs.append(float(high))
+            lows.append(float(low))
+            if _positive(close):
+                last_close = float(close)
+            continue
+        if row.get("status_present") is True and row.get("is_suspended") is True and last_close:
+            highs.append(last_close)
+            lows.append(last_close)
+            continue
+        return None
+    return (highs, lows) if len(highs) == 20 else None
 
 
 def _net_return(entry_price: float, exit_price: float, costs: Mapping[str, Any] | None) -> float:
@@ -113,11 +145,11 @@ def evaluate_stock_forward(
                 result[f"ret{horizon}"] - result[f"benchmark_ret{horizon}"]
             )
     if result.get("mature20") and entry_price is not None:
-        window = [stock_rows.get(day, {}) for day in dates[entry_index + 1 : entry_index + 21]]
-        if len(window) == 20 and all(_positive(row.get("adj_high")) for row in window):
-            result["mfe20"] = max(float(row["adj_high"]) for row in window) / entry_price - 1
-        if len(window) == 20 and all(_positive(row.get("adj_low")) for row in window):
-            result["mae20"] = min(float(row["adj_low"]) for row in window) / entry_price - 1
+        extremes = _stock_extreme_window(stock_rows, dates, entry_index)
+        if extremes is not None:
+            highs, lows = extremes
+            result["mfe20"] = max(highs) / entry_price - 1
+            result["mae20"] = min(lows) / entry_price - 1
     return result
 
 

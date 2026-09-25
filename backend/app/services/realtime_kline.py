@@ -1,7 +1,7 @@
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from time import monotonic
 from typing import Protocol
 
@@ -9,6 +9,7 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.clock import business_today
 from app.models.market_data import (
     StockBasic,
     StockDaily,
@@ -152,7 +153,13 @@ def _cached_provider_rows(
             if cached is not None and cached[0] > now:
                 return [dict(row) for row in cached[1]]
     rows = _provider_rows(provider.get_daily_range(ts_code=ts_code, start=start, end=end), ts_code)
-    ttl = cache_seconds if rows else negative_cache_seconds
+    recent_cutoff = business_today() - timedelta(days=1)
+    negative_ttl = (
+        min(negative_cache_seconds, max(cache_seconds, 120))
+        if end >= recent_cutoff
+        else negative_cache_seconds
+    )
+    ttl = cache_seconds if rows else negative_ttl
     if ttl > 0:
         with _cache_lock:
             _range_cache[key] = (now + ttl, [dict(row) for row in rows])

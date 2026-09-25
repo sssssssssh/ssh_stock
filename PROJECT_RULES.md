@@ -322,3 +322,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Research Future Window 必须由批次长度、配置 Horizon 与延迟退出搜索天数计算，不得写死 61、65 或 66。
 - 自动 Research 以目标交易日和完整 Research Identity 判断成功幂等；该限制不适用于手工重跑。
 - Realtime Provider 必须延迟到确认存在缺口后初始化；空响应使用独立负缓存 TTL。
+
+## Milestone 12.8 Research 边界规则
+
+- 退出原因必须先解释完整 Trade Status：停牌优先于 Raw 缺失，`is_active=false` 必须为 `NOT_ACTIVE`，只有状态完整且非停牌后才能以 `NO_STOCK_ROW` 表示 Raw 缺失。
+- 自动 Research 最小回刷跨度为 `max(horizons) + 1 + executable_exit_search_days`；配置只能扩大，不能缩短此下限。
+- MFE/MAE 只允许在明确停牌日 carry forward 前一有效收盘价；非停牌的行情或状态缺失不得被 carry forward 掩盖。
+- 最终退出统计必须同时报告成功和超过搜索窗口仍未解决的样本，分母为已成功入场样本。

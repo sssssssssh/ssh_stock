@@ -300,6 +300,12 @@ def test_scheduled_research_completed_is_identity_and_source_aware() -> None:
     assert "target_trade_date" in sql
 
 
+def test_research_refresh_lookback_covers_next_open_h60_and_delay5() -> None:
+    settings = get_settings().model_copy(deep=True)
+    settings.research_config["refresh_lookback_trade_days"] = 1
+    assert scheduler_module.research_refresh_lookback(settings) == 66
+
+
 def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch) -> None:
     calls = []
     monkeypatch.setattr(

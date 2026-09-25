@@ -294,6 +294,62 @@ def test_suspended_horizon_carries_mark_price_forward_without_lookahead() -> Non
     assert result["mark_ret5"] == pytest.approx(-0.2)
 
 
+@pytest.mark.parametrize(
+    ("changes", "reason"),
+    [
+        ({"raw_present": False, "status_present": True, "is_suspended": True}, "SUSPENDED"),
+        ({"raw_present": False, "status_present": True, "is_active": False}, "NOT_ACTIVE"),
+        ({"raw_present": False, "status_present": True}, "NO_STOCK_ROW"),
+    ],
+)
+def test_exit_reason_uses_real_status_only_row_shape(changes, reason) -> None:
+    days = _days(7)
+    base = {
+        "adj_open": 100,
+        "adj_close": 100,
+        "raw_open": 100,
+        "raw_present": True,
+        "status_present": True,
+        "is_active": True,
+        "is_suspended": False,
+        "tradable": True,
+    }
+    stock = {day: dict(base) for day in days}
+    stock[days[6]].update(changes)
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+    assert result["exit_reason5"] == reason
+
+
+def test_mfe_mae_carry_last_close_only_across_suspended_days() -> None:
+    days = _days(22)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "adj_high": 110,
+            "adj_low": 90,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_active": True,
+            "is_suspended": False,
+            "tradable": True,
+        }
+        for day in days
+    }
+    stock[days[10]].update(
+        adj_close=None,
+        adj_high=None,
+        adj_low=None,
+        raw_present=False,
+        is_suspended=True,
+        tradable=False,
+    )
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(20,))
+    assert result["mfe20"] == pytest.approx(0.1)
+    assert result["mae20"] == pytest.approx(-0.1)
+
+
 def test_trading_cost_produces_separate_net_returns() -> None:
     days = _days(7)
     stock = {

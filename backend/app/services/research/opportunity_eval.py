@@ -316,6 +316,7 @@ def _stock_rows(
             select(
                 StockTradeStatusDaily.ts_code,
                 StockTradeStatusDaily.trade_date,
+                StockTradeStatusDaily.is_active,
                 StockTradeStatusDaily.is_suspended,
                 StockTradeStatusDaily.tradable,
                 StockTradeStatusDaily.up_limit,

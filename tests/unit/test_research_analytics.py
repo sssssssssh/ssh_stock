@@ -78,6 +78,9 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
     assert result["delayed_exit_count"] == 1
     assert result["delayed_exit_rate"] == pytest.approx(0.5)
     assert result["avg_positive_exit_delay_days"] == pytest.approx(2)
+    assert result["final_exit_success_rate"] == pytest.approx(1)
+    assert result["final_exit_unresolved_count"] == 0
+    assert result["unresolved_exit_rate"] == pytest.approx(0)
     assert result["avg_return"] == pytest.approx(0.04)
     assert result["avg_excess_return"] == pytest.approx(0.06)
     assert result["win_rate"] == 0.5

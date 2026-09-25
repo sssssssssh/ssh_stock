@@ -134,6 +134,7 @@ class Cohort:
         net_returns = self.net_returns[horizon]
         net_delayed_returns = self.net_delayed_returns[horizon]
         positive_delays = [delay for delay in self.exit_delays[horizon] if delay > 0]
+        final_exit_unresolved_count = max(self.entry[horizon] - len(delayed_returns), 0)
         return {
             "horizon": horizon,
             "event_count": self.event_count,
@@ -171,6 +172,15 @@ class Cohort:
                 len(positive_delays) / len(delayed_returns) if delayed_returns else None
             ),
             "avg_positive_exit_delay_days": _mean(positive_delays),
+            "final_exit_success_rate": (
+                len(delayed_returns) / self.entry[horizon] if self.entry[horizon] else None
+            ),
+            "final_exit_unresolved_count": final_exit_unresolved_count,
+            "unresolved_exit_rate": (
+                final_exit_unresolved_count / self.entry[horizon]
+                if self.entry[horizon]
+                else None
+            ),
             "non_executable_rate": (
                 self.non_executable[horizon] / self.entry[horizon]
                 if self.entry[horizon]

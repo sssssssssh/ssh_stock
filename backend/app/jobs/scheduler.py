@@ -224,6 +224,7 @@ def run_scheduled_research(db, target_date: date) -> bool:
             latest_opportunity,
         )
         return False
+    refresh_lookback = research_refresh_lookback(settings)
     open_dates = (
         db.execute(
             select(TradeCalendar.cal_date)
@@ -232,7 +233,7 @@ def run_scheduled_research(db, target_date: date) -> bool:
                 TradeCalendar.cal_date <= latest_raw,
             )
             .order_by(TradeCalendar.cal_date.desc())
-            .limit(settings.research_config["refresh_lookback_trade_days"] + 1)
+            .limit(refresh_lookback + 1)
         )
         .scalars()
         .all()
@@ -244,6 +245,15 @@ def run_scheduled_research(db, target_date: date) -> bool:
     except ResearchQueueConflictError:
         return False
     return True
+
+
+def research_refresh_lookback(settings) -> int:
+    minimum = (
+        max(settings.research_config["horizons"])
+        + 1
+        + settings.research_config["executable_exit_search_days"]
+    )
+    return max(settings.research_config["refresh_lookback_trade_days"], minimum)
 
 
 def scheduled_research_completed(db, target_date: date, settings) -> bool:

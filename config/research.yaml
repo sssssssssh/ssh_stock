@@ -1,6 +1,6 @@
 research:
   version: research_v1
-  eval_version: research_eval_v3
+  eval_version: research_eval_v4
   benchmark_code: "000300.SH"
   stock:
     entry_basis: NEXT_OPEN
@@ -13,7 +13,7 @@ research:
   trend_topn: [20, 50, 100]
   theme_topn: [5, 10, 20]
   score_bucket_size: 10
-  refresh_lookback_trade_days: 65
+  refresh_lookback_trade_days: 66
   batch_trade_days: 20
   min_sample_warning: 30
   executable_exit_search_days: 5

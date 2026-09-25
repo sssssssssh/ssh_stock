@@ -1,4 +1,5 @@
 from datetime import date
+from time import monotonic
 
 import pandas as pd
 from app.models.market_data import StockBasic, StockDaily, StockTradeStatusDaily, TradeCalendar
@@ -187,6 +188,26 @@ def test_realtime_kline_negative_cache_reuses_empty_response() -> None:
         )
         assert result.rows == []
     assert provider.calls == [("000001.SZ", day, day)]
+
+
+def test_recent_negative_cache_uses_short_ttl(monkeypatch) -> None:
+    db = _session()
+    day = date(2026, 9, 25)
+    db.add(TradeCalendar(cal_date=day, is_open=True, exchange="SSE"))
+    db.commit()
+    provider = _Provider([])
+    monkeypatch.setattr("app.services.realtime_kline.business_today", lambda: day)
+    load_realtime_kline(
+        db,
+        lambda: provider,
+        ts_code="000001.SZ",
+        start=day,
+        end=day,
+        cache_seconds=120,
+        negative_cache_seconds=1800,
+    )
+    expires_at, _ = _range_cache[("000001.SZ", day, day)]
+    assert 0 < expires_at - monotonic() <= 120
 
 
 def test_realtime_kline_merges_missing_ranges_and_caches_provider_rows() -> None:

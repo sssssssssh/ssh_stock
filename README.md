@@ -1169,3 +1169,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Scheduler 对同一目标交易日和完整 Research Identity 的成功自动任务保持幂等；手工 Research 仍可重跑。
 - Realtime Kline 无缺口时不初始化 Provider，空响应使用默认 1800 秒负缓存；服务心跳周期统一读取配置并保留 30 天。
 - Research UI 使用“最终可退出收益”语义并展示真实延迟率；前端覆盖率门槛为 Statements/Lines/Functions 20%、Branches 10%。
+
+## Milestone 12.8 Research 正确性补丁（2026-09-25）
+
+- Research 身份升级为 `research_eval_v4`。真实停牌状态行即使没有 Raw，也优先解释为 `SUSPENDED`；退市或非活跃状态解释为 `NOT_ACTIVE`。
+- Scheduler 回刷跨度按 `max horizon + Next Open + delayed search days` 动态下限计算，当前至少回看 66 个交易日并查询 67 个日期。
+- MFE20/MAE20 在明确停牌的市场日使用前一有效收盘价作为当日 high/low mark；普通数据缺失仍拒绝计算，避免掩盖质量问题。
+- Analytics 新增最终退出成功率、最终退出未解决数和未解决退出率；Realtime 当日及最近一日空响应使用短 TTL，历史空响应继续使用长负缓存。
