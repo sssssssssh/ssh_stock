@@ -275,6 +275,9 @@ def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) 
     monkeypatch.setattr(scheduler_module, "recover_stale_research_jobs", lambda db: 0)
     monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: True)
     monkeypatch.setattr(
+        scheduler_module, "research_source_window_complete", lambda *args: True
+    )
+    monkeypatch.setattr(
         scheduler_module,
         "queue_research_eval",
         lambda db, start, end, **kwargs: calls.append((start, end, kwargs)),
@@ -304,6 +307,41 @@ def test_research_refresh_lookback_covers_next_open_h60_and_delay5() -> None:
     settings = get_settings().model_copy(deep=True)
     settings.research_config["refresh_lookback_trade_days"] = 1
     assert scheduler_module.research_refresh_lookback(settings) == 66
+
+
+def test_research_source_window_requires_every_open_date(monkeypatch) -> None:
+    dates = [date(2026, 9, 21), date(2026, 9, 22), date(2026, 9, 23)]
+    captured = []
+    monkeypatch.setattr(
+        scheduler_module,
+        "analysis_complete_dates",
+        lambda db, start, end, **kwargs: captured.append((start, end, kwargs))
+        or {dates[0], dates[2]},
+    )
+    settings = get_settings()
+    assert scheduler_module.research_source_window_complete(object(), dates, settings) is False
+    assert captured[0][0:2] == (dates[0], dates[-1])
+
+
+def test_scheduled_research_rejects_middle_window_gap(monkeypatch) -> None:
+    dates = [date(2026, 9, 23), date(2026, 9, 22), date(2026, 9, 21)]
+    db = SimpleNamespace(
+        scalar=lambda statement: 0 if "job_run" in str(statement) else dates[0],
+        execute=lambda statement: SimpleNamespace(
+            scalars=lambda: SimpleNamespace(all=lambda: dates)
+        ),
+    )
+    monkeypatch.setattr(scheduler_module, "recover_stale_research_jobs", lambda db: 0)
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: True)
+    monkeypatch.setattr(
+        scheduler_module, "research_source_window_complete", lambda *args: False
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "queue_research_eval",
+        lambda *args, **kwargs: pytest.fail("incomplete source window must not be replaced"),
+    )
+    assert scheduler_module.run_scheduled_research(db, dates[0]) is False
 
 
 def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch) -> None:
@@ -348,6 +386,9 @@ def test_scheduler_requeues_after_recovering_stale_research(monkeypatch) -> None
     calls = []
     monkeypatch.setattr(
         scheduler_module, "queue_research_eval", lambda *args, **kwargs: calls.append(args)
+    )
+    monkeypatch.setattr(
+        scheduler_module, "research_source_window_complete", lambda *args: True
     )
     assert scheduler_module.run_scheduled_research(Db(), dates[0]) is True
     assert job.status == "FAILED"

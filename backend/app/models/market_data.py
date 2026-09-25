@@ -731,6 +731,18 @@ class _ResearchForwardFields:
     mature10: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mature20: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mature60: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    delayed_exit_window_mature5: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    delayed_exit_window_mature10: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    delayed_exit_window_mature20: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    delayed_exit_window_mature60: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     exit_trade_date5: Mapped[date | None] = mapped_column(Date)
     exit_trade_date10: Mapped[date | None] = mapped_column(Date)
     exit_trade_date20: Mapped[date | None] = mapped_column(Date)

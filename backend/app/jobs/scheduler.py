@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
+from app.jobs.catchup_job import analysis_complete_dates
 from app.jobs.research_job import (
     RESEARCH_IDENTITY_KEYS,
     RESEARCH_JOB_TYPE,
@@ -240,6 +241,14 @@ def run_scheduled_research(db, target_date: date) -> bool:
     )
     if not open_dates:
         return False
+    if not research_source_window_complete(db, open_dates, settings):
+        logger.warning(
+            "RESEARCH_SOURCE_WINDOW_INCOMPLETE start={} end={} count={}",
+            open_dates[-1],
+            open_dates[0],
+            len(open_dates),
+        )
+        return False
     try:
         queue_research_eval(db, open_dates[-1], open_dates[0], mode="scheduler")
     except ResearchQueueConflictError:
@@ -254,6 +263,20 @@ def research_refresh_lookback(settings) -> int:
         + settings.research_config["executable_exit_search_days"]
     )
     return max(settings.research_config["refresh_lookback_trade_days"], minimum)
+
+
+def research_source_window_complete(db, open_dates: list[date], settings) -> bool:
+    if not open_dates:
+        return False
+    complete_dates = analysis_complete_dates(
+        db,
+        min(open_dates),
+        max(open_dates),
+        algo_version=settings.algo_version,
+        strategy=settings.strategy,
+        opportunity_config=settings.opportunity_config,
+    )
+    return complete_dates == set(open_dates)
 
 
 def scheduled_research_completed(db, target_date: date, settings) -> bool:

@@ -22,6 +22,15 @@ def test_research_thresholds_include_production_strong_score() -> None:
         _validate_research_config(changed, settings.opportunity_config)
 
 
+@pytest.mark.parametrize("value", (None, "5"))
+def test_invalid_exit_search_days_raises_value_error_not_type_error(value) -> None:
+    settings = get_settings()
+    changed = dict(settings.research_config)
+    changed["executable_exit_search_days"] = value
+    with pytest.raises(ValueError, match="executable_exit_search_days"):
+        _validate_research_config(changed, settings.opportunity_config)
+
+
 @pytest.mark.parametrize(
     ("password", "secure"),
     [("123456", True), ("", True), ("long-enough-production", False)],

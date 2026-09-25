@@ -72,6 +72,7 @@ class Cohort:
         self.net_returns: dict[int, list[float]] = defaultdict(list)
         self.net_delayed_returns: dict[int, list[float]] = defaultdict(list)
         self.exit_delays: dict[int, list[float]] = defaultdict(list)
+        self.final_exit_unresolved = defaultdict(int)
         self.non_executable = defaultdict(int)
         self.mfe: list[float] = []
         self.mae: list[float] = []
@@ -92,6 +93,8 @@ class Cohort:
             delayed_return = row.get(f"delayed_exit_ret{horizon}")
             if delayed_return is not None:
                 self.delayed_returns[horizon].append(float(delayed_return))
+            elif row.get(f"delayed_exit_window_mature{horizon}") is True:
+                self.final_exit_unresolved[horizon] += 1
             net_delayed = row.get(f"net_delayed_exit_ret{horizon}")
             if net_delayed is not None:
                 self.net_delayed_returns[horizon].append(float(net_delayed))
@@ -134,7 +137,11 @@ class Cohort:
         net_returns = self.net_returns[horizon]
         net_delayed_returns = self.net_delayed_returns[horizon]
         positive_delays = [delay for delay in self.exit_delays[horizon] if delay > 0]
-        final_exit_unresolved_count = max(self.entry[horizon] - len(delayed_returns), 0)
+        final_exit_unresolved_count = self.final_exit_unresolved[horizon]
+        final_exit_completed_count = len(delayed_returns) + final_exit_unresolved_count
+        final_exit_pending_count = max(
+            self.entry[horizon] - final_exit_completed_count, 0
+        )
         return {
             "horizon": horizon,
             "event_count": self.event_count,
@@ -173,11 +180,20 @@ class Cohort:
             ),
             "avg_positive_exit_delay_days": _mean(positive_delays),
             "final_exit_success_rate": (
-                len(delayed_returns) / self.entry[horizon] if self.entry[horizon] else None
+                len(delayed_returns) / final_exit_completed_count
+                if final_exit_completed_count
+                else None
             ),
+            "final_exit_completed_count": final_exit_completed_count,
             "final_exit_unresolved_count": final_exit_unresolved_count,
             "unresolved_exit_rate": (
-                final_exit_unresolved_count / self.entry[horizon]
+                final_exit_unresolved_count / final_exit_completed_count
+                if final_exit_completed_count
+                else None
+            ),
+            "final_exit_pending_count": final_exit_pending_count,
+            "pending_exit_rate": (
+                final_exit_pending_count / self.entry[horizon]
                 if self.entry[horizon]
                 else None
             ),

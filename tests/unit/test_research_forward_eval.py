@@ -294,6 +294,28 @@ def test_suspended_horizon_carries_mark_price_forward_without_lookahead() -> Non
     assert result["mark_ret5"] == pytest.approx(-0.2)
 
 
+def test_post_delist_horizon_does_not_carry_last_price_forward() -> None:
+    days = _days(7)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_active": True,
+            "is_suspended": False,
+            "tradable": True,
+            "delist_date": days[5],
+        }
+        for day in days[:6]
+    }
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+    assert result["exit_trade_date5"] == days[6]
+    assert result["mark_trade_date5"] is None
+    assert result["mark_ret5"] is None
+
+
 @pytest.mark.parametrize(
     ("changes", "reason"),
     [
@@ -318,6 +340,59 @@ def test_exit_reason_uses_real_status_only_row_shape(changes, reason) -> None:
     stock[days[6]].update(changes)
     result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
     assert result["exit_reason5"] == reason
+
+
+@pytest.mark.parametrize(
+    ("changes", "reason"),
+    [
+        ({"raw_present": False, "status_present": True, "is_suspended": True}, "SUSPENDED"),
+        ({"raw_present": False, "status_present": True, "is_active": False}, "NOT_ACTIVE"),
+    ],
+)
+def test_entry_reason_prefers_status_over_missing_raw(changes, reason) -> None:
+    days = _days(7)
+    base = {
+        "adj_open": 100,
+        "adj_close": 100,
+        "raw_open": 100,
+        "raw_present": True,
+        "status_present": True,
+        "is_active": True,
+        "is_suspended": False,
+        "tradable": True,
+    }
+    stock = {day: dict(base) for day in days}
+    stock[days[1]].update(changes)
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+    assert result["entry_executable"] is False
+    assert result["entry_reason"] == reason
+
+
+def test_delayed_exit_window_matures_only_after_full_search_window() -> None:
+    days = _days(12)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_active": True,
+            "is_suspended": False,
+            "tradable": True,
+            "is_limit_down_close": True,
+        }
+        for day in days
+    }
+    pending = evaluate_stock_forward(
+        days[0], days[:-1], stock, {}, horizons=(5,), executable_exit_search_days=5
+    )
+    mature = evaluate_stock_forward(
+        days[0], days, stock, {}, horizons=(5,), executable_exit_search_days=5
+    )
+    assert pending["mature5"] is True
+    assert pending["delayed_exit_window_mature5"] is False
+    assert mature["delayed_exit_window_mature5"] is True
 
 
 def test_mfe_mae_carry_last_close_only_across_suspended_days() -> None:

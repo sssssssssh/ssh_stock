@@ -116,8 +116,8 @@ def _validate_research_config(
     for key in ("version", "eval_version", "benchmark_code"):
         if not isinstance(config.get(key), str) or not config[key].strip():
             raise ValueError(f"research.{key} must be nonempty")
-    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v4":
-        raise ValueError("research schema requires research_v1/research_eval_v4")
+    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v5":
+        raise ValueError("research schema requires research_v1/research_eval_v5")
     for key, upper in (
         ("horizons", 250),
         ("transition_horizons", 250),
@@ -158,17 +158,15 @@ def _validate_research_config(
     size = config.get("score_bucket_size")
     if type(size) is not int or not 1 <= size <= 50:
         raise ValueError("research.score_bucket_size must be in 1..50")
-    min_refresh_lookback = (
-        max(config["horizons"]) + 1 + config.get("executable_exit_search_days", 0)
-    )
+    search_days = config.get("executable_exit_search_days")
+    if type(search_days) is not int or not 0 <= search_days <= 20:
+        raise ValueError("research.executable_exit_search_days must be in 0..20")
+    min_refresh_lookback = max(config["horizons"]) + 1 + search_days
     if config.get("refresh_lookback_trade_days", 0) < min_refresh_lookback:
         raise ValueError("research.refresh_lookback_trade_days is too short")
     for key in ("batch_trade_days", "min_sample_warning"):
         if type(config.get(key)) is not int or config[key] <= 0:
             raise ValueError(f"research.{key} must be positive")
-    search_days = config.get("executable_exit_search_days")
-    if type(search_days) is not int or not 0 <= search_days <= 20:
-        raise ValueError("research.executable_exit_search_days must be in 0..20")
     costs = config.get("trading_cost")
     if not isinstance(costs, dict):
         raise ValueError("research.trading_cost must be a mapping")

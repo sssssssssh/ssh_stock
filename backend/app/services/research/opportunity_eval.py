@@ -10,6 +10,7 @@ from app.models.market_data import (
     IndexDaily,
     MarketDaily,
     OpportunityForwardEval,
+    StockBasic,
     StockDaily,
     StockFactorDaily,
     StockOpportunityDaily,
@@ -334,8 +335,19 @@ def _stock_rows(
     for row in statuses:
         result[row["ts_code"]][row["trade_date"]].update(row)
         result[row["ts_code"]][row["trade_date"]]["status_present"] = True
-    for code_rows in result.values():
+    basics = (
+        db.execute(
+            select(StockBasic.ts_code, StockBasic.delist_date).where(
+                StockBasic.ts_code.in_(codes)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    delist_by_code = {row["ts_code"]: row["delist_date"] for row in basics}
+    for code, code_rows in result.items():
         for row in code_rows.values():
             row.setdefault("raw_present", False)
             row.setdefault("status_present", False)
+            row["delist_date"] = delist_by_code.get(code)
     return result

@@ -187,7 +187,7 @@ onMounted(refresh);
               <th>分组</th><th>事件</th><th>成熟</th><th>收益样本</th>
               <th>可执行收益</th><th>净收益</th><th>持仓市值收益</th><th>最终可退出收益</th>
               <th>最终可退出净收益</th><th>平均退出延迟</th><th>真实延迟率</th><th>未解决退出率</th><th>不可退出率</th>
-              <th>超额</th><th>胜率</th><th>MFE20</th><th>MAE20</th>
+              <th>待观察退出率</th><th>超额</th><th>胜率</th><th>MFE20</th><th>MAE20</th>
               <template v-if="(tab === 'left' || tab === 'right') && index === 0">
                 <th v-for="days in [5, 10, 20]" :key="`s3-${days}`">S3@{{ days }}</th>
                 <th v-for="days in [5, 10, 20]" :key="`s4-${days}`">S4+@{{ days }}</th>
@@ -216,6 +216,7 @@ onMounted(refresh);
                 <td>{{ percent(stats(row)?.delayed_exit_rate) }}</td>
                 <td>{{ percent(stats(row)?.unresolved_exit_rate) }}</td>
                 <td>{{ percent(stats(row)?.non_executable_rate) }}</td>
+                <td>{{ percent(stats(row)?.pending_exit_rate) }}</td>
                 <td>{{ percent(stats(row)?.avg_excess_return) }}</td>
                 <td>{{ percent(stats(row)?.win_rate) }}</td>
                 <td>{{ percent(stats(row, 20)?.avg_mfe20) }}</td>

@@ -1176,3 +1176,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Scheduler 回刷跨度按 `max horizon + Next Open + delayed search days` 动态下限计算，当前至少回看 66 个交易日并查询 67 个日期。
 - MFE20/MAE20 在明确停牌的市场日使用前一有效收盘价作为当日 high/low mark；普通数据缺失仍拒绝计算，避免掩盖质量问题。
 - Analytics 新增最终退出成功率、最终退出未解决数和未解决退出率；Realtime 当日及最近一日空响应使用短 TTL，历史空响应继续使用长负缓存。
+
+## Milestone 12.8.1 Research 正确性收尾（2026-09-25）
+
+- Research 身份升级为 `research_eval_v5`，入场与退出统一按 Trade Status、停牌、非活跃、Raw 完整性和价格限制的顺序校验。
+- 最终退出统计区分成功、观察完成后仍未解决、搜索窗口尚未完整观察三种状态；成功率和未解决率只使用已完成观察样本作为分母。
+- 自动 Research 在排队前复用生产分析完整性检查覆盖整个 67 日回刷窗口；任一中间交易日缺失时不执行 replace-slice。
+- 股票目标日位于 `delist_date` 之后时，不再把退市前最后成交价作为普通停牌式 Mark Carry Forward；退市现金结算与强制损失规则留给 M13 Execution Rule 明确定义。

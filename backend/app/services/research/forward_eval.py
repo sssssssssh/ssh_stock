@@ -7,6 +7,20 @@ from app.services.research.signal_eval import _executable_entry, _executable_exi
 HORIZONS = (5, 10, 20, 60)
 
 
+def _validated_stock_entry(row: dict[str, Any] | None) -> tuple[float | None, str | None]:
+    if row is None:
+        return None, "NO_STOCK_ROW"
+    if row.get("status_present") is False:
+        return None, "TRADE_STATUS_MISSING"
+    if row.get("is_suspended") is True:
+        return None, "SUSPENDED"
+    if row.get("is_active") is False:
+        return None, "NOT_ACTIVE"
+    if row.get("raw_present") is False:
+        return None, "NO_STOCK_ROW"
+    return _executable_entry(row, "adj_open", use_open_limit=True)
+
+
 def _validated_stock_exit(row: dict[str, Any] | None) -> tuple[float | None, str | None]:
     if row is None:
         return None, "NO_STOCK_ROW"
@@ -27,6 +41,11 @@ def _mark_price(
     entry_index: int,
     target_index: int,
 ) -> tuple[date | None, float | None]:
+    delist_dates = {
+        row.get("delist_date") for row in stock_rows.values() if row.get("delist_date")
+    }
+    if delist_dates and dates[target_index] > min(delist_dates):
+        return None, None
     for index in range(target_index, entry_index - 1, -1):
         price = stock_rows.get(dates[index], {}).get("adj_close")
         if _positive(price):
@@ -88,12 +107,7 @@ def evaluate_stock_forward(
     entry_index = dates.index(event_date) + 1
     entry_date = dates[entry_index]
     entry_row = stock_rows.get(entry_date)
-    if entry_row is not None and entry_row.get("raw_present") is False:
-        entry_price, entry_reason = None, "NO_STOCK_ROW"
-    elif entry_row is not None and entry_row.get("status_present") is False:
-        entry_price, entry_reason = None, "TRADE_STATUS_MISSING"
-    else:
-        entry_price, entry_reason = _executable_entry(entry_row, "adj_open", use_open_limit=True)
+    entry_price, entry_reason = _validated_stock_entry(entry_row)
     result.update(
         entry_trade_date=entry_date,
         entry_price=entry_price,
@@ -106,6 +120,9 @@ def evaluate_stock_forward(
             continue
         exit_date = dates[index]
         result[f"mature{horizon}"] = True
+        result[f"delayed_exit_window_mature{horizon}"] = (
+            index + executable_exit_search_days < len(dates)
+        )
         result[f"exit_trade_date{horizon}"] = exit_date
         exit_row = stock_rows.get(exit_date)
         exit_price, exit_reason = _validated_stock_exit(exit_row)
@@ -184,6 +201,9 @@ def evaluate_theme_forward(
             continue
         exit_date = dates[index]
         result[f"mature{horizon}"] = True
+        result[f"delayed_exit_window_mature{horizon}"] = (
+            index + executable_exit_search_days < len(dates)
+        )
         result[f"exit_trade_date{horizon}"] = exit_date
         exit_row = theme_rows.get(exit_date)
         exit_price = exit_row.get("close") if exit_row else None
@@ -247,6 +267,7 @@ def _empty_forward(horizons: Sequence[int], dates: Sequence[date]) -> dict[str, 
         result.update(
             {
                 f"mature{horizon}": False,
+                f"delayed_exit_window_mature{horizon}": False,
                 f"exit_trade_date{horizon}": None,
                 f"exit_executable{horizon}": None,
                 f"exit_reason{horizon}": None,

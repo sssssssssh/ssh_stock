@@ -34,6 +34,7 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
         {
             "mature20": True,
             "entry_executable": True,
+            "delayed_exit_window_mature20": True,
             "exit_executable20": True,
             "ret20": 0.10,
             "mark_ret20": 0.08,
@@ -49,6 +50,7 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
         {
             "mature20": True,
             "entry_executable": True,
+            "delayed_exit_window_mature20": True,
             "exit_executable20": True,
             "ret20": -0.02,
             "mark_ret20": -0.03,
@@ -86,6 +88,29 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
     assert result["win_rate"] == 0.5
     assert result["avg_mfe20"] == pytest.approx(0.15)
     assert result["sample_warning"] is True
+
+
+def test_pending_final_exit_is_not_counted_as_unresolved() -> None:
+    rows = [
+        {"mature5": True, "entry_executable": True, "delayed_exit_window_mature5": False},
+        {"mature5": True, "entry_executable": True, "delayed_exit_window_mature5": True},
+        {
+            "mature5": True,
+            "entry_executable": True,
+            "delayed_exit_window_mature5": False,
+            "delayed_exit_ret5": 0.03,
+        },
+    ]
+    cohort = Cohort(min_sample_warning=1)
+    for row in rows:
+        cohort.add(row)
+    result = cohort.horizon_result(5)
+    assert result["final_exit_completed_count"] == 2
+    assert result["final_exit_unresolved_count"] == 1
+    assert result["final_exit_pending_count"] == 1
+    assert result["final_exit_success_rate"] == pytest.approx(0.5)
+    assert result["unresolved_exit_rate"] == pytest.approx(0.5)
+    assert result["pending_exit_rate"] == pytest.approx(1 / 3)
 
 
 def test_context_null_is_unknown_and_quantile_single_value_is_preserved() -> None:
