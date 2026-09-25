@@ -67,6 +67,12 @@ class Cohort:
         self.returns: dict[int, list[float]] = defaultdict(list)
         self.benchmarks: dict[int, list[float]] = defaultdict(list)
         self.excess: dict[int, list[float]] = defaultdict(list)
+        self.mark_returns: dict[int, list[float]] = defaultdict(list)
+        self.delayed_returns: dict[int, list[float]] = defaultdict(list)
+        self.net_returns: dict[int, list[float]] = defaultdict(list)
+        self.net_delayed_returns: dict[int, list[float]] = defaultdict(list)
+        self.exit_delays: dict[int, list[float]] = defaultdict(list)
+        self.non_executable = defaultdict(int)
         self.mfe: list[float] = []
         self.mae: list[float] = []
 
@@ -80,13 +86,29 @@ class Cohort:
             if not entry_ok:
                 continue
             self.entry[horizon] += 1
+            mark_return = row.get(f"mark_ret{horizon}")
+            if mark_return is not None:
+                self.mark_returns[horizon].append(float(mark_return))
+            delayed_return = row.get(f"delayed_exit_ret{horizon}")
+            if delayed_return is not None:
+                self.delayed_returns[horizon].append(float(delayed_return))
+            net_delayed = row.get(f"net_delayed_exit_ret{horizon}")
+            if net_delayed is not None:
+                self.net_delayed_returns[horizon].append(float(net_delayed))
+            delay_days = row.get(f"delayed_exit_delay_days{horizon}")
+            if delay_days is not None:
+                self.exit_delays[horizon].append(float(delay_days))
             if row.get(f"exit_executable{horizon}") is not True:
+                self.non_executable[horizon] += 1
                 continue
             self.exit[horizon] += 1
             value = row.get(f"ret{horizon}")
             if value is None:
                 continue
             self.returns[horizon].append(float(value))
+            net_return = row.get(f"net_ret{horizon}")
+            if net_return is not None:
+                self.net_returns[horizon].append(float(net_return))
             benchmark = row.get(f"benchmark_ret{horizon}")
             excess = row.get(f"excess_ret{horizon}")
             if benchmark is not None and excess is not None:
@@ -107,6 +129,8 @@ class Cohort:
     def horizon_result(self, horizon: int) -> dict[str, Any]:
         returns = self.returns[horizon]
         excess = self.excess[horizon]
+        mark_returns = self.mark_returns[horizon]
+        delayed_returns = self.delayed_returns[horizon]
         return {
             "horizon": horizon,
             "event_count": self.event_count,
@@ -124,6 +148,22 @@ class Cohort:
             "avg_excess_return": _mean(excess),
             "median_excess_return": median(excess) if excess else None,
             "excess_win_rate": _rate(value > 0 for value in excess),
+            "avg_mark_return": _mean(mark_returns),
+            "median_mark_return": median(mark_returns) if mark_returns else None,
+            "mark_win_rate": _rate(value > 0 for value in mark_returns),
+            "avg_delayed_exit_return": _mean(delayed_returns),
+            "median_delayed_exit_return": (
+                median(delayed_returns) if delayed_returns else None
+            ),
+            "delayed_exit_win_rate": _rate(value > 0 for value in delayed_returns),
+            "avg_net_return": _mean(self.net_returns[horizon]),
+            "avg_net_delayed_exit_return": _mean(self.net_delayed_returns[horizon]),
+            "avg_exit_delay_days": _mean(self.exit_delays[horizon]),
+            "non_executable_rate": (
+                self.non_executable[horizon] / self.entry[horizon]
+                if self.entry[horizon]
+                else None
+            ),
             "avg_mfe20": _mean(self.mfe) if horizon == 20 else None,
             "avg_mae20": _mean(self.mae) if horizon == 20 else None,
             "sample_warning": len(returns) < self.min_sample_warning,
@@ -202,7 +242,18 @@ def _read_rows(
             *(
                 field + str(horizon)
                 for horizon in HORIZONS
-                for field in ("mature", "exit_executable", "ret", "benchmark_ret", "excess_ret")
+                for field in (
+                    "mature",
+                    "exit_executable",
+                    "ret",
+                    "benchmark_ret",
+                    "excess_ret",
+                    "mark_ret",
+                    "delayed_exit_ret",
+                    "delayed_exit_delay_days",
+                    "net_ret",
+                    "net_delayed_exit_ret",
+                )
             ),
         )
         if model is not ResearchTransitionEval

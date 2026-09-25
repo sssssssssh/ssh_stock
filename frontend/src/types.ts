@@ -323,6 +323,16 @@ export type ResearchHorizonStats = {
   avg_excess_return: number | null;
   median_excess_return: number | null;
   excess_win_rate: number | null;
+  avg_mark_return: number | null;
+  median_mark_return: number | null;
+  mark_win_rate: number | null;
+  avg_delayed_exit_return: number | null;
+  median_delayed_exit_return: number | null;
+  delayed_exit_win_rate: number | null;
+  avg_net_return: number | null;
+  avg_net_delayed_exit_return: number | null;
+  avg_exit_delay_days: number | null;
+  non_executable_rate: number | null;
   avg_mfe20: number | null;
   avg_mae20: number | null;
   sample_warning: boolean;

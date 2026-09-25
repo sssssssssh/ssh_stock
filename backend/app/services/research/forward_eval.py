@@ -7,6 +7,17 @@ from app.services.research.signal_eval import _executable_entry, _executable_exi
 HORIZONS = (5, 10, 20, 60)
 
 
+def _net_return(entry_price: float, exit_price: float, costs: Mapping[str, Any] | None) -> float:
+    if not costs or not costs.get("enabled", False):
+        return exit_price / entry_price - 1
+    commission = float(costs.get("commission_rate", 0))
+    stamp_tax = float(costs.get("stamp_tax_sell_rate", 0))
+    slippage = float(costs.get("slippage_bps", 0)) / 10_000
+    effective_entry = entry_price * (1 + commission + slippage)
+    effective_exit = exit_price * (1 - commission - stamp_tax - slippage)
+    return effective_exit / effective_entry - 1
+
+
 def evaluate_stock_forward(
     event_date: date,
     market_dates: Sequence[date],
@@ -14,6 +25,8 @@ def evaluate_stock_forward(
     benchmark_rows: Mapping[date, dict[str, Any]],
     *,
     horizons: Sequence[int] = HORIZONS,
+    executable_exit_search_days: int = 5,
+    trading_cost: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     dates = list(market_dates)
     result = _empty_forward(horizons, dates)
@@ -50,8 +63,30 @@ def evaluate_stock_forward(
             exit_price, exit_reason = _executable_exit(exit_row)
         result[f"exit_executable{horizon}"] = exit_reason is None
         result[f"exit_reason{horizon}"] = exit_reason
+        mark_price = exit_row.get("adj_close") if exit_row else None
+        if entry_price is not None and _positive(mark_price):
+            result[f"mark_ret{horizon}"] = float(mark_price) / entry_price - 1
         if entry_price is not None and exit_price is not None:
             result[f"ret{horizon}"] = exit_price / entry_price - 1
+            result[f"net_ret{horizon}"] = _net_return(entry_price, exit_price, trading_cost)
+        if entry_price is not None:
+            for delay in range(0, executable_exit_search_days + 1):
+                delayed_index = index + delay
+                if delayed_index >= len(dates):
+                    break
+                delayed_date = dates[delayed_index]
+                delayed_row = stock_rows.get(delayed_date)
+                delayed_price, delayed_reason = _executable_exit(delayed_row)
+                if delayed_reason is not None or delayed_price is None:
+                    continue
+                result[f"delayed_exit_trade_date{horizon}"] = delayed_date
+                result[f"delayed_exit_price{horizon}"] = delayed_price
+                result[f"delayed_exit_delay_days{horizon}"] = delay
+                result[f"delayed_exit_ret{horizon}"] = delayed_price / entry_price - 1
+                result[f"net_delayed_exit_ret{horizon}"] = _net_return(
+                    entry_price, delayed_price, trading_cost
+                )
+                break
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("open")
         benchmark_exit = benchmark_rows.get(exit_date, {}).get("close")
         if _positive(benchmark_entry) and _positive(benchmark_exit):
@@ -76,6 +111,8 @@ def evaluate_theme_forward(
     benchmark_rows: Mapping[date, dict[str, Any]],
     *,
     horizons: Sequence[int] = HORIZONS,
+    executable_exit_search_days: int = 5,
+    trading_cost: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     dates = list(market_dates)
     result = _empty_forward(horizons, dates)
@@ -104,8 +141,31 @@ def evaluate_theme_forward(
         exit_reason = None if _positive(exit_price) else "EXIT_PRICE_MISSING"
         result[f"exit_executable{horizon}"] = exit_reason is None
         result[f"exit_reason{horizon}"] = exit_reason
+        if result["entry_price"] is not None and _positive(exit_price):
+            result[f"mark_ret{horizon}"] = float(exit_price) / result["entry_price"] - 1
         if result["entry_price"] is not None and exit_reason is None:
             result[f"ret{horizon}"] = float(exit_price) / result["entry_price"] - 1
+            result[f"net_ret{horizon}"] = _net_return(
+                result["entry_price"], float(exit_price), trading_cost
+            )
+        if result["entry_price"] is not None:
+            for delay in range(0, executable_exit_search_days + 1):
+                delayed_index = index + delay
+                if delayed_index >= len(dates):
+                    break
+                delayed_date = dates[delayed_index]
+                delayed_price = theme_rows.get(delayed_date, {}).get("close")
+                if not _positive(delayed_price):
+                    continue
+                price = float(delayed_price)
+                result[f"delayed_exit_trade_date{horizon}"] = delayed_date
+                result[f"delayed_exit_price{horizon}"] = price
+                result[f"delayed_exit_delay_days{horizon}"] = delay
+                result[f"delayed_exit_ret{horizon}"] = price / result["entry_price"] - 1
+                result[f"net_delayed_exit_ret{horizon}"] = _net_return(
+                    result["entry_price"], price, trading_cost
+                )
+                break
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("close")
         benchmark_exit = benchmark_rows.get(exit_date, {}).get("close")
         if _positive(benchmark_entry) and _positive(benchmark_exit):
@@ -141,6 +201,13 @@ def _empty_forward(horizons: Sequence[int], dates: Sequence[date]) -> dict[str, 
                 f"exit_executable{horizon}": None,
                 f"exit_reason{horizon}": None,
                 f"ret{horizon}": None,
+                f"mark_ret{horizon}": None,
+                f"delayed_exit_trade_date{horizon}": None,
+                f"delayed_exit_price{horizon}": None,
+                f"delayed_exit_delay_days{horizon}": None,
+                f"delayed_exit_ret{horizon}": None,
+                f"net_ret{horizon}": None,
+                f"net_delayed_exit_ret{horizon}": None,
                 f"benchmark_ret{horizon}": None,
                 f"excess_ret{horizon}": None,
             }

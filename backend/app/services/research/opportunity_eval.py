@@ -202,7 +202,14 @@ def evaluate_opportunity_batch(
             for code in chunk:
                 stock_rows = rows_by_code.get(code, {})
                 for base in by_code[code]:
-                    forward = evaluate_stock_forward(base.trade_date, dates, stock_rows, benchmark)
+                    forward = evaluate_stock_forward(
+                        base.trade_date,
+                        dates,
+                        stock_rows,
+                        benchmark,
+                        executable_exit_search_days=research["executable_exit_search_days"],
+                        trading_cost=research["trading_cost"],
+                    )
                     counts["entry_nonexecutable"] += forward["entry_executable"] is False
                     counts["benchmark_missing"] += any(
                         forward[f"ret{h}"] is not None and forward[f"benchmark_ret{h}"] is None

@@ -1,6 +1,6 @@
 research:
   version: research_v1
-  eval_version: research_eval_v1
+  eval_version: research_eval_v2
   benchmark_code: "000300.SH"
   stock:
     entry_basis: NEXT_OPEN
@@ -16,3 +16,10 @@ research:
   refresh_lookback_trade_days: 65
   batch_trade_days: 20
   min_sample_warning: 30
+  executable_exit_search_days: 5
+  trading_cost:
+    enabled: true
+    commission_rate: 0.0003
+    minimum_commission_cny: 5
+    stamp_tax_sell_rate: 0.0005
+    slippage_bps: 5

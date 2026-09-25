@@ -136,7 +136,12 @@ def evaluate_theme_batch(
             for code in chunk:
                 for base in by_code[code]:
                     forward = evaluate_theme_forward(
-                        base.trade_date, dates, lookup[code], benchmark
+                        base.trade_date,
+                        dates,
+                        lookup[code],
+                        benchmark,
+                        executable_exit_search_days=research["executable_exit_search_days"],
+                        trading_cost=research["trading_cost"],
                     )
                     counts["benchmark_missing"] += any(
                         forward[f"ret{h}"] is not None and forward[f"benchmark_ret{h}"] is None

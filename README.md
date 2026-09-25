@@ -1134,3 +1134,11 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - `APP_ENV=prod` 时强制使用至少 12 位的非默认管理员密码，并要求 `AUTH_COOKIE_SECURE=true`；不安全配置会在 Settings 加载阶段直接失败。
 - 登录接口按“用户名 + 客户端 IP”执行进程内失败窗口计数，默认 5 分钟内失败 5 次后锁定 60 秒；成功登录清理计数，失败响应不暴露账号是否存在。
 - Session 的 `last_seen_at` 默认最多每 10 分钟更新一次，避免只读页面请求持续写数据库。
+
+## Milestone 12.2 Research V2 收益口径（2026-09-25）
+
+- 原 `ret5/10/20/60` 保持“目标日可执行退出的 gross 收益”；目标日不能卖出时仍为 NULL。
+- `mark_retN` 使用目标日复权收盘价计算持仓市值收益，不因跌停或停牌的不可执行状态丢失样本。
+- `delayed_exit_retN` 在目标日及之后最多 `executable_exit_search_days` 个交易日内寻找首个可卖出日，并记录日期、价格和延迟天数。
+- `net_retN` 和 `net_delayed_exit_retN` 应用佣金、卖出印花税和双边滑点。公式为 `exit_price × (1 - commission - stamp_tax - slippage) / [entry_price × (1 + commission + slippage)] - 1`。最低佣金仅为未来组合回测预留，不在无资金规模的事件评价中应用。
+- Research 页面并列展示可执行、持仓市值、延迟退出及净收益，不再把不可退出样本静默排除为看似更好的结果。

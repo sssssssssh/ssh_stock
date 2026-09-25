@@ -110,8 +110,8 @@ def _validate_research_config(
     for key in ("version", "eval_version", "benchmark_code"):
         if not isinstance(config.get(key), str) or not config[key].strip():
             raise ValueError(f"research.{key} must be nonempty")
-    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v1":
-        raise ValueError("research v1 schema requires research_v1/research_eval_v1")
+    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v2":
+        raise ValueError("research schema requires research_v1/research_eval_v2")
     for key, upper in (
         ("horizons", 250),
         ("transition_horizons", 250),
@@ -157,6 +157,24 @@ def _validate_research_config(
     for key in ("batch_trade_days", "min_sample_warning"):
         if type(config.get(key)) is not int or config[key] <= 0:
             raise ValueError(f"research.{key} must be positive")
+    search_days = config.get("executable_exit_search_days")
+    if type(search_days) is not int or not 0 <= search_days <= 20:
+        raise ValueError("research.executable_exit_search_days must be in 0..20")
+    costs = config.get("trading_cost")
+    if not isinstance(costs, dict):
+        raise ValueError("research.trading_cost must be a mapping")
+    required_costs = {
+        "enabled",
+        "commission_rate",
+        "minimum_commission_cny",
+        "stamp_tax_sell_rate",
+        "slippage_bps",
+    }
+    if set(costs) != required_costs or type(costs["enabled"]) is not bool:
+        raise ValueError("research.trading_cost has invalid fields")
+    for key in required_costs - {"enabled"}:
+        if not isinstance(costs[key], (int, float)) or costs[key] < 0:
+            raise ValueError(f"research.trading_cost.{key} must be nonnegative")
 
 
 def _validate_opportunity_weights(config: dict[str, Any]) -> None:

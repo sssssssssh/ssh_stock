@@ -175,3 +175,65 @@ def test_stock_partial_source_rows_are_not_treated_as_executable(flag, reason) -
     assert result["mature5"] is True
     assert result["entry_reason"] == reason
     assert result["ret5"] is None
+
+
+def test_limit_down_keeps_mark_return_and_uses_delayed_executable_exit() -> None:
+    days = _days(10)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "up_limit": 120,
+            "is_suspended": False,
+            "tradable": True,
+            "is_limit_down_close": False,
+        }
+        for day in days
+    }
+    stock[days[6]]["adj_close"] = 80
+    stock[days[6]]["is_limit_down_close"] = True
+    stock[days[7]]["adj_close"] = 75
+    stock[days[7]]["is_limit_down_close"] = True
+    stock[days[8]]["adj_close"] = 78
+
+    result = evaluate_stock_forward(
+        days[0], days, stock, {}, horizons=(5,), executable_exit_search_days=5
+    )
+
+    assert result["exit_executable5"] is False
+    assert result["ret5"] is None
+    assert result["mark_ret5"] == pytest.approx(-0.2)
+    assert result["delayed_exit_trade_date5"] == days[8]
+    assert result["delayed_exit_delay_days5"] == 2
+    assert result["delayed_exit_ret5"] == pytest.approx(-0.22)
+
+
+def test_trading_cost_produces_separate_net_returns() -> None:
+    days = _days(7)
+    stock = {
+        day: {
+            "adj_open": 100,
+            "adj_close": 110,
+            "raw_open": 100,
+            "up_limit": 120,
+            "is_suspended": False,
+            "tradable": True,
+        }
+        for day in days
+    }
+    costs = {
+        "enabled": True,
+        "commission_rate": 0.0003,
+        "minimum_commission_cny": 5,
+        "stamp_tax_sell_rate": 0.0005,
+        "slippage_bps": 5,
+    }
+    result = evaluate_stock_forward(
+        days[0], days, stock, {}, horizons=(5,), trading_cost=costs
+    )
+    expected = 110 * (1 - 0.0003 - 0.0005 - 0.0005) / (100 * (1 + 0.0003 + 0.0005)) - 1
+
+    assert result["ret5"] == pytest.approx(0.1)
+    assert result["net_ret5"] == pytest.approx(expected)
+    assert result["net_delayed_exit_ret5"] == pytest.approx(expected)
