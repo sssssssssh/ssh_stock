@@ -1,5 +1,7 @@
 import pytest
 from app.core.config import Settings, _validate_research_config, get_settings
+from app.core.strategy_config import StrategyConfig
+from pydantic import ValidationError
 
 
 def test_settings_load_yaml_defaults() -> None:
@@ -49,3 +51,10 @@ def test_production_accepts_secure_non_default_password() -> None:
         auth_cookie_secure=True,
     )
     assert settings.auth_cookie_secure is True
+
+
+def test_strategy_config_rejects_unknown_or_misspelled_fields() -> None:
+    config = get_settings().strategy.copy()
+    config["trend"] = {**config["trend"], "s5_min_rps6O": 90}
+    with pytest.raises(ValidationError, match="s5_min_rps6O"):
+        StrategyConfig.model_validate(config)

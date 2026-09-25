@@ -1153,3 +1153,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 
 - 新增 `service_heartbeat`，backend、worker、scheduler 在空闲时也持续登记实例心跳；Runtime API 以 120 秒为默认阈值返回 UP/STALE/DOWN，并单独展示数据库可用状态。
 - Scheduler 在 18:10 至 20:30 分段检查当日 EOD readiness。同一交易日尚未完成时通过既有任务锁幂等补排 CatchUp；Production 当前身份数据就绪后转为补排 Research，避免晚到数据让当日研究永久错过。
+
+## Milestone 12.6 工程收口（2026-09-25）
+
+- `config/strategy.yaml` 由 Pydantic typed schema 校验，未知字段直接报错，避免拼写错误被静默忽略。
+- CI 后端测试启用覆盖率并要求 `backend/app` 不低于 70%；前端 Vitest 同步生成覆盖率报告。
+- Python 生产镜像改用无特权 `appuser` 运行。迁移、Backend、Worker 与 Scheduler 仍复用同一镜像。
+- 配置校验、登录防护、Provider Gateway 与服务心跳保持独立模块，后续修改无需继续扩大核心入口文件。

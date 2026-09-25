@@ -128,14 +128,14 @@ def test_current_source_lineage_is_copied_into_forward_result(
     monkeypatch.setattr(module, "benchmark_lookup", lambda *args: {})
     if module is opportunity_eval:
         monkeypatch.setattr(module, "_stock_rows", lambda *args: {})
-        monkeypatch.setattr(module, "evaluate_stock_forward", lambda *args: {
+        monkeypatch.setattr(module, "evaluate_stock_forward", lambda *args, **kwargs: {
             "entry_executable": False,
             **{f"ret{h}": None for h in (5, 10, 20, 60)},
             **{f"benchmark_ret{h}": None for h in (5, 10, 20, 60)},
         })
         result = module.evaluate_opportunity_batch(db, [date(2026, 5, 10)], settings)
     else:
-        monkeypatch.setattr(module, "evaluate_theme_forward", lambda *args: {
+        monkeypatch.setattr(module, "evaluate_theme_forward", lambda *args, **kwargs: {
             **{f"ret{h}": None for h in (5, 10, 20, 60)},
             **{f"benchmark_ret{h}": None for h in (5, 10, 20, 60)},
         })

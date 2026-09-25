@@ -6,6 +6,8 @@ import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.strategy_config import StrategyConfig
+
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
 
@@ -83,7 +85,8 @@ class Settings(BaseSettings):
     def build(cls) -> "Settings":
         settings = cls()
         app_config = load_yaml_config(ROOT_DIR / "config" / "app.yaml")
-        strategy = load_yaml_config(ROOT_DIR / "config" / "strategy.yaml")
+        strategy_raw = load_yaml_config(ROOT_DIR / "config" / "strategy.yaml")
+        strategy = StrategyConfig.model_validate(strategy_raw).model_dump(mode="python")
         opportunity_config = load_yaml_config(ROOT_DIR / "config" / "opportunity.yaml")
         research_config = load_yaml_config(ROOT_DIR / "config" / "research.yaml").get(
             "research", {}

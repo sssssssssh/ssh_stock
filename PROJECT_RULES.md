@@ -307,3 +307,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 前端 A 股业务日期必须通过 `Intl.DateTimeFormat` 和 `Asia/Shanghai` 生成；容器显示时区为上海，数据库和 Python aware datetime 继续使用 UTC。
 - Retention 只清理 90 天前 Provider 日志、180 天前成功/部分/取消任务、365 天前失败任务及失效 30 天后的 Session；不得自动清理 Raw、Derived、DataQuality 或 Research Eval。
 - 外部 PostgreSQL、`.env` 和 `config/*.yaml` 是部署核心资产；升级或恢复流程遵循 `docs/部署与备份.md`。
+
+## Milestone 12 工程质量规则
+
+- Strategy 配置必须先通过 typed schema；所有层级禁止未知键，新增配置时同步修改 schema、YAML 和测试。
+- CI 的后端覆盖率门槛为 70%，不得通过排除关键业务模块或空测试绕过；前端测试必须执行 coverage 模式。
+- 生产 Python 容器必须使用无特权用户。需要写入的数据必须放在显式挂载或授权目录，不得依赖 root 权限。
+- 对既有大模块采用低风险边界拆分：认证限流、Provider 构造、服务心跳与配置类型保持独立；涉及 ORM 元数据初始化顺序的拆分必须另行验证后再做。

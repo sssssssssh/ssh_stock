@@ -36,7 +36,7 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
-      - run: python -m pytest
+      - run: python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
       - run: python -m ruff check backend tests migrations scripts
       - run: cp .env.example .env
       - run: docker compose config
@@ -49,7 +49,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - run: npm run test
+      - run: npm run test:coverage
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
