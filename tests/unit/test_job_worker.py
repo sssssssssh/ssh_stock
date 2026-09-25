@@ -143,8 +143,8 @@ def test_worker_recalculation_does_not_construct_provider(monkeypatch) -> None:
 
     monkeypatch.setattr(
         worker_module,
-        "TushareProvider",
-        lambda: (_ for _ in ()).throw(AssertionError("provider must stay lazy")),
+        "market_data_gateway",
+        lambda db: (_ for _ in ()).throw(AssertionError("provider must stay lazy")),
     )
     monkeypatch.setattr(worker_module, "_load_dirty_ranges", lambda *args: [])
     monkeypatch.setattr(

@@ -1,8 +1,8 @@
 from datetime import date
 
 import pandas as pd
-from app.models.market_data import StockDaily, TradeCalendar
-from app.services.realtime_kline import load_realtime_kline
+from app.models.market_data import StockBasic, StockDaily, StockTradeStatusDaily, TradeCalendar
+from app.services.realtime_kline import _range_cache, load_realtime_kline
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,10 @@ class _Provider:
 def _session() -> Session:
     engine = create_engine("sqlite:///:memory:")
     TradeCalendar.__table__.create(engine)
+    StockBasic.__table__.create(engine)
     StockDaily.__table__.create(engine)
+    StockTradeStatusDaily.__table__.create(engine)
+    _range_cache.clear()
     return Session(engine)
 
 
@@ -90,5 +93,73 @@ def test_realtime_kline_fills_local_gap_from_provider_without_writing() -> None:
 
     assert result.source == "mixed"
     assert [row["trade_date"] for row in result.rows] == dates
-    assert provider.calls == [("000001.SZ", dates[0], dates[-1])]
+    assert provider.calls == [("000001.SZ", dates[-1], dates[-1])]
     assert db.query(StockDaily).count() == 1
+
+
+def test_realtime_kline_respects_listing_and_suspension_dates() -> None:
+    db = _session()
+    dates = [date(2026, 9, day) for day in range(14, 19)]
+    db.add_all([TradeCalendar(cal_date=item, is_open=True, exchange="SSE") for item in dates])
+    db.add(
+        StockBasic(
+            ts_code="000001.SZ",
+            symbol="000001",
+            name="test",
+            exchange="SZSE",
+            list_status="L",
+            list_date=dates[2],
+        )
+    )
+    db.add(
+        StockTradeStatusDaily(
+            trade_date=dates[3],
+            ts_code="000001.SZ",
+            is_active=True,
+            is_suspended=True,
+            is_st=False,
+            tradable=False,
+            strategy_eligible=False,
+            calc_version="trade_status_v1",
+            config_hash="hash",
+            calculated_at=date(2026, 9, 18),
+        )
+    )
+    db.add(_daily(dates[2], 10))
+    db.commit()
+    provider = _Provider([])
+
+    result = load_realtime_kline(
+        db,
+        lambda: provider,
+        ts_code="000001.SZ",
+        start=dates[0],
+        end=dates[-1],
+    )
+
+    assert provider.calls == [("000001.SZ", dates[4], dates[4])]
+    assert result.rows[0]["trade_date"] == dates[2]
+
+
+def test_realtime_kline_merges_missing_ranges_and_caches_provider_rows() -> None:
+    db = _session()
+    dates = [date(2026, 9, day) for day in range(14, 20)]
+    db.add_all([TradeCalendar(cal_date=item, is_open=True, exchange="SSE") for item in dates])
+    db.add_all([_daily(dates[0], 10), _daily(dates[4], 10)])
+    db.commit()
+    provider = _Provider([])
+
+    for _ in range(2):
+        load_realtime_kline(
+            db,
+            lambda: provider,
+            ts_code="000001.SZ",
+            start=dates[0],
+            end=dates[-1],
+            cache_seconds=120,
+        )
+
+    assert provider.calls == [
+        ("000001.SZ", dates[1], dates[3]),
+        ("000001.SZ", dates[5], dates[5]),
+    ]

@@ -12,6 +12,12 @@
 - 交易成本只能写入独立 `net_*` 字段，不得覆盖 gross return。事件评价不应用依赖账户成交金额的最低佣金。
 - Research Analytics 必须同时报告目标日不可退出率、延迟天数和三种收益口径，避免无法卖出的下跌样本造成乐观偏差。
 
+## Milestone 12 Realtime 规则
+
+- API 和 Worker 的外部行情调用必须共用带独立事务日志的 Provider Gateway。
+- Realtime Kline expected dates 必须受上市/退市范围和 PIT 停牌状态约束，只能请求合并后的真实缺口区间。
+- Realtime 缓存仅缓存 Provider 响应且不写 Raw 表，TTL 必须配置化并可设为 0 关闭。
+
 ## 文档权威顺序
 
 1. `docs/股票机会发现系统_PRD_V1.0.md`

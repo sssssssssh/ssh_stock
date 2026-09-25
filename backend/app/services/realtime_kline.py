@@ -1,13 +1,23 @@
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from time import monotonic
 from typing import Protocol
 
 import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.market_data import StockDaily, TradeCalendar
+from app.models.market_data import (
+    StockBasic,
+    StockDaily,
+    StockTradeStatusDaily,
+    TradeCalendar,
+)
+
+_cache_lock = threading.Lock()
+_range_cache: dict[tuple[str, date, date], tuple[float, list[dict[str, object]]]] = {}
 
 
 class DailyRangeProvider(Protocol):
@@ -27,6 +37,7 @@ def load_realtime_kline(
     ts_code: str,
     start: date,
     end: date,
+    cache_seconds: int = 120,
 ) -> RealtimeKlineResult:
     local_models = (
         db.execute(
@@ -42,7 +53,7 @@ def load_realtime_kline(
     )
     local_rows = [_stock_daily_row(row) for row in local_models]
     local_dates = {row["trade_date"] for row in local_rows}
-    expected_dates = set(
+    open_dates = set(
         db.execute(
             select(TradeCalendar.cal_date).where(
                 TradeCalendar.cal_date.between(start, end),
@@ -52,11 +63,48 @@ def load_realtime_kline(
         .scalars()
         .all()
     )
+    stock = db.get(StockBasic, ts_code)
+    expected_dates = {
+        item
+        for item in open_dates
+        if stock is None
+        or (
+            (stock.list_date is None or item >= stock.list_date)
+            and (stock.delist_date is None or item <= stock.delist_date)
+        )
+    }
+    if expected_dates:
+        non_trading_dates = set(
+            db.execute(
+                select(StockTradeStatusDaily.trade_date).where(
+                    StockTradeStatusDaily.ts_code == ts_code,
+                    StockTradeStatusDaily.trade_date.in_(expected_dates),
+                    (
+                        StockTradeStatusDaily.is_suspended.is_(True)
+                        | StockTradeStatusDaily.tradable.is_(False)
+                    ),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        expected_dates -= non_trading_dates
     if expected_dates and expected_dates <= local_dates:
         return RealtimeKlineResult(source="local", rows=local_rows)
 
-    provider_frame = provider_factory().get_daily_range(ts_code=ts_code, start=start, end=end)
-    provider_rows = _provider_rows(provider_frame, ts_code)
+    missing_dates = expected_dates - local_dates
+    provider = provider_factory()
+    provider_rows: list[dict[str, object]] = []
+    for range_start, range_end in _merge_missing_ranges(missing_dates, sorted(open_dates)):
+        provider_rows.extend(
+            _cached_provider_rows(
+                provider,
+                ts_code,
+                range_start,
+                range_end,
+                cache_seconds=cache_seconds,
+            )
+        )
     merged = {row["trade_date"]: row for row in local_rows}
     merged.update({row["trade_date"]: row for row in provider_rows})
     source = "mixed" if local_rows and provider_rows else "tushare" if provider_rows else "local"
@@ -64,6 +112,47 @@ def load_realtime_kline(
         source=source,
         rows=[merged[key] for key in sorted(merged)],
     )
+
+
+def _merge_missing_ranges(
+    missing_dates: set[date], ordered_market_dates: list[date]
+) -> list[tuple[date, date]]:
+    missing = [item for item in ordered_market_dates if item in missing_dates]
+    if not missing:
+        return []
+    positions = {item: index for index, item in enumerate(ordered_market_dates)}
+    ranges: list[tuple[date, date]] = []
+    range_start = previous = missing[0]
+    for current in missing[1:]:
+        if positions[current] == positions[previous] + 1:
+            previous = current
+            continue
+        ranges.append((range_start, previous))
+        range_start = previous = current
+    ranges.append((range_start, previous))
+    return ranges
+
+
+def _cached_provider_rows(
+    provider: DailyRangeProvider,
+    ts_code: str,
+    start: date,
+    end: date,
+    *,
+    cache_seconds: int,
+) -> list[dict[str, object]]:
+    key = (ts_code, start, end)
+    now = monotonic()
+    if cache_seconds > 0:
+        with _cache_lock:
+            cached = _range_cache.get(key)
+            if cached is not None and cached[0] > now:
+                return [dict(row) for row in cached[1]]
+    rows = _provider_rows(provider.get_daily_range(ts_code=ts_code, start=start, end=end), ts_code)
+    if cache_seconds > 0:
+        with _cache_lock:
+            _range_cache[key] = (now + cache_seconds, [dict(row) for row in rows])
+    return rows
 
 
 def _stock_daily_row(row: StockDaily) -> dict[str, object]:

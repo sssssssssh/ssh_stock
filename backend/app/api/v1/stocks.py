@@ -17,7 +17,7 @@ from app.models.market_data import (
     StockStateDaily,
     StrategySignal,
 )
-from app.providers.tushare_provider import TushareProvider
+from app.providers.gateway import market_data_gateway
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     SIGNAL_CALC_VERSION,
@@ -104,10 +104,11 @@ def realtime_kline(
     try:
         result = load_realtime_kline(
             db,
-            TushareProvider,
+            lambda: market_data_gateway(db),
             ts_code=ts_code,
             start=start,
             end=target_end,
+            cache_seconds=get_settings().realtime_kline_cache_seconds,
         )
     except Exception as exc:
         detail = f"tushare realtime kline failed: {exc}"

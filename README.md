@@ -1142,3 +1142,9 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - `delayed_exit_retN` 在目标日及之后最多 `executable_exit_search_days` 个交易日内寻找首个可卖出日，并记录日期、价格和延迟天数。
 - `net_retN` 和 `net_delayed_exit_retN` 应用佣金、卖出印花税和双边滑点。公式为 `exit_price × (1 - commission - stamp_tax - slippage) / [entry_price × (1 + commission + slippage)] - 1`。最低佣金仅为未来组合回测预留，不在无资金规模的事件评价中应用。
 - Research 页面并列展示可执行、持仓市值、延迟退出及净收益，不再把不可退出样本静默排除为看似更好的结果。
+
+## Milestone 12.4 Realtime Kline 与 Provider（2026-09-25）
+
+- Realtime Kline 与 Worker 共用 Logging Provider Gateway，API 触发的 Tushare 区间请求进入 `provider_api_log`。
+- Expected dates 按交易日历与股票上市/退市有效期取交集，并排除已有 PIT 交易状态确认的停牌/不可交易日期。
+- 仅把缺失交易日合并为连续区间后请求 Provider，不再因缺一天重拉完整窗口；区间响应使用默认 120 秒的进程内 TTL 缓存。

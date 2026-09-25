@@ -19,8 +19,8 @@ from app.jobs.daily_job import DailyJob
 from app.jobs.research_job import RESEARCH_JOB_TYPE, run_research_eval
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
+from app.providers.gateway import market_data_gateway
 from app.providers.logging_provider import LoggingMarketDataProvider
-from app.providers.tushare_provider import TushareProvider
 from app.repositories.job_run import touch_job_heartbeat, update_job
 from app.services.dirty import recover_stale_processing_ranges
 from app.services.job_guard import (
@@ -311,4 +311,4 @@ def _load_dirty_ranges(db: Session, ids: object) -> list[DataDirtyRange]:
 
 
 def _provider(db: Session) -> LoggingMarketDataProvider:
-    return LoggingMarketDataProvider(db, TushareProvider())
+    return market_data_gateway(db)

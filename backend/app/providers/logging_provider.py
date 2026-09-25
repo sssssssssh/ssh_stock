@@ -80,6 +80,11 @@ class LoggingMarketDataProvider:
     def get_daily(self, trade_date: date) -> pd.DataFrame:
         return self._logged("daily", trade_date, self.inner.get_daily, trade_date)
 
+    def get_daily_range(self, ts_code: str, start: date, end: date) -> pd.DataFrame:
+        return self._logged(
+            "daily_range", None, self.inner.get_daily_range, ts_code, start, end
+        )
+
     def get_adj_factor(self, trade_date: date) -> pd.DataFrame:
         return self._logged("adj_factor", trade_date, self.inner.get_adj_factor, trade_date)
 
