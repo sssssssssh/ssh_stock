@@ -31,6 +31,11 @@ export type SystemRuntime = {
   active_job: { id: string; job_type: string; step: string | null; started_at: string | null } | null;
   queued_count: number;
   running_count: number;
+  services: Record<"backend" | "worker" | "scheduler" | "database", {
+    status: "UP" | "STALE" | "DOWN";
+    heartbeat_at: string | null;
+    instance_id?: string | null;
+  }>;
   scheduler_cron: { daily: string; basic_info: string; research: string };
   latest_raw_date: string | null;
   latest_analysis_date: string | null;

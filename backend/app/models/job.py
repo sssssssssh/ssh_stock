@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, func
+from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -45,3 +45,20 @@ class ProviderApiLog(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     error_type: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ServiceHeartbeat(Base):
+    __tablename__ = "service_heartbeat"
+    __table_args__ = (
+        UniqueConstraint("service_name", "instance_id", name="uq_service_heartbeat_instance"),
+        Index("idx_service_heartbeat_name_time", "service_name", "heartbeat_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    service_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    instance_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    heartbeat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    version: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="UP")
+    service_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

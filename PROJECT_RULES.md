@@ -18,6 +18,12 @@
 - Realtime Kline expected dates 必须受上市/退市范围和 PIT 停牌状态约束，只能请求合并后的真实缺口区间。
 - Realtime 缓存仅缓存 Provider 响应且不写 Raw 表，TTL 必须配置化并可设为 0 关闭。
 
+## Milestone 12 运行可靠性规则
+
+- backend、worker、scheduler 必须独立维护服务实例心跳；任务心跳不得替代空闲 Worker 存活状态。
+- Runtime API 的服务状态按配置阈值计算，数据库状态来自当前 API 请求的真实连通性。
+- EOD 重试必须复用任务互斥锁，同日不得重复创建活跃任务；完整 Production identity ready 后必须允许后续检查触发 Research。
+
 ## 文档权威顺序
 
 1. `docs/股票机会发现系统_PRD_V1.0.md`

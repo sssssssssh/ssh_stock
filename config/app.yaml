@@ -14,6 +14,10 @@ app:
     refresh_recent_trade_days: 5
     dirty_max_retry_count: 3
     worker_poll_seconds: 2
+    service_heartbeat_interval_seconds: 45
+    service_stale_seconds: 120
+    eod_retry_cron: "10,30,50 18-19 * * 1-5"
+    eod_retry_final_cron: "10,30 20 * * 1-5"
 
 provider:
   tushare:

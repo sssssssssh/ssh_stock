@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.common import envelope
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.models.job import JobRun
+from app.models.job import JobRun, ServiceHeartbeat
 from app.models.market_data import (
     DataQualityDaily,
     IndexDaily,
@@ -66,8 +66,23 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
         ).all()
     )
     latest_job_heartbeat = db.scalar(select(func.max(JobRun.heartbeat_at)))
+    heartbeat_rows = db.execute(
+        select(ServiceHeartbeat).order_by(
+            ServiceHeartbeat.service_name, ServiceHeartbeat.heartbeat_at.desc()
+        )
+    ).scalars()
+    latest_services: dict[str, ServiceHeartbeat] = {}
+    for row in heartbeat_rows:
+        latest_services.setdefault(row.service_name, row)
     scheduler = settings.app_config.get("app", {}).get("scheduler", {})
     research = settings.app_config.get("research", {})
+    stale_seconds = int(scheduler.get("service_stale_seconds", 120))
+    now = datetime.now(UTC)
+    services = {
+        name: _service_payload(latest_services.get(name), now, stale_seconds)
+        for name in ("backend", "worker", "scheduler")
+    }
+    services["database"] = {"status": "UP", "heartbeat_at": now.isoformat()}
     return envelope(
         {
             "latest_job_heartbeat": latest_job_heartbeat.isoformat()
@@ -86,6 +101,7 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
             else None,
             "queued_count": int(counts.get("QUEUED", 0)),
             "running_count": int(counts.get("RUNNING", 0)),
+            "services": services,
             "scheduler_cron": {
                 "daily": scheduler.get("daily_cron", "10 18 * * 1-5"),
                 "basic_info": scheduler.get("basic_info_cron", "30 9 * * 6"),
@@ -103,6 +119,22 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
             ),
         }
     )
+
+
+def _service_payload(
+    row: ServiceHeartbeat | None, now: datetime, stale_seconds: int
+) -> dict[str, Any]:
+    if row is None:
+        return {"status": "DOWN", "heartbeat_at": None, "instance_id": None}
+    heartbeat = row.heartbeat_at
+    if heartbeat.tzinfo is None:
+        heartbeat = heartbeat.replace(tzinfo=UTC)
+    status = "UP" if now - heartbeat <= timedelta(seconds=stale_seconds) else "STALE"
+    return {
+        "status": status,
+        "heartbeat_at": heartbeat.isoformat(),
+        "instance_id": row.instance_id,
+    }
 
 
 @router.get("/status")

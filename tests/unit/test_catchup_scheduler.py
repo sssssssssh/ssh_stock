@@ -16,6 +16,7 @@ from app.jobs.scheduler import (
     cron_trigger_kwargs,
     run_scheduled_basic_info,
     run_scheduled_catchup,
+    run_scheduled_eod_retry,
 )
 from app.models.market_data import (
     MarketDaily,
@@ -895,6 +896,35 @@ def test_research_sources_must_all_reach_expected_trade_date() -> None:
         expected,
     )
     assert not _research_sources_current(expected, expected, expected, None)
+
+
+def test_eod_retry_queues_catchup_until_ready_then_research(monkeypatch) -> None:
+    expected = date(2026, 9, 24)
+
+    class Db:
+        def __init__(self, values):
+            self.values = list(values)
+
+        def scalar(self, statement):
+            return self.values.pop(0)
+
+    events = []
+    monkeypatch.setattr(
+        scheduler_module,
+        "run_scheduled_catchup",
+        lambda db, provider, target: events.append(("catchup", target)) or True,
+    )
+    monkeypatch.setattr(
+        scheduler_module,
+        "run_scheduled_research",
+        lambda db, target: events.append(("research", target)) or True,
+    )
+
+    assert run_scheduled_eod_retry(
+        Db([expected, expected, date(2026, 9, 23), date(2026, 9, 23)]), expected
+    )
+    assert run_scheduled_eod_retry(Db([expected, expected, expected, expected]), expected)
+    assert events == [("catchup", expected), ("research", expected)]
 
 
 @pytest.mark.parametrize(

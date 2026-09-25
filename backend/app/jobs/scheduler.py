@@ -24,12 +24,31 @@ from app.services.job_guard import (
     research_can_run,
 )
 from app.services.retention import run_retention
+from app.services.service_heartbeat import new_instance_id, touch_service_heartbeat
 
 
 def run_scheduler() -> None:
     settings = get_settings()
     timezone = ZoneInfo(settings.app_timezone)
     scheduler = BlockingScheduler(timezone=timezone)
+    scheduler_instance = new_instance_id("scheduler")
+
+    def heartbeat() -> None:
+        with SessionLocal() as db:
+            touch_service_heartbeat(db, "scheduler", scheduler_instance)
+
+    heartbeat()
+    heartbeat_seconds = settings.app_config.get("app", {}).get("scheduler", {}).get(
+        "service_heartbeat_interval_seconds", 45
+    )
+    scheduler.add_job(
+        heartbeat,
+        "interval",
+        seconds=heartbeat_seconds,
+        id="scheduler_heartbeat",
+        max_instances=1,
+        coalesce=True,
+    )
 
     def run_daily() -> None:
         with SessionLocal() as db:
@@ -43,6 +62,29 @@ def run_scheduler() -> None:
         settings.app_config.get("app", {}).get("scheduler", {}).get("daily_cron", "10 18 * * 1-5")
     )
     scheduler.add_job(run_daily, "cron", id="daily_job", **cron_trigger_kwargs(cron))
+    retry_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
+        "eod_retry_cron", "10,30,50 18-19 * * 1-5"
+    )
+    retry_final_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
+        "eod_retry_final_cron", "10,30 20 * * 1-5"
+    )
+
+    def run_eod_retry() -> None:
+        with SessionLocal() as db:
+            run_scheduled_eod_retry(db, _scheduler_today(timezone))
+
+    scheduler.add_job(
+        run_eod_retry,
+        "cron",
+        id="eod_readiness_retry",
+        **cron_trigger_kwargs(retry_cron),
+    )
+    scheduler.add_job(
+        run_eod_retry,
+        "cron",
+        id="eod_readiness_retry_final",
+        **cron_trigger_kwargs(retry_final_cron),
+    )
     basic_cron = (
         settings.app_config.get("app", {}).get("scheduler", {}).get("basic_info_cron", "30 9 * * 6")
     )
@@ -195,6 +237,46 @@ def run_scheduled_research(db, target_date: date) -> bool:
     except ResearchQueueConflictError:
         return False
     return True
+
+
+def run_scheduled_eod_retry(db, target_date: date) -> bool:
+    """Retry the same trade date without duplicating active jobs.
+
+    Once Production sources are ready, the same cycle queues Research instead so
+    late EOD data does not make that day's research refresh disappear.
+    """
+    expected_latest = db.scalar(
+        select(func.max(TradeCalendar.cal_date)).where(
+            TradeCalendar.is_open.is_(True), TradeCalendar.cal_date <= target_date
+        )
+    )
+    if expected_latest is None or expected_latest != target_date:
+        return False
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    latest_raw = db.scalar(select(func.max(StockDaily.trade_date)))
+    latest_state = db.scalar(
+        select(func.max(StockStateDaily.trade_date)).where(
+            StockStateDaily.algo_version == settings.algo_version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == strategy_hash,
+        )
+    )
+    latest_opportunity = db.scalar(
+        select(func.max(StockOpportunityDaily.trade_date)).where(
+            *opportunity_identity_filters(
+                settings,
+                strategy_hash=strategy_hash,
+                opportunity_hash=opportunity_hash,
+            )
+        )
+    )
+    if _research_sources_current(
+        expected_latest, latest_raw, latest_state, latest_opportunity
+    ):
+        return run_scheduled_research(db, target_date)
+    return run_scheduled_catchup(db, None, target_date)
 
 
 def _research_sources_current(

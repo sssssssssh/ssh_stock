@@ -37,6 +37,7 @@ from app.services.quality.history_quality import (
     HistoricalQualitySummary,
 )
 from app.services.recalculation import run_recalculation
+from app.services.service_heartbeat import start_service_heartbeat
 
 WORKER_JOB_TYPES = (
     "daily",
@@ -193,35 +194,42 @@ def _run_heartbeat_loop(
 
 
 def run_worker() -> None:
+    service_stop, service_thread = start_service_heartbeat("worker")
     poll_seconds = float(scheduler_setting("worker_poll_seconds", 2))
     recovery_interval = float(scheduler_setting("stale_recovery_interval_seconds", 60))
     worker_id = worker_identity()
     last_recovery = 0.0
-    while True:
-        with SessionLocal() as db:
-            now = time.monotonic()
-            if now - last_recovery >= recovery_interval:
-                recovered_jobs = recover_stale_ingestion_jobs(db)
-                recovered_research = recover_stale_research_jobs(db)
-                recovered_dirty = recover_stale_processing_ranges(
-                    db,
-                    stale_minutes=float(scheduler_setting("dirty_processing_timeout_minutes", 30)),
-                )
-                logger.info(
-                    "worker recovery id={} recovered_jobs={} "
-                    "recovered_research={} recovered_dirty={}",
-                    worker_id,
-                    recovered_jobs,
-                    recovered_research,
-                    recovered_dirty,
-                )
-                last_recovery = now
-            job_id = claim_next_job(db, worker_id)
-        if job_id is None:
-            time.sleep(poll_seconds)
-            continue
-        with SessionLocal() as db:
-            execute_claimed_job(db, job_id)
+    try:
+        while True:
+            with SessionLocal() as db:
+                now = time.monotonic()
+                if now - last_recovery >= recovery_interval:
+                    recovered_jobs = recover_stale_ingestion_jobs(db)
+                    recovered_research = recover_stale_research_jobs(db)
+                    recovered_dirty = recover_stale_processing_ranges(
+                        db,
+                        stale_minutes=float(
+                            scheduler_setting("dirty_processing_timeout_minutes", 30)
+                        ),
+                    )
+                    logger.info(
+                        "worker recovery id={} recovered_jobs={} "
+                        "recovered_research={} recovered_dirty={}",
+                        worker_id,
+                        recovered_jobs,
+                        recovered_research,
+                        recovered_dirty,
+                    )
+                    last_recovery = now
+                job_id = claim_next_job(db, worker_id)
+            if job_id is None:
+                time.sleep(poll_seconds)
+                continue
+            with SessionLocal() as db:
+                execute_claimed_job(db, job_id)
+    finally:
+        service_stop.set()
+        service_thread.join(timeout=5)
 
 
 def run_validate_data_job(db: Session, job: JobRun, metadata: dict[str, Any]) -> None:

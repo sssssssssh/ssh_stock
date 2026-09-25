@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -6,16 +8,24 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_db
 from app.services.auth.bootstrap import bootstrap_admin
+from app.services.service_heartbeat import start_service_heartbeat
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title=settings.app_name, version=settings.algo_version)
 
-    @app.on_event("startup")
-    def initialize_admin() -> None:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
         with SessionLocal() as db:
             bootstrap_admin(db)
+        stop, thread = start_service_heartbeat("backend")
+        try:
+            yield
+        finally:
+            stop.set()
+            thread.join(timeout=5)
+
+    app = FastAPI(title=settings.app_name, version=settings.algo_version, lifespan=lifespan)
 
     @app.get("/health")
     def health(db: Session = Depends(get_db)) -> dict[str, str]:

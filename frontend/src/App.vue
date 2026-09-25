@@ -1179,7 +1179,8 @@ function statusLabel(status: string) {
 
       <section v-show="activeView === 'data'" class="view-stack">
         <section class="runtime-strip" aria-label="运行状态">
-          <div><span>最近任务心跳</span><strong>{{ runtime?.latest_job_heartbeat || runtime?.worker_heartbeat || "--" }}</strong></div>
+          <div><span>Backend / 数据库</span><strong>{{ runtime?.services?.backend?.status || "--" }} / {{ runtime?.services?.database?.status || "--" }}</strong></div>
+          <div><span>Worker / Scheduler</span><strong>{{ runtime?.services?.worker?.status || "--" }} / {{ runtime?.services?.scheduler?.status || "--" }}</strong></div>
           <div><span>当前任务</span><strong>{{ runtime?.active_job?.step || "无" }}</strong></div>
           <div><span>排队 / 运行</span><strong>{{ runtime?.queued_count ?? 0 }} / {{ runtime?.running_count ?? 0 }}</strong></div>
           <div><span>Raw / 分析 / 机会</span><strong>{{ runtime?.latest_raw_date || "--" }} / {{ runtime?.latest_analysis_date || "--" }} / {{ runtime?.latest_opportunity_date || "--" }}</strong></div>

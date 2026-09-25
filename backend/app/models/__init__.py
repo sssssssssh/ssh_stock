@@ -1,6 +1,6 @@
 from app.models.auth import AppUser, AuthSession
 from app.models.base import Base
-from app.models.job import JobRun, ProviderApiLog
+from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 from app.models.market_data import (
     IndexDaily,
     MarketDaily,
@@ -38,6 +38,7 @@ __all__ = [
     "JobRun",
     "MarketDaily",
     "ProviderApiLog",
+    "ServiceHeartbeat",
     "Sector",
     "SectorFactorDaily",
     "SectorMember",

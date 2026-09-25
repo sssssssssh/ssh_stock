@@ -1148,3 +1148,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Realtime Kline 与 Worker 共用 Logging Provider Gateway，API 触发的 Tushare 区间请求进入 `provider_api_log`。
 - Expected dates 按交易日历与股票上市/退市有效期取交集，并排除已有 PIT 交易状态确认的停牌/不可交易日期。
 - 仅把缺失交易日合并为连续区间后请求 Provider，不再因缺一天重拉完整窗口；区间响应使用默认 120 秒的进程内 TTL 缓存。
+
+## Milestone 12.5 服务心跳与 EOD 重试（2026-09-25）
+
+- 新增 `service_heartbeat`，backend、worker、scheduler 在空闲时也持续登记实例心跳；Runtime API 以 120 秒为默认阈值返回 UP/STALE/DOWN，并单独展示数据库可用状态。
+- Scheduler 在 18:10 至 20:30 分段检查当日 EOD readiness。同一交易日尚未完成时通过既有任务锁幂等补排 CatchUp；Production 当前身份数据就绪后转为补排 Research，避免晚到数据让当日研究永久错过。
