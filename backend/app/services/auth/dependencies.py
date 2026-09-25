@@ -1,9 +1,10 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Cookie, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.auth import AppUser, AuthSession
 from app.services.auth.service import session_token_hash
@@ -38,9 +39,14 @@ def require_auth_session(
         or expires_at <= now
     ):
         raise _auth_error(401, "INVALID_SESSION")
-    auth_session.last_seen_at = now
-    db.add(auth_session)
-    db.commit()
+    last_seen_at = auth_session.last_seen_at
+    if last_seen_at.tzinfo is None:
+        last_seen_at = last_seen_at.replace(tzinfo=UTC)
+    update_interval = timedelta(minutes=get_settings().auth_last_seen_update_minutes)
+    if now - last_seen_at >= update_interval:
+        auth_session.last_seen_at = now
+        db.add(auth_session)
+        db.commit()
     return user, auth_session
 
 

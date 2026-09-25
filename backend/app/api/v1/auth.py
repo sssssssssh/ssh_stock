@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.models.auth import AppUser, AuthSession
 from app.services.auth.dependencies import SESSION_COOKIE, require_auth_session
+from app.services.auth.login_guard import InMemoryLoginFailureGuard
 from app.services.auth.service import (
     authenticate,
     change_password,
@@ -17,6 +18,19 @@ from app.services.auth.service import (
 )
 
 router = APIRouter()
+_login_guard: InMemoryLoginFailureGuard | None = None
+
+
+def _get_login_guard() -> InMemoryLoginFailureGuard:
+    global _login_guard
+    settings = get_settings()
+    if _login_guard is None:
+        _login_guard = InMemoryLoginFailureGuard(
+            window_seconds=getattr(settings, "auth_login_failure_window_seconds", 300),
+            max_failures=getattr(settings, "auth_login_max_failures", 5),
+            lockout_seconds=getattr(settings, "auth_login_lockout_seconds", 60),
+        )
+    return _login_guard
 
 
 class LoginRequest(BaseModel):
@@ -37,10 +51,21 @@ def _user_payload(user: AppUser) -> dict[str, object]:
 
 
 @router.post("/login")
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(
+    payload: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    client_ip = request.client.host if request.client is not None else "unknown"
+    guard = _get_login_guard()
+    if guard.is_blocked(payload.username, client_ip):
+        raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS"})
     user = authenticate(db, payload.username, payload.password)
     if user is None:
+        guard.record_failure(payload.username, client_ip)
         raise HTTPException(status_code=401, detail={"code": "INVALID_CREDENTIALS"})
+    guard.clear(payload.username, client_ip)
     settings = get_settings()
     token, _ = create_session(db, user, hours=settings.auth_session_hours)
     response.set_cookie(

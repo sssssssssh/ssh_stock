@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = Field(default="123456", repr=False)
     auth_session_hours: int = 168
     auth_cookie_secure: bool = False
+    auth_last_seen_update_minutes: int = 10
+    auth_login_failure_window_seconds: int = 300
+    auth_login_max_failures: int = 5
+    auth_login_lockout_seconds: int = 60
+    realtime_kline_cache_seconds: int = 120
 
     app_name: str = "空间"
     algo_version: str = "v1.0"
@@ -46,6 +51,33 @@ class Settings(BaseSettings):
     opportunity_config: dict[str, Any] = Field(default_factory=dict)
     research_config: dict[str, Any] = Field(default_factory=dict)
     app_config: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_runtime_security(self) -> "Settings":
+        if self.auth_last_seen_update_minutes <= 0:
+            raise ValueError("AUTH_LAST_SEEN_UPDATE_MINUTES must be positive")
+        for field_name in (
+            "auth_login_failure_window_seconds",
+            "auth_login_max_failures",
+            "auth_login_lockout_seconds",
+        ):
+            if getattr(self, field_name) <= 0:
+                raise ValueError(f"{field_name.upper()} must be positive")
+        if self.realtime_kline_cache_seconds < 0:
+            raise ValueError("REALTIME_KLINE_CACHE_SECONDS must be nonnegative")
+        if self.app_env.lower() == "prod":
+            if (
+                not self.bootstrap_admin_password
+                or self.bootstrap_admin_password == "123456"
+                or len(self.bootstrap_admin_password) < 12
+            ):
+                raise ValueError(
+                    "production BOOTSTRAP_ADMIN_PASSWORD must be configured, non-default, "
+                    "and at least 12 characters"
+                )
+            if not self.auth_cookie_secure:
+                raise ValueError("production AUTH_COOKIE_SECURE must be true")
+        return self
 
     @classmethod
     def build(cls) -> "Settings":

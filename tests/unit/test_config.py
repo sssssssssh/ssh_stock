@@ -1,5 +1,5 @@
 import pytest
-from app.core.config import _validate_research_config, get_settings
+from app.core.config import Settings, _validate_research_config, get_settings
 
 
 def test_settings_load_yaml_defaults() -> None:
@@ -18,3 +18,34 @@ def test_research_thresholds_include_production_strong_score() -> None:
     changed = {**settings.research_config, "left_thresholds": [60, 65, 70, 80, 85]}
     with pytest.raises(ValueError, match="strong_score=75"):
         _validate_research_config(changed, settings.opportunity_config)
+
+
+@pytest.mark.parametrize(
+    ("password", "secure"),
+    [("123456", True), ("", True), ("long-enough-production", False)],
+)
+def test_production_security_rejects_unsafe_auth(password: str, secure: bool) -> None:
+    with pytest.raises(ValueError, match="production"):
+        Settings(
+            app_env="prod",
+            bootstrap_admin_password=password,
+            auth_cookie_secure=secure,
+        )
+
+
+def test_development_allows_bootstrap_defaults() -> None:
+    settings = Settings(
+        app_env="dev",
+        bootstrap_admin_password="123456",
+        auth_cookie_secure=False,
+    )
+    assert settings.app_env == "dev"
+
+
+def test_production_accepts_secure_non_default_password() -> None:
+    settings = Settings(
+        app_env="prod",
+        bootstrap_admin_password="long-enough-production",
+        auth_cookie_secure=True,
+    )
+    assert settings.auth_cookie_secure is True

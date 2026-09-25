@@ -1129,3 +1129,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 数据页展示最近任务心跳、当前任务、排队/运行数量以及最新 Raw/分析/机会日期。`POST /api/v1/jobs/{job_id}/cancel` 可取消任意 QUEUED 任务；RUNNING 只允许 Backfill、Recalculate 和 Research Eval 在安全点停止，其他任务返回 409。Dirty Repair 主动取消后恢复为 OPEN 且不增加重试次数。每天 03:15 清理 Provider 日志、过期任务日志和失效 Session，不清理 Raw、Derived、质量或研究数据。备份与恢复见 `docs/部署与备份.md`。
 
 浏览器默认日期统一按 `Asia/Shanghai` 生成；Compose 中 backend、worker、scheduler 和 frontend 的 OS 日志时区也统一为上海时区，数据库时间戳仍使用 UTC。前端验证额外执行 `npm run test`。
+## Milestone 12.1 安全加固（2026-09-25）
+
+- `APP_ENV=prod` 时强制使用至少 12 位的非默认管理员密码，并要求 `AUTH_COOKIE_SECURE=true`；不安全配置会在 Settings 加载阶段直接失败。
+- 登录接口按“用户名 + 客户端 IP”执行进程内失败窗口计数，默认 5 分钟内失败 5 次后锁定 60 秒；成功登录清理计数，失败响应不暴露账号是否存在。
+- Session 的 `last_seen_at` 默认最多每 10 分钟更新一次，避免只读页面请求持续写数据库。
