@@ -16,6 +16,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.theme_quality import theme_source_status
 from app.services.research.forward_eval import evaluate_theme_forward
 from app.services.research.opportunity_eval import benchmark_lookup, future_dates
 from app.services.theme.membership import resolve_theme_memberships
@@ -55,6 +56,37 @@ THEME_KEY = (
 )
 
 
+def theme_research_ready_dates(
+    db: Session, base_dates: list[date], settings: Any
+) -> tuple[list[date], list[date]]:
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    ready: list[date] = []
+    skipped: list[date] = []
+    for trade_date in base_dates:
+        source_status = theme_source_status(db, trade_date, "ths_theme_daily")
+        if source_status not in {"PASS", "WARNING"}:
+            skipped.append(trade_date)
+            continue
+        factor_count = db.scalar(
+            select(func.count())
+            .select_from(ThemeFactorDaily)
+            .where(
+                ThemeFactorDaily.trade_date == trade_date,
+                *theme_factor_identity_filters(
+                    settings,
+                    strategy_hash=strategy_hash,
+                    opportunity_hash=opportunity_hash,
+                ),
+            )
+        )
+        if int(factor_count or 0) > 0:
+            ready.append(trade_date)
+        else:
+            skipped.append(trade_date)
+    return ready, skipped
+
+
 def evaluate_theme_batch(
     db: Session,
     base_dates: list[date],
@@ -66,8 +98,18 @@ def evaluate_theme_batch(
     strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(research)
+    ready_dates, skipped_dates = theme_research_ready_dates(db, base_dates, settings)
+    counts = {
+        "base_rows": 0,
+        "eval_rows": 0,
+        "deleted_rows": 0,
+        "benchmark_missing": 0,
+        "theme_skipped_source_dates": len(skipped_dates),
+    }
+    if not ready_dates:
+        return counts
     scope_filters = (
-        ThemeForwardEval.trade_date.in_(base_dates),
+        ThemeForwardEval.trade_date.in_(ready_dates),
         ThemeForwardEval.strategy_config_hash == strategy_hash,
         ThemeForwardEval.theme_calc_version == THEME_CALC_VERSION,
         ThemeForwardEval.opportunity_config_hash == opportunity_hash,
@@ -79,7 +121,7 @@ def evaluate_theme_batch(
     bases = (
         db.execute(
             select(ThemeFactorDaily).where(
-                ThemeFactorDaily.trade_date.in_(base_dates),
+                ThemeFactorDaily.trade_date.in_(ready_dates),
                 *theme_factor_identity_filters(
                     settings,
                     strategy_hash=strategy_hash,
@@ -92,7 +134,7 @@ def evaluate_theme_batch(
         .scalars()
         .all()
     )
-    counts = {"base_rows": len(bases), "eval_rows": 0, "deleted_rows": 0, "benchmark_missing": 0}
+    counts["base_rows"] = len(bases)
     if not bases:
         stats = replace_slice_rows_with_stats(
             db, ThemeForwardEval, (), scope_filters=scope_filters, key_columns=THEME_KEY
@@ -102,13 +144,13 @@ def evaluate_theme_batch(
     latest = db.scalar(select(func.max(ThemeDaily.trade_date)))
     dates = future_dates(
         db,
-        base_dates,
+        ready_dates,
         latest,
         max_horizon=max(research["horizons"]),
         executable_exit_search_days=research["executable_exit_search_days"],
     )
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
-    theme_context = resolve_theme_memberships(db, base_dates).context_by_date
+    theme_context = resolve_theme_memberships(db, ready_dates).context_by_date
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.theme_code].append(base)

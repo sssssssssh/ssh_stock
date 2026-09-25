@@ -1183,3 +1183,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 最终退出统计区分成功、观察完成后仍未解决、搜索窗口尚未完整观察三种状态；成功率和未解决率只使用已完成观察样本作为分母。
 - 自动 Research 在排队前复用生产分析完整性检查覆盖整个 67 日回刷窗口；任一中间交易日缺失时不执行 replace-slice。
 - 股票目标日位于 `delist_date` 之后时，不再把退市前最后成交价作为普通停牌式 Mark Carry Forward；退市现金结算与强制损失规则留给 M13 Execution Rule 明确定义。
+
+## Milestone 12.8.2 Research 最终退出语义收尾（2026-09-26）
+
+- Research 身份升级为 `research_eval_v6`；股票与题材的最终退出状态持久化为 `SUCCESS`、`PENDING`、`UNRESOLVED` 或 `DATA_INCOMPLETE`。
+- 最终退出成功率与未解决率只以 `SUCCESS + UNRESOLVED` 为分母；待观察和数据不完整样本分别统计，不再解释为交易失败。
+- Analytics 数据库查询显式读取退出窗口成熟度和最终状态；SQLite 数据库链路测试覆盖 Opportunity 与 Theme，防止 ORM 已有字段但查询遗漏。
+- Theme 原始来源不可用或当前身份因子缺失时跳过对应日期，不对已有 Research 结果执行破坏性 replace-slice；股票 Research 继续正常运行并记录警告。

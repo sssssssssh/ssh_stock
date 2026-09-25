@@ -10,8 +10,10 @@ from app.models.market_data import (
     ThemeForwardEval,
 )
 from app.services.analysis_identity import (
+    OPPORTUNITY_CALC_VERSION,
     RESEARCH_EVAL_VERSION,
     RESEARCH_VERSION,
+    THEME_CALC_VERSION,
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
@@ -21,7 +23,9 @@ from app.services.research.analytics import (
     bucket_stats,
     context_stats,
     grouped_stats,
+    opportunity_stats,
     research_status,
+    theme_stats,
     topn_stats,
     transition_stats,
 )
@@ -35,6 +39,7 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
             "mature20": True,
             "entry_executable": True,
             "delayed_exit_window_mature20": True,
+            "final_exit_status20": "SUCCESS",
             "exit_executable20": True,
             "ret20": 0.10,
             "mark_ret20": 0.08,
@@ -51,6 +56,7 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
             "mature20": True,
             "entry_executable": True,
             "delayed_exit_window_mature20": True,
+            "final_exit_status20": "SUCCESS",
             "exit_executable20": True,
             "ret20": -0.02,
             "mark_ret20": -0.03,
@@ -92,12 +98,23 @@ def test_horizon_stats_separate_event_mature_execution_and_return_denominators()
 
 def test_pending_final_exit_is_not_counted_as_unresolved() -> None:
     rows = [
-        {"mature5": True, "entry_executable": True, "delayed_exit_window_mature5": False},
-        {"mature5": True, "entry_executable": True, "delayed_exit_window_mature5": True},
         {
             "mature5": True,
             "entry_executable": True,
             "delayed_exit_window_mature5": False,
+            "final_exit_status5": "PENDING",
+        },
+        {
+            "mature5": True,
+            "entry_executable": True,
+            "delayed_exit_window_mature5": True,
+            "final_exit_status5": "UNRESOLVED",
+        },
+        {
+            "mature5": True,
+            "entry_executable": True,
+            "delayed_exit_window_mature5": False,
+            "final_exit_status5": "SUCCESS",
             "delayed_exit_ret5": 0.03,
         },
     ]
@@ -111,6 +128,23 @@ def test_pending_final_exit_is_not_counted_as_unresolved() -> None:
     assert result["final_exit_success_rate"] == pytest.approx(0.5)
     assert result["unresolved_exit_rate"] == pytest.approx(0.5)
     assert result["pending_exit_rate"] == pytest.approx(1 / 3)
+
+
+def test_data_incomplete_final_exit_is_excluded_from_completed_count() -> None:
+    cohort = Cohort(min_sample_warning=1)
+    cohort.add(
+        {
+            "mature5": True,
+            "entry_executable": True,
+            "final_exit_status5": "DATA_INCOMPLETE",
+        }
+    )
+    result = cohort.horizon_result(5)
+    assert result["final_exit_completed_count"] == 0
+    assert result["final_exit_data_incomplete_count"] == 1
+    assert result["final_exit_success_rate"] is None
+    assert result["unresolved_exit_rate"] is None
+    assert result["data_incomplete_exit_rate"] == pytest.approx(1)
 
 
 def test_context_null_is_unknown_and_quantile_single_value_is_preserved() -> None:
@@ -189,6 +223,66 @@ def test_topn_ties_are_stable_by_code_for_stock_and_theme() -> None:
     assert stock[0]["horizons"][0]["avg_return"] == pytest.approx(0.1)
     assert theme[0]["group"] == "TOP1"
     assert theme[0]["horizons"][0]["avg_return"] == pytest.approx(0.1)
+
+
+def test_db_backed_analytics_reads_persisted_final_exit_statuses() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    ThemeForwardEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 2, 2)
+    common = {
+        "trade_date": day,
+        "strategy_config_hash": analysis_strategy_hash(settings.strategy),
+        "opportunity_config_hash": config_hash(settings.opportunity_config),
+        "research_version": RESEARCH_VERSION,
+        "research_config_hash": config_hash(settings.research_config),
+        "eval_version": RESEARCH_EVAL_VERSION,
+        "benchmark_code": settings.research_config["benchmark_code"],
+        "entry_executable": True,
+        "mature5": True,
+        "delayed_exit_window_mature5": True,
+    }
+    statuses = ("SUCCESS", "UNRESOLVED", "PENDING", "DATA_INCOMPLETE")
+    with Session(engine) as db:
+        for index, status in enumerate(statuses, start=1):
+            db.add(
+                OpportunityForwardEval(
+                    id=index,
+                    ts_code=f"{index:06d}.SZ",
+                    algo_version=settings.algo_version,
+                    opportunity_calc_version=OPPORTUNITY_CALC_VERSION,
+                    entry_basis="NEXT_OPEN",
+                    state="S4",
+                    opportunity_stage="TREND",
+                    final_exit_status5=status,
+                    delayed_exit_ret5=0.05 if status == "SUCCESS" else None,
+                    **common,
+                )
+            )
+        db.add(
+            ThemeForwardEval(
+                id=1,
+                theme_code="885001.TI",
+                theme_calc_version=THEME_CALC_VERSION,
+                entry_basis="NEXT_CLOSE",
+                final_exit_status5="DATA_INCOMPLETE",
+                **common,
+            )
+        )
+        db.commit()
+        stock = opportunity_stats(db, settings, day, day)[0]["horizons"][0]
+        theme = theme_stats(db, settings, day, day)[0]["horizons"][0]
+    assert stock["final_exit_success_count"] == 1
+    assert stock["final_exit_unresolved_count"] == 1
+    assert stock["final_exit_pending_count"] == 1
+    assert stock["final_exit_data_incomplete_count"] == 1
+    assert stock["final_exit_completed_count"] == 2
+    assert stock["final_exit_success_rate"] == pytest.approx(0.5)
+    assert stock["unresolved_exit_rate"] == pytest.approx(0.5)
+    assert stock["pending_exit_rate"] == pytest.approx(0.25)
+    assert stock["data_incomplete_exit_rate"] == pytest.approx(0.25)
+    assert theme["final_exit_data_incomplete_count"] == 1
 
 
 def test_status_uses_theme_evaluation_date_when_stock_eval_is_empty() -> None:

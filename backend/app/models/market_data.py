@@ -743,6 +743,10 @@ class _ResearchForwardFields:
     delayed_exit_window_mature60: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    final_exit_status5: Mapped[str | None] = mapped_column(String(24))
+    final_exit_status10: Mapped[str | None] = mapped_column(String(24))
+    final_exit_status20: Mapped[str | None] = mapped_column(String(24))
+    final_exit_status60: Mapped[str | None] = mapped_column(String(24))
     exit_trade_date5: Mapped[date | None] = mapped_column(Date)
     exit_trade_date10: Mapped[date | None] = mapped_column(Date)
     exit_trade_date20: Mapped[date | None] = mapped_column(Date)

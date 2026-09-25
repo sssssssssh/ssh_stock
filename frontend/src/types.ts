@@ -344,12 +344,15 @@ export type ResearchHorizonStats = {
   delayed_exit_count: number;
   delayed_exit_rate: number | null;
   avg_positive_exit_delay_days: number | null;
+  final_exit_success_count: number;
   final_exit_success_rate: number | null;
   final_exit_completed_count: number;
   final_exit_unresolved_count: number;
   unresolved_exit_rate: number | null;
   final_exit_pending_count: number;
   pending_exit_rate: number | null;
+  final_exit_data_incomplete_count: number;
+  data_incomplete_exit_rate: number | null;
   non_executable_rate: number | null;
   avg_mfe20: number | null;
   avg_mae20: number | null;

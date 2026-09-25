@@ -395,6 +395,77 @@ def test_delayed_exit_window_matures_only_after_full_search_window() -> None:
     assert mature["delayed_exit_window_mature5"] is True
 
 
+def _final_exit_stock(days: list[date]) -> dict[date, dict]:
+    return {
+        day: {
+            "adj_open": 100,
+            "adj_close": 100,
+            "raw_open": 100,
+            "raw_present": True,
+            "status_present": True,
+            "is_active": True,
+            "is_suspended": False,
+            "tradable": True,
+            "is_limit_down_close": False,
+        }
+        for day in days
+    }
+
+
+def test_final_exit_status_success_pending_and_unresolved() -> None:
+    days = _days(12)
+    immediate = evaluate_stock_forward(
+        days[0], days, _final_exit_stock(days), {}, horizons=(5,)
+    )
+    assert immediate["final_exit_status5"] == "SUCCESS"
+
+    pending_stock = _final_exit_stock(days)
+    for day in days[6:]:
+        pending_stock[day]["is_limit_down_close"] = True
+    pending = evaluate_stock_forward(
+        days[0], days[:9], pending_stock, {}, horizons=(5,)
+    )
+    unresolved = evaluate_stock_forward(
+        days[0], days, pending_stock, {}, horizons=(5,)
+    )
+    assert pending["final_exit_status5"] == "PENDING"
+    assert unresolved["final_exit_status5"] == "UNRESOLVED"
+
+
+@pytest.mark.parametrize("gap_field", ("status_present", "raw_present"))
+def test_final_exit_status_data_incomplete_after_full_window(gap_field) -> None:
+    days = _days(12)
+    stock = _final_exit_stock(days)
+    for day in days[6:]:
+        stock[day]["is_limit_down_close"] = True
+    stock[days[8]][gap_field] = False
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+    assert result["final_exit_status5"] == "DATA_INCOMPLETE"
+
+
+def test_final_exit_success_takes_priority_over_earlier_data_gap() -> None:
+    days = _days(12)
+    stock = _final_exit_stock(days)
+    stock[days[6]]["status_present"] = False
+    stock[days[7]]["is_limit_down_close"] = True
+    result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
+    assert result["delayed_exit_delay_days5"] == 2
+    assert result["final_exit_status5"] == "SUCCESS"
+
+
+def test_theme_final_exit_status_distinguishes_pending_gap_and_success() -> None:
+    days = _days(12)
+    entry_only = {days[1]: {"close": 100}}
+    pending = evaluate_theme_forward(days[0], days[:9], entry_only, {}, horizons=(5,))
+    incomplete = evaluate_theme_forward(days[0], days, entry_only, {}, horizons=(5,))
+    successful = evaluate_theme_forward(
+        days[0], days, {**entry_only, days[8]: {"close": 105}}, {}, horizons=(5,)
+    )
+    assert pending["final_exit_status5"] == "PENDING"
+    assert incomplete["final_exit_status5"] == "DATA_INCOMPLETE"
+    assert successful["final_exit_status5"] == "SUCCESS"
+
+
 def test_mfe_mae_carry_last_close_only_across_suspended_days() -> None:
     days = _days(22)
     stock = {

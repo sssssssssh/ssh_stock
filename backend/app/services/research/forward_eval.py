@@ -5,6 +5,11 @@ from typing import Any
 from app.services.research.signal_eval import _executable_entry, _executable_exit, _positive
 
 HORIZONS = (5, 10, 20, 60)
+FINAL_EXIT_DATA_GAP_REASONS = {
+    "NO_STOCK_ROW",
+    "TRADE_STATUS_MISSING",
+    "EXIT_PRICE_MISSING",
+}
 
 
 def _validated_stock_entry(row: dict[str, Any] | None) -> tuple[float | None, str | None]:
@@ -136,6 +141,7 @@ def evaluate_stock_forward(
             result[f"ret{horizon}"] = exit_price / entry_price - 1
             result[f"net_ret{horizon}"] = _net_return(entry_price, exit_price, trading_cost)
         if entry_price is not None:
+            data_gap_seen = False
             for delay in range(0, executable_exit_search_days + 1):
                 delayed_index = index + delay
                 if delayed_index >= len(dates):
@@ -144,6 +150,7 @@ def evaluate_stock_forward(
                 delayed_row = stock_rows.get(delayed_date)
                 delayed_price, delayed_reason = _validated_stock_exit(delayed_row)
                 if delayed_reason is not None or delayed_price is None:
+                    data_gap_seen = data_gap_seen or delayed_reason in FINAL_EXIT_DATA_GAP_REASONS
                     continue
                 result[f"delayed_exit_trade_date{horizon}"] = delayed_date
                 result[f"delayed_exit_price{horizon}"] = delayed_price
@@ -152,7 +159,15 @@ def evaluate_stock_forward(
                 result[f"net_delayed_exit_ret{horizon}"] = _net_return(
                     entry_price, delayed_price, trading_cost
                 )
+                result[f"final_exit_status{horizon}"] = "SUCCESS"
                 break
+            if result[f"final_exit_status{horizon}"] is None:
+                if not result[f"delayed_exit_window_mature{horizon}"]:
+                    result[f"final_exit_status{horizon}"] = "PENDING"
+                elif data_gap_seen:
+                    result[f"final_exit_status{horizon}"] = "DATA_INCOMPLETE"
+                else:
+                    result[f"final_exit_status{horizon}"] = "UNRESOLVED"
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("open")
         benchmark_exit = benchmark_rows.get(exit_date, {}).get("close")
         if _positive(benchmark_entry) and _positive(benchmark_exit):
@@ -219,6 +234,7 @@ def evaluate_theme_forward(
                 result["entry_price"], float(exit_price), trading_cost
             )
         if result["entry_price"] is not None:
+            data_gap_seen = False
             for delay in range(0, executable_exit_search_days + 1):
                 delayed_index = index + delay
                 if delayed_index >= len(dates):
@@ -226,6 +242,7 @@ def evaluate_theme_forward(
                 delayed_date = dates[delayed_index]
                 delayed_price = theme_rows.get(delayed_date, {}).get("close")
                 if not _positive(delayed_price):
+                    data_gap_seen = True
                     continue
                 price = float(delayed_price)
                 result[f"delayed_exit_trade_date{horizon}"] = delayed_date
@@ -235,7 +252,15 @@ def evaluate_theme_forward(
                 result[f"net_delayed_exit_ret{horizon}"] = _net_return(
                     result["entry_price"], price, trading_cost
                 )
+                result[f"final_exit_status{horizon}"] = "SUCCESS"
                 break
+            if result[f"final_exit_status{horizon}"] is None:
+                if not result[f"delayed_exit_window_mature{horizon}"]:
+                    result[f"final_exit_status{horizon}"] = "PENDING"
+                elif data_gap_seen:
+                    result[f"final_exit_status{horizon}"] = "DATA_INCOMPLETE"
+                else:
+                    result[f"final_exit_status{horizon}"] = "UNRESOLVED"
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("close")
         benchmark_exit = benchmark_rows.get(exit_date, {}).get("close")
         if _positive(benchmark_entry) and _positive(benchmark_exit):
@@ -268,6 +293,7 @@ def _empty_forward(horizons: Sequence[int], dates: Sequence[date]) -> dict[str, 
             {
                 f"mature{horizon}": False,
                 f"delayed_exit_window_mature{horizon}": False,
+                f"final_exit_status{horizon}": None,
                 f"exit_trade_date{horizon}": None,
                 f"exit_executable{horizon}": None,
                 f"exit_reason{horizon}": None,

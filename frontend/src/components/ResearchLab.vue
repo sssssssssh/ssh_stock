@@ -64,6 +64,13 @@ function extra(row: Row, key: string): string {
   return typeof value === "number" ? percent(value) : "--";
 }
 
+function tableColumnCount(index: number): number {
+  const baseColumns = 20;
+  return index === 0 && (tab.value === "left" || tab.value === "right")
+    ? baseColumns + 13
+    : baseColumns;
+}
+
 function windowValue(): ResearchWindow {
   return { start: start.value, end: end.value };
 }
@@ -186,8 +193,9 @@ onMounted(refresh);
             <thead><tr>
               <th>分组</th><th>事件</th><th>成熟</th><th>收益样本</th>
               <th>可执行收益</th><th>净收益</th><th>持仓市值收益</th><th>最终可退出收益</th>
-              <th>最终可退出净收益</th><th>平均退出延迟</th><th>真实延迟率</th><th>未解决退出率</th><th>不可退出率</th>
-              <th>待观察退出率</th><th>超额</th><th>胜率</th><th>MFE20</th><th>MAE20</th>
+              <th>最终可退出净收益</th><th>平均退出延迟</th><th>真实延迟率</th><th>最终退出成功率</th>
+              <th>未解决退出率</th><th>待观察退出率</th><th>数据不完整率</th><th>不可退出率</th>
+              <th>超额</th><th>胜率</th><th>MFE20</th><th>MAE20</th>
               <template v-if="(tab === 'left' || tab === 'right') && index === 0">
                 <th v-for="days in [5, 10, 20]" :key="`s3-${days}`">S3@{{ days }}</th>
                 <th v-for="days in [5, 10, 20]" :key="`s4-${days}`">S4+@{{ days }}</th>
@@ -214,9 +222,11 @@ onMounted(refresh);
                 <td>{{ percent(stats(row)?.avg_net_delayed_exit_return) }}</td>
                 <td>{{ number(stats(row)?.avg_exit_delay_days) }}</td>
                 <td>{{ percent(stats(row)?.delayed_exit_rate) }}</td>
+                <td>{{ percent(stats(row)?.final_exit_success_rate) }}</td>
                 <td>{{ percent(stats(row)?.unresolved_exit_rate) }}</td>
-                <td>{{ percent(stats(row)?.non_executable_rate) }}</td>
                 <td>{{ percent(stats(row)?.pending_exit_rate) }}</td>
+                <td>{{ percent(stats(row)?.data_incomplete_exit_rate) }}</td>
+                <td>{{ percent(stats(row)?.non_executable_rate) }}</td>
                 <td>{{ percent(stats(row)?.avg_excess_return) }}</td>
                 <td>{{ percent(stats(row)?.win_rate) }}</td>
                 <td>{{ percent(stats(row, 20)?.avg_mfe20) }}</td>
@@ -232,7 +242,7 @@ onMounted(refresh);
                 <td v-if="(tab === 'left' || tab === 'right') && index === 0">{{ number(row.avg_days_to_s4plus as number | null) }}</td>
                 <td v-if="(tab === 'left' || tab === 'right') && index === 0">{{ number(row.avg_days_to_s5 as number | null) }}</td>
               </tr>
-              <tr v-if="!rows.length"><td :colspan="25" class="research-empty">暂无研究样本</td></tr>
+              <tr v-if="!rows.length"><td :colspan="tableColumnCount(index)" class="research-empty">暂无研究样本</td></tr>
             </tbody>
           </table>
         </div>

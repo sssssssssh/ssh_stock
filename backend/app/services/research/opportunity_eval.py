@@ -345,6 +345,17 @@ def _stock_rows(
         .all()
     )
     delist_by_code = {row["ts_code"]: row["delist_date"] for row in basics}
+    for code, delist_date in delist_by_code.items():
+        if delist_date is None:
+            continue
+        for trade_date in dates:
+            if trade_date > delist_date:
+                result[code][trade_date].update(
+                    status_present=True,
+                    is_active=False,
+                    is_suspended=False,
+                    raw_present=False,
+                )
     for code, code_rows in result.items():
         for row in code_rows.values():
             row.setdefault("raw_present", False)

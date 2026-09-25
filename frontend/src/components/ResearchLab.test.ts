@@ -17,9 +17,10 @@ vi.mock("../services/research", () => {
     delayed_exit_win_rate: 1, avg_net_return: avgReturn,
     avg_net_delayed_exit_return: avgReturn, avg_exit_delay_days: 0,
     delayed_exit_count: 0, delayed_exit_rate: 0, avg_positive_exit_delay_days: null,
-    final_exit_success_rate: 1, final_exit_completed_count: 1,
+    final_exit_success_count: 1, final_exit_success_rate: 1, final_exit_completed_count: 1,
     final_exit_unresolved_count: 0, unresolved_exit_rate: 0,
     final_exit_pending_count: 0, pending_exit_rate: 0,
+    final_exit_data_incomplete_count: 0, data_incomplete_exit_rate: 0,
     non_executable_rate: 0, avg_mfe20: null, avg_mae20: null, sample_warning: false,
     return_sample_warning: false, mark_sample_warning: false,
     delayed_exit_sample_warning: false

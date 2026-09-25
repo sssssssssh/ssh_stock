@@ -128,6 +128,7 @@ def queue_research_eval(
             "opportunity_deleted_rows": 0,
             "theme_rows": 0,
             "theme_deleted_rows": 0,
+            "theme_skipped_source_dates": 0,
             "transition_rows": 0,
             "transition_deleted_rows": 0,
             "warnings": [],
@@ -170,6 +171,7 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
         "theme_base_rows": 0,
         "theme_rows": 0,
         "theme_deleted_rows": 0,
+        "theme_skipped_source_dates": 0,
         "transition_base_rows": 0,
         "transition_rows": 0,
         "transition_deleted_rows": 0,
@@ -197,6 +199,9 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
             totals["theme_base_rows"] += result["base_rows"]
             totals["theme_rows"] += result["eval_rows"]
             totals["theme_deleted_rows"] += result["deleted_rows"]
+            totals["theme_skipped_source_dates"] += result.get(
+                "theme_skipped_source_dates", 0
+            )
             totals["benchmark_missing"] += result["benchmark_missing"]
             if result["base_rows"] and not result["eval_rows"]:
                 raise RuntimeError("theme research input rows > 0 but eval rows = 0")
@@ -212,7 +217,14 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
             "batch_count": len(batches),
             "current_trade_date": dates[-1].isoformat(),
             "progress_pct": round(index / len(batches) * 100, 1),
-            "warnings": ["BENCHMARK_DATA_MISSING"] if totals["benchmark_missing"] else [],
+            "warnings": [
+                warning
+                for warning, present in (
+                    ("BENCHMARK_DATA_MISSING", totals["benchmark_missing"]),
+                    ("THEME_SOURCE_INCOMPLETE", totals["theme_skipped_source_dates"]),
+                )
+                if present
+            ],
         }
         update_job(
             db,

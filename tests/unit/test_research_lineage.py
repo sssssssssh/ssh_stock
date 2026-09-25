@@ -9,11 +9,21 @@ import app.services.theme.service as theme_service_module
 import pandas as pd
 import pytest
 from app.core.config import get_settings
-from app.models.market_data import StockOpportunityDaily, ThemeFactorDaily
-from app.services.analysis_identity import analysis_strategy_hash
+from app.models.market_data import (
+    StockOpportunityDaily,
+    ThemeFactorDaily,
+    ThemeForwardEval,
+)
+from app.services.analysis_identity import (
+    RESEARCH_EVAL_VERSION,
+    RESEARCH_VERSION,
+    THEME_CALC_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.calc_metadata import config_hash
-from sqlalchemy import select
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import Session
 
 
 class _Rows:
@@ -72,6 +82,10 @@ def test_research_filters_unverified_or_old_source_lineage(
     )
     settings = get_settings()
     db = _ResearchDb()
+    if module is theme_eval:
+        monkeypatch.setattr(
+            module, "theme_research_ready_dates", lambda db, dates, settings: (dates, [])
+        )
     result = {
         opportunity_eval: opportunity_eval.evaluate_opportunity_batch,
         theme_eval: theme_eval.evaluate_theme_batch,
@@ -135,6 +149,9 @@ def test_current_source_lineage_is_copied_into_forward_result(
         })
         result = module.evaluate_opportunity_batch(db, [date(2026, 5, 10)], settings)
     else:
+        monkeypatch.setattr(
+            module, "theme_research_ready_dates", lambda db, dates, settings: (dates, [])
+        )
         monkeypatch.setattr(module, "evaluate_theme_forward", lambda *args, **kwargs: {
             **{f"ret{h}": None for h in (5, 10, 20, 60)},
             **{f"benchmark_ret{h}": None for h in (5, 10, 20, 60)},
@@ -142,6 +159,55 @@ def test_current_source_lineage_is_copied_into_forward_result(
         result = module.evaluate_theme_batch(db, [date(2026, 5, 10)], settings)
     assert result["eval_rows"] == 1
     assert captured[0]["strategy_config_hash"] == base.source_strategy_config_hash
+
+
+@pytest.mark.parametrize("source_status", ("TRANSIENT_ERROR", "PERMISSION_UNAVAILABLE"))
+def test_theme_research_skips_incomplete_source_without_deleting_existing_rows(
+    monkeypatch, source_status,
+) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    ThemeForwardEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 5, 10)
+    with Session(engine) as db:
+        monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: source_status)
+        db.add(
+            ThemeForwardEval(
+                id=1,
+                trade_date=day,
+                theme_code="885001.TI",
+                strategy_config_hash=analysis_strategy_hash(settings.strategy),
+                theme_calc_version=THEME_CALC_VERSION,
+                opportunity_config_hash=config_hash(settings.opportunity_config),
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis="NEXT_CLOSE",
+                benchmark_code=settings.research_config["benchmark_code"],
+            )
+        )
+        db.commit()
+        result = theme_eval.evaluate_theme_batch(db, [day], settings)
+        remaining = db.scalar(select(func.count()).select_from(ThemeForwardEval))
+    assert result["theme_skipped_source_dates"] == 1
+    assert result["deleted_rows"] == 0
+    assert remaining == 1
+
+
+@pytest.mark.parametrize("source_status", ("PASS", "WARNING"))
+def test_theme_research_ready_dates_accepts_usable_source_and_current_factors(
+    monkeypatch, source_status
+) -> None:
+    day = date(2026, 5, 10)
+
+    class Db:
+        def scalar(self, statement):
+            return 1
+
+    monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: source_status)
+    ready, skipped = theme_eval.theme_research_ready_dates(Db(), [day], get_settings())
+    assert ready == [day]
+    assert skipped == []
 
 
 def test_production_services_write_current_strategy_lineage(monkeypatch) -> None:

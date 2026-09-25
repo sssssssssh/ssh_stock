@@ -37,6 +37,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
             "eval_rows": 2,
             "deleted_rows": 1,
             "benchmark_missing": 0,
+            "theme_skipped_source_dates": 1,
         },
     )
     monkeypatch.setattr(
@@ -61,10 +62,14 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
     assert totals["transition_rows"] == 2
     assert totals["opportunity_deleted_rows"] == 4
     assert totals["theme_deleted_rows"] == 2
+    assert totals["theme_skipped_source_dates"] == 2
     assert totals["transition_deleted_rows"] == 6
     assert calls[-1]["status"] == "SUCCESS"
     assert calls[-1]["metadata"]["progress_pct"] == 100
-    assert calls[-1]["metadata"]["warnings"] == ["BENCHMARK_DATA_MISSING"]
+    assert calls[-1]["metadata"]["warnings"] == [
+        "BENCHMARK_DATA_MISSING",
+        "THEME_SOURCE_INCOMPLETE",
+    ]
 
 
 def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
