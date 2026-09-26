@@ -1,7 +1,6 @@
 from datetime import date
 from types import SimpleNamespace
 
-import app.jobs.catchup_job as catchup_module
 import app.services.ingestion.service as ingestion_module
 import pandas as pd
 import pytest
@@ -202,15 +201,19 @@ def test_theme_factor_error_date_does_not_replace_existing_results() -> None:
 
 
 def test_catchup_requires_current_opportunity_quality(monkeypatch) -> None:
-    monkeypatch.setattr(catchup_module, "is_core_analysis_complete", lambda *args, **kwargs: True)
-    monkeypatch.setattr(catchup_module, "config_hash", lambda config: config["hash"])
+    from app.services.quality import analysis_readiness
+
+    monkeypatch.setattr(
+        analysis_readiness, "is_core_analysis_complete", lambda *args, **kwargs: True
+    )
+    monkeypatch.setattr(analysis_readiness, "config_hash", lambda config: config["hash"])
     captured = {}
 
     def quality(*args, **kwargs):
         captured.update(kwargs)
         return SimpleNamespace(is_complete=False)
 
-    monkeypatch.setattr(catchup_module, "check_opportunity_quality", quality)
+    monkeypatch.setattr(analysis_readiness, "check_opportunity_quality", quality)
 
     complete = is_analysis_complete(
         object(),

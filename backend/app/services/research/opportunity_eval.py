@@ -29,6 +29,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.analysis_readiness import is_core_analysis_complete
 from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.research.forward_eval import evaluate_stock_forward
 from app.services.theme.membership import resolve_theme_memberships
@@ -155,6 +156,14 @@ def opportunity_research_ready_dates(
     ready: list[date] = []
     skipped: list[date] = []
     for trade_date in base_dates:
+        if not is_core_analysis_complete(
+            db,
+            trade_date,
+            strategy=settings.strategy,
+            algo_version=settings.algo_version,
+        ):
+            skipped.append(trade_date)
+            continue
         quality = check_opportunity_quality(
             db,
             trade_date,
@@ -163,7 +172,9 @@ def opportunity_research_ready_dates(
             algo_version=settings.algo_version,
             config=settings.opportunity_config,
         )
-        if quality.results["opportunity_vs_state"] in {"PASS", "WARNING"}:
+        if quality.counts["state"] <= 0:
+            skipped.append(trade_date)
+        elif quality.results["opportunity_vs_state"] in {"PASS", "WARNING"}:
             ready.append(trade_date)
         else:
             skipped.append(trade_date)

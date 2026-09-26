@@ -16,6 +16,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.analysis_readiness import is_core_analysis_complete
 from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.quality.theme_quality import theme_source_status
 from app.services.research.forward_eval import evaluate_theme_forward
@@ -65,6 +66,14 @@ def theme_research_ready_dates(
     ready: list[date] = []
     skipped: list[date] = []
     for trade_date in base_dates:
+        if not is_core_analysis_complete(
+            db,
+            trade_date,
+            strategy=settings.strategy,
+            algo_version=settings.algo_version,
+        ):
+            skipped.append(trade_date)
+            continue
         source_status = theme_source_status(db, trade_date, "ths_theme_daily")
         if source_status not in {"PASS", "WARNING"}:
             skipped.append(trade_date)

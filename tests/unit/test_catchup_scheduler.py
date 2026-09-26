@@ -3,10 +3,10 @@ from types import SimpleNamespace
 
 import app.jobs.catchup_job as catchup_module
 import app.jobs.scheduler as scheduler_module
+import app.services.quality.analysis_readiness as analysis_readiness
 import pytest
 from app.jobs.catchup_job import (
     CatchUpJob,
-    analysis_complete_dates,
     build_catchup_plan,
     classify_catchup_dates,
     is_analysis_complete,
@@ -25,6 +25,7 @@ from app.models.market_data import (
     StockFactorDaily,
     StockStateDaily,
 )
+from app.services.quality.analysis_readiness import analysis_complete_dates
 
 
 def test_catchup_plan_runs_missing_and_recent_refresh_dates() -> None:
@@ -127,12 +128,12 @@ def test_catchup_plan_skips_when_missing_exceeds_limit() -> None:
 
 def test_analysis_complete_dates_require_current_algo_version(monkeypatch) -> None:
     monkeypatch.setattr(
-        catchup_module,
+        analysis_readiness,
         "_open_trade_dates",
         lambda db, start, end: [date(2026, 9, 1), date(2026, 9, 2)],
     )
     monkeypatch.setattr(
-        catchup_module,
+        analysis_readiness,
         "is_analysis_complete",
         lambda db, trade_date, **kwargs: (
             trade_date == date(2026, 9, 2) and kwargs["algo_version"] == "v1.0"
@@ -224,7 +225,7 @@ def test_catchup_candidate_window_ignores_older_history(monkeypatch) -> None:
 def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
     calls = {}
     monkeypatch.setattr(
-        catchup_module, "analysis_strategy_hash", lambda strategy: "current_hash"
+        analysis_readiness, "analysis_strategy_hash", lambda strategy: "current_hash"
     )
 
     def count_matching(db, model, *criteria):
@@ -238,7 +239,7 @@ def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
             return 0
         return 1
 
-    monkeypatch.setattr(catchup_module, "_count_matching", count_matching)
+    monkeypatch.setattr(analysis_readiness, "_count_matching", count_matching)
 
     complete = is_analysis_complete(
         object(),
@@ -501,7 +502,9 @@ def test_catchup_recalculation_fails_when_latest_raw_date_is_missing(monkeypatch
 
 
 def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypatch) -> None:
-    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+    monkeypatch.setattr(
+        analysis_readiness, "analysis_strategy_hash", lambda strategy: "current_hash"
+    )
     counts = {
         StockDaily: 100,
         StockFactorDaily: 100,
@@ -510,7 +513,7 @@ def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypat
         StockStateDaily: 100,
     }
     monkeypatch.setattr(
-        catchup_module,
+        analysis_readiness,
         "_count_matching",
         lambda db, model, *criteria: counts[model],
     )
@@ -526,7 +529,9 @@ def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypat
 
 
 def test_is_analysis_complete_rejects_low_factor_or_state_coverage(monkeypatch) -> None:
-    monkeypatch.setattr(catchup_module, "config_hash", lambda strategy: "current_hash")
+    monkeypatch.setattr(
+        analysis_readiness, "analysis_strategy_hash", lambda strategy: "current_hash"
+    )
     counts = {
         StockDaily: 100,
         StockFactorDaily: 10,
@@ -535,7 +540,7 @@ def test_is_analysis_complete_rejects_low_factor_or_state_coverage(monkeypatch) 
         StockStateDaily: 10,
     }
     monkeypatch.setattr(
-        catchup_module,
+        analysis_readiness,
         "_count_matching",
         lambda db, model, *criteria: counts[model],
     )
@@ -961,13 +966,8 @@ def test_catchup_theme_repair_does_not_block_required_analysis(
     )
     monkeypatch.setattr(
         catchup_module,
-        "is_core_analysis_complete",
-        lambda *args, **kwargs: core_complete,
-    )
-    monkeypatch.setattr(
-        catchup_module,
-        "check_opportunity_quality",
-        lambda *args, **kwargs: SimpleNamespace(is_complete=opportunity_complete),
+        "is_analysis_complete",
+        lambda *args, **kwargs: core_complete and opportunity_complete,
     )
     monkeypatch.setattr(catchup_module, "classify_catchup_dates", classify_catchup_dates)
     job._theme_repair_dates = lambda dates: [trade_date]

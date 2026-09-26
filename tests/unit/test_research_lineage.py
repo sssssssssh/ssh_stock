@@ -179,6 +179,9 @@ def test_theme_research_skips_incomplete_source_without_deleting_existing_rows(
     settings = get_settings()
     day = date(2026, 5, 10)
     with Session(engine) as db:
+        monkeypatch.setattr(
+            theme_eval, "is_core_analysis_complete", lambda *args, **kwargs: True
+        )
         monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: source_status)
         db.add(
             ThemeForwardEval(
@@ -209,6 +212,7 @@ def test_theme_research_ready_dates_accepts_usable_source_and_current_factors(
 ) -> None:
     day = date(2026, 5, 10)
 
+    monkeypatch.setattr(theme_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
     monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: source_status)
     monkeypatch.setattr(
         theme_eval,
@@ -226,9 +230,13 @@ def test_theme_research_ready_dates_accepts_usable_source_and_current_factors(
 def test_opportunity_ready_gate_uses_only_opportunity_coverage(monkeypatch, status) -> None:
     day = date(2026, 5, 10)
     monkeypatch.setattr(
+        opportunity_eval, "is_core_analysis_complete", lambda *args, **kwargs: True
+    )
+    monkeypatch.setattr(
         opportunity_eval,
         "check_opportunity_quality",
         lambda *args, **kwargs: SimpleNamespace(
+            counts={"state": 1},
             results={
                 "opportunity_vs_state": status,
                 "theme_factor_vs_theme_daily": "ERROR",
@@ -242,6 +250,62 @@ def test_opportunity_ready_gate_uses_only_opportunity_coverage(monkeypatch, stat
     assert skipped == []
 
 
+def test_opportunity_ready_gate_checks_core_before_opportunity_quality(monkeypatch) -> None:
+    day = date(2026, 5, 10)
+    monkeypatch.setattr(
+        opportunity_eval, "is_core_analysis_complete", lambda *args, **kwargs: False
+    )
+    monkeypatch.setattr(
+        opportunity_eval,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: pytest.fail("quality must not run before the core gate"),
+    )
+
+    ready, skipped = opportunity_eval.opportunity_research_ready_dates(
+        object(), [day], get_settings()
+    )
+
+    assert ready == []
+    assert skipped == [day]
+
+
+def test_opportunity_ready_gate_fails_closed_when_state_is_empty(monkeypatch) -> None:
+    day = date(2026, 5, 10)
+    monkeypatch.setattr(
+        opportunity_eval, "is_core_analysis_complete", lambda *args, **kwargs: True
+    )
+    monkeypatch.setattr(
+        opportunity_eval,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: SimpleNamespace(
+            counts={"state": 0, "opportunity": 0},
+            results={"opportunity_vs_state": "PASS"},
+        ),
+    )
+
+    ready, skipped = opportunity_eval.opportunity_research_ready_dates(
+        object(), [day], get_settings()
+    )
+
+    assert ready == []
+    assert skipped == [day]
+
+
+def test_theme_ready_gate_checks_core_before_source_quality(monkeypatch) -> None:
+    day = date(2026, 5, 10)
+    monkeypatch.setattr(theme_eval, "is_core_analysis_complete", lambda *args, **kwargs: False)
+    monkeypatch.setattr(
+        theme_eval,
+        "theme_source_status",
+        lambda *args: pytest.fail("source quality must not run before the core gate"),
+    )
+
+    ready, skipped = theme_eval.theme_research_ready_dates(object(), [day], get_settings())
+
+    assert ready == []
+    assert skipped == [day]
+
+
 def test_theme_research_skips_factor_coverage_error_without_deleting_existing_rows(
     monkeypatch,
 ) -> None:
@@ -249,6 +313,7 @@ def test_theme_research_skips_factor_coverage_error_without_deleting_existing_ro
     ThemeForwardEval.__table__.create(engine)
     settings = get_settings()
     day = date(2026, 5, 10)
+    monkeypatch.setattr(theme_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
     monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: "PASS")
     monkeypatch.setattr(
         theme_eval,

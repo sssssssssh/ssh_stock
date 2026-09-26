@@ -1194,5 +1194,6 @@ docker compose logs --tail=200 backend worker scheduler frontend
 ## Milestone 12.8.3 Pre-M13 正确性收尾（2026-09-26）
 
 - Research 身份升级为 `research_eval_v7`。延迟退出搜索路径一旦在首个可执行日前遇到行情、交易状态或退出价格缺口，该 horizon 立即记为 `DATA_INCOMPLETE`，不得被后续可成交日覆盖为 `SUCCESS`；停牌、跌停和非活跃等已知不可退出原因仍可继续向后搜索。
+- M12.8.4 将 Research 身份升级为 `research_eval_v8`，并统一 CatchUp、Scheduler、Opportunity Research 与 Theme Research 的分析就绪判定。Opportunity 与 Theme 都先通过 factor/market/sector/state 核心完整性门禁；Opportunity 额外要求非空 state 与 `opportunity_vs_state` 可用，Theme 独立要求题材源和题材因子覆盖可用，不再被 Opportunity 覆盖率误判放行或阻断。未就绪日期不进入 replace-slice，已就绪但业务筛选为空仍会权威清空当前 v8 slice。
 - Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
 - 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。

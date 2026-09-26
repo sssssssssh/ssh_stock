@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal
-from app.jobs.catchup_job import analysis_complete_dates
 from app.jobs.research_job import (
     RESEARCH_IDENTITY_KEYS,
     RESEARCH_JOB_TYPE,
@@ -29,6 +28,7 @@ from app.services.job_guard import (
     recover_stale_research_jobs,
     research_can_run,
 )
+from app.services.quality.analysis_readiness import analysis_complete_dates
 from app.services.retention import run_retention
 from app.services.service_heartbeat import new_instance_id, touch_service_heartbeat
 

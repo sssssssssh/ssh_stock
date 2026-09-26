@@ -2,29 +2,14 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.clock import business_today
 from app.core.config import get_settings
-from app.models.market_data import (
-    MarketDaily,
-    SectorFactorDaily,
-    StockDaily,
-    StockFactorDaily,
-    StockStateDaily,
-    TradeCalendar,
-)
+from app.models.market_data import TradeCalendar
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job
-from app.services.analysis_identity import (
-    FACTOR_CALC_VERSION,
-    MARKET_CALC_VERSION,
-    SECTOR_CALC_VERSION,
-    TREND_CALC_VERSION,
-    analysis_strategy_hash,
-)
-from app.services.calc_metadata import config_hash
 from app.services.dirty import (
     latest_raw_trade_date,
     repairable_dirty_ranges,
@@ -32,8 +17,8 @@ from app.services.dirty import (
 )
 from app.services.ingestion import EodDataNotReadyError, IngestionService
 from app.services.job_guard import scheduler_setting
-from app.services.quality.daily_quality import DataQualityError, cross_table_coverage_status
-from app.services.quality.opportunity_quality import check_opportunity_quality
+from app.services.quality.analysis_readiness import is_analysis_complete
+from app.services.quality.daily_quality import DataQualityError
 from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.quality.theme_quality import (
     expected_theme_codes_on_date,
@@ -358,33 +343,6 @@ def _open_trade_dates(db: Session, start: date, end: date) -> list[date]:
     )
 
 
-def analysis_complete_dates(
-    db: Session,
-    start: date,
-    end: date,
-    *,
-    algo_version: str,
-    strategy: dict | None = None,
-    opportunity_config: dict | None = None,
-) -> set[date]:
-    settings = get_settings()
-    resolved_strategy = strategy if strategy is not None else settings.strategy
-    resolved_opportunity = (
-        opportunity_config if opportunity_config is not None else settings.opportunity_config
-    )
-    return {
-        trade_date
-        for trade_date in _open_trade_dates(db, start, end)
-        if is_analysis_complete(
-            db,
-            trade_date,
-            strategy=resolved_strategy,
-            opportunity_config=resolved_opportunity,
-            algo_version=algo_version,
-        )
-    }
-
-
 def classify_catchup_dates(
     db: Session,
     candidate_dates: list[date],
@@ -416,110 +374,9 @@ def classify_catchup_dates(
     return raw_required_dates, analysis_required_dates
 
 
-def is_analysis_complete(
-    db: Session,
-    trade_date: date,
-    *,
-    strategy: dict,
-    opportunity_config: dict | None = None,
-    algo_version: str,
-) -> bool:
-    if not is_core_analysis_complete(
-        db,
-        trade_date,
-        strategy=strategy,
-        algo_version=algo_version,
-    ):
-        return False
-    if opportunity_config is None:
-        return True
-    resolved_opportunity = opportunity_config
-    quality = check_opportunity_quality(
-        db,
-        trade_date,
-        strategy_hash=analysis_strategy_hash(strategy),
-        opportunity_hash=config_hash(resolved_opportunity),
-        algo_version=algo_version,
-        config=resolved_opportunity,
-    )
-    return quality.is_complete
-
-
-def is_core_analysis_complete(
-    db: Session,
-    trade_date: date,
-    *,
-    strategy: dict,
-    algo_version: str,
-) -> bool:
-    current_config_hash = analysis_strategy_hash(strategy)
-    stock_daily_count = _count_matching(db, StockDaily, StockDaily.trade_date == trade_date)
-    factor_count = _count_matching(
-        db,
-        StockFactorDaily,
-        StockFactorDaily.trade_date == trade_date,
-        StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
-        StockFactorDaily.config_hash == current_config_hash,
-    )
-    if (
-        cross_table_coverage_status(
-            strategy,
-            "factor_vs_daily",
-            stock_daily_count,
-            factor_count,
-            error_default=0.90,
-        )
-        != "PASS"
-    ):
-        return False
-
-    market_count = _count_matching(
-        db,
-        MarketDaily,
-        MarketDaily.trade_date == trade_date,
-        MarketDaily.calc_version == MARKET_CALC_VERSION,
-        MarketDaily.config_hash == current_config_hash,
-    )
-    if market_count < 1:
-        return False
-
-    sector_count = _count_matching(
-        db,
-        SectorFactorDaily,
-        SectorFactorDaily.trade_date == trade_date,
-        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
-        SectorFactorDaily.config_hash == current_config_hash,
-    )
-    if sector_count < 1:
-        return False
-
-    state_count = _count_matching(
-        db,
-        StockStateDaily,
-        StockStateDaily.trade_date == trade_date,
-        StockStateDaily.algo_version == algo_version,
-        StockStateDaily.calc_version == TREND_CALC_VERSION,
-        StockStateDaily.config_hash == current_config_hash,
-    )
-    return (
-        cross_table_coverage_status(
-            strategy,
-            "state_vs_factor",
-            factor_count,
-            state_count,
-            error_default=0.90,
-        )
-        == "PASS"
-    )
-
-
 def _candidate_catchup_dates(
     open_dates: list[date],
     *,
     max_trade_days: int,
 ) -> list[date]:
     return open_dates[-max_trade_days:] if max_trade_days > 0 else []
-
-
-def _count_matching(db: Session, model: type, *criteria) -> int:
-    return int(db.execute(select(func.count()).select_from(model).where(*criteria)).scalar_one())
