@@ -517,6 +517,11 @@ def test_is_analysis_complete_requires_versions_hash_and_pass_coverage(monkeypat
         "_count_matching",
         lambda db, model, *criteria: counts[model],
     )
+    monkeypatch.setattr(
+        analysis_readiness,
+        "check_sector_factor_coverage",
+        lambda *args, **kwargs: SimpleNamespace(status="PASS"),
+    )
 
     complete = is_analysis_complete(
         object(),

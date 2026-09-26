@@ -57,6 +57,9 @@ data_quality:
     state_vs_factor:
       warning_coverage_rate: 0.98
       error_coverage_rate: 0.90
+    sector_factor_vs_expected:
+      warning_coverage_rate: 0.98
+      error_coverage_rate: 0.90
 
 raw_quality:
   adj_factor:

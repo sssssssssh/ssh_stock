@@ -28,6 +28,7 @@ from app.services.analysis_identity import (
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
+from app.services.quality.sector_quality import check_sector_factor_coverage
 from app.services.universe import is_stock_active_on
 
 
@@ -323,6 +324,26 @@ def record_cross_table_quality(
         warning_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "warning", 0.98),
         error_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "error", 0.90),
     )
+    sector_quality = check_sector_factor_coverage(
+        db,
+        trade_date,
+        strategy=strategy,
+        strategy_hash=hash_value,
+    )
+    counts["sector_factor_expected"] = sector_quality.expected_count
+    counts["sector_factor_matched"] = sector_quality.matched_count
+    results["sector_factor_vs_expected"] = _persist_sector_coverage(
+        db,
+        trade_date,
+        sector_quality,
+        job_id=job_id,
+        warning_coverage_rate=_cross_table_threshold(
+            strategy, "sector_factor_vs_expected", "warning", 0.98
+        ),
+        error_coverage_rate=_cross_table_threshold(
+            strategy, "sector_factor_vs_expected", "error", 0.90
+        ),
+    )
     return CrossTableQualityResult(
         trade_date=trade_date,
         counts=counts,
@@ -338,6 +359,7 @@ def record_cross_table_quality(
                 "basic_vs_daily",
                 "factor_vs_daily",
                 "state_vs_factor",
+                "sector_factor_vs_expected",
             }
         ],
     )
@@ -457,6 +479,49 @@ def _persist_simple(
         ["trade_date", "dataset"],
     )
     return status
+
+
+def _persist_sector_coverage(
+    db: Session,
+    trade_date: date,
+    result: Any,
+    *,
+    job_id: uuid.UUID | None,
+    warning_coverage_rate: float,
+    error_coverage_rate: float,
+) -> str:
+    upsert_rows(
+        db,
+        DataQualityDaily,
+        [
+            {
+                "trade_date": trade_date,
+                "dataset": "sector_factor_vs_expected",
+                "expected_rows": result.expected_count,
+                "actual_rows": result.matched_count,
+                "coverage_rate": result.coverage_rate,
+                "missing_count": result.missing_count,
+                "duplicate_count": 0,
+                "null_count": 0,
+                "warning_count": int(result.status == "WARNING"),
+                "error_count": int(result.status == "ERROR"),
+                "status": result.status,
+                "issue_codes": {
+                    "actual_count": result.actual_count,
+                    "matched_count": result.matched_count,
+                    "missing_count": result.missing_count,
+                    "extra_count": result.extra_count,
+                    "missing_sector_ids": list(result.missing_sector_ids),
+                    "extra_sector_ids": list(result.extra_sector_ids),
+                    "warning_coverage_rate": warning_coverage_rate,
+                    "error_coverage_rate": error_coverage_rate,
+                },
+                "job_id": job_id,
+            }
+        ],
+        ["trade_date", "dataset"],
+    )
+    return result.status
 
 
 def _count_date(

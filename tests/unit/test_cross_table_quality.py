@@ -1,20 +1,43 @@
 from datetime import date
 
+from app.core.config import get_settings
 from app.models.market_data import (
+    DataQualityDaily,
     IndexDaily,
     MarketDaily,
     SectorFactorDaily,
+    SectorMember,
     StockAdjFactor,
     StockDaily,
     StockDailyBasic,
     StockFactorDaily,
     StockStateDaily,
 )
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    analysis_strategy_hash,
+)
 from app.services.quality import daily_quality
 from app.services.quality.daily_quality import (
     record_cross_table_quality,
     validate_cross_table_range,
 )
+from app.services.quality.sector_quality import SectorCoverageResult
+from sqlalchemy import BigInteger, create_engine, select
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import Session
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_for_sqlite(_type, _compiler, **_kwargs):
+    return "JSON"
+
+
+@compiles(BigInteger, "sqlite")
+def _compile_bigint_for_sqlite(_type, _compiler, **_kwargs):
+    return "INTEGER"
 
 
 def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> None:
@@ -60,6 +83,11 @@ def test_cross_table_quality_escalates_severe_missing_to_error(monkeypatch) -> N
         daily_quality,
         "_count_date",
         lambda db, model, column, trade_date, *criteria: counts[model],
+    )
+    monkeypatch.setattr(
+        daily_quality,
+        "check_sector_factor_coverage",
+        lambda *args, **kwargs: SectorCoverageResult(30, 0, 0, 30, 0, 0.0, "ERROR"),
     )
     monkeypatch.setattr(
         daily_quality,
@@ -129,3 +157,76 @@ def test_validate_cross_table_range_commits_error_evidence(monkeypatch) -> None:
     assert result.error_datasets == {"2026-09-02": ["factor_vs_daily"]}
     assert (date(2026, 9, 2), "factor_vs_daily", "ERROR") in db.persisted
     assert db.commits == 1
+
+
+def test_sector_cross_table_quality_persists_error_with_real_sector_sql(monkeypatch) -> None:
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    day = date(2026, 9, 26)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    for table in (
+        StockFactorDaily.__table__,
+        SectorMember.__table__,
+        SectorFactorDaily.__table__,
+        DataQualityDaily.__table__,
+    ):
+        table.create(engine)
+    monkeypatch.setattr(daily_quality, "_count_date", lambda *args, **kwargs: 30)
+    monkeypatch.setattr(
+        daily_quality,
+        "expected_stock_daily_codes",
+        lambda *args: {f"{index:06d}.SZ" for index in range(30)},
+    )
+    with Session(engine) as db:
+        db.execute(
+            StockFactorDaily.__table__.insert(),
+            [
+                {
+                    "trade_date": day,
+                    "ts_code": f"{index:06d}.SZ",
+                    "eligible": True,
+                    "calc_version": FACTOR_CALC_VERSION,
+                    "config_hash": strategy_hash,
+                }
+                for index in range(30)
+            ],
+        )
+        db.execute(
+            SectorMember.__table__.insert(),
+            [
+                {
+                    "sector_id": index + 1,
+                    "ts_code": f"{index:06d}.SZ",
+                    "valid_from": day,
+                    "is_latest": True,
+                }
+                for index in range(30)
+            ],
+        )
+        db.execute(
+            SectorFactorDaily.__table__.insert(),
+            [{
+                "trade_date": day,
+                "sector_id": 1,
+                "calc_version": SECTOR_CALC_VERSION,
+                "config_hash": strategy_hash,
+            }],
+        )
+        db.commit()
+
+        result = record_cross_table_quality(db, day, strategy=settings.strategy)
+        persisted = db.scalar(
+            select(DataQualityDaily).where(
+                DataQualityDaily.trade_date == day,
+                DataQualityDaily.dataset == "sector_factor_vs_expected",
+            )
+        )
+
+    assert result.has_error
+    assert "sector_factor_vs_expected" in result.error_datasets
+    assert persisted is not None
+    assert persisted.expected_rows == 30
+    assert persisted.actual_rows == 1
+    assert persisted.status == "ERROR"
+    assert persisted.issue_codes["actual_count"] == 1
+    assert persisted.issue_codes["missing_count"] == 29

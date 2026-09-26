@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import app.services.opportunity.service as opportunity_service_module
@@ -10,22 +10,40 @@ import pandas as pd
 import pytest
 from app.core.config import get_settings
 from app.models.market_data import (
+    MarketDaily,
     OpportunityForwardEval,
+    SectorFactorDaily,
+    SectorMember,
+    StockDaily,
+    StockFactorDaily,
     StockOpportunityDaily,
+    StockStateDaily,
     ThemeFactorDaily,
     ThemeForwardEval,
 )
 from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
     RESEARCH_EVAL_VERSION,
     RESEARCH_VERSION,
+    SECTOR_CALC_VERSION,
     THEME_CALC_VERSION,
+    TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_for_sqlite(_type, _compiler, **_kwargs):
+    return "JSON"
 
 
 class _Rows:
@@ -304,6 +322,134 @@ def test_theme_ready_gate_checks_core_before_source_quality(monkeypatch) -> None
 
     assert ready == []
     assert skipped == [day]
+
+
+def test_opportunity_batch_preserves_existing_v9_slice_when_sector_is_incomplete() -> None:
+    settings = get_settings()
+    day = date(2026, 9, 26)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    for table in (
+        StockDaily.__table__,
+        StockFactorDaily.__table__,
+        MarketDaily.__table__,
+        SectorMember.__table__,
+        SectorFactorDaily.__table__,
+        StockStateDaily.__table__,
+        StockOpportunityDaily.__table__,
+        OpportunityForwardEval.__table__,
+    ):
+        table.create(engine)
+    codes = [f"{index:06d}.SZ" for index in range(30)]
+    with Session(engine) as db:
+        db.execute(
+            StockDaily.__table__.insert(),
+            [{"trade_date": day, "ts_code": code} for code in codes],
+        )
+        db.execute(
+            StockFactorDaily.__table__.insert(),
+            [
+                {
+                    "trade_date": day,
+                    "ts_code": code,
+                    "eligible": True,
+                    "calc_version": FACTOR_CALC_VERSION,
+                    "config_hash": strategy_hash,
+                }
+                for code in codes
+            ],
+        )
+        db.execute(
+            SectorMember.__table__.insert(),
+            [
+                {
+                    "sector_id": index + 1,
+                    "ts_code": code,
+                    "valid_from": day,
+                    "is_latest": True,
+                }
+                for index, code in enumerate(codes)
+            ],
+        )
+        db.execute(
+            SectorFactorDaily.__table__.insert(),
+            [{
+                "trade_date": day,
+                "sector_id": 1,
+                "calc_version": SECTOR_CALC_VERSION,
+                "config_hash": strategy_hash,
+            }],
+        )
+        db.execute(
+            MarketDaily.__table__.insert(),
+            [{
+                "trade_date": day,
+                "calc_version": MARKET_CALC_VERSION,
+                "config_hash": strategy_hash,
+            }],
+        )
+        db.execute(
+            StockStateDaily.__table__.insert(),
+            [
+                {
+                    "trade_date": day,
+                    "ts_code": code,
+                    "algo_version": settings.algo_version,
+                    "state": "S4",
+                    "is_new_state": False,
+                    "fast_transition": False,
+                    "calc_version": TREND_CALC_VERSION,
+                    "config_hash": strategy_hash,
+                }
+                for code in codes
+            ],
+        )
+        db.execute(
+            StockOpportunityDaily.__table__.insert(),
+            [
+                {
+                    "trade_date": day,
+                    "ts_code": code,
+                    "algo_version": settings.algo_version,
+                    "state": "S4",
+                    "left_reversal_new": False,
+                    "opportunity_stage": "WATCH",
+                    "calc_version": OPPORTUNITY_CALC_VERSION,
+                    "config_hash": opportunity_hash,
+                    "source_strategy_config_hash": strategy_hash,
+                    "calculated_at": datetime.now(UTC),
+                }
+                for code in codes
+            ],
+        )
+        db.add(
+            OpportunityForwardEval(
+                id=1,
+                trade_date=day,
+                ts_code=codes[0],
+                algo_version=settings.algo_version,
+                strategy_config_hash=strategy_hash,
+                opportunity_calc_version=OPPORTUNITY_CALC_VERSION,
+                opportunity_config_hash=opportunity_hash,
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis=settings.research_config["stock"]["entry_basis"],
+                benchmark_code=settings.research_config["benchmark_code"],
+                state="S4",
+                opportunity_stage="WATCH",
+            )
+        )
+        db.commit()
+
+        result = opportunity_eval.evaluate_opportunity_batch(db, [day], settings)
+        remaining = db.scalar(select(func.count()).select_from(OpportunityForwardEval))
+
+    assert result["opportunity_skipped_source_dates"] == 1
+    assert result["eval_rows"] == 0
+    assert result["deleted_rows"] == 0
+    assert remaining == 1
 
 
 def test_theme_research_skips_factor_coverage_error_without_deleting_existing_rows(

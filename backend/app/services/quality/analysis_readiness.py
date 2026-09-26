@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.market_data import (
     MarketDaily,
-    SectorFactorDaily,
     StockDaily,
     StockFactorDaily,
     StockStateDaily,
@@ -15,13 +14,13 @@ from app.models.market_data import (
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
-    SECTOR_CALC_VERSION,
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
 from app.services.quality.daily_quality import cross_table_coverage_status
 from app.services.quality.opportunity_quality import check_opportunity_quality
+from app.services.quality.sector_quality import check_sector_factor_coverage
 
 
 def analysis_complete_dates(
@@ -131,14 +130,13 @@ def is_core_analysis_complete(
     )
     if market_count < 1:
         return False
-    sector_count = _count_matching(
+    sector_quality = check_sector_factor_coverage(
         db,
-        SectorFactorDaily,
-        SectorFactorDaily.trade_date == trade_date,
-        SectorFactorDaily.calc_version == SECTOR_CALC_VERSION,
-        SectorFactorDaily.config_hash == strategy_hash,
+        trade_date,
+        strategy=strategy,
+        strategy_hash=strategy_hash,
     )
-    if sector_count < 1:
+    if sector_quality.status != "PASS":
         return False
     state_count = _count_matching(
         db,

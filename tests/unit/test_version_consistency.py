@@ -17,6 +17,7 @@ from app.models.market_data import (
 )
 from app.services.analysis_identity import analysis_strategy_hash
 from app.services.quality.daily_quality import record_cross_table_quality
+from app.services.quality.sector_quality import SectorCoverageResult
 from app.services.trend.service import TrendService
 
 
@@ -70,6 +71,11 @@ def test_cross_table_quality_counts_only_current_versions(monkeypatch) -> None:
         lambda db, trade_date: {f"{index:06d}.SZ" for index in range(10)},
     )
     monkeypatch.setattr(quality_module, "upsert_rows", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(
+        quality_module,
+        "check_sector_factor_coverage",
+        lambda *args, **kwargs: SectorCoverageResult(1, 1, 1, 0, 0, 1.0, "PASS"),
+    )
 
     record_cross_table_quality(object(), date(2026, 9, 15), strategy={"version": "test"})
 

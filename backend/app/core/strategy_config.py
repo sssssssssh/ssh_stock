@@ -61,6 +61,7 @@ class CrossTableConfig(StrictConfig):
     basic_vs_daily: CoverageThreshold
     factor_vs_daily: CoverageThreshold
     state_vs_factor: CoverageThreshold
+    sector_factor_vs_expected: CoverageThreshold
 
 
 class DataQualityConfig(StrictConfig):
