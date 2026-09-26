@@ -222,3 +222,30 @@ def test_sector_actual_set_rejects_old_identity(actual_hash, actual_version) -> 
 
     assert result.actual_count == 0
     assert result.status == "ERROR"
+
+
+@pytest.mark.parametrize(
+    ("actual_ids", "matched", "missing", "extra"),
+    (
+        (list(range(1, 32)), 30, 0, 1),
+        (list(range(1, 30)) + [31], 29, 1, 1),
+    ),
+)
+def test_sector_extra_rows_downgrade_pass_to_warning(
+    actual_ids, matched, missing, extra
+) -> None:
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    day = date(2026, 9, 26)
+    with _db() as db:
+        _seed_expected(db, day, strategy_hash, 30)
+        _seed_actual(db, day, strategy_hash, actual_ids)
+        db.commit()
+        result = check_sector_factor_coverage(
+            db, day, strategy=settings.strategy, strategy_hash=strategy_hash
+        )
+
+    assert result.matched_count == matched
+    assert result.missing_count == missing
+    assert result.extra_count == extra
+    assert result.status == "WARNING"

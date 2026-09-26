@@ -132,6 +132,7 @@ def queue_research_eval(
             "theme_skipped_source_dates": 0,
             "transition_rows": 0,
             "transition_deleted_rows": 0,
+            "transition_skipped_source_dates": 0,
             "warnings": [],
             "progress_pct": 0,
         },
@@ -177,6 +178,7 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
         "transition_base_rows": 0,
         "transition_rows": 0,
         "transition_deleted_rows": 0,
+        "transition_skipped_source_dates": 0,
     }
     update_job(db, job, status="RUNNING", step="research evaluation started", metadata=metadata)
     for index, dates in enumerate(batches, start=1):
@@ -215,6 +217,9 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
             totals["transition_base_rows"] += result["base_rows"]
             totals["transition_rows"] += result["eval_rows"]
             totals["transition_deleted_rows"] += result["deleted_rows"]
+            totals["transition_skipped_source_dates"] += result.get(
+                "transition_skipped_source_dates", 0
+            )
         metadata = {
             **metadata,
             **totals,
@@ -231,6 +236,10 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
                         totals["opportunity_skipped_source_dates"],
                     ),
                     ("THEME_SOURCE_INCOMPLETE", totals["theme_skipped_source_dates"]),
+                    (
+                        "TRANSITION_SOURCE_INCOMPLETE",
+                        totals["transition_skipped_source_dates"],
+                    ),
                 )
                 if present
             ],

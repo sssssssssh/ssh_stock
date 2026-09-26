@@ -21,7 +21,12 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
-from app.services.research.opportunity_eval import STATES, future_dates
+from app.services.quality.analysis_readiness import is_core_analysis_complete
+from app.services.research.opportunity_eval import (
+    STATES,
+    future_dates,
+    opportunity_research_ready_dates,
+)
 
 TRANSITION_KEY = (
     "event_trade_date",
@@ -115,12 +120,108 @@ def transition_outcome(
     return result
 
 
+def transition_research_ready_dates(
+    db: Session, base_dates: list[date], settings: Any
+) -> tuple[list[date], list[date]]:
+    if not base_dates:
+        return [], []
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    latest_state = db.scalar(
+        select(func.max(StockStateDaily.trade_date)).where(
+            StockStateDaily.algo_version == settings.algo_version,
+            StockStateDaily.calc_version == TREND_CALC_VERSION,
+            StockStateDaily.config_hash == strategy_hash,
+        )
+    )
+    calendar_end = max(max(base_dates), latest_state) if latest_state else max(base_dates)
+    first_prior = db.scalar(
+        select(TradeCalendar.cal_date)
+        .where(
+            TradeCalendar.is_open.is_(True),
+            TradeCalendar.cal_date < min(base_dates),
+        )
+        .order_by(TradeCalendar.cal_date.desc())
+        .limit(1)
+    )
+    calendar_start = first_prior or min(base_dates)
+    open_dates = list(
+        db.execute(
+            select(TradeCalendar.cal_date)
+            .where(
+                TradeCalendar.is_open.is_(True),
+                TradeCalendar.cal_date >= calendar_start,
+                TradeCalendar.cal_date <= calendar_end,
+            )
+            .order_by(TradeCalendar.cal_date)
+        )
+        .scalars()
+        .all()
+    )
+    positions = {day: index for index, day in enumerate(open_dates)}
+    prior_by_date = {
+        day: open_dates[positions[day] - 1]
+        for day in base_dates
+        if day in positions and positions[day] > 0
+    }
+    opportunity_dates = sorted(set(base_dates) | set(prior_by_date.values()))
+    opportunity_ready, _ = opportunity_research_ready_dates(
+        db, opportunity_dates, settings
+    )
+    opportunity_ready_set = set(opportunity_ready)
+    max_horizon = max(settings.research_config["transition_horizons"])
+    future_candidates: set[date] = set()
+    future_by_base: dict[date, list[date]] = {}
+    for day in base_dates:
+        position = positions.get(day)
+        elapsed = []
+        if position is not None and latest_state is not None:
+            elapsed = [
+                future_day
+                for future_day in open_dates[position + 1 : position + 1 + max_horizon]
+                if future_day <= latest_state
+            ]
+        future_by_base[day] = elapsed
+        future_candidates.update(elapsed)
+    core_ready = {
+        day: is_core_analysis_complete(
+            db,
+            day,
+            strategy=settings.strategy,
+            algo_version=settings.algo_version,
+        )
+        for day in sorted(future_candidates)
+    }
+    ready: list[date] = []
+    skipped: list[date] = []
+    for day in base_dates:
+        prior = prior_by_date.get(day)
+        if (
+            day not in opportunity_ready_set
+            or prior is None
+            or prior not in opportunity_ready_set
+            or not all(core_ready[future_day] for future_day in future_by_base[day])
+        ):
+            skipped.append(day)
+        else:
+            ready.append(day)
+    return ready, skipped
+
+
 def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any) -> dict[str, int]:
     strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
+    ready_dates, skipped_dates = transition_research_ready_dates(db, base_dates, settings)
+    counts = {
+        "base_rows": 0,
+        "eval_rows": 0,
+        "deleted_rows": 0,
+        "transition_skipped_source_dates": len(skipped_dates),
+    }
+    if not ready_dates:
+        return counts
     scope_filters = (
-        ResearchTransitionEval.event_trade_date.in_(base_dates),
+        ResearchTransitionEval.event_trade_date.in_(ready_dates),
         ResearchTransitionEval.algo_version == settings.algo_version,
         ResearchTransitionEval.trend_calc_version == TREND_CALC_VERSION,
         ResearchTransitionEval.opportunity_calc_version == OPPORTUNITY_CALC_VERSION,
@@ -133,7 +234,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
         select(TradeCalendar.cal_date)
         .where(
             TradeCalendar.is_open.is_(True),
-            TradeCalendar.cal_date < base_dates[0],
+            TradeCalendar.cal_date < ready_dates[0],
         )
         .order_by(TradeCalendar.cal_date.desc())
         .limit(1)
@@ -147,7 +248,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
     )
     dates = future_dates(
         db,
-        base_dates,
+        ready_dates,
         latest,
         max_horizon=max(settings.research_config["transition_horizons"]),
         executable_exit_search_days=0,
@@ -156,7 +257,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
     bases = (
         db.execute(
             select(StockOpportunityDaily).where(
-                StockOpportunityDaily.trade_date.in_(base_dates),
+                StockOpportunityDaily.trade_date.in_(ready_dates),
                 *opportunity_identity_filters(
                     settings,
                     strategy_hash=strategy_hash,
@@ -169,7 +270,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
         .all()
     )
     prior_by_date = {day: all_dates[index - 1] for index, day in enumerate(all_dates) if index > 0}
-    prior_dates = {prior_by_date[day] for day in base_dates if day in prior_by_date}
+    prior_dates = {prior_by_date[day] for day in ready_dates if day in prior_by_date}
     previous: dict[tuple[date, str], Any] = {}
     if all_dates and bases:
         prior_rows = (
@@ -191,7 +292,7 @@ def evaluate_transition_batch(db: Session, base_dates: list[date], settings: Any
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)
-    counts = {"base_rows": len(bases), "eval_rows": 0, "deleted_rows": 0}
+    counts["base_rows"] = len(bases)
     codes = sorted(by_code)
 
     def row_batches() -> Iterator[list[dict[str, Any]]]:

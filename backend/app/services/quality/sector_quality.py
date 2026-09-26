@@ -83,6 +83,8 @@ def check_sector_factor_coverage(
             status = "ERROR"
         elif coverage_rate < warning_rate:
             status = "WARNING"
+        elif extra_ids:
+            status = "WARNING"
         else:
             status = "PASS"
     return SectorCoverageResult(

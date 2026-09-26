@@ -16,7 +16,7 @@ def test_settings_load_yaml_defaults() -> None:
 
 def test_research_thresholds_include_production_strong_score() -> None:
     settings = get_settings()
-    assert settings.research_config["eval_version"] == "research_eval_v9"
+    assert settings.research_config["eval_version"] == "research_eval_v10"
     _validate_research_config(settings.research_config, settings.opportunity_config)
     changed = {**settings.research_config, "left_thresholds": [60, 65, 70, 80, 85]}
     with pytest.raises(ValueError, match="strong_score=75"):

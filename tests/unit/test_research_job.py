@@ -48,6 +48,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
             "base_rows": 3,
             "eval_rows": 1,
             "deleted_rows": 3,
+            "transition_skipped_source_dates": 1,
         },
     )
     monkeypatch.setattr(research_job, "update_job", lambda db, job, **kwargs: calls.append(kwargs))
@@ -66,12 +67,14 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
     assert totals["theme_deleted_rows"] == 2
     assert totals["theme_skipped_source_dates"] == 2
     assert totals["transition_deleted_rows"] == 6
+    assert totals["transition_skipped_source_dates"] == 2
     assert calls[-1]["status"] == "SUCCESS"
     assert calls[-1]["metadata"]["progress_pct"] == 100
     assert calls[-1]["metadata"]["warnings"] == [
         "BENCHMARK_DATA_MISSING",
         "OPPORTUNITY_SOURCE_INCOMPLETE",
         "THEME_SOURCE_INCOMPLETE",
+        "TRANSITION_SOURCE_INCOMPLETE",
     ]
 
 
@@ -102,6 +105,44 @@ def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
     )
     with pytest.raises(RuntimeError, match="input rows > 0"):
         research_job.run_research_eval(object(), job)
+
+
+def test_transition_only_records_readiness_skip_warning(monkeypatch) -> None:
+    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    settings = get_settings()
+    monkeypatch.setattr(research_job, "get_settings", lambda: settings)
+    monkeypatch.setattr(
+        research_job,
+        "trade_batches",
+        lambda *args: iter([[date(2026, 1, 2)]]),
+    )
+    monkeypatch.setattr(
+        research_job,
+        "evaluate_transition_batch",
+        lambda *args: {
+            "base_rows": 0,
+            "eval_rows": 0,
+            "deleted_rows": 0,
+            "transition_skipped_source_dates": 1,
+        },
+    )
+    calls = []
+    monkeypatch.setattr(
+        research_job, "update_job", lambda db, job, **kwargs: calls.append(kwargs)
+    )
+    job = SimpleNamespace(
+        job_metadata={
+            "start": "2026-01-02",
+            "end": "2026-01-02",
+            "transition_only": True,
+            **research_job.current_research_identity(settings),
+        }
+    )
+
+    totals = research_job.run_research_eval(object(), job)
+
+    assert totals["transition_skipped_source_dates"] == 1
+    assert calls[-1]["metadata"]["warnings"] == ["TRANSITION_SOURCE_INCOMPLETE"]
 
 
 def test_research_queue_validates_range_and_modes_before_writing() -> None:
@@ -157,6 +198,7 @@ def test_research_queue_recovers_stale_and_stores_lineage_metadata(monkeypatch) 
     assert metadata["opportunity_deleted_rows"] == 0
     assert metadata["theme_deleted_rows"] == 0
     assert metadata["transition_deleted_rows"] == 0
+    assert metadata["transition_skipped_source_dates"] == 0
 
 
 def test_research_queue_uses_postgresql_advisory_lock(monkeypatch) -> None:

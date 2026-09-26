@@ -110,6 +110,10 @@ def test_research_filters_unverified_or_old_source_lineage(
         monkeypatch.setattr(
             module, "theme_research_ready_dates", lambda db, dates, settings: (dates, [])
         )
+    if module is transition_eval:
+        monkeypatch.setattr(
+            module, "transition_research_ready_dates", lambda db, dates, settings: (dates, [])
+        )
     result = {
         opportunity_eval: opportunity_eval.evaluate_opportunity_batch,
         theme_eval: theme_eval.evaluate_theme_batch,
@@ -324,7 +328,7 @@ def test_theme_ready_gate_checks_core_before_source_quality(monkeypatch) -> None
     assert skipped == [day]
 
 
-def test_opportunity_batch_preserves_existing_v9_slice_when_sector_is_incomplete() -> None:
+def test_opportunity_batch_preserves_existing_v10_slice_when_sector_is_incomplete() -> None:
     settings = get_settings()
     day = date(2026, 9, 26)
     strategy_hash = analysis_strategy_hash(settings.strategy)
@@ -448,6 +452,78 @@ def test_opportunity_batch_preserves_existing_v9_slice_when_sector_is_incomplete
 
     assert result["opportunity_skipped_source_dates"] == 1
     assert result["eval_rows"] == 0
+    assert result["deleted_rows"] == 0
+    assert remaining == 1
+
+
+def test_theme_batch_preserves_existing_v10_slice_with_real_incomplete_core() -> None:
+    settings = get_settings()
+    day = date(2026, 9, 26)
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    for table in (
+        StockDaily.__table__,
+        StockFactorDaily.__table__,
+        MarketDaily.__table__,
+        SectorMember.__table__,
+        SectorFactorDaily.__table__,
+        StockStateDaily.__table__,
+        ThemeForwardEval.__table__,
+    ):
+        table.create(engine)
+    with Session(engine) as db:
+        db.execute(
+            StockDaily.__table__.insert(),
+            [{"trade_date": day, "ts_code": "000001.SZ"}],
+        )
+        db.execute(
+            StockFactorDaily.__table__.insert(),
+            [{
+                "trade_date": day,
+                "ts_code": "000001.SZ",
+                "eligible": True,
+                "calc_version": FACTOR_CALC_VERSION,
+                "config_hash": strategy_hash,
+            }],
+        )
+        db.execute(
+            SectorMember.__table__.insert(),
+            [{
+                "sector_id": 1,
+                "ts_code": "000001.SZ",
+                "valid_from": day,
+                "is_latest": True,
+            }],
+        )
+        db.execute(
+            MarketDaily.__table__.insert(),
+            [{
+                "trade_date": day,
+                "calc_version": MARKET_CALC_VERSION,
+                "config_hash": strategy_hash,
+            }],
+        )
+        db.add(
+            ThemeForwardEval(
+                id=1,
+                trade_date=day,
+                theme_code="885001.TI",
+                strategy_config_hash=strategy_hash,
+                theme_calc_version=THEME_CALC_VERSION,
+                opportunity_config_hash=config_hash(settings.opportunity_config),
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis=settings.research_config["theme"]["entry_basis"],
+                benchmark_code=settings.research_config["benchmark_code"],
+            )
+        )
+        db.commit()
+
+        result = theme_eval.evaluate_theme_batch(db, [day], settings)
+        remaining = db.scalar(select(func.count()).select_from(ThemeForwardEval))
+
+    assert result["theme_skipped_source_dates"] == 1
     assert result["deleted_rows"] == 0
     assert remaining == 1
 
@@ -665,6 +741,11 @@ def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> 
     db = _ResearchDb(base)
     monkeypatch.setattr(
         transition_eval, "future_dates", lambda *args, **kwargs: [base.trade_date]
+    )
+    monkeypatch.setattr(
+        transition_eval,
+        "transition_research_ready_dates",
+        lambda db, dates, settings: (dates, []),
     )
     monkeypatch.setattr(
         transition_eval, "replace_slice_rows_with_stats",

@@ -12,7 +12,7 @@ TRADE_STATUS_CALC_VERSION = "trade_status_v1"
 THEME_CALC_VERSION = "theme_v1"
 OPPORTUNITY_CALC_VERSION = "opportunity_v1"
 RESEARCH_VERSION = "research_v1"
-RESEARCH_EVAL_VERSION = "research_eval_v9"
+RESEARCH_EVAL_VERSION = "research_eval_v10"
 ANALYSIS_STRATEGY_KEYS = (
     "universe",
     "benchmark",
