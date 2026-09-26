@@ -1,10 +1,20 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import app.services.research.transition_eval as transition_eval
 from app.core.config import get_settings
-from app.models.market_data import ResearchTransitionEval, StockStateDaily, TradeCalendar
+from app.models.market_data import (
+    DataQualityDaily,
+    ResearchTransitionEval,
+    StockFactorDaily,
+    StockOpportunityDaily,
+    StockStateDaily,
+    ThemeDaily,
+    ThemeFactorDaily,
+    TradeCalendar,
+)
 from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
     OPPORTUNITY_CALC_VERSION,
     RESEARCH_VERSION,
     TREND_CALC_VERSION,
@@ -12,9 +22,12 @@ from app.services.analysis_identity import (
 )
 from app.services.calc_metadata import config_hash
 from app.services.research.transition_eval import (
+    TransitionCandidate,
     evaluate_transition_batch,
     is_right_side_new,
     left_crossings,
+    transition_event_stock_state_integrity,
+    transition_opportunity_source_complete,
     transition_outcome,
     transition_research_ready_dates,
 )
@@ -153,8 +166,8 @@ def test_transition_readiness_uses_real_previous_open_date(monkeypatch) -> None:
     db = _readiness_db(days, days[2])
     monkeypatch.setattr(
         transition_eval,
-        "opportunity_research_ready_dates",
-        lambda db, candidates, settings: ([days[2]], [days[1]]),
+        "transition_opportunity_source_complete",
+        lambda db, candidate, settings: candidate == days[2],
     )
     monkeypatch.setattr(transition_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
 
@@ -170,8 +183,8 @@ def test_transition_readiness_rejects_elapsed_future_core_gap(monkeypatch) -> No
     db = _readiness_db(days, days[4])
     monkeypatch.setattr(
         transition_eval,
-        "opportunity_research_ready_dates",
-        lambda db, candidates, settings: (candidates, []),
+        "transition_opportunity_source_complete",
+        lambda *args, **kwargs: True,
     )
     monkeypatch.setattr(
         transition_eval,
@@ -191,8 +204,8 @@ def test_transition_readiness_ignores_unelapsed_future_dates(monkeypatch) -> Non
     db = _readiness_db(days, days[3])
     monkeypatch.setattr(
         transition_eval,
-        "opportunity_research_ready_dates",
-        lambda db, candidates, settings: (candidates, []),
+        "transition_opportunity_source_complete",
+        lambda *args, **kwargs: True,
     )
     checked = []
     monkeypatch.setattr(
@@ -247,3 +260,246 @@ def test_transition_batch_skipped_date_preserves_existing_slice(monkeypatch) -> 
     assert result["transition_skipped_source_dates"] == 1
     assert result["deleted_rows"] == 0
     assert remaining == 1
+
+
+def _transition_db() -> Session:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    for model in (
+        TradeCalendar,
+        StockFactorDaily,
+        StockStateDaily,
+        StockOpportunityDaily,
+        DataQualityDaily,
+        ThemeDaily,
+        ThemeFactorDaily,
+        ResearchTransitionEval,
+    ):
+        model.__table__.create(engine)
+    return Session(engine)
+
+
+def _state_row(day: date, code: str, settings, state: str = "S2") -> StockStateDaily:
+    return StockStateDaily(
+        trade_date=day,
+        ts_code=code,
+        algo_version=settings.algo_version,
+        previous_state="S1",
+        state=state,
+        is_new_state=False,
+        fast_transition=False,
+        calc_version=TREND_CALC_VERSION,
+        config_hash=analysis_strategy_hash(settings.strategy),
+    )
+
+
+def _opportunity_row(
+    day: date,
+    code: str,
+    settings,
+    *,
+    score: float,
+    state: str = "S2",
+) -> StockOpportunityDaily:
+    return StockOpportunityDaily(
+        trade_date=day,
+        ts_code=code,
+        algo_version=settings.algo_version,
+        state=state,
+        previous_state="S1",
+        left_reversal_score=score,
+        left_reversal_new=False,
+        opportunity_stage="LEFT_REVERSAL",
+        calc_version=OPPORTUNITY_CALC_VERSION,
+        config_hash=config_hash(settings.opportunity_config),
+        source_strategy_config_hash=analysis_strategy_hash(settings.strategy),
+        calculated_at=datetime.now(UTC),
+    )
+
+
+def _factor_row(day: date, code: str, settings) -> StockFactorDaily:
+    return StockFactorDaily(
+        trade_date=day,
+        ts_code=code,
+        eligible=True,
+        calc_version=FACTOR_CALC_VERSION,
+        config_hash=analysis_strategy_hash(settings.strategy),
+    )
+
+
+def _transition_row(
+    row_id: int,
+    day: date,
+    code: str,
+    settings,
+    *,
+    mature: bool = True,
+) -> ResearchTransitionEval:
+    return ResearchTransitionEval(
+        id=row_id,
+        event_trade_date=day,
+        ts_code=code,
+        event_type="LEFT_THRESHOLD_CROSS",
+        event_key="LEFT_70",
+        threshold_value=70,
+        source_state="S2",
+        source_score=75,
+        algo_version=settings.algo_version,
+        trend_calc_version=TREND_CALC_VERSION,
+        opportunity_calc_version=OPPORTUNITY_CALC_VERSION,
+        strategy_config_hash=analysis_strategy_hash(settings.strategy),
+        opportunity_config_hash=config_hash(settings.opportunity_config),
+        research_version=RESEARCH_VERSION,
+        research_config_hash=config_hash(settings.research_config),
+        mature5=mature,
+        mature10=mature,
+        mature20=mature,
+    )
+
+
+def test_transition_exact_source_gate_rejects_99_of_100_rows(monkeypatch) -> None:
+    settings = get_settings()
+    day = date(2026, 2, 2)
+    db = _transition_db()
+    monkeypatch.setattr(transition_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
+    db.add_all(
+        [_state_row(day, f"{index:06d}.SZ", settings) for index in range(100)]
+        + [
+            _opportunity_row(
+                day,
+                f"{index:06d}.SZ",
+                settings,
+                score=50,
+            )
+            for index in range(99)
+        ]
+    )
+    db.commit()
+
+    assert transition_opportunity_source_complete(db, day, settings) is False
+    db.close()
+
+
+def test_event_stock_integrity_uses_only_elapsed_candidate_factor_pairs() -> None:
+    settings = get_settings()
+    event_day, elapsed_day, unelapsed_day = _days(3)
+    event_code = "000001.SZ"
+    db = _transition_db()
+    candidate = TransitionCandidate(
+        base=SimpleNamespace(trade_date=event_day, ts_code=event_code),
+        event_type="LEFT_THRESHOLD_CROSS",
+        event_key="LEFT_70",
+        threshold_value=70,
+        source_score=75,
+    )
+    db.add_all(
+        [
+            _factor_row(elapsed_day, "000999.SZ", settings),
+            _factor_row(unelapsed_day, event_code, settings),
+        ]
+    )
+    db.commit()
+
+    unsafe, missing = transition_event_stock_state_integrity(
+        db,
+        [candidate],
+        {event_day: [elapsed_day]},
+        settings,
+    )
+    assert unsafe == set()
+    assert missing == {}
+
+    db.add_all(
+        [
+            _factor_row(elapsed_day, event_code, settings),
+            _state_row(elapsed_day, event_code, settings, state="S4"),
+        ]
+    )
+    db.commit()
+    unsafe, missing = transition_event_stock_state_integrity(
+        db,
+        [candidate],
+        {event_day: [elapsed_day]},
+        settings,
+    )
+    assert unsafe == set()
+    assert missing == {}
+    db.close()
+
+
+def test_event_stock_future_state_gap_preserves_existing_slice(monkeypatch) -> None:
+    settings = get_settings()
+    previous_day, event_day, future_day = _days(3)
+    event_code = "000001.SZ"
+    db = _transition_db()
+    monkeypatch.setattr(transition_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
+    db.add_all(
+        [
+            TradeCalendar(cal_date=day, is_open=True, exchange="SSE")
+            for day in (previous_day, event_day, future_day)
+        ]
+        + [
+            _state_row(previous_day, event_code, settings, state="S1"),
+            _state_row(event_day, event_code, settings),
+            _state_row(future_day, "000999.SZ", settings, state="S4"),
+            _opportunity_row(previous_day, event_code, settings, score=50, state="S1"),
+            _opportunity_row(event_day, event_code, settings, score=75),
+            _factor_row(future_day, event_code, settings),
+            _transition_row(1, event_day, event_code, settings),
+        ]
+    )
+    db.commit()
+
+    result = evaluate_transition_batch(db, [event_day], settings)
+    preserved = db.scalar(
+        select(ResearchTransitionEval).where(
+            ResearchTransitionEval.event_trade_date == event_day,
+            ResearchTransitionEval.ts_code == event_code,
+        )
+    )
+
+    assert result["transition_skipped_event_stock_dates"] == 1
+    assert result["transition_skipped_source_dates"] == 1
+    assert result["deleted_rows"] == 0
+    assert preserved is not None
+    assert preserved.mature20 is True
+    db.close()
+
+
+def test_mixed_unsafe_and_safe_dates_preserve_only_unsafe_slice(monkeypatch) -> None:
+    settings = get_settings()
+    prior_unsafe, unsafe_day, prior_safe, safe_day, future_day = _days(5)
+    unsafe_code = "000001.SZ"
+    safe_code = "000002.SZ"
+    db = _transition_db()
+    monkeypatch.setattr(transition_eval, "is_core_analysis_complete", lambda *args, **kwargs: True)
+    db.add_all(
+        [
+            TradeCalendar(cal_date=day, is_open=True, exchange="SSE")
+            for day in (prior_unsafe, unsafe_day, prior_safe, safe_day, future_day)
+        ]
+        + [
+            _state_row(prior_unsafe, unsafe_code, settings, state="S1"),
+            _state_row(unsafe_day, unsafe_code, settings),
+            _state_row(prior_safe, safe_code, settings),
+            _state_row(safe_day, safe_code, settings),
+            _state_row(future_day, "000999.SZ", settings, state="S4"),
+            _opportunity_row(prior_unsafe, unsafe_code, settings, score=50, state="S1"),
+            _opportunity_row(unsafe_day, unsafe_code, settings, score=75),
+            _opportunity_row(prior_safe, safe_code, settings, score=80),
+            _opportunity_row(safe_day, safe_code, settings, score=80),
+            _factor_row(future_day, unsafe_code, settings),
+            _transition_row(1, unsafe_day, unsafe_code, settings),
+            _transition_row(2, safe_day, safe_code, settings),
+        ]
+    )
+    db.commit()
+
+    result = evaluate_transition_batch(db, [unsafe_day, safe_day], settings)
+    remaining_dates = set(
+        db.execute(select(ResearchTransitionEval.event_trade_date)).scalars().all()
+    )
+
+    assert result["transition_skipped_event_stock_dates"] == 1
+    assert result["deleted_rows"] == 1
+    assert remaining_dates == {unsafe_day}
+    db.close()

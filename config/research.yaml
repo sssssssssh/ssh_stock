@@ -1,6 +1,6 @@
 research:
   version: research_v1
-  eval_version: research_eval_v10
+  eval_version: research_eval_v11
   benchmark_code: "000300.SH"
   stock:
     entry_basis: NEXT_OPEN

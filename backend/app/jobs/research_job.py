@@ -133,6 +133,7 @@ def queue_research_eval(
             "transition_rows": 0,
             "transition_deleted_rows": 0,
             "transition_skipped_source_dates": 0,
+            "transition_skipped_event_stock_dates": 0,
             "warnings": [],
             "progress_pct": 0,
         },
@@ -179,6 +180,7 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
         "transition_rows": 0,
         "transition_deleted_rows": 0,
         "transition_skipped_source_dates": 0,
+        "transition_skipped_event_stock_dates": 0,
     }
     update_job(db, job, status="RUNNING", step="research evaluation started", metadata=metadata)
     for index, dates in enumerate(batches, start=1):
@@ -219,6 +221,9 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
             totals["transition_deleted_rows"] += result["deleted_rows"]
             totals["transition_skipped_source_dates"] += result.get(
                 "transition_skipped_source_dates", 0
+            )
+            totals["transition_skipped_event_stock_dates"] += result.get(
+                "transition_skipped_event_stock_dates", 0
             )
         metadata = {
             **metadata,

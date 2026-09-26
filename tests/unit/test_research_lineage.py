@@ -748,6 +748,11 @@ def test_transition_prior_day_query_uses_current_source_lineage(monkeypatch) -> 
         lambda db, dates, settings: (dates, []),
     )
     monkeypatch.setattr(
+        transition_eval,
+        "_transition_calendar",
+        lambda *args, **kwargs: ({base.trade_date: date(2026, 5, 9)}, {base.trade_date: []}),
+    )
+    monkeypatch.setattr(
         transition_eval, "replace_slice_rows_with_stats",
         lambda db, model, batches, **kwargs: {"upserted": sum(map(len, batches)), "deleted": 0},
     )
