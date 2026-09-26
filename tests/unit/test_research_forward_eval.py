@@ -32,6 +32,14 @@ def test_future_window_covers_batch_tail_h60_and_delay5_without_inventing_dates(
         )
         assert len(result) == 86
         assert result[-1] == days[85]
+        sparse = future_dates(
+            db,
+            [days[0], days[19]],
+            days[-1],
+            max_horizon=60,
+            executable_exit_search_days=5,
+        )
+        assert sparse == result
         truncated = future_dates(
             db,
             days[:20],
@@ -242,7 +250,7 @@ def test_limit_down_keeps_mark_return_and_uses_delayed_executable_exit() -> None
     assert result["delayed_exit_ret5"] == pytest.approx(-0.22)
 
 
-def test_delayed_exit_skips_incomplete_raw_and_status_rows() -> None:
+def test_delayed_exit_stops_at_incomplete_raw_or_status_row() -> None:
     days = _days(10)
     stock = {
         day: {
@@ -265,8 +273,9 @@ def test_delayed_exit_skips_incomplete_raw_and_status_rows() -> None:
     )
 
     assert result["exit_reason5"] == "LIMIT_DOWN"
-    assert result["delayed_exit_trade_date5"] == days[9]
-    assert result["delayed_exit_delay_days5"] == 3
+    assert result["delayed_exit_trade_date5"] is None
+    assert result["delayed_exit_delay_days5"] is None
+    assert result["final_exit_status5"] == "DATA_INCOMPLETE"
 
 
 def test_suspended_horizon_carries_mark_price_forward_without_lookahead() -> None:
@@ -443,14 +452,18 @@ def test_final_exit_status_data_incomplete_after_full_window(gap_field) -> None:
     assert result["final_exit_status5"] == "DATA_INCOMPLETE"
 
 
-def test_final_exit_success_takes_priority_over_earlier_data_gap() -> None:
+def test_final_exit_earlier_data_gap_prevents_later_success() -> None:
     days = _days(12)
     stock = _final_exit_stock(days)
     stock[days[6]]["status_present"] = False
     stock[days[7]]["is_limit_down_close"] = True
     result = evaluate_stock_forward(days[0], days, stock, {}, horizons=(5,))
-    assert result["delayed_exit_delay_days5"] == 2
-    assert result["final_exit_status5"] == "SUCCESS"
+    assert result["delayed_exit_trade_date5"] is None
+    assert result["delayed_exit_price5"] is None
+    assert result["delayed_exit_delay_days5"] is None
+    assert result["delayed_exit_ret5"] is None
+    assert result["net_delayed_exit_ret5"] is None
+    assert result["final_exit_status5"] == "DATA_INCOMPLETE"
 
 
 def test_theme_final_exit_status_distinguishes_pending_gap_and_success() -> None:
@@ -458,11 +471,16 @@ def test_theme_final_exit_status_distinguishes_pending_gap_and_success() -> None
     entry_only = {days[1]: {"close": 100}}
     pending = evaluate_theme_forward(days[0], days[:9], entry_only, {}, horizons=(5,))
     incomplete = evaluate_theme_forward(days[0], days, entry_only, {}, horizons=(5,))
-    successful = evaluate_theme_forward(
+    gap_then_price = evaluate_theme_forward(
         days[0], days, {**entry_only, days[8]: {"close": 105}}, {}, horizons=(5,)
     )
-    assert pending["final_exit_status5"] == "PENDING"
+    successful = evaluate_theme_forward(
+        days[0], days, {**entry_only, days[6]: {"close": 105}}, {}, horizons=(5,)
+    )
+    assert pending["final_exit_status5"] == "DATA_INCOMPLETE"
     assert incomplete["final_exit_status5"] == "DATA_INCOMPLETE"
+    assert gap_then_price["final_exit_status5"] == "DATA_INCOMPLETE"
+    assert gap_then_price["delayed_exit_trade_date5"] is None
     assert successful["final_exit_status5"] == "SUCCESS"
 
 

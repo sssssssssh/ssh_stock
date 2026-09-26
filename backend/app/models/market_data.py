@@ -4,6 +4,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -18,6 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.naming import conv
 
 from app.models.base import Base
 
@@ -830,6 +832,14 @@ class OpportunityForwardEval(_ResearchForwardFields, Base):
         Index("idx_opp_eval_stage_rank", "opportunity_stage", "trend_rank_score"),
         Index("idx_opp_eval_risk_date", "extension_risk", "trade_date"),
         Index("idx_opp_eval_regime_date", "market_regime", "trade_date"),
+        *(
+            CheckConstraint(
+                f"final_exit_status{horizon} IS NULL OR final_exit_status{horizon} IN "
+                "('SUCCESS', 'PENDING', 'UNRESOLVED', 'DATA_INCOMPLETE')",
+                name=conv(f"ck_opp_eval_exit_status{horizon}"),
+            )
+            for horizon in (5, 10, 20, 60)
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -887,6 +897,14 @@ class ThemeForwardEval(_ResearchForwardFields, Base):
         ),
         Index("idx_theme_eval_date_rank", "trade_date", "heat_rank"),
         Index("idx_theme_eval_lifecycle_date", "lifecycle", "trade_date"),
+        *(
+            CheckConstraint(
+                f"final_exit_status{horizon} IS NULL OR final_exit_status{horizon} IN "
+                "('SUCCESS', 'PENDING', 'UNRESOLVED', 'DATA_INCOMPLETE')",
+                name=conv(f"ck_theme_eval_exit_status{horizon}"),
+            )
+            for horizon in (5, 10, 20, 60)
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

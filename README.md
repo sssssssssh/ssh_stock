@@ -1190,3 +1190,9 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 最终退出成功率与未解决率只以 `SUCCESS + UNRESOLVED` 为分母；待观察和数据不完整样本分别统计，不再解释为交易失败。
 - Analytics 数据库查询显式读取退出窗口成熟度和最终状态；SQLite 数据库链路测试覆盖 Opportunity 与 Theme，防止 ORM 已有字段但查询遗漏。
 - Theme 原始来源不可用或当前身份因子缺失时跳过对应日期，不对已有 Research 结果执行破坏性 replace-slice；股票 Research 继续正常运行并记录警告。
+
+## Milestone 12.8.3 Pre-M13 正确性收尾（2026-09-26）
+
+- Research 身份升级为 `research_eval_v7`。延迟退出搜索路径一旦在首个可执行日前遇到行情、交易状态或退出价格缺口，该 horizon 立即记为 `DATA_INCOMPLETE`，不得被后续可成交日覆盖为 `SUCCESS`；停牌、跌停和非活跃等已知不可退出原因仍可继续向后搜索。
+- Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
+- 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。

@@ -116,8 +116,8 @@ def _validate_research_config(
     for key in ("version", "eval_version", "benchmark_code"):
         if not isinstance(config.get(key), str) or not config[key].strip():
             raise ValueError(f"research.{key} must be nonempty")
-    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v6":
-        raise ValueError("research schema requires research_v1/research_eval_v6")
+    if config["version"] != "research_v1" or config["eval_version"] != "research_eval_v7":
+        raise ValueError("research schema requires research_v1/research_eval_v7")
     for key, upper in (
         ("horizons", 250),
         ("transition_horizons", 250),

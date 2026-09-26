@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 from app.core.config import get_settings
 from app.models.market_data import (
+    OpportunityForwardEval,
     StockOpportunityDaily,
     ThemeFactorDaily,
     ThemeForwardEval,
@@ -23,6 +24,7 @@ from app.services.analysis_identity import (
 from app.services.calc_metadata import config_hash
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -82,6 +84,10 @@ def test_research_filters_unverified_or_old_source_lineage(
     )
     settings = get_settings()
     db = _ResearchDb()
+    if module is opportunity_eval:
+        monkeypatch.setattr(
+            module, "opportunity_research_ready_dates", lambda db, dates, settings: (dates, [])
+        )
     if module is theme_eval:
         monkeypatch.setattr(
             module, "theme_research_ready_dates", lambda db, dates, settings: (dates, [])
@@ -126,6 +132,9 @@ def test_current_source_lineage_is_copied_into_forward_result(
         "calc_version": "opportunity_v1" if module is opportunity_eval else "theme_v1",
     })
     if module is opportunity_eval:
+        monkeypatch.setattr(
+            module, "opportunity_research_ready_dates", lambda db, dates, settings: (dates, [])
+        )
         values.update({"algo_version": settings.algo_version, "state": "S4"})
     else:
         values.update({"heat_score": 80, "data_coverage": 0.8})
@@ -200,14 +209,154 @@ def test_theme_research_ready_dates_accepts_usable_source_and_current_factors(
 ) -> None:
     day = date(2026, 5, 10)
 
-    class Db:
-        def scalar(self, statement):
-            return 1
-
     monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: source_status)
-    ready, skipped = theme_eval.theme_research_ready_dates(Db(), [day], get_settings())
+    monkeypatch.setattr(
+        theme_eval,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: SimpleNamespace(
+            results={"theme_factor_vs_theme_daily": "PASS"}
+        ),
+    )
+    ready, skipped = theme_eval.theme_research_ready_dates(object(), [day], get_settings())
     assert ready == [day]
     assert skipped == []
+
+
+@pytest.mark.parametrize("status", ("PASS", "WARNING"))
+def test_opportunity_ready_gate_uses_only_opportunity_coverage(monkeypatch, status) -> None:
+    day = date(2026, 5, 10)
+    monkeypatch.setattr(
+        opportunity_eval,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: SimpleNamespace(
+            results={
+                "opportunity_vs_state": status,
+                "theme_factor_vs_theme_daily": "ERROR",
+            }
+        ),
+    )
+    ready, skipped = opportunity_eval.opportunity_research_ready_dates(
+        object(), [day], get_settings()
+    )
+    assert ready == [day]
+    assert skipped == []
+
+
+def test_theme_research_skips_factor_coverage_error_without_deleting_existing_rows(
+    monkeypatch,
+) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    ThemeForwardEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 5, 10)
+    monkeypatch.setattr(theme_eval, "theme_source_status", lambda *args: "PASS")
+    monkeypatch.setattr(
+        theme_eval,
+        "check_opportunity_quality",
+        lambda *args, **kwargs: SimpleNamespace(
+            results={"theme_factor_vs_theme_daily": "ERROR"}
+        ),
+    )
+    with Session(engine) as db:
+        db.add(
+            ThemeForwardEval(
+                id=1,
+                trade_date=day,
+                theme_code="885001.TI",
+                strategy_config_hash=analysis_strategy_hash(settings.strategy),
+                theme_calc_version=THEME_CALC_VERSION,
+                opportunity_config_hash=config_hash(settings.opportunity_config),
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis="NEXT_CLOSE",
+                benchmark_code=settings.research_config["benchmark_code"],
+            )
+        )
+        db.commit()
+        result = theme_eval.evaluate_theme_batch(db, [day], settings)
+        remaining = db.scalar(select(func.count()).select_from(ThemeForwardEval))
+    assert result["theme_skipped_source_dates"] == 1
+    assert result["deleted_rows"] == 0
+    assert remaining == 1
+
+
+def test_opportunity_research_skips_quality_error_without_deleting_existing_rows(
+    monkeypatch,
+) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OpportunityForwardEval.__table__.create(engine)
+    settings = get_settings()
+    day = date(2026, 5, 10)
+    with Session(engine) as db:
+        db.add(
+            OpportunityForwardEval(
+                id=1,
+                trade_date=day,
+                ts_code="000001.SZ",
+                algo_version=settings.algo_version,
+                strategy_config_hash=analysis_strategy_hash(settings.strategy),
+                opportunity_calc_version="opportunity_v1",
+                opportunity_config_hash=config_hash(settings.opportunity_config),
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis="NEXT_OPEN",
+                benchmark_code=settings.research_config["benchmark_code"],
+                state="S4",
+                opportunity_stage="RIGHT_CONFIRMED",
+            )
+        )
+        db.commit()
+        monkeypatch.setattr(
+            opportunity_eval,
+            "opportunity_research_ready_dates",
+            lambda db, dates, settings: ([], dates),
+        )
+        result = opportunity_eval.evaluate_opportunity_batch(db, [day], settings)
+        remaining = db.scalar(select(func.count()).select_from(OpportunityForwardEval))
+    assert result["opportunity_skipped_source_dates"] == 1
+    assert result["deleted_rows"] == 0
+    assert remaining == 1
+
+
+def test_final_exit_status_constraint_rejects_invalid_value() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    ThemeForwardEval.__table__.create(engine)
+    settings = get_settings()
+    with Session(engine) as db:
+        db.add(
+            ThemeForwardEval(
+                id=1,
+                trade_date=date(2026, 5, 10),
+                theme_code="885001.TI",
+                strategy_config_hash=analysis_strategy_hash(settings.strategy),
+                theme_calc_version=THEME_CALC_VERSION,
+                opportunity_config_hash=config_hash(settings.opportunity_config),
+                research_version=RESEARCH_VERSION,
+                research_config_hash=config_hash(settings.research_config),
+                eval_version=RESEARCH_EVAL_VERSION,
+                entry_basis="NEXT_CLOSE",
+                benchmark_code=settings.research_config["benchmark_code"],
+                final_exit_status5="INVALID",
+            )
+        )
+        with pytest.raises(IntegrityError):
+            db.commit()
+
+
+def test_forward_eval_models_define_all_final_exit_status_constraints() -> None:
+    expected = {
+        *(f"ck_opp_eval_exit_status{h}" for h in (5, 10, 20, 60)),
+        *(f"ck_theme_eval_exit_status{h}" for h in (5, 10, 20, 60)),
+    }
+    actual = {
+        constraint.name
+        for table in (OpportunityForwardEval.__table__, ThemeForwardEval.__table__)
+        for constraint in table.constraints
+        if constraint.name and "exit_status" in constraint.name
+    }
+    assert actual == expected
 
 
 def test_production_services_write_current_strategy_lineage(monkeypatch) -> None:

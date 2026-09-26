@@ -126,6 +126,7 @@ def queue_research_eval(
             **current_research_identity(settings),
             "opportunity_rows": 0,
             "opportunity_deleted_rows": 0,
+            "opportunity_skipped_source_dates": 0,
             "theme_rows": 0,
             "theme_deleted_rows": 0,
             "theme_skipped_source_dates": 0,
@@ -166,6 +167,7 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
         "opportunity_base_rows": 0,
         "opportunity_rows": 0,
         "opportunity_deleted_rows": 0,
+        "opportunity_skipped_source_dates": 0,
         "entry_nonexecutable": 0,
         "benchmark_missing": 0,
         "theme_base_rows": 0,
@@ -190,6 +192,9 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
             totals["opportunity_base_rows"] += result["base_rows"]
             totals["opportunity_rows"] += result["eval_rows"]
             totals["opportunity_deleted_rows"] += result["deleted_rows"]
+            totals["opportunity_skipped_source_dates"] += result.get(
+                "opportunity_skipped_source_dates", 0
+            )
             totals["entry_nonexecutable"] += result["entry_nonexecutable"]
             totals["benchmark_missing"] += result["benchmark_missing"]
             if result["base_rows"] and not result["eval_rows"]:
@@ -221,6 +226,10 @@ def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
                 warning
                 for warning, present in (
                     ("BENCHMARK_DATA_MISSING", totals["benchmark_missing"]),
+                    (
+                        "OPPORTUNITY_SOURCE_INCOMPLETE",
+                        totals["opportunity_skipped_source_dates"],
+                    ),
                     ("THEME_SOURCE_INCOMPLETE", totals["theme_skipped_source_dates"]),
                 )
                 if present

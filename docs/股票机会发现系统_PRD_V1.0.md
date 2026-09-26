@@ -1268,3 +1268,7 @@ Research V5 统一入场与退出的状态优先级，并将最终退出区分�
 ## Milestone 12.8.2 Research 最终退出状态（2026-09-26）
 
 Research V6 将最终退出固定为 SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE 四种可审计状态。成功与未解决组成完成观察分母；待观察和数据不完整均不作为失败。题材来源暂不可用时跳过对应日期并保留已有研究结果，不得影响股票 Research。
+
+## Milestone 12.8.3 Research 输入可信度收尾（2026-09-26）
+
+Research V7 将第一可退出日定义为可证明的路径结果：若首个可执行日前出现行情、交易状态或价格缺口，最终退出状态为 DATA_INCOMPLETE，后续价格不得覆盖该结论。Opportunity 与 Theme 的手工批处理都使用生产覆盖质量门禁，ERROR 日期只跳过、不进入 replace-slice，避免部分生产数据删除已有完整研究结果。

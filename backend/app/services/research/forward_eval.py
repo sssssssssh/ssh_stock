@@ -149,8 +149,10 @@ def evaluate_stock_forward(
                 delayed_date = dates[delayed_index]
                 delayed_row = stock_rows.get(delayed_date)
                 delayed_price, delayed_reason = _validated_stock_exit(delayed_row)
+                if delayed_reason in FINAL_EXIT_DATA_GAP_REASONS:
+                    data_gap_seen = True
+                    break
                 if delayed_reason is not None or delayed_price is None:
-                    data_gap_seen = data_gap_seen or delayed_reason in FINAL_EXIT_DATA_GAP_REASONS
                     continue
                 result[f"delayed_exit_trade_date{horizon}"] = delayed_date
                 result[f"delayed_exit_price{horizon}"] = delayed_price
@@ -162,10 +164,10 @@ def evaluate_stock_forward(
                 result[f"final_exit_status{horizon}"] = "SUCCESS"
                 break
             if result[f"final_exit_status{horizon}"] is None:
-                if not result[f"delayed_exit_window_mature{horizon}"]:
-                    result[f"final_exit_status{horizon}"] = "PENDING"
-                elif data_gap_seen:
+                if data_gap_seen:
                     result[f"final_exit_status{horizon}"] = "DATA_INCOMPLETE"
+                elif not result[f"delayed_exit_window_mature{horizon}"]:
+                    result[f"final_exit_status{horizon}"] = "PENDING"
                 else:
                     result[f"final_exit_status{horizon}"] = "UNRESOLVED"
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("open")
@@ -243,7 +245,7 @@ def evaluate_theme_forward(
                 delayed_price = theme_rows.get(delayed_date, {}).get("close")
                 if not _positive(delayed_price):
                     data_gap_seen = True
-                    continue
+                    break
                 price = float(delayed_price)
                 result[f"delayed_exit_trade_date{horizon}"] = delayed_date
                 result[f"delayed_exit_price{horizon}"] = price
@@ -255,10 +257,10 @@ def evaluate_theme_forward(
                 result[f"final_exit_status{horizon}"] = "SUCCESS"
                 break
             if result[f"final_exit_status{horizon}"] is None:
-                if not result[f"delayed_exit_window_mature{horizon}"]:
-                    result[f"final_exit_status{horizon}"] = "PENDING"
-                elif data_gap_seen:
+                if data_gap_seen:
                     result[f"final_exit_status{horizon}"] = "DATA_INCOMPLETE"
+                elif not result[f"delayed_exit_window_mature{horizon}"]:
+                    result[f"final_exit_status{horizon}"] = "PENDING"
                 else:
                     result[f"final_exit_status{horizon}"] = "UNRESOLVED"
         benchmark_entry = benchmark_rows.get(entry_date, {}).get("close")

@@ -29,6 +29,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.research.forward_eval import evaluate_stock_forward
 from app.services.theme.membership import resolve_theme_memberships
 
@@ -98,8 +99,20 @@ def future_dates(
 ) -> list[date]:
     if latest is None or not base_dates:
         return []
+    base_span_count = int(
+        db.scalar(
+            select(func.count())
+            .select_from(TradeCalendar)
+            .where(
+                TradeCalendar.is_open.is_(True),
+                TradeCalendar.cal_date >= base_dates[0],
+                TradeCalendar.cal_date <= base_dates[-1],
+            )
+        )
+        or len(base_dates)
+    )
     required_count = (
-        len(base_dates) + 1 + max_horizon + executable_exit_search_days
+        base_span_count + 1 + max_horizon + executable_exit_search_days
     )
     return (
         db.execute(
@@ -134,6 +147,29 @@ def benchmark_lookup(db: Session, dates: list[date], code: str) -> dict[date, di
     return {row["trade_date"]: dict(row) for row in rows}
 
 
+def opportunity_research_ready_dates(
+    db: Session, base_dates: list[date], settings: Any
+) -> tuple[list[date], list[date]]:
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    ready: list[date] = []
+    skipped: list[date] = []
+    for trade_date in base_dates:
+        quality = check_opportunity_quality(
+            db,
+            trade_date,
+            strategy_hash=strategy_hash,
+            opportunity_hash=opportunity_hash,
+            algo_version=settings.algo_version,
+            config=settings.opportunity_config,
+        )
+        if quality.results["opportunity_vs_state"] in {"PASS", "WARNING"}:
+            ready.append(trade_date)
+        else:
+            skipped.append(trade_date)
+    return ready, skipped
+
+
 def evaluate_opportunity_batch(
     db: Session,
     base_dates: list[date],
@@ -145,8 +181,19 @@ def evaluate_opportunity_batch(
     opportunity_hash = config_hash(settings.opportunity_config)
     research_hash = config_hash(settings.research_config)
     research = settings.research_config
+    ready_dates, skipped_dates = opportunity_research_ready_dates(db, base_dates, settings)
+    counts = {
+        "base_rows": 0,
+        "eval_rows": 0,
+        "deleted_rows": 0,
+        "entry_nonexecutable": 0,
+        "benchmark_missing": 0,
+        "opportunity_skipped_source_dates": len(skipped_dates),
+    }
+    if not ready_dates:
+        return counts
     scope_filters = (
-        OpportunityForwardEval.trade_date.in_(base_dates),
+        OpportunityForwardEval.trade_date.in_(ready_dates),
         OpportunityForwardEval.algo_version == settings.algo_version,
         OpportunityForwardEval.strategy_config_hash == strategy_hash,
         OpportunityForwardEval.opportunity_calc_version == OPPORTUNITY_CALC_VERSION,
@@ -159,7 +206,7 @@ def evaluate_opportunity_batch(
     bases = (
         db.execute(
             select(StockOpportunityDaily).where(
-                StockOpportunityDaily.trade_date.in_(base_dates),
+                StockOpportunityDaily.trade_date.in_(ready_dates),
                 *opportunity_identity_filters(
                     settings,
                     strategy_hash=strategy_hash,
@@ -171,13 +218,7 @@ def evaluate_opportunity_batch(
         .scalars()
         .all()
     )
-    counts = {
-        "base_rows": len(bases),
-        "eval_rows": 0,
-        "deleted_rows": 0,
-        "entry_nonexecutable": 0,
-        "benchmark_missing": 0,
-    }
+    counts["base_rows"] = len(bases)
     if not bases:
         stats = replace_slice_rows_with_stats(
             db,
@@ -191,7 +232,7 @@ def evaluate_opportunity_batch(
     latest = db.scalar(select(func.max(StockDaily.trade_date)))
     dates = future_dates(
         db,
-        base_dates,
+        ready_dates,
         latest,
         max_horizon=max(research["horizons"]),
         executable_exit_search_days=research["executable_exit_search_days"],
@@ -199,13 +240,13 @@ def evaluate_opportunity_batch(
     benchmark = benchmark_lookup(db, dates, research["benchmark_code"])
     market_rows = db.execute(
         select(MarketDaily.trade_date, MarketDaily.regime).where(
-            MarketDaily.trade_date.in_(base_dates),
+            MarketDaily.trade_date.in_(ready_dates),
             MarketDaily.calc_version == MARKET_CALC_VERSION,
             MarketDaily.config_hash == strategy_hash,
         )
     ).all()
     regimes = {row.trade_date: row.regime for row in market_rows}
-    theme_context = resolve_theme_memberships(db, base_dates).context_by_date
+    theme_context = resolve_theme_memberships(db, ready_dates).context_by_date
     by_code: dict[str, list[Any]] = defaultdict(list)
     for base in bases:
         by_code[base.ts_code].append(base)

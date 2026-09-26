@@ -16,6 +16,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.quality.opportunity_quality import check_opportunity_quality
 from app.services.quality.theme_quality import theme_source_status
 from app.services.research.forward_eval import evaluate_theme_forward
 from app.services.research.opportunity_eval import benchmark_lookup, future_dates
@@ -68,19 +69,15 @@ def theme_research_ready_dates(
         if source_status not in {"PASS", "WARNING"}:
             skipped.append(trade_date)
             continue
-        factor_count = db.scalar(
-            select(func.count())
-            .select_from(ThemeFactorDaily)
-            .where(
-                ThemeFactorDaily.trade_date == trade_date,
-                *theme_factor_identity_filters(
-                    settings,
-                    strategy_hash=strategy_hash,
-                    opportunity_hash=opportunity_hash,
-                ),
-            )
+        quality = check_opportunity_quality(
+            db,
+            trade_date,
+            strategy_hash=strategy_hash,
+            opportunity_hash=opportunity_hash,
+            algo_version=settings.algo_version,
+            config=settings.opportunity_config,
         )
-        if int(factor_count or 0) > 0:
+        if quality.results["theme_factor_vs_theme_daily"] in {"PASS", "WARNING"}:
             ready.append(trade_date)
         else:
             skipped.append(trade_date)
