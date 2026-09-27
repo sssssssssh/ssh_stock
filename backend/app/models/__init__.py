@@ -29,6 +29,13 @@ from app.models.market_data import (
     ThemeMoneyflowDaily,
     TradeCalendar,
 )
+from app.models.portfolio import (
+    PortfolioBacktestRun,
+    PortfolioFill,
+    PortfolioNavDaily,
+    PortfolioOrder,
+    PortfolioPositionDaily,
+)
 
 __all__ = [
     "Base",
@@ -37,6 +44,11 @@ __all__ = [
     "IndexDaily",
     "JobRun",
     "MarketDaily",
+    "PortfolioBacktestRun",
+    "PortfolioFill",
+    "PortfolioNavDaily",
+    "PortfolioOrder",
+    "PortfolioPositionDaily",
     "ProviderApiLog",
     "ServiceHeartbeat",
     "Sector",

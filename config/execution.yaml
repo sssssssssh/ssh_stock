@@ -1,0 +1,14 @@
+execution:
+  version: execution_v1
+  mode: SIMULATED
+  signal_time: CLOSE
+  entry_basis: NEXT_OPEN
+  exit_basis: NEXT_OPEN
+  board_lot: 100
+  t_plus_one: true
+  pending_order_max_trade_days: 5
+  trading_cost:
+    commission_rate: 0.0003
+    minimum_commission_cny: 5
+    stamp_tax_sell_rate: 0.0005
+    slippage_bps: 5

@@ -6,6 +6,8 @@ import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.execution_config import ExecutionConfig
+from app.core.portfolio_config import PortfolioConfig
 from app.core.strategy_config import StrategyConfig
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
@@ -53,6 +55,8 @@ class Settings(BaseSettings):
     strategy: dict[str, Any] = Field(default_factory=dict)
     opportunity_config: dict[str, Any] = Field(default_factory=dict)
     research_config: dict[str, Any] = Field(default_factory=dict)
+    portfolio_config: PortfolioConfig | None = None
+    execution_config: ExecutionConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -94,6 +98,12 @@ class Settings(BaseSettings):
         research_config = load_yaml_config(ROOT_DIR / "config" / "research.yaml").get(
             "research", {}
         )
+        portfolio_config = PortfolioConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "portfolio.yaml").get("portfolio", {})
+        )
+        execution_config = ExecutionConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "execution.yaml").get("execution", {})
+        )
         _validate_opportunity_weights(opportunity_config)
         _validate_research_config(research_config, opportunity_config)
         app_section = app_config.get("app", {})
@@ -105,6 +115,8 @@ class Settings(BaseSettings):
         settings.strategy = strategy
         settings.opportunity_config = opportunity_config
         settings.research_config = research_config
+        settings.portfolio_config = portfolio_config
+        settings.execution_config = execution_config
         return settings
 
 

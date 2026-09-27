@@ -1198,5 +1198,14 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - M12.8.5 将 Research 身份升级为 `research_eval_v9`，并把 Sector 完整性从“当前身份至少一行”收紧为日期级 expected-set 覆盖。Expected Sector 由当天当前身份且 `eligible=true` 的 StockFactor 与当天有效的 SectorMember 区间连接后取 distinct sector_id；Actual Sector 仅统计当前 `SECTOR_CALC_VERSION` 与策略 hash。Production cross-table quality 和 Research Core Readiness 共用这一判定，Research 只接受 PASS，WARNING/ERROR 日期只跳过且不删除已有结果。
 - M12.8.6 将 Research 身份升级为 `research_eval_v10`，Transition Research 在 destructive replace 前统一校验事件日、真实前一开市日的 Opportunity source readiness，以及已发生的最多 20 个未来开市日的 Core Readiness；未就绪日期只跳过并保留已有 Transition slice，尚未发生的未来日期不阻断正常未成熟结果。Sector expected coverage 达标但存在 extra sector 时降为 WARNING，Research 继续 fail-closed。Transition v10 通过包含完整 Research config 的 `research_config_hash` 与 v9 隔离，无需数据库迁移。
 - M12.8.7 将 Research 身份升级为 `research_eval_v11`。Transition 的事件日和真实前一开市日改用 Opportunity/State 精确等量门禁；候选事件按 `(event_trade_date, ts_code)` 批量核对已发生未来窗口内当前 Factor 对应的当前 State。只要事件股票存在 Factor 而缺少 State，该事件日即 fail-closed、保留原 Transition slice；无候选事件的完整日期仍可权威清空。本次仅升级 Research 配置身份，不新增数据库迁移。
+
+## Milestone 13.1 Portfolio Backtest Foundation（2026-09-27）
+
+- 新增独立 typed `PortfolioConfig` 与 `ExecutionConfig`，金额、价格、成本和权重在业务层使用 `Decimal`；M13.1 API 只启用 `BACKTEST`。
+- `0029_m13_1_portfolio_foundation` 新增 Backtest Run、Order、Fill、Position Daily、NAV Daily 五张表。Backtest 定义冻结 Strategy、Opportunity、Portfolio、Execution 四段完整配置及版本/哈希。
+- Candidate Provider 只读取请求日期、当前 Opportunity identity 的 `stock_opportunity_daily`，不回退历史日期，也不重新计算 Factor/State/Sector/Theme。空候选与来源不可用通过 `source_available` 明确区分。
+- `TopNEqualWeightPolicy`、Domain Contracts 和 Backtest Engine Skeleton 保持纯业务/依赖注入边界；真实成交解析、Broker、PAPER/LIVE 与 Agent Runtime 均未提前实现。
+- 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
+- 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
 - Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
 - 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。

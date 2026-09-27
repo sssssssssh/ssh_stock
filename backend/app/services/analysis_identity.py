@@ -13,6 +13,9 @@ THEME_CALC_VERSION = "theme_v1"
 OPPORTUNITY_CALC_VERSION = "opportunity_v1"
 RESEARCH_VERSION = "research_v1"
 RESEARCH_EVAL_VERSION = "research_eval_v11"
+PORTFOLIO_VERSION = "portfolio_v1"
+EXECUTION_VERSION = "execution_v1"
+BACKTEST_ENGINE_VERSION = "backtest_v1"
 ANALYSIS_STRATEGY_KEYS = (
     "universe",
     "benchmark",

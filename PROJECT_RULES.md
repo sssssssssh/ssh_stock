@@ -329,3 +329,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 自动 Research 最小回刷跨度为 `max(horizons) + 1 + executable_exit_search_days`；配置只能扩大，不能缩短此下限。
 - MFE/MAE 只允许在明确停牌日 carry forward 前一有效收盘价；非停牌的行情或状态缺失不得被 carry forward 掩盖。
 - 最终退出统计必须同时报告成功和超过搜索窗口仍未解决的样本，分母为已成功入场样本。
+
+## Milestone 13.1 Portfolio 基础规则
+
+- Portfolio 只能消费指定交易日且符合当前 Opportunity identity 的 `stock_opportunity_daily`，不得回退日期或重新计算 Factor、State、Sector、Theme。
+- 金额、价格、交易成本和权重在配置与领域对象中使用 Decimal，数据库使用 Numeric，不得用 Float 构造组合账本。
+- Backtest Definition 必须冻结 Strategy、Opportunity、Portfolio、Execution 完整配置和版本/哈希；创建时只允许 `CREATED`，M13.1 不开放运行接口。
+- Portfolio Policy 与 Backtest Loop 不得导入 ORM/SQLAlchemy；Repository 不得包含选股、配权或成交规则。
+- `source_available=false` 与“来源可用但筛选后候选为空”必须区分。Preview 不得写数据库。
+- Agent 只能调用认证 API/Application Service，禁止直接访问 Repository/ORM；PAPER/LIVE、Broker、真实 Execution Resolver 和 Agent Runtime 不在 M13.1 范围。

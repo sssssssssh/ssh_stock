@@ -1,0 +1,23 @@
+portfolio:
+  version: portfolio_v1
+  account_mode: BACKTEST
+  initial_cash_cny: 1000000
+  benchmark_code: "000300.SH"
+  candidate:
+    source: STOCK_OPPORTUNITY_DAILY
+    allowed_stages:
+      - RIGHT_SIDE_NEW
+      - RIGHT_SIDE
+      - TREND
+      - STRONG_TREND
+    ranking_field: opportunity_score
+    ranking_direction: DESC
+    min_score: 70
+    top_n: 10
+  construction:
+    weighting: EQUAL
+    max_positions: 10
+    max_single_position_weight: 0.10
+    min_cash_ratio: 0.02
+    max_new_positions_per_day: 3
+    rebalance_frequency: DAILY
