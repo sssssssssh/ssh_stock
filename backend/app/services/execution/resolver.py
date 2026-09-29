@@ -185,13 +185,18 @@ class AshareExecutionResolver:
                 return _temporary(
                     intent, ExecutionReason.T_PLUS_ONE, config, account_snapshot
                 )
-            valid_lot = self.instrument_rules.valid_sell(
+            quantity_validation = self.instrument_rules.validate_sell(
                 profile, quantity, total_quantity
             )
         else:
-            valid_lot = self.instrument_rules.valid_buy(profile, quantity)
-        if not valid_lot:
-            return _terminal(intent, ExecutionReason.INVALID_LOT, account_snapshot)
+            quantity_validation = self.instrument_rules.validate_buy(profile, quantity)
+        if not quantity_validation.valid:
+            assert quantity_validation.reason is not None
+            return _terminal(
+                intent,
+                ExecutionReason(quantity_validation.reason),
+                account_snapshot,
+            )
 
         reference_price = snapshot.open_price
         if not is_positive_price(reference_price):

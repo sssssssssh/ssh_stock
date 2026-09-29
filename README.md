@@ -1208,12 +1208,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
 - 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
 
-## Milestone 13.2 Execution Resolver
+## Milestone 13.2.1 Execution Integrity
 
-- `config/execution.yaml` 使用 `execution_v2`，包含 A 股规则版本、价格 tick、禁止 Partial Fill 的成交策略，以及按日期生效的印花税和过户费配置。
-- 内部 `ExecutionApplicationService.execute_open_batch()` 只处理已具有明确 `target_quantity` 的 BACKTEST Pending Order。历史 `execution_v1` Backtest Definition 会被明确拒绝。
+- `config/execution.yaml` 使用 `execution_v3`、`cn_a_share_2026_v2` 和固定 `LIMIT_AT_OPEN` 口径，包含价格 tick、禁止 Partial Fill 的成交策略，以及按日期生效的印花税和过户费配置。
+- 内部 `ExecutionApplicationService.execute_open_batch()` 处理 BACKTEST Pending Order。历史 `execution_v1/v2` Backtest Definition 会被明确拒绝；`target_quantity=NULL` 会审计为单订单 `INVALID_QUANTITY`，不会回滚同批合法订单。
 - 执行行情必须同时具备 Raw 日线、current TradeStatus、StockLimit row 和 StockBasic 市场资料；任何缺口整批零写入，不会伪装成市场拒单。
-- `0031_m13_2_execution_audit` 新增逐次开盘尝试账本，并为 Fill 增加 Attempt、Raw reference price、transfer fee 和 cash fee total 审计字段。
+- `LIMIT_AT_OPEN` 单笔上限分别为沪深主板 100 万股、创业板 30 万股、科创板 10 万股、北交所 100 万股；超限直接拒绝，不拆单或缩量。
+- `0031` 新增逐次开盘尝试账本；`0032_m13_2_1_execution_integrity` 收紧 Order quantity，并以数据库 CHECK 保证 Attempt 的结果、原因、数量、价格和费用一致。
 - 当前仍不提供公开 backtest `/run`，不负责 TargetWeight 换算、Rebalance、Position/NAV Accounting、PAPER/LIVE 或券商下单。
 - Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
 - 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。

@@ -101,7 +101,7 @@ class PortfolioOrder(Base):
             name=conv("ck_portfolio_order_target_weight"),
         ),
         CheckConstraint(
-            "target_quantity IS NULL OR target_quantity >= 0",
+            "target_quantity IS NULL OR target_quantity > 0",
             name=conv("ck_portfolio_order_target_quantity"),
         ),
         CheckConstraint(
@@ -159,8 +159,14 @@ class PortfolioOrderAttempt(Base):
             name=conv("ck_portfolio_order_attempt_outcome"),
         ),
         CheckConstraint(
-            "requested_quantity > 0",
+            "requested_quantity >= 0",
             name=conv("ck_portfolio_order_attempt_requested_quantity"),
+        ),
+        CheckConstraint(
+            "requested_quantity > 0 OR "
+            "(requested_quantity = 0 AND outcome = 'REJECTED' "
+            "AND reason_code = 'INVALID_QUANTITY')",
+            name=conv("ck_portfolio_order_attempt_quantity_validity"),
         ),
         CheckConstraint(
             "fill_quantity >= 0",
@@ -200,6 +206,33 @@ class PortfolioOrderAttempt(Base):
         ),
         CheckConstraint(
             "total_cost >= 0", name=conv("ck_portfolio_order_attempt_total_cost")
+        ),
+        CheckConstraint(
+            "(outcome = 'EXECUTED' AND reason_code IS NULL) OR "
+            "(outcome <> 'EXECUTED' AND reason_code IS NOT NULL)",
+            name=conv("ck_portfolio_order_attempt_outcome_reason"),
+        ),
+        CheckConstraint(
+            "outcome <> 'EXECUTED' OR "
+            "(fill_quantity = requested_quantity AND requested_quantity > 0 "
+            "AND reference_price IS NOT NULL AND fill_price IS NOT NULL "
+            "AND gross_amount > 0)",
+            name=conv("ck_portfolio_order_attempt_executed_consistency"),
+        ),
+        CheckConstraint(
+            "outcome = 'EXECUTED' OR "
+            "(fill_quantity = 0 AND fill_price IS NULL AND gross_amount = 0 "
+            "AND commission = 0 AND stamp_tax = 0 AND transfer_fee = 0 "
+            "AND cash_fee_total = 0 AND slippage_cost = 0 AND total_cost = 0)",
+            name=conv("ck_portfolio_order_attempt_non_executed_consistency"),
+        ),
+        CheckConstraint(
+            "cash_fee_total = commission + stamp_tax + transfer_fee",
+            name=conv("ck_portfolio_order_attempt_cash_fee_components"),
+        ),
+        CheckConstraint(
+            "total_cost = cash_fee_total + slippage_cost",
+            name=conv("ck_portfolio_order_attempt_total_cost_components"),
         ),
         ForeignKeyConstraint(
             ["order_id", "run_id"],

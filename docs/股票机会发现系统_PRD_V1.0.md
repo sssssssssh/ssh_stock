@@ -1272,3 +1272,7 @@ Research V6 将最终退出固定为 SUCCESS、PENDING、UNRESOLVED、DATA_INCOM
 ## Milestone 12.8.3 Research 输入可信度收尾（2026-09-26）
 
 Research V7 将第一可退出日定义为可证明的路径结果：若首个可执行日前出现行情、交易状态或价格缺口，最终退出状态为 DATA_INCOMPLETE，后续价格不得覆盖该结论。Opportunity 与 Theme 的手工批处理都使用生产覆盖质量门禁，ERROR 日期只跳过、不进入 replace-slice，避免部分生产数据删除已有完整研究结果。
+
+## Milestone 13.2.1 Execution Integrity（2026-09-29）
+
+模拟执行身份升级为 `execution_v3`，固定使用 `LIMIT_AT_OPEN` 数量口径。沪深主板、创业板、科创板和北交所分别执行 100 万、30 万、10 万和 100 万股的单笔申报上限；超限订单直接以 `MAX_QUANTITY_EXCEEDED` 拒绝，不自动拆单或缩量。历史或异常的 NULL 数量订单只影响自身，记录 `INVALID_QUANTITY` Attempt 后继续处理同批合法订单。数据源缺口仍保持整批 fail-closed。本阶段不提供 Rebalance、Position/NAV Accounting、公开运行接口或 Broker 接入。

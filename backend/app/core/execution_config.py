@@ -70,9 +70,10 @@ class TradingCostConfig(StrictExecutionConfig):
 
 
 class ExecutionConfig(StrictExecutionConfig):
-    version: Literal["execution_v2"]
+    version: Literal["execution_v3"]
     mode: Literal["SIMULATED"]
-    ruleset_version: Literal["cn_a_share_2026_v1"]
+    ruleset_version: Literal["cn_a_share_2026_v2"]
+    simulated_order_style: Literal["LIMIT_AT_OPEN"]
     signal_time: Literal["CLOSE"]
     entry_basis: Literal["NEXT_OPEN"]
     exit_basis: Literal["NEXT_OPEN"]

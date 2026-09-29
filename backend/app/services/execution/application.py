@@ -82,10 +82,8 @@ class ExecutionApplicationService:
             attempts: list[PortfolioOrderAttempt] = []
             fills: list[PortfolioFill] = []
             for decision in result.decisions:
-                if decision.order_id is None or decision.requested_quantity <= 0:
-                    raise ValueError(
-                        "persisted execution decision requires order_id and positive quantity"
-                    )
+                if decision.order_id is None:
+                    raise ValueError("persisted execution decision requires order_id")
                 attempt = PortfolioOrderAttempt(
                     id=uuid.uuid4(),
                     order_id=decision.order_id,

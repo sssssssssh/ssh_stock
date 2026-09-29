@@ -45,7 +45,7 @@ def _intent(
     code: str = "600000.SH",
     *,
     side: str = "BUY",
-    quantity: int = 100,
+    quantity: int | None = 100,
     attempt_count: int = 0,
     order_no: int = 1,
 ) -> OrderIntent:
@@ -109,10 +109,11 @@ def _position(
     )
 
 
-def test_execution_v2_config_and_schedule_validation() -> None:
+def test_execution_v3_config_and_schedule_validation() -> None:
     config = _config()
-    assert config.version == "execution_v2"
-    assert config.ruleset_version == "cn_a_share_2026_v1"
+    assert config.version == "execution_v3"
+    assert config.ruleset_version == "cn_a_share_2026_v2"
+    assert config.simulated_order_style == "LIMIT_AT_OPEN"
     assert config.price_tick_cny == Decimal("0.01")
     assert config.fill_model.partial_fill is False
     assert config.trading_cost.commission_rate == Decimal("0.0003")
@@ -268,12 +269,106 @@ def test_a_share_instrument_quantity_rules(
     rules = AshareInstrumentRuleResolver()
     profile = rules.resolve(ts_code="TEST", exchange=exchange, market=market)
     assert profile is not None
-    actual = (
-        rules.valid_buy(profile, quantity)
+    validation = (
+        rules.validate_buy(profile, quantity)
         if side == "BUY"
-        else rules.valid_sell(profile, quantity, total)
+        else rules.validate_sell(profile, quantity, total)
     )
-    assert actual is valid
+    assert validation.valid is valid
+
+
+@pytest.mark.parametrize(
+    ("exchange", "market", "maximum", "oversize"),
+    [
+        ("SSE", "主板", 1_000_000, 1_000_100),
+        ("SZSE", "主板", 1_000_000, 1_000_100),
+        ("SZSE", "创业板", 300_000, 300_100),
+        ("SSE", "科创板", 100_000, 100_001),
+        ("BSE", "北交所", 1_000_000, 1_000_001),
+    ],
+)
+def test_limit_at_open_maximum_buy_quantities(
+    exchange: str,
+    market: str,
+    maximum: int,
+    oversize: int,
+) -> None:
+    rules = AshareInstrumentRuleResolver()
+    profile = rules.resolve(ts_code="TEST", exchange=exchange, market=market)
+    assert profile is not None
+    assert profile.max_buy_quantity == maximum
+    assert profile.max_sell_quantity == maximum
+    assert rules.validate_buy(profile, maximum).valid
+    validation = rules.validate_buy(profile, oversize)
+    assert validation.valid is False
+    assert validation.reason == "MAX_QUANTITY_EXCEEDED"
+
+
+def test_maximum_quantity_reason_precedence_and_odd_lot_cap() -> None:
+    resolver = AshareExecutionResolver()
+    snapshot = _snapshot()
+    cash = Decimal("20000000")
+
+    buy = resolver.resolve_batch(
+        [_intent(quantity=1_000_001)],
+        _batch(snapshot),
+        AccountState(DAY, cash),
+        _config(),
+    ).decisions[0]
+    assert buy.reason_code == "MAX_QUANTITY_EXCEEDED"
+    assert buy.outcome == "REJECTED"
+    assert buy.fill_quantity == 0
+    assert buy.total_cost == 0
+
+    above_position = resolver.resolve_batch(
+        [_intent(side="SELL", quantity=1_000_100)],
+        _batch(snapshot),
+        AccountState(
+            DAY,
+            Decimal("0"),
+            (_position("600000.SH", 1_000_000, 1_000_000),),
+        ),
+        _config(),
+    ).decisions[0]
+    assert above_position.reason_code == "INSUFFICIENT_POSITION"
+
+    unavailable = resolver.resolve_batch(
+        [_intent(side="SELL", quantity=1_000_100)],
+        _batch(snapshot),
+        AccountState(
+            DAY,
+            Decimal("0"),
+            (_position("600000.SH", 1_000_100, 1_000_000),),
+        ),
+        _config(),
+    ).decisions[0]
+    assert unavailable.reason_code == "T_PLUS_ONE"
+
+    odd_lot_liquidation = resolver.resolve_batch(
+        [_intent(side="SELL", quantity=1_000_001)],
+        _batch(snapshot),
+        AccountState(
+            DAY,
+            Decimal("0"),
+            (_position("600000.SH", 1_000_001, 1_000_001),),
+        ),
+        _config(),
+    ).decisions[0]
+    assert odd_lot_liquidation.reason_code == "MAX_QUANTITY_EXCEEDED"
+
+
+def test_null_quantity_is_auditable_terminal_decision() -> None:
+    decision = AshareExecutionResolver().resolve_batch(
+        [_intent(quantity=None)],
+        _batch(_snapshot()),
+        AccountState(DAY, Decimal("100000")),
+        _config(),
+    ).decisions[0]
+    assert decision.outcome == "REJECTED"
+    assert decision.reason_code == "INVALID_QUANTITY"
+    assert decision.requested_quantity == 0
+    assert decision.fill_quantity == 0
+    assert decision.total_cost == 0
 
 
 def test_resolver_reason_precedence_and_limit_retries() -> None:

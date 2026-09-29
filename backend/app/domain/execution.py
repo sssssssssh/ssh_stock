@@ -24,9 +24,17 @@ class InstrumentExecutionProfile:
     market: str
     min_buy_quantity: int
     buy_step: int
+    max_buy_quantity: int
     min_sell_quantity: int
     sell_step: int
+    max_sell_quantity: int
     odd_lot_sell_all_allowed: bool = True
+
+
+@dataclass(frozen=True)
+class QuantityValidation:
+    valid: bool
+    reason: str | None = None
 
 
 @dataclass(frozen=True)

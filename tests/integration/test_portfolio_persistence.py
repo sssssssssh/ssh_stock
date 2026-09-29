@@ -667,7 +667,7 @@ def test_execution_application_persists_attempt_and_fill_and_fails_closed(
             assert repository.list_order_attempts(run.id, missing_order.id) == []
 
             old_run = _run()
-            old_run.execution_version = "execution_v1"
+            old_run.execution_version = "execution_v2"
             repository.create_run(old_run)
             with pytest.raises(ExecutionVersionMismatchError):
                 service.execute_open_batch(old_run.id, trade_date)
@@ -858,6 +858,7 @@ def test_attempt_and_fill_same_run_foreign_keys_reject_cross_run_rows() -> None:
                     fill_quantity=100,
                     reference_price=Decimal("10"),
                     fill_price=Decimal("10"),
+                    gross_amount=Decimal("1000"),
                 )
 
             with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
@@ -875,6 +876,7 @@ def test_attempt_and_fill_same_run_foreign_keys_reject_cross_run_rows() -> None:
                 fill_quantity=100,
                 reference_price=Decimal("10"),
                 fill_price=Decimal("10"),
+                gross_amount=Decimal("1000"),
             )
             db.add(other_attempt)
             db.flush()
@@ -981,6 +983,365 @@ def test_0031_migration_backfills_historical_fill(monkeypatch) -> None:
                 )
             }
             assert "reference_price" not in columns
+        finally:
+            transaction.rollback()
+    engine.dispose()
+
+
+def test_invalid_quantity_order_does_not_rollback_valid_order(monkeypatch) -> None:
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    trade_date = date(2026, 9, 3)
+    invalid_code = "M132N.SH"
+    valid_code = "M132V.SH"
+
+    class AccountGateway:
+        def account_state(self, run_id, requested_date):
+            return AccountState(requested_date, Decimal("100000"))
+
+    engine = sa.create_engine(settings.database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run())
+            invalid_order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 9, 2),
+                scheduled_trade_date=trade_date,
+                ts_code=invalid_code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=None,
+                status="PENDING",
+            )
+            valid_order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 9, 2),
+                scheduled_trade_date=trade_date,
+                ts_code=valid_code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [invalid_order, valid_order])
+            for code in (invalid_code, valid_code):
+                db.add_all(
+                    [
+                        StockBasic(ts_code=code, exchange="SSE", market="主板"),
+                        StockDaily(
+                            trade_date=trade_date,
+                            ts_code=code,
+                            open=10,
+                            close=10,
+                        ),
+                        StockLimitDaily(
+                            trade_date=trade_date,
+                            ts_code=code,
+                            up_limit=11,
+                            down_limit=9,
+                        ),
+                        StockTradeStatusDaily(
+                            trade_date=trade_date,
+                            ts_code=code,
+                            is_active=True,
+                            is_suspended=False,
+                            st_status_unknown=False,
+                            tradable=True,
+                            strategy_eligible=True,
+                            calc_version=TRADE_STATUS_CALC_VERSION,
+                            config_hash=strategy_hash,
+                            calculated_at=datetime.now(UTC),
+                        ),
+                    ]
+                )
+            db.flush()
+            monkeypatch.setattr(db, "commit", db.flush)
+
+            result = ExecutionApplicationService(
+                db,
+                account_gateway=AccountGateway(),
+                settings=settings,
+            ).execute_open_batch(run.id, trade_date)
+
+            decisions = {item.intent.ts_code: item for item in result.decisions}
+            assert decisions[invalid_code].reason_code == "INVALID_QUANTITY"
+            assert decisions[valid_code].outcome == "EXECUTED"
+            assert (invalid_order.status, invalid_order.reason_code) == (
+                "REJECTED",
+                "INVALID_QUANTITY",
+            )
+            assert valid_order.status == "EXECUTED"
+            invalid_attempt = repository.list_order_attempts(
+                run.id, invalid_order.id
+            )[0]
+            assert (invalid_attempt.outcome, invalid_attempt.requested_quantity) == (
+                "REJECTED",
+                0,
+            )
+            assert repository.list_order_attempts(run.id, valid_order.id)[0].outcome == (
+                "EXECUTED"
+            )
+            fills = repository.list_fills(run.id)
+            assert len(fills) == 1
+            assert fills[0].order_id == valid_order.id
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_execution_integrity_database_checks_reject_invalid_rows() -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run())
+            order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 9, 2),
+                scheduled_trade_date=date(2026, 9, 3),
+                ts_code="M132Q.SH",
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [order])
+
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(
+                    PortfolioOrder(
+                        run_id=run.id,
+                        signal_trade_date=date(2026, 9, 2),
+                        scheduled_trade_date=date(2026, 9, 3),
+                        ts_code="M132Z.SH",
+                        side="BUY",
+                        order_type="NEXT_OPEN",
+                        target_quantity=0,
+                        status="PENDING",
+                    )
+                )
+                db.flush()
+
+            base = {
+                "id": uuid.uuid4(),
+                "order_id": order.id,
+                "run_id": run.id,
+                "attempt_trade_date": date(2026, 9, 3),
+                "attempt_no": 1,
+                "outcome": "EXECUTED",
+                "reason_code": None,
+                "requested_quantity": 100,
+                "fill_quantity": 100,
+                "reference_price": Decimal("10"),
+                "fill_price": Decimal("10"),
+                "gross_amount": Decimal("1000"),
+                "commission": Decimal("5"),
+                "stamp_tax": Decimal("0"),
+                "transfer_fee": Decimal("0"),
+                "cash_fee_total": Decimal("5"),
+                "slippage_cost": Decimal("0"),
+                "total_cost": Decimal("5"),
+                "market_snapshot": {},
+                "account_snapshot": {},
+            }
+            invalid_overrides = (
+                {"reason_code": "UNEXPECTED"},
+                {
+                    "outcome": "REJECTED",
+                    "reason_code": None,
+                    "fill_quantity": 0,
+                    "fill_price": None,
+                    "gross_amount": Decimal("0"),
+                    "commission": Decimal("0"),
+                    "cash_fee_total": Decimal("0"),
+                    "total_cost": Decimal("0"),
+                },
+                {
+                    "outcome": "RETRY",
+                    "reason_code": "LIMIT_UP",
+                    "requested_quantity": 0,
+                    "fill_quantity": 0,
+                    "reference_price": Decimal("10"),
+                    "fill_price": None,
+                    "gross_amount": Decimal("0"),
+                    "commission": Decimal("0"),
+                    "cash_fee_total": Decimal("0"),
+                    "total_cost": Decimal("0"),
+                },
+                {
+                    "requested_quantity": 0,
+                    "fill_quantity": 0,
+                    "gross_amount": Decimal("0"),
+                },
+                {"fill_quantity": 99},
+                {"fill_price": None},
+                {
+                    "outcome": "RETRY",
+                    "reason_code": "LIMIT_UP",
+                    "fill_quantity": 1,
+                    "fill_price": None,
+                    "gross_amount": Decimal("0"),
+                    "commission": Decimal("0"),
+                    "cash_fee_total": Decimal("0"),
+                    "total_cost": Decimal("0"),
+                },
+                {
+                    "outcome": "REJECTED",
+                    "reason_code": "INVALID_LOT",
+                    "fill_quantity": 0,
+                    "fill_price": None,
+                    "gross_amount": Decimal("0"),
+                    "commission": Decimal("1"),
+                    "cash_fee_total": Decimal("1"),
+                    "total_cost": Decimal("1"),
+                },
+                {"cash_fee_total": Decimal("6"), "total_cost": Decimal("6")},
+                {"total_cost": Decimal("6")},
+            )
+            for overrides in invalid_overrides:
+                values = {**base, **overrides, "id": uuid.uuid4()}
+                with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                    db.execute(sa.insert(PortfolioOrderAttempt).values(**values))
+
+            invalid_quantity = {
+                **base,
+                "id": uuid.uuid4(),
+                "outcome": "REJECTED",
+                "reason_code": "INVALID_QUANTITY",
+                "requested_quantity": 0,
+                "fill_quantity": 0,
+                "reference_price": None,
+                "fill_price": None,
+                "gross_amount": Decimal("0"),
+                "commission": Decimal("0"),
+                "cash_fee_total": Decimal("0"),
+                "total_cost": Decimal("0"),
+            }
+            db.execute(sa.insert(PortfolioOrderAttempt).values(**invalid_quantity))
+            db.flush()
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_0032_migration_preflights_and_fail_safe_downgrade(monkeypatch) -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("path_separator", "os")
+    migration = ScriptDirectory.from_config(config).get_revision(
+        "0032_m13_2_1_execution_integrity"
+    ).module
+    schema = f"m13_2_1_integrity_{uuid.uuid4().hex}"
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            connection.execute(sa.text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(sa.text(f'SET LOCAL search_path TO "{schema}"'))
+            metadata = sa.MetaData()
+            order_table = sa.Table(
+                "portfolio_order",
+                metadata,
+                sa.Column("id", sa.UUID(), primary_key=True),
+                sa.Column("target_quantity", sa.BigInteger()),
+                sa.CheckConstraint(
+                    "target_quantity IS NULL OR target_quantity >= 0",
+                    name="ck_portfolio_order_target_quantity",
+                ),
+            )
+            attempt_table = sa.Table(
+                "portfolio_order_attempt",
+                metadata,
+                sa.Column("id", sa.UUID(), primary_key=True),
+                sa.Column("outcome", sa.String(16), nullable=False),
+                sa.Column("reason_code", sa.String(64)),
+                sa.Column("requested_quantity", sa.BigInteger(), nullable=False),
+                sa.Column("fill_quantity", sa.BigInteger(), nullable=False),
+                sa.Column("reference_price", sa.Numeric(18, 4)),
+                sa.Column("fill_price", sa.Numeric(18, 4)),
+                sa.Column("gross_amount", sa.Numeric(20, 4), nullable=False),
+                sa.Column("commission", sa.Numeric(20, 4), nullable=False),
+                sa.Column("stamp_tax", sa.Numeric(20, 4), nullable=False),
+                sa.Column("transfer_fee", sa.Numeric(20, 4), nullable=False),
+                sa.Column("cash_fee_total", sa.Numeric(20, 4), nullable=False),
+                sa.Column("slippage_cost", sa.Numeric(20, 4), nullable=False),
+                sa.Column("total_cost", sa.Numeric(20, 4), nullable=False),
+                sa.CheckConstraint(
+                    "requested_quantity > 0",
+                    name="ck_portfolio_order_attempt_requested_quantity",
+                ),
+            )
+            metadata.create_all(connection)
+            monkeypatch.setattr(
+                migration, "op", Operations(MigrationContext.configure(connection))
+            )
+
+            zero_order_id = uuid.uuid4()
+            connection.execute(
+                order_table.insert().values(id=zero_order_id, target_quantity=0)
+            )
+            with pytest.raises(RuntimeError, match="1 order.*target_quantity = 0"):
+                migration.upgrade()
+            connection.execute(
+                order_table.delete().where(order_table.c.id == zero_order_id)
+            )
+
+            dirty_attempt_id = uuid.uuid4()
+            connection.execute(
+                attempt_table.insert().values(
+                    id=dirty_attempt_id,
+                    outcome="EXECUTED",
+                    reason_code=None,
+                    requested_quantity=100,
+                    fill_quantity=99,
+                    reference_price=Decimal("10"),
+                    fill_price=Decimal("10"),
+                    gross_amount=Decimal("1000"),
+                    commission=Decimal("5"),
+                    stamp_tax=Decimal("0"),
+                    transfer_fee=Decimal("0"),
+                    cash_fee_total=Decimal("5"),
+                    slippage_cost=Decimal("0"),
+                    total_cost=Decimal("5"),
+                )
+            )
+            with pytest.raises(RuntimeError, match="1 violating historical attempt"):
+                migration.upgrade()
+            connection.execute(
+                attempt_table.delete().where(attempt_table.c.id == dirty_attempt_id)
+            )
+
+            migration.upgrade()
+            zero_attempt_id = uuid.uuid4()
+            connection.execute(
+                attempt_table.insert().values(
+                    id=zero_attempt_id,
+                    outcome="REJECTED",
+                    reason_code="INVALID_QUANTITY",
+                    requested_quantity=0,
+                    fill_quantity=0,
+                    reference_price=None,
+                    fill_price=None,
+                    gross_amount=Decimal("0"),
+                    commission=Decimal("0"),
+                    stamp_tax=Decimal("0"),
+                    transfer_fee=Decimal("0"),
+                    cash_fee_total=Decimal("0"),
+                    slippage_cost=Decimal("0"),
+                    total_cost=Decimal("0"),
+                )
+            )
+            with pytest.raises(RuntimeError, match="1 attempt.*requested_quantity = 0"):
+                migration.downgrade()
+            assert connection.scalar(
+                sa.select(sa.func.count()).select_from(attempt_table)
+            ) == 1
+            connection.execute(
+                attempt_table.delete().where(attempt_table.c.id == zero_attempt_id)
+            )
+            migration.downgrade()
+            migration.upgrade()
         finally:
             transaction.rollback()
     engine.dispose()

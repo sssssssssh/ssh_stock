@@ -14,7 +14,7 @@ OPPORTUNITY_CALC_VERSION = "opportunity_v1"
 RESEARCH_VERSION = "research_v1"
 RESEARCH_EVAL_VERSION = "research_eval_v11"
 PORTFOLIO_VERSION = "portfolio_v1"
-EXECUTION_VERSION = "execution_v2"
+EXECUTION_VERSION = "execution_v3"
 BACKTEST_ENGINE_VERSION = "backtest_v3"
 ANALYSIS_STRATEGY_KEYS = (
     "universe",

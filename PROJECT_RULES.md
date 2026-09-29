@@ -357,10 +357,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 五层完整但 Portfolio stage/score 过滤后无 Candidate 仍为 READY，合法生成 100% 现金 Target。
 - M13.1.2 不新增迁移，不修改 0030，不修改 OPEN/CLOSE/AFTER_CLOSE 时间模型，不实现 M13.2 Execution。
 
-## Milestone 13.2 Execution Resolver 规则
+## Milestone 13.2.1 Execution Integrity 规则
 
-- Execution identity 为 `execution_v2`，Backtest Engine 保持 `backtest_v3`；历史 `execution_v1` Definition 不改写且执行服务必须拒绝。
+- Execution identity 为 `execution_v3`、ruleset 为 `cn_a_share_2026_v2`，固定 synthetic order style 为 `LIMIT_AT_OPEN`；Backtest Engine 保持 `backtest_v3`。历史 `execution_v1/v2` Definition 不改写且执行服务必须拒绝。
 - NEXT_OPEN 成交 reference price 只能使用 Raw `StockDaily.open`。Raw、current TradeStatus、StockLimit row 或 StockBasic profile 任一缺失时整批 fail closed，且不得写 OrderAttempt、Order 状态或 Fill。
-- Resolver 必须先 SELL 后 BUY，使用工作现金和 available quantity，遵守 A 股板块手数、T+1、开盘涨跌停、Decimal 税费与不利 tick 滑点；不允许自动缩量或 Partial Fill。
+- Resolver 必须先 SELL 后 BUY，使用工作现金和 available quantity，遵守 A 股板块手数、单笔最大申报数量、T+1、开盘涨跌停、Decimal 税费与不利 tick 滑点；超限订单返回 `MAX_QUANTITY_EXCEEDED`，不允许自动拆单、自动缩量或 Partial Fill。
+- `target_quantity=NULL` 是单订单 `REJECTED/INVALID_QUANTITY`，必须写入 requested quantity 为 0 的 Attempt，不能回滚同批合法订单；显式 0 quantity 由数据库 Order CHECK 拒绝。
 - 每次真实开盘尝试写入 `portfolio_order_attempt`；第 5 次临时阻塞转 `CANCELLED/EXPIRED`，Attempt 保留底层 blocker。Fill 必须通过复合外键归属同 Run 的 Order 和 Attempt。
+- `0032_m13_2_1_execution_integrity` 对 Order quantity 和 Attempt outcome/reason/quantity/price/cost 一致性提供数据库 CHECK；若历史 0 quantity Order 或脏 Attempt 存在，升级必须明确失败。存在 0 quantity Attempt 时禁止降级到 0031。
 - M13.2 不实现 TargetWeight 到股数换算、Rebalance、Position/NAV Accounting、公开 `/run`、PAPER/LIVE 或 Broker 接入，不修改 M12 Research 语义。

@@ -20,9 +20,10 @@ or bypass the identity and authorization boundaries.
   configuration snapshots and their hashes.
 - The identity tuple contains the analysis algorithm version, Strategy hash,
   `opportunity_v1` plus its config hash, `portfolio_v1` plus its config hash,
-  `execution_v2` plus its config hash, and `backtest_v3`.
-- Existing `execution_v1` definitions remain immutable history and are rejected by the M13.2
-  execution application service. Newly created definitions freeze `execution_v2`.
+  `execution_v3` plus its config hash, and `backtest_v3`.
+- Existing `execution_v1/v2` definitions remain immutable history and are rejected by the
+  execution application service. Newly created definitions freeze `execution_v3`, ruleset
+  `cn_a_share_2026_v2` and synthetic order style `LIMIT_AT_OPEN`.
 - Existing `backtest_v1` and `backtest_v2` definitions remain immutable history. A future run command must reject
   any definition whose stored Backtest Engine version differs from the current engine version.
 - M13.1 application APIs accept only `BACKTEST`. `PAPER` and `LIVE` are reserved schema values,
@@ -68,11 +69,14 @@ Trade Status, persisted Stock Limit rows and Stock Basic instrument metadata. Th
 are loaded in fixed batch queries; any missing row or invalid raw open makes the entire execution
 batch `INCOMPLETE` with zero order, attempt or fill writes.
 
-The resolver applies deterministic precedence, A-share board lot rules, T+1 available quantity,
+The resolver applies deterministic precedence, A-share board lot and maximum order quantity
+rules, T+1 available quantity,
 open limit blocking, adverse tick-rounded slippage, date-effective commission/stamp/transfer
 fees, and SELL-before-BUY working cash. Temporary blockers remain pending and expire on the fifth
-real open attempt. It never performs partial fills or automatic quantity reduction. Resolver
-logic is pure and contains no ORM or Session dependency.
+real open attempt. Oversize orders are terminally rejected as `MAX_QUANTITY_EXCEEDED`; it never
+splits orders, performs partial fills or automatically reduces quantity. A NULL quantity is an
+auditable single-order `INVALID_QUANTITY` reject and does not roll back valid orders in the same
+batch. Resolver logic is pure and contains no ORM or Session dependency.
 
 The `BacktestEngine` remains dependency-injected and only orchestrates
 `TradingCalendarGateway`, `CandidateProvider`, `PortfolioPolicy`, `ExecutionResolver` and
@@ -109,10 +113,16 @@ rows instead of deleting them. It also enforces `available_quantity <= quantity`
 current long-only `0..1` bounds for position and target weights.
 
 Migration `0031_m13_2_execution_audit` adds immutable per-open `portfolio_order_attempt` rows.
-Each attempt belongs to the same Run as its Order; execution-v2 Fills reference the matching
+Each attempt belongs to the same Run as its Order; new execution Fills reference the matching
 Attempt with another same-Run composite foreign key. Fill audit now stores raw reference price,
 transfer fee and cash fee total separately. Historical Fills keep a nullable Attempt reference,
 backfill reference price from their price, and retain canonical cost totals.
+
+Migration `0032_m13_2_1_execution_integrity` requires positive non-NULL Order quantities and
+allows zero requested quantity only for a `REJECTED/INVALID_QUANTITY` Attempt. Database checks
+also enforce outcome/reason, full-fill price and quantity, non-executed zero values, and canonical
+cost components. Upgrade rejects dirty history rather than rewriting it; downgrade refuses to
+discard zero-quantity audit evidence that 0031 cannot represent.
 
 `ExecutionApplicationService.execute_open_batch()` is an internal transaction boundary. It
 rejects non-BACKTEST and old execution identities, obtains account state through an injected
