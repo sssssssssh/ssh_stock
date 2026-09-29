@@ -1,16 +1,43 @@
 from dataclasses import dataclass
 from datetime import date
+from enum import StrEnum
 from typing import Protocol
 
 from app.core.portfolio_config import PortfolioConfig
 from app.domain.portfolio import SignalCandidate
 
 
+class SourceReadinessStatus(StrEnum):
+    READY = "READY"
+    UNAVAILABLE = "UNAVAILABLE"
+    INCOMPLETE = "INCOMPLETE"
+
+
+class PortfolioSourceNotReadyError(RuntimeError):
+    def __init__(self, batch: "CandidateBatch") -> None:
+        self.batch = batch
+        super().__init__(
+            f"portfolio source is {batch.source_status.value}: "
+            f"{batch.source_reason or 'unspecified'}"
+        )
+
+
 @dataclass(frozen=True)
 class CandidateBatch:
     trade_date: date
     candidates: tuple[SignalCandidate, ...]
-    source_available: bool
+    source_status: SourceReadinessStatus
+    source_reason: str | None
+    state_count: int
+    opportunity_count: int
+
+    @property
+    def source_available(self) -> bool:
+        return self.source_status != SourceReadinessStatus.UNAVAILABLE
+
+    @property
+    def source_ready(self) -> bool:
+        return self.source_status == SourceReadinessStatus.READY
 
 
 class CandidateProvider(Protocol):

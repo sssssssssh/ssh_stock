@@ -12,7 +12,10 @@ from app.domain.portfolio import (
     OrderIntent,
     PortfolioTarget,
 )
-from app.services.portfolio.contracts import CandidateProvider
+from app.services.portfolio.contracts import (
+    CandidateProvider,
+    PortfolioSourceNotReadyError,
+)
 from app.services.portfolio.execution import ExecutionResolver
 from app.services.portfolio.policy import PortfolioPolicy
 
@@ -20,21 +23,30 @@ from app.services.portfolio.policy import PortfolioPolicy
 class TradingCalendarGateway(Protocol):
     def trade_dates(self, start: date, end: date) -> Sequence[date]: ...
 
+    def next_trade_date(self, day: date) -> date | None: ...
+
 
 class AccountingLedger(Protocol):
     def account_state(self, trade_date: date) -> AccountState: ...
 
-    def order_intents(
-        self, target: PortfolioTarget, account: AccountState
-    ) -> Sequence[OrderIntent]: ...
+    def pending_order_intents(self, trade_date: date) -> Sequence[OrderIntent]: ...
 
     def market_snapshot(
         self, trade_date: date, intents: Sequence[OrderIntent]
     ) -> Sequence[MarketExecutionSnapshot]: ...
 
-    def apply(
+    def apply_execution(
         self, trade_date: date, decisions: Sequence[ExecutionDecision]
-    ) -> DailyPortfolioSnapshot: ...
+    ) -> None: ...
+
+    def mark_to_market(self, trade_date: date) -> DailyPortfolioSnapshot: ...
+
+    def create_order_intents(
+        self,
+        target: PortfolioTarget,
+        account: AccountState,
+        scheduled_trade_date: date,
+    ) -> Sequence[OrderIntent]: ...
 
 
 class BacktestEngine:
@@ -62,18 +74,39 @@ class BacktestEngine:
     def run(self, start: date, end: date) -> tuple[DailyPortfolioSnapshot, ...]:
         snapshots: list[DailyPortfolioSnapshot] = []
         for trade_date in self.calendar.trade_dates(start, end):
-            account = self.ledger.account_state(trade_date)
+            # OPEN: only orders created from information available before this day.
+            account_open = self.ledger.account_state(trade_date)
+            pending = self.ledger.pending_order_intents(trade_date)
+            market = self.ledger.market_snapshot(trade_date, pending)
+            decisions = self.execution.resolve(
+                pending, market, account_open, self.execution_config
+            )
+            self.ledger.apply_execution(trade_date, decisions)
+
+            # CLOSE: value the account after today's executions.
+            snapshot = self.ledger.mark_to_market(trade_date)
+            snapshots.append(snapshot)
+
+            # AFTER_CLOSE: today's signal can only create an intent for a later open.
             batch = self.candidates.list_candidates(trade_date, self.portfolio_config)
+            if not batch.source_ready:
+                raise PortfolioSourceNotReadyError(batch)
+            account_close = AccountState(
+                trade_date=snapshot.trade_date,
+                cash=snapshot.cash,
+                positions=snapshot.positions,
+            )
             target = self.policy.build_target(
                 batch.candidates,
-                account,
+                account_close,
                 self.portfolio_config,
-                source_available=batch.source_available,
+                source_available=True,
             )
-            intents = self.ledger.order_intents(target, account)
-            market = self.ledger.market_snapshot(trade_date, intents)
-            decisions = self.execution.resolve(
-                intents, market, account, self.execution_config
-            )
-            snapshots.append(self.ledger.apply(trade_date, decisions))
+            next_trade_date = self.calendar.next_trade_date(trade_date)
+            if next_trade_date is not None:
+                self.ledger.create_order_intents(
+                    target,
+                    account_close,
+                    scheduled_trade_date=next_trade_date,
+                )
         return tuple(snapshots)

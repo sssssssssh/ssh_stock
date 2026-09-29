@@ -12,6 +12,7 @@ from app.core.db import get_db
 from app.domain.portfolio import PortfolioTarget, SignalCandidate
 from app.models.portfolio import PortfolioBacktestRun
 from app.services.portfolio.application import PortfolioApplicationService
+from app.services.portfolio.contracts import PortfolioSourceNotReadyError
 
 router = APIRouter()
 
@@ -51,6 +52,11 @@ def candidates(
             **service.identity_meta(),
             "trade_date": trade_date.isoformat(),
             "source_available": batch.source_available,
+            "source_ready": batch.source_ready,
+            "source_status": batch.source_status.value,
+            "source_reason": batch.source_reason,
+            "state_count": batch.state_count,
+            "opportunity_count": batch.opportunity_count,
             "count": len(batch.candidates),
         },
     )
@@ -62,7 +68,19 @@ def preview_target(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     service = PortfolioApplicationService(db)
-    target = service.preview_target(request.trade_date)
+    try:
+        target = service.preview_target(request.trade_date)
+    except PortfolioSourceNotReadyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "PORTFOLIO_SOURCE_NOT_READY",
+                "source_status": exc.batch.source_status.value,
+                "source_reason": exc.batch.source_reason,
+                "state_count": exc.batch.state_count,
+                "opportunity_count": exc.batch.opportunity_count,
+            },
+        ) from exc
     return envelope(_target_payload(target), service.identity_meta())
 
 

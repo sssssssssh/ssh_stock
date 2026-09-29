@@ -17,7 +17,11 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
-from app.services.portfolio.candidates import CandidateBatch, OpportunityCandidateProvider
+from app.services.portfolio.candidates import OpportunityCandidateProvider
+from app.services.portfolio.contracts import (
+    CandidateBatch,
+    PortfolioSourceNotReadyError,
+)
 from app.services.portfolio.policy import TopNEqualWeightPolicy
 
 
@@ -50,6 +54,8 @@ class PortfolioApplicationService:
 
     def preview_target(self, trade_date: date) -> PortfolioTarget:
         batch = self.list_candidates(trade_date)
+        if not batch.source_ready:
+            raise PortfolioSourceNotReadyError(batch)
         account = AccountState(
             trade_date=trade_date,
             cash=self.portfolio_config.initial_cash_cny,
@@ -58,7 +64,7 @@ class PortfolioApplicationService:
             batch.candidates,
             account,
             self.portfolio_config,
-            source_available=batch.source_available,
+            source_available=True,
         )
 
     def create_backtest_definition(

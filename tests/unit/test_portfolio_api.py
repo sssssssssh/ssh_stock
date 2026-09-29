@@ -8,6 +8,10 @@ from app.domain.portfolio import PortfolioTarget, TargetPosition
 from app.main import app
 from app.services.auth.dependencies import require_authenticated_user
 from app.services.portfolio.candidates import CandidateBatch
+from app.services.portfolio.contracts import (
+    PortfolioSourceNotReadyError,
+    SourceReadinessStatus,
+)
 from fastapi.testclient import TestClient
 
 
@@ -19,14 +23,21 @@ class FakePortfolioService:
         return {
             "portfolio_version": "portfolio_v1",
             "execution_version": "execution_v1",
-            "backtest_engine_version": "backtest_v1",
+            "backtest_engine_version": "backtest_v2",
         }
 
     def get_config_status(self):
         return {"account_mode": "BACKTEST", **self.identity_meta()}
 
     def list_candidates(self, trade_date):
-        return CandidateBatch(trade_date, (), False)
+        return CandidateBatch(
+            trade_date,
+            (),
+            SourceReadinessStatus.UNAVAILABLE,
+            "CURRENT_STATE_AND_OPPORTUNITY_UNAVAILABLE",
+            0,
+            0,
+        )
 
     def preview_target(self, trade_date):
         return PortfolioTarget(
@@ -77,11 +88,39 @@ def test_portfolio_read_and_preview_endpoints_return_identity_without_writes(
     assert config.status_code == 200
     assert config.json()["meta"]["portfolio_version"] == "portfolio_v1"
     assert candidates.json()["meta"]["source_available"] is False
+    assert candidates.json()["meta"]["source_status"] == "UNAVAILABLE"
+    assert candidates.json()["meta"]["state_count"] == 0
     assert preview.json()["data"]["targets"][0]["target_weight"] == "0.1"
     assert listing.status_code == 200
     assert missing.status_code == 404
     assert fake_db.commits == 0
     assert fake_db.adds == 0
+
+
+def test_preview_returns_409_when_portfolio_source_is_not_ready(monkeypatch) -> None:
+    class NotReadyPortfolioService(FakePortfolioService):
+        def preview_target(self, trade_date):
+            batch = self.list_candidates(trade_date)
+            raise PortfolioSourceNotReadyError(batch)
+
+    monkeypatch.setattr(
+        portfolio_api, "PortfolioApplicationService", NotReadyPortfolioService
+    )
+    app.dependency_overrides[require_authenticated_user] = lambda: SimpleNamespace(
+        username="test"
+    )
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        response = TestClient(app).post(
+            "/api/v1/portfolio/targets/preview",
+            json={"trade_date": "2026-09-01"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "PORTFOLIO_SOURCE_NOT_READY"
+    assert response.json()["detail"]["source_status"] == "UNAVAILABLE"
 
 
 def test_backtest_create_request_validates_dates_and_money(monkeypatch) -> None:

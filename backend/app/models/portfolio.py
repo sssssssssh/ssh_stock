@@ -9,11 +9,13 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
     PrimaryKeyConstraint,
     String,
+    UniqueConstraint,
     func,
     text,
 )
@@ -95,7 +97,7 @@ class PortfolioOrder(Base):
             name=conv("ck_portfolio_order_status"),
         ),
         CheckConstraint(
-            "target_weight IS NULL OR target_weight >= 0",
+            "target_weight IS NULL OR (target_weight >= 0 AND target_weight <= 1)",
             name=conv("ck_portfolio_order_target_weight"),
         ),
         CheckConstraint(
@@ -104,6 +106,9 @@ class PortfolioOrder(Base):
         ),
         CheckConstraint(
             "attempt_count >= 0", name=conv("ck_portfolio_order_attempt_count")
+        ),
+        UniqueConstraint(
+            "id", "run_id", name=conv("uq_portfolio_order_id_run_id")
         ),
         Index(
             "idx_portfolio_order_run_schedule_status",
@@ -160,15 +165,19 @@ class PortfolioFill(Base):
             "slippage_cost >= 0", name=conv("ck_portfolio_fill_slippage_cost")
         ),
         CheckConstraint("total_cost >= 0", name=conv("ck_portfolio_fill_total_cost")),
+        ForeignKeyConstraint(
+            ["order_id", "run_id"],
+            ["portfolio_order.id", "portfolio_order.run_id"],
+            name=conv("fk_portfolio_fill_order_run_portfolio_order"),
+            ondelete="CASCADE",
+        ),
         Index("idx_portfolio_fill_run_date", "run_id", "trade_date"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    order_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("portfolio_order.id", ondelete="CASCADE"), nullable=False
-    )
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     run_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("portfolio_backtest_run.id", ondelete="CASCADE"),
@@ -206,6 +215,10 @@ class PortfolioPositionDaily(Base):
             "available_quantity >= 0",
             name=conv("ck_portfolio_position_available_quantity"),
         ),
+        CheckConstraint(
+            "available_quantity <= quantity",
+            name=conv("ck_portfolio_position_available_lte_quantity"),
+        ),
         CheckConstraint("avg_cost >= 0", name=conv("ck_portfolio_position_avg_cost")),
         CheckConstraint(
             "close_price IS NULL OR close_price >= 0",
@@ -214,7 +227,10 @@ class PortfolioPositionDaily(Base):
         CheckConstraint(
             "market_value >= 0", name=conv("ck_portfolio_position_market_value")
         ),
-        CheckConstraint("weight >= 0", name=conv("ck_portfolio_position_weight")),
+        CheckConstraint(
+            "weight >= 0 AND weight <= 1",
+            name=conv("ck_portfolio_position_weight"),
+        ),
         Index("idx_portfolio_position_run_date", "run_id", "trade_date"),
     )
 

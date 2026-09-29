@@ -8,7 +8,7 @@ SDK or autonomous trading loop.
 | Capability | Meaning | M13.1 examples |
 | --- | --- | --- |
 | `READ` | Read current identity and persisted definitions | config, candidates, backtest list/detail |
-| `SIMULATE` | Produce an in-memory, non-persistent result | target preview |
+| `SIMULATE` | Does not touch real trading; may produce a preview or persist an experiment/backtest draft | target preview, backtest definition |
 | `MUTATE_DRAFT` | Persist a mutable research draft | reserved for a future challenger strategy |
 | `EXECUTE` | Produce orders/fills or touch a broker | not exposed in M13.1 |
 
@@ -29,8 +29,11 @@ The Agent must use the authenticated API or these application methods. It must n
 
 - Every result reports Portfolio, Execution, Opportunity and Backtest identity metadata.
 - Candidate reads use the exact requested date and current Opportunity identity only.
-- `source_available=false` must not be interpreted as a valid empty trading signal.
-- Preview is side-effect free.
+- Candidate consumers must inspect `source_status`. `INCOMPLETE` and `UNAVAILABLE` must not be
+  interpreted as a valid empty trading signal; only `READY` may enter portfolio construction.
+- A `READY` source with zero filtered candidates is a valid empty signal and all-cash target.
+- Preview is a side-effect-free simulation. Backtest definition creation is also `SIMULATE`, but
+  it may persist a `CREATED` simulation draft and still cannot place or execute an order.
 - Definition creation persists status `CREATED`; it cannot submit, resolve or fill an order.
 - `PAPER`, `LIVE`, broker adapters, production execution resolution and `/run` endpoints remain
   outside the permitted M13.1 surface.

@@ -336,5 +336,14 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 金额、价格、交易成本和权重在配置与领域对象中使用 Decimal，数据库使用 Numeric，不得用 Float 构造组合账本。
 - Backtest Definition 必须冻结 Strategy、Opportunity、Portfolio、Execution 完整配置和版本/哈希；创建时只允许 `CREATED`，M13.1 不开放运行接口。
 - Portfolio Policy 与 Backtest Loop 不得导入 ORM/SQLAlchemy；Repository 不得包含选股、配权或成交规则。
-- `source_available=false` 与“来源可用但筛选后候选为空”必须区分。Preview 不得写数据库。
+- Candidate source 的 `READY/INCOMPLETE/UNAVAILABLE` 与“READY 但筛选后候选为空”必须区分。Preview 不得写数据库。
 - Agent 只能调用认证 API/Application Service，禁止直接访问 Repository/ORM；PAPER/LIVE、Broker、真实 Execution Resolver 和 Agent Runtime 不在 M13.1 范围。
+
+## Milestone 13.1.1 Portfolio 正确性收口规则
+
+- Backtest Engine identity 为 `backtest_v2`；历史 `backtest_v1` Definition 不改写。未来运行入口必须拒绝 stored engine version 与 current engine version 不一致的 Definition。
+- 每个交易日严格按 `OPEN execution -> CLOSE valuation -> AFTER_CLOSE signal` 编排。D 日收盘候选只能生成下一真实开市日的 OrderIntent，不得在 D 日开盘执行。
+- Portfolio Candidate source 必须基于 current Core Analysis 与 current identity State/Opportunity `ts_code` 精确集合判定。只有 `READY` 可构建 Target；`INCOMPLETE/UNAVAILABLE` 必须 fail closed，不能解释为无机会。
+- `READY` 且筛选后无 Candidate 是合法空信号，Target 保持 100% 现金。
+- Fill 必须通过 `(order_id, run_id)` 复合外键归属同一 Run；持仓可用数量不得超过数量，long-only Position/Target weight 必须位于 0..1。
+- M13.1.1 不开放 `/run`，不实现真实 Execution Resolver，不接 Broker/PAPER/LIVE，不修改 M12 Research 语义。

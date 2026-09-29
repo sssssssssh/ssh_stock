@@ -20,7 +20,9 @@ or bypass the identity and authorization boundaries.
   configuration snapshots and their hashes.
 - The identity tuple contains the analysis algorithm version, Strategy hash,
   `opportunity_v1` plus its config hash, `portfolio_v1` plus its config hash,
-  `execution_v1` plus its config hash, and `backtest_v1`.
+  `execution_v1` plus its config hash, and `backtest_v2`.
+- Existing `backtest_v1` definitions remain immutable history. A future run command must reject
+  any definition whose stored Backtest Engine version differs from the current engine version.
 - M13.1 application APIs accept only `BACKTEST`. `PAPER` and `LIVE` are reserved schema values,
   not enabled operating modes.
 
@@ -32,8 +34,13 @@ Opportunity identity filters. It never falls back to an earlier date and never r
 Factor, State, Sector or Theme data. Ranking fields are whitelisted and ordering is stable:
 score descending, then code ascending.
 
-An empty result and an unavailable source are distinct. `CandidateBatch.source_available`
-is false when the target date contains no rows for the current Opportunity identity.
+An empty filtered result and an unready source are distinct. Readiness compares the exact
+current-identity `StockStateDaily` and `StockOpportunityDaily` code sets and requires current
+Core Analysis completeness. `READY` means both non-empty sets match exactly; `UNAVAILABLE`
+means both sets are absent; every partial, mismatched, or Core-incomplete source is
+`INCOMPLETE`. Portfolio construction fails closed unless the source is `READY`. A `READY`
+source with zero candidates after portfolio filters is a valid no-signal day and produces an
+all-cash target.
 
 ## Portfolio policy
 
@@ -49,6 +56,17 @@ does not ship a simplified production resolver. The `BacktestEngine` is dependen
 only orchestrates `TradingCalendarGateway`, `CandidateProvider`, `PortfolioPolicy`,
 `ExecutionResolver` and `AccountingLedger`. Its loop imports neither SQLAlchemy nor ORM models.
 
+The loop has three ordered phases for every real open date `D`:
+
+1. `OPEN`: execute only previously created pending orders scheduled for `D`.
+2. `CLOSE`: mark the post-execution account to market.
+3. `AFTER_CLOSE`: consume `Candidate(D)`, build `Target(D)`, and create an intent scheduled for
+   `next_trade_date(D)` from the trading calendar.
+
+Therefore a close signal from `D` can never execute at the open of `D`. The first date may have
+an empty execution phase. An intent created after the final in-range close may remain pending
+for the next real open outside the backtest range, but it is never executed early.
+
 ## Persistence
 
 Migration `0029_m13_1_portfolio_foundation` introduces:
@@ -62,6 +80,11 @@ Migration `0029_m13_1_portfolio_foundation` introduces:
 All child tables carry an explicit `run_id` and cascade when a backtest definition is removed.
 The repository performs persistence only; it contains no selection, allocation, or execution
 rules.
+
+Migration `0030_m13_1_1_portfolio_integrity` makes Fill ownership ledger-safe with a composite
+foreign key from `(order_id, run_id)` to the matching Order, and rejects historical cross-run
+rows instead of deleting them. It also enforces `available_quantity <= quantity` and the
+current long-only `0..1` bounds for position and target weights.
 
 ## M13.1 API
 

@@ -1,15 +1,17 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.portfolio_config import PortfolioConfig
 from app.domain.portfolio import CandidateSourceIdentity, SignalCandidate
-from app.models.market_data import StockOpportunityDaily
+from app.models.market_data import StockOpportunityDaily, StockStateDaily
 from app.services.analysis_filters import opportunity_identity_filters
-from app.services.portfolio.contracts import CandidateBatch
+from app.services.analysis_identity import TREND_CALC_VERSION, analysis_strategy_hash
+from app.services.portfolio.contracts import CandidateBatch, SourceReadinessStatus
+from app.services.quality.analysis_readiness import is_core_analysis_complete
 
 
 class OpportunityCandidateProvider:
@@ -26,11 +28,34 @@ class OpportunityCandidateProvider:
         if ranking_column is None:
             raise ValueError("unsupported portfolio candidate ranking field")
         identity = opportunity_identity_filters(self.settings)
-        source_count = self.db.execute(
-            select(func.count())
-            .select_from(StockOpportunityDaily)
-            .where(StockOpportunityDaily.trade_date == trade_date, *identity)
-        ).scalar_one()
+        strategy_hash = analysis_strategy_hash(self.settings.strategy)
+        state_codes = set(
+            self.db.execute(
+                select(StockStateDaily.ts_code).where(
+                    StockStateDaily.trade_date == trade_date,
+                    StockStateDaily.algo_version == self.settings.algo_version,
+                    StockStateDaily.calc_version == TREND_CALC_VERSION,
+                    StockStateDaily.config_hash == strategy_hash,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        opportunity_codes = set(
+            self.db.execute(
+                select(StockOpportunityDaily.ts_code).where(
+                    StockOpportunityDaily.trade_date == trade_date,
+                    *identity,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        source_status, source_reason = self._source_readiness(
+            trade_date,
+            state_codes=state_codes,
+            opportunity_codes=opportunity_codes,
+        )
         rows = (
             self.db.execute(
                 select(StockOpportunityDaily)
@@ -75,8 +100,38 @@ class OpportunityCandidateProvider:
         return CandidateBatch(
             trade_date=trade_date,
             candidates=candidates,
-            source_available=bool(source_count),
+            source_status=source_status,
+            source_reason=source_reason,
+            state_count=len(state_codes),
+            opportunity_count=len(opportunity_codes),
         )
+
+    def _source_readiness(
+        self,
+        trade_date: date,
+        *,
+        state_codes: set[str],
+        opportunity_codes: set[str],
+    ) -> tuple[SourceReadinessStatus, str | None]:
+        if not state_codes and not opportunity_codes:
+            return (
+                SourceReadinessStatus.UNAVAILABLE,
+                "CURRENT_STATE_AND_OPPORTUNITY_UNAVAILABLE",
+            )
+        if not is_core_analysis_complete(
+            self.db,
+            trade_date,
+            strategy=self.settings.strategy,
+            algo_version=self.settings.algo_version,
+        ):
+            return SourceReadinessStatus.INCOMPLETE, "CORE_ANALYSIS_INCOMPLETE"
+        if not state_codes:
+            return SourceReadinessStatus.INCOMPLETE, "CURRENT_STATE_UNAVAILABLE"
+        if not opportunity_codes:
+            return SourceReadinessStatus.INCOMPLETE, "CURRENT_OPPORTUNITY_UNAVAILABLE"
+        if state_codes != opportunity_codes:
+            return SourceReadinessStatus.INCOMPLETE, "STATE_OPPORTUNITY_SET_MISMATCH"
+        return SourceReadinessStatus.READY, None
 
 
 def _reason_codes(value: object) -> tuple[str, ...]:
