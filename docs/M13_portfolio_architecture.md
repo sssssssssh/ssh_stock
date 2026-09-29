@@ -20,7 +20,9 @@ or bypass the identity and authorization boundaries.
   configuration snapshots and their hashes.
 - The identity tuple contains the analysis algorithm version, Strategy hash,
   `opportunity_v1` plus its config hash, `portfolio_v1` plus its config hash,
-  `execution_v1` plus its config hash, and `backtest_v3`.
+  `execution_v2` plus its config hash, and `backtest_v3`.
+- Existing `execution_v1` definitions remain immutable history and are rejected by the M13.2
+  execution application service. Newly created definitions freeze `execution_v2`.
 - Existing `backtest_v1` and `backtest_v2` definitions remain immutable history. A future run command must reject
   any definition whose stored Backtest Engine version differs from the current engine version.
 - M13.1 application APIs accept only `BACKTEST`. `PAPER` and `LIVE` are reserved schema values,
@@ -60,10 +62,21 @@ The output is a `PortfolioTarget`; it does not create orders or fills.
 
 ## Execution and backtest boundaries
 
-M13.1 defines `ExecutionResolver`, reason codes and `MarketExecutionSnapshot`, but deliberately
-does not ship a simplified production resolver. The `BacktestEngine` is dependency-injected and
-only orchestrates `TradingCalendarGateway`, `CandidateProvider`, `PortfolioPolicy`,
-`ExecutionResolver` and `AccountingLedger`. Its loop imports neither SQLAlchemy nor ORM models.
+M13.2 supplies an auditable simulated A-share `AshareExecutionResolver` for orders that already
+have an explicit `target_quantity`. It executes against raw `StockDaily.open`, current identity
+Trade Status, persisted Stock Limit rows and Stock Basic instrument metadata. Those four sources
+are loaded in fixed batch queries; any missing row or invalid raw open makes the entire execution
+batch `INCOMPLETE` with zero order, attempt or fill writes.
+
+The resolver applies deterministic precedence, A-share board lot rules, T+1 available quantity,
+open limit blocking, adverse tick-rounded slippage, date-effective commission/stamp/transfer
+fees, and SELL-before-BUY working cash. Temporary blockers remain pending and expire on the fifth
+real open attempt. It never performs partial fills or automatic quantity reduction. Resolver
+logic is pure and contains no ORM or Session dependency.
+
+The `BacktestEngine` remains dependency-injected and only orchestrates
+`TradingCalendarGateway`, `CandidateProvider`, `PortfolioPolicy`, `ExecutionResolver` and
+`AccountingLedger`. Its loop imports neither SQLAlchemy nor ORM models.
 
 The loop has three ordered phases for every real open date `D`:
 
@@ -94,6 +107,17 @@ Migration `0030_m13_1_1_portfolio_integrity` makes Fill ownership ledger-safe wi
 foreign key from `(order_id, run_id)` to the matching Order, and rejects historical cross-run
 rows instead of deleting them. It also enforces `available_quantity <= quantity` and the
 current long-only `0..1` bounds for position and target weights.
+
+Migration `0031_m13_2_execution_audit` adds immutable per-open `portfolio_order_attempt` rows.
+Each attempt belongs to the same Run as its Order; execution-v2 Fills reference the matching
+Attempt with another same-Run composite foreign key. Fill audit now stores raw reference price,
+transfer fee and cash fee total separately. Historical Fills keep a nullable Attempt reference,
+backfill reference price from their price, and retain canonical cost totals.
+
+`ExecutionApplicationService.execute_open_batch()` is an internal transaction boundary. It
+rejects non-BACKTEST and old execution identities, obtains account state through an injected
+gateway, fails closed before writes on source gaps, and atomically inserts attempts, updates
+orders and inserts executed fills. Position and NAV accounting remain reserved for M13.3.
 
 ## M13.1 API
 

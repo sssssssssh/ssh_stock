@@ -22,7 +22,7 @@ class FakePortfolioService:
     def identity_meta(self):
         return {
             "portfolio_version": "portfolio_v1",
-            "execution_version": "execution_v1",
+            "execution_version": "execution_v2",
             "backtest_engine_version": "backtest_v3",
         }
 

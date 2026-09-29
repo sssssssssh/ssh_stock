@@ -1,14 +1,37 @@
 execution:
-  version: execution_v1
+  version: execution_v2
   mode: SIMULATED
+  ruleset_version: cn_a_share_2026_v1
   signal_time: CLOSE
   entry_basis: NEXT_OPEN
   exit_basis: NEXT_OPEN
-  board_lot: 100
   t_plus_one: true
   pending_order_max_trade_days: 5
+  price_tick_cny: 0.01
+  fill_model:
+    partial_fill: false
+    insufficient_cash_policy: REJECT
+    temporary_block_policy: RETRY
   trading_cost:
     commission_rate: 0.0003
     minimum_commission_cny: 5
-    stamp_tax_sell_rate: 0.0005
+    stamp_tax_sell_schedule:
+      - effective_from: 2008-09-19
+        rate: 0.001
+      - effective_from: 2023-08-28
+        rate: 0.0005
+    transfer_fee:
+      enabled: true
+      schedules:
+        - effective_from: 2015-08-01
+          effective_to: 2022-04-28
+          exchanges: [SSE, SZSE]
+          rate: 0.00002
+        - effective_from: 2021-11-15
+          effective_to: 2022-04-28
+          exchanges: [BSE]
+          rate: 0.000025
+        - effective_from: 2022-04-29
+          exchanges: [SSE, SZSE, BSE]
+          rate: 0.00001
     slippage_bps: 5

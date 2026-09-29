@@ -1,6 +1,6 @@
 # Agent-ready Service Contracts
 
-M13.1 prepares explicit service boundaries for a future Agent runtime; it does not add an Agent
+M13 prepares explicit service boundaries for a future Agent runtime; it does not add an Agent
 SDK or autonomous trading loop.
 
 ## Capability levels
@@ -25,6 +25,15 @@ A future Agent may depend on `PortfolioApplicationService` methods:
 The Agent must use the authenticated API or these application methods. It must not depend on
 `PortfolioRepository`, ORM types, SQLAlchemy sessions, or database tables directly.
 
+M13.2 reserves these execution capabilities for a future authenticated application surface:
+
+- `execution.get_order_attempts(run_id, order_id)` (`READ`)
+- `execution.explain_order(run_id, order_id)` (`READ`)
+- `execution.preview(order, account, trade_date)` (`SIMULATE`)
+
+They describe or simulate persisted execution evidence. They do not authorize broker execution,
+live order submission, direct database access or a public backtest `/run` endpoint.
+
 ## Safety invariants
 
 - Every result reports Portfolio, Execution, Opportunity and Backtest identity metadata.
@@ -38,8 +47,9 @@ The Agent must use the authenticated API or these application methods. It must n
 - Preview is a side-effect-free simulation. Backtest definition creation is also `SIMULATE`, but
   it may persist a `CREATED` simulation draft and still cannot place or execute an order.
 - Definition creation persists status `CREATED`; it cannot submit, resolve or fill an order.
-- `PAPER`, `LIVE`, broker adapters, production execution resolution and `/run` endpoints remain
-  outside the permitted M13.1 surface.
+- `PAPER`, `LIVE`, broker adapters and `/run` endpoints remain outside the permitted surface.
+- Order explanations must use persisted OrderAttempt evidence, including source, market and
+  account snapshots. An Agent must not invent why an order retried, expired or was rejected.
 
 These contracts let a later Agent layer reason over stable application services while keeping
 authorization, identity, simulation and execution permissions separable.

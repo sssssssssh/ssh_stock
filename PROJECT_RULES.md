@@ -356,3 +356,11 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 任意一层 missing/extra code 或 old identity 均为 `INCOMPLETE` 并 fail closed；五层全空为 `UNAVAILABLE`。诊断样本每层最多返回 20 个排序后的代码。
 - 五层完整但 Portfolio stage/score 过滤后无 Candidate 仍为 READY，合法生成 100% 现金 Target。
 - M13.1.2 不新增迁移，不修改 0030，不修改 OPEN/CLOSE/AFTER_CLOSE 时间模型，不实现 M13.2 Execution。
+
+## Milestone 13.2 Execution Resolver 规则
+
+- Execution identity 为 `execution_v2`，Backtest Engine 保持 `backtest_v3`；历史 `execution_v1` Definition 不改写且执行服务必须拒绝。
+- NEXT_OPEN 成交 reference price 只能使用 Raw `StockDaily.open`。Raw、current TradeStatus、StockLimit row 或 StockBasic profile 任一缺失时整批 fail closed，且不得写 OrderAttempt、Order 状态或 Fill。
+- Resolver 必须先 SELL 后 BUY，使用工作现金和 available quantity，遵守 A 股板块手数、T+1、开盘涨跌停、Decimal 税费与不利 tick 滑点；不允许自动缩量或 Partial Fill。
+- 每次真实开盘尝试写入 `portfolio_order_attempt`；第 5 次临时阻塞转 `CANCELLED/EXPIRED`，Attempt 保留底层 blocker。Fill 必须通过复合外键归属同 Run 的 Order 和 Attempt。
+- M13.2 不实现 TargetWeight 到股数换算、Rebalance、Position/NAV Accounting、公开 `/run`、PAPER/LIVE 或 Broker 接入，不修改 M12 Research 语义。

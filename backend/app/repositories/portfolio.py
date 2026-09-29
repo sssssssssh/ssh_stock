@@ -11,6 +11,7 @@ from app.models.portfolio import (
     PortfolioFill,
     PortfolioNavDaily,
     PortfolioOrder,
+    PortfolioOrderAttempt,
     PortfolioPositionDaily,
 )
 
@@ -82,8 +83,81 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_pending_orders(
+        self, run_id: uuid.UUID, trade_date: date
+    ) -> list[PortfolioOrder]:
+        return list(
+            self.db.execute(
+                select(PortfolioOrder)
+                .where(
+                    PortfolioOrder.run_id == run_id,
+                    PortfolioOrder.status == "PENDING",
+                    PortfolioOrder.scheduled_trade_date <= trade_date,
+                )
+                .order_by(
+                    PortfolioOrder.scheduled_trade_date,
+                    PortfolioOrder.id,
+                    PortfolioOrder.ts_code,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    def update_order_execution_state(
+        self,
+        order_id: uuid.UUID,
+        *,
+        status: str,
+        reason_code: str | None,
+        attempt_count: int,
+    ) -> PortfolioOrder:
+        order = self.db.get(PortfolioOrder, order_id)
+        if order is None:
+            raise LookupError(f"portfolio order not found: {order_id}")
+        order.status = status
+        order.reason_code = reason_code
+        order.attempt_count = attempt_count
+        return order
+
+    def insert_order_attempts(
+        self, run_id: uuid.UUID, rows: Sequence[PortfolioOrderAttempt]
+    ) -> None:
+        self._assert_run_id(run_id, rows)
+        self.db.add_all(rows)
+        self.db.flush()
+
+    def list_order_attempts(
+        self,
+        run_id: uuid.UUID,
+        order_id: uuid.UUID | None = None,
+    ) -> list[PortfolioOrderAttempt]:
+        statement = select(PortfolioOrderAttempt).where(
+            PortfolioOrderAttempt.run_id == run_id
+        )
+        if order_id is not None:
+            statement = statement.where(PortfolioOrderAttempt.order_id == order_id)
+        return list(
+            self.db.execute(
+                statement.order_by(
+                    PortfolioOrderAttempt.attempt_trade_date,
+                    PortfolioOrderAttempt.attempt_no,
+                    PortfolioOrderAttempt.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     def insert_fills(self, run_id: uuid.UUID, rows: Sequence[PortfolioFill]) -> None:
         self._assert_run_id(run_id, rows)
+        for row in rows:
+            if row.reference_price is None:
+                raise ValueError("portfolio fill reference_price is required")
+            if row.cash_fee_total != row.commission + row.stamp_tax + row.transfer_fee:
+                raise ValueError("portfolio fill cash fee components are inconsistent")
+            if row.total_cost != row.cash_fee_total + row.slippage_cost:
+                raise ValueError("portfolio fill total cost is inconsistent")
         self.db.add_all(rows)
         self.db.flush()
 

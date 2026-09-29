@@ -1,25 +1,35 @@
+import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import app.services.portfolio.source_integrity as source_integrity_module
 import pytest
 import sqlalchemy as sa
+from alembic.config import Config
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.domain.portfolio import AccountState
 from app.main import app
 from app.models.market_data import (
     StockBasic,
     StockDaily,
     StockFactorDaily,
+    StockLimitDaily,
     StockOpportunityDaily,
     StockStateDaily,
     StockSuspendDaily,
+    StockTradeStatusDaily,
 )
 from app.models.portfolio import (
     PortfolioBacktestRun,
     PortfolioFill,
     PortfolioNavDaily,
     PortfolioOrder,
+    PortfolioOrderAttempt,
     PortfolioPositionDaily,
 )
 from app.repositories.portfolio import PortfolioRepository
@@ -29,10 +39,16 @@ from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     OPPORTUNITY_CALC_VERSION,
     PORTFOLIO_VERSION,
+    TRADE_STATUS_CALC_VERSION,
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.execution.application import ExecutionApplicationService
+from app.services.execution.contracts import (
+    ExecutionSourceNotReadyError,
+    ExecutionVersionMismatchError,
+)
 from app.services.portfolio.application import PortfolioApplicationService
 from app.services.portfolio.contracts import SourceReadinessStatus
 from app.services.portfolio.source_integrity import check_portfolio_source_integrity
@@ -87,20 +103,43 @@ def test_five_portfolio_tables_round_trip_and_cascade() -> None:
                 status="EXECUTED",
             )
             repository.insert_orders(run.id, [order])
+            attempt = PortfolioOrderAttempt(
+                order_id=order.id,
+                run_id=run.id,
+                attempt_trade_date=date(2026, 9, 2),
+                attempt_no=1,
+                outcome="EXECUTED",
+                requested_quantity=100,
+                fill_quantity=100,
+                reference_price=Decimal("9.995"),
+                fill_price=Decimal("10"),
+                gross_amount=Decimal("1000"),
+                commission=Decimal("5"),
+                stamp_tax=Decimal("0"),
+                transfer_fee=Decimal("0"),
+                cash_fee_total=Decimal("5"),
+                slippage_cost=Decimal("0.5"),
+                total_cost=Decimal("5.5"),
+            )
+            repository.insert_order_attempts(run.id, [attempt])
             repository.insert_fills(
                 run.id,
                 [
                     PortfolioFill(
                         order_id=order.id,
+                        attempt_id=attempt.id,
                         run_id=run.id,
                         trade_date=date(2026, 9, 2),
                         ts_code="000001.SZ",
                         side="BUY",
                         quantity=100,
                         price=Decimal("10"),
+                        reference_price=Decimal("9.995"),
                         gross_amount=Decimal("1000"),
                         commission=Decimal("5"),
                         stamp_tax=Decimal("0"),
+                        transfer_fee=Decimal("0"),
+                        cash_fee_total=Decimal("5"),
                         slippage_cost=Decimal("0.5"),
                         total_cost=Decimal("5.5"),
                     )
@@ -141,6 +180,7 @@ def test_five_portfolio_tables_round_trip_and_cascade() -> None:
                 ),
             )
             assert len(repository.list_orders(run.id)) == 1
+            assert len(repository.list_order_attempts(run.id)) == 1
             fills = repository.list_fills(run.id)
             assert len(fills) == 1
             assert fills[0].price == Decimal("10.0000")
@@ -154,6 +194,7 @@ def test_five_portfolio_tables_round_trip_and_cascade() -> None:
             db.flush()
             for table in (
                 PortfolioOrder,
+                PortfolioOrderAttempt,
                 PortfolioFill,
                 PortfolioPositionDaily,
                 PortfolioNavDaily,
@@ -469,9 +510,12 @@ def test_fill_order_run_identity_is_enforced_by_database() -> None:
                     side="BUY",
                     quantity=100,
                     price=Decimal("10"),
+                    reference_price=Decimal("10"),
                     gross_amount=Decimal("1000"),
                     commission=Decimal("0"),
                     stamp_tax=Decimal("0"),
+                    transfer_fee=Decimal("0"),
+                    cash_fee_total=Decimal("0"),
                     slippage_cost=Decimal("0"),
                     total_cost=Decimal("0"),
                 )
@@ -492,6 +536,7 @@ def test_m13_check_constraint_names_match_orm_metadata() -> None:
     for model in (
         PortfolioBacktestRun,
         PortfolioOrder,
+        PortfolioOrderAttempt,
         PortfolioFill,
         PortfolioPositionDaily,
         PortfolioNavDaily,
@@ -524,4 +569,418 @@ def test_m13_check_constraint_names_match_orm_metadata() -> None:
         ("id", "run_id"),
     )
     assert "fk_portfolio_fill_order_id_portfolio_order" not in fill_foreign_keys
+    assert fill_foreign_keys[
+        "fk_portfolio_fill_attempt_run_portfolio_order_attempt"
+    ] == (
+        ("attempt_id", "run_id"),
+        ("id", "run_id"),
+    )
+    engine.dispose()
+
+
+def test_execution_application_persists_attempt_and_fill_and_fails_closed(
+    monkeypatch,
+) -> None:
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    trade_date = date(2026, 7, 1)
+    code = "M132A.SH"
+
+    class AccountGateway:
+        def account_state(self, run_id, requested_date):
+            return AccountState(requested_date, Decimal("100000"))
+
+    engine = sa.create_engine(settings.database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run())
+            order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 6, 30),
+                scheduled_trade_date=trade_date,
+                ts_code=code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [order])
+            db.add_all(
+                [
+                    StockBasic(ts_code=code, exchange="SSE", market="主板"),
+                    StockDaily(trade_date=trade_date, ts_code=code, open=10, close=10),
+                    StockLimitDaily(
+                        trade_date=trade_date,
+                        ts_code=code,
+                        up_limit=11,
+                        down_limit=9,
+                    ),
+                    StockTradeStatusDaily(
+                        trade_date=trade_date,
+                        ts_code=code,
+                        is_active=True,
+                        is_suspended=False,
+                        st_status_unknown=False,
+                        tradable=True,
+                        strategy_eligible=True,
+                        calc_version=TRADE_STATUS_CALC_VERSION,
+                        config_hash=strategy_hash,
+                        calculated_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            db.flush()
+            monkeypatch.setattr(db, "commit", db.flush)
+            service = ExecutionApplicationService(
+                db, account_gateway=AccountGateway(), settings=settings
+            )
+            result = service.execute_open_batch(run.id, trade_date)
+            attempts = repository.list_order_attempts(run.id)
+            fills = repository.list_fills(run.id)
+            assert result.decisions[0].outcome == "EXECUTED"
+            assert (order.status, order.attempt_count) == ("EXECUTED", 1)
+            assert len(attempts) == len(fills) == 1
+            assert fills[0].attempt_id == attempts[0].id
+            assert fills[0].reference_price == Decimal("10.0000")
+            assert fills[0].total_cost == (
+                fills[0].cash_fee_total + fills[0].slippage_cost
+            )
+
+            missing_code = "M132B.SH"
+            missing_order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 6, 30),
+                scheduled_trade_date=trade_date,
+                ts_code=missing_code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [missing_order])
+            with pytest.raises(ExecutionSourceNotReadyError):
+                service.execute_open_batch(run.id, trade_date)
+            assert missing_order.status == "PENDING"
+            assert missing_order.attempt_count == 0
+            assert repository.list_order_attempts(run.id, missing_order.id) == []
+
+            old_run = _run()
+            old_run.execution_version = "execution_v1"
+            repository.create_run(old_run)
+            with pytest.raises(ExecutionVersionMismatchError):
+                service.execute_open_batch(old_run.id, trade_date)
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_execution_application_preserves_three_day_attempt_history(monkeypatch) -> None:
+    settings = get_settings()
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    days = [date(2026, 7, day) for day in (6, 7, 8)]
+    code = "M132C.SH"
+
+    class AccountGateway:
+        def account_state(self, run_id, requested_date):
+            return AccountState(requested_date, Decimal("100000"))
+
+    engine = sa.create_engine(settings.database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run())
+            order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 7, 3),
+                scheduled_trade_date=days[0],
+                ts_code=code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [order])
+            db.add(StockBasic(ts_code=code, exchange="SSE", market="主板"))
+            for index, current in enumerate(days):
+                db.add_all(
+                    [
+                        StockDaily(
+                            trade_date=current,
+                            ts_code=code,
+                            open=11 if index < 2 else 10,
+                            close=10,
+                        ),
+                        StockLimitDaily(
+                            trade_date=current,
+                            ts_code=code,
+                            up_limit=11,
+                            down_limit=9,
+                        ),
+                        StockTradeStatusDaily(
+                            trade_date=current,
+                            ts_code=code,
+                            is_active=True,
+                            is_suspended=False,
+                            st_status_unknown=False,
+                            tradable=True,
+                            strategy_eligible=True,
+                            calc_version=TRADE_STATUS_CALC_VERSION,
+                            config_hash=strategy_hash,
+                            calculated_at=datetime.now(UTC),
+                        ),
+                    ]
+                )
+            db.flush()
+            monkeypatch.setattr(db, "commit", db.flush)
+            service = ExecutionApplicationService(
+                db, account_gateway=AccountGateway(), settings=settings
+            )
+            assert service.execute_open_batch(run.id, days[0]).decisions[0].outcome == (
+                "RETRY"
+            )
+            assert service.execute_open_batch(run.id, days[1]).decisions[0].outcome == (
+                "RETRY"
+            )
+            assert service.execute_open_batch(run.id, days[2]).decisions[0].outcome == (
+                "EXECUTED"
+            )
+            attempts = repository.list_order_attempts(run.id, order.id)
+            assert [item.outcome for item in attempts] == [
+                "RETRY",
+                "RETRY",
+                "EXECUTED",
+            ]
+            assert [item.attempt_no for item in attempts] == [1, 2, 3]
+            assert order.status == "EXECUTED"
+            assert order.attempt_count == 3
+            assert len(repository.list_fills(run.id)) == 1
+
+            expiry_code = "M132E.SH"
+            expiry_days = [date(2026, 7, day) for day in range(13, 18)]
+            expiry_order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(2026, 7, 10),
+                scheduled_trade_date=expiry_days[0],
+                ts_code=expiry_code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="PENDING",
+            )
+            repository.insert_orders(run.id, [expiry_order])
+            db.add(StockBasic(ts_code=expiry_code, exchange="SSE", market="主板"))
+            for current in expiry_days:
+                db.add_all(
+                    [
+                        StockDaily(
+                            trade_date=current,
+                            ts_code=expiry_code,
+                            open=10,
+                            close=10,
+                        ),
+                        StockLimitDaily(
+                            trade_date=current,
+                            ts_code=expiry_code,
+                            up_limit=11,
+                            down_limit=9,
+                        ),
+                        StockTradeStatusDaily(
+                            trade_date=current,
+                            ts_code=expiry_code,
+                            is_active=True,
+                            is_suspended=True,
+                            st_status_unknown=False,
+                            tradable=False,
+                            strategy_eligible=False,
+                            calc_version=TRADE_STATUS_CALC_VERSION,
+                            config_hash=strategy_hash,
+                            calculated_at=datetime.now(UTC),
+                        ),
+                    ]
+                )
+            db.flush()
+            expiry_outcomes = [
+                service.execute_open_batch(run.id, current).decisions[0].outcome
+                for current in expiry_days
+            ]
+            assert expiry_outcomes == ["RETRY", "RETRY", "RETRY", "RETRY", "EXPIRED"]
+            assert expiry_order.status == "CANCELLED"
+            assert expiry_order.reason_code == "EXPIRED"
+            expiry_attempts = repository.list_order_attempts(run.id, expiry_order.id)
+            assert len(expiry_attempts) == 5
+            assert expiry_attempts[-1].outcome == "EXPIRED"
+            assert expiry_attempts[-1].reason_code == "SUSPENDED"
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_attempt_and_fill_same_run_foreign_keys_reject_cross_run_rows() -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            repository = PortfolioRepository(db)
+            run_a = repository.create_run(_run())
+            run_b = repository.create_run(_run())
+            order_a = PortfolioOrder(
+                run_id=run_a.id,
+                signal_trade_date=date(2026, 9, 1),
+                scheduled_trade_date=date(2026, 9, 2),
+                ts_code="M132FK.SH",
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="EXECUTED",
+            )
+            order_b = PortfolioOrder(
+                run_id=run_b.id,
+                signal_trade_date=date(2026, 9, 1),
+                scheduled_trade_date=date(2026, 9, 2),
+                ts_code="M132FB.SH",
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="EXECUTED",
+            )
+            repository.insert_orders(run_a.id, [order_a])
+            repository.insert_orders(run_b.id, [order_b])
+
+            def attempt(run_id):
+                return PortfolioOrderAttempt(
+                    order_id=order_a.id,
+                    run_id=run_id,
+                    attempt_trade_date=date(2026, 9, 2),
+                    attempt_no=1,
+                    outcome="EXECUTED",
+                    requested_quantity=100,
+                    fill_quantity=100,
+                    reference_price=Decimal("10"),
+                    fill_price=Decimal("10"),
+                )
+
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(attempt(run_b.id))
+                db.flush()
+            valid_attempt = attempt(run_a.id)
+            db.add(valid_attempt)
+            other_attempt = PortfolioOrderAttempt(
+                order_id=order_b.id,
+                run_id=run_b.id,
+                attempt_trade_date=date(2026, 9, 2),
+                attempt_no=1,
+                outcome="EXECUTED",
+                requested_quantity=100,
+                fill_quantity=100,
+                reference_price=Decimal("10"),
+                fill_price=Decimal("10"),
+            )
+            db.add(other_attempt)
+            db.flush()
+            cross_fill = PortfolioFill(
+                order_id=order_a.id,
+                attempt_id=other_attempt.id,
+                run_id=run_a.id,
+                trade_date=date(2026, 9, 2),
+                ts_code="M132FK.SH",
+                side="BUY",
+                quantity=100,
+                price=Decimal("10"),
+                reference_price=Decimal("10"),
+                gross_amount=Decimal("1000"),
+                commission=Decimal("0"),
+                stamp_tax=Decimal("0"),
+                transfer_fee=Decimal("0"),
+                cash_fee_total=Decimal("0"),
+                slippage_cost=Decimal("0"),
+                total_cost=Decimal("0"),
+            )
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(cross_fill)
+                db.flush()
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_0031_migration_backfills_historical_fill(monkeypatch) -> None:
+    root = Path(__file__).resolve().parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("path_separator", "os")
+    migration = ScriptDirectory.from_config(config).get_revision(
+        "0031_m13_2_execution_audit"
+    ).module
+    schema = f"m13_2_fill_{uuid.uuid4().hex}"
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            connection.execute(sa.text(f'CREATE SCHEMA "{schema}"'))
+            connection.execute(sa.text(f'SET LOCAL search_path TO "{schema}"'))
+            metadata = sa.MetaData()
+            order_table = sa.Table(
+                "portfolio_order",
+                metadata,
+                sa.Column("id", sa.UUID(), primary_key=True),
+                sa.Column("run_id", sa.UUID(), nullable=False),
+                sa.UniqueConstraint("id", "run_id"),
+            )
+            fill_table = sa.Table(
+                "portfolio_fill",
+                metadata,
+                sa.Column("id", sa.UUID(), primary_key=True),
+                sa.Column("order_id", sa.UUID(), nullable=False),
+                sa.Column("run_id", sa.UUID(), nullable=False),
+                sa.Column("price", sa.Numeric(18, 4), nullable=False),
+                sa.Column("commission", sa.Numeric(20, 4), nullable=False),
+                sa.Column("stamp_tax", sa.Numeric(20, 4), nullable=False),
+                sa.Column("slippage_cost", sa.Numeric(20, 4), nullable=False),
+                sa.Column("total_cost", sa.Numeric(20, 4), nullable=False),
+            )
+            metadata.create_all(connection)
+            run_id, order_id, fill_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+            connection.execute(
+                order_table.insert().values(id=order_id, run_id=run_id)
+            )
+            connection.execute(
+                fill_table.insert().values(
+                    id=fill_id,
+                    order_id=order_id,
+                    run_id=run_id,
+                    price=Decimal("10.25"),
+                    commission=Decimal("5"),
+                    stamp_tax=Decimal("0.5"),
+                    slippage_cost=Decimal("1"),
+                    total_cost=Decimal("6.5"),
+                )
+            )
+            monkeypatch.setattr(
+                migration, "op", Operations(MigrationContext.configure(connection))
+            )
+            migration.upgrade()
+            row = connection.execute(
+                sa.text(
+                    """
+                    SELECT attempt_id, reference_price, transfer_fee,
+                           cash_fee_total, total_cost
+                    FROM portfolio_fill WHERE id = :fill_id
+                    """
+                ),
+                {"fill_id": fill_id},
+            ).mappings().one()
+            assert row["attempt_id"] is None
+            assert row["reference_price"] == Decimal("10.2500")
+            assert row["transfer_fee"] == Decimal("0.0000")
+            assert row["cash_fee_total"] == Decimal("5.5000")
+            assert row["total_cost"] == Decimal("6.5000")
+            migration.downgrade()
+            columns = {
+                item["name"]
+                for item in sa.inspect(connection).get_columns(
+                    "portfolio_fill", schema=schema
+                )
+            }
+            assert "reference_price" not in columns
+        finally:
+            transaction.rollback()
     engine.dispose()

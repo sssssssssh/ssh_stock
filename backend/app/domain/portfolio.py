@@ -2,6 +2,12 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
+from app.domain import execution as execution_domain
+
+ExecutionDecision = execution_domain.ExecutionDecision
+MarketExecutionSnapshot = execution_domain.MarketExecutionSnapshot
+OrderIntent = execution_domain.OrderIntent
+
 
 @dataclass(frozen=True)
 class CandidateSourceIdentity:
@@ -56,38 +62,6 @@ class PortfolioTarget:
     targets: tuple[TargetPosition, ...]
     target_cash_ratio: Decimal
     source_available: bool
-
-
-@dataclass(frozen=True)
-class OrderIntent:
-    signal_trade_date: date
-    scheduled_trade_date: date
-    ts_code: str
-    side: str
-    order_type: str
-    target_weight: Decimal | None = None
-    target_quantity: int | None = None
-
-
-@dataclass(frozen=True)
-class MarketExecutionSnapshot:
-    trade_date: date
-    ts_code: str
-    open_price: Decimal | None
-    close_price: Decimal | None
-    up_limit: Decimal | None
-    down_limit: Decimal | None
-    suspended: bool
-
-
-@dataclass(frozen=True)
-class ExecutionDecision:
-    status: str
-    executable: bool
-    fill_quantity: int
-    fill_price: Decimal | None
-    reason_code: str | None
-    intent: OrderIntent | None = None
 
 
 @dataclass(frozen=True)

@@ -12,7 +12,6 @@ from app.domain.portfolio import (
     AccountState,
     CandidateSourceIdentity,
     DailyPortfolioSnapshot,
-    ExecutionDecision,
     OrderIntent,
     SignalCandidate,
 )
@@ -120,7 +119,7 @@ def _integrity(
 def test_portfolio_and_execution_config_are_strict_and_decimal() -> None:
     settings = get_settings()
     assert settings.portfolio_config.version == "portfolio_v1"
-    assert settings.execution_config.version == "execution_v1"
+    assert settings.execution_config.version == "execution_v2"
     assert settings.portfolio_config.initial_cash_cny == Decimal("1000000")
     assert settings.execution_config.trading_cost.commission_rate == Decimal("0.0003")
 
@@ -130,8 +129,8 @@ def test_portfolio_and_execution_config_are_strict_and_decimal() -> None:
         PortfolioConfig.model_validate(raw)
 
     execution = settings.execution_config.model_dump(mode="python")
-    execution["board_lot"] = 0
-    with pytest.raises(ValidationError, match="board_lot"):
+    execution["price_tick_cny"] = 0
+    with pytest.raises(ValidationError, match="price_tick_cny"):
         ExecutionConfig.model_validate(execution)
 
 
@@ -475,17 +474,7 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
     class Resolver:
         def resolve(self, intents, market, account, config):
             events.append(("execute", account.trade_date, tuple(intents)))
-            return tuple(
-                ExecutionDecision(
-                    status="REJECTED",
-                    executable=False,
-                    fill_quantity=0,
-                    fill_price=None,
-                    reason_code="NO_MARKET_DATA",
-                    intent=intent,
-                )
-                for intent in intents
-            )
+            return ()
 
     class Ledger:
         def __init__(self):

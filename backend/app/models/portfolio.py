@@ -148,6 +148,128 @@ class PortfolioOrder(Base):
     )
 
 
+class PortfolioOrderAttempt(Base):
+    __tablename__ = "portfolio_order_attempt"
+    __table_args__ = (
+        CheckConstraint(
+            "attempt_no > 0", name=conv("ck_portfolio_order_attempt_attempt_no")
+        ),
+        CheckConstraint(
+            "outcome IN ('RETRY', 'EXECUTED', 'REJECTED', 'EXPIRED')",
+            name=conv("ck_portfolio_order_attempt_outcome"),
+        ),
+        CheckConstraint(
+            "requested_quantity > 0",
+            name=conv("ck_portfolio_order_attempt_requested_quantity"),
+        ),
+        CheckConstraint(
+            "fill_quantity >= 0",
+            name=conv("ck_portfolio_order_attempt_fill_quantity"),
+        ),
+        CheckConstraint(
+            "fill_quantity <= requested_quantity",
+            name=conv("ck_portfolio_order_attempt_fill_lte_requested"),
+        ),
+        CheckConstraint(
+            "reference_price IS NULL OR reference_price > 0",
+            name=conv("ck_portfolio_order_attempt_reference_price"),
+        ),
+        CheckConstraint(
+            "fill_price IS NULL OR fill_price > 0",
+            name=conv("ck_portfolio_order_attempt_fill_price"),
+        ),
+        CheckConstraint(
+            "gross_amount >= 0", name=conv("ck_portfolio_order_attempt_gross_amount")
+        ),
+        CheckConstraint(
+            "commission >= 0", name=conv("ck_portfolio_order_attempt_commission")
+        ),
+        CheckConstraint(
+            "stamp_tax >= 0", name=conv("ck_portfolio_order_attempt_stamp_tax")
+        ),
+        CheckConstraint(
+            "transfer_fee >= 0", name=conv("ck_portfolio_order_attempt_transfer_fee")
+        ),
+        CheckConstraint(
+            "cash_fee_total >= 0",
+            name=conv("ck_portfolio_order_attempt_cash_fee_total"),
+        ),
+        CheckConstraint(
+            "slippage_cost >= 0",
+            name=conv("ck_portfolio_order_attempt_slippage_cost"),
+        ),
+        CheckConstraint(
+            "total_cost >= 0", name=conv("ck_portfolio_order_attempt_total_cost")
+        ),
+        ForeignKeyConstraint(
+            ["order_id", "run_id"],
+            ["portfolio_order.id", "portfolio_order.run_id"],
+            name=conv("fk_portfolio_order_attempt_order_run_portfolio_order"),
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint(
+            "id", "run_id", name=conv("uq_portfolio_order_attempt_id_run_id")
+        ),
+        UniqueConstraint(
+            "order_id", "attempt_no", name=conv("uq_portfolio_order_attempt_order_no")
+        ),
+        UniqueConstraint(
+            "order_id",
+            "attempt_trade_date",
+            name=conv("uq_portfolio_order_attempt_order_date"),
+        ),
+        Index(
+            "idx_portfolio_order_attempt_run_date", "run_id", "attempt_trade_date"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    attempt_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    attempt_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason_code: Mapped[str | None] = mapped_column(String(64))
+    requested_quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fill_quantity: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default=text("0")
+    )
+    reference_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    fill_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    gross_amount: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    commission: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    stamp_tax: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    transfer_fee: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    cash_fee_total: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    slippage_cost: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    total_cost: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    market_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    account_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class PortfolioFill(Base):
     __tablename__ = "portfolio_fill"
     __table_args__ = (
@@ -162,13 +284,33 @@ class PortfolioFill(Base):
         CheckConstraint("commission >= 0", name=conv("ck_portfolio_fill_commission")),
         CheckConstraint("stamp_tax >= 0", name=conv("ck_portfolio_fill_stamp_tax")),
         CheckConstraint(
+            "transfer_fee >= 0", name=conv("ck_portfolio_fill_transfer_fee")
+        ),
+        CheckConstraint(
+            "cash_fee_total >= 0", name=conv("ck_portfolio_fill_cash_fee_total")
+        ),
+        CheckConstraint(
             "slippage_cost >= 0", name=conv("ck_portfolio_fill_slippage_cost")
         ),
         CheckConstraint("total_cost >= 0", name=conv("ck_portfolio_fill_total_cost")),
+        CheckConstraint(
+            "cash_fee_total = commission + stamp_tax + transfer_fee",
+            name=conv("ck_portfolio_fill_cash_fee_components"),
+        ),
+        CheckConstraint(
+            "total_cost = cash_fee_total + slippage_cost",
+            name=conv("ck_portfolio_fill_total_cost_components"),
+        ),
         ForeignKeyConstraint(
             ["order_id", "run_id"],
             ["portfolio_order.id", "portfolio_order.run_id"],
             name=conv("fk_portfolio_fill_order_run_portfolio_order"),
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["attempt_id", "run_id"],
+            ["portfolio_order_attempt.id", "portfolio_order_attempt.run_id"],
+            name=conv("fk_portfolio_fill_attempt_run_portfolio_order_attempt"),
             ondelete="CASCADE",
         ),
         Index("idx_portfolio_fill_run_date", "run_id", "trade_date"),
@@ -178,6 +320,7 @@ class PortfolioFill(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     order_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    attempt_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     run_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("portfolio_backtest_run.id", ondelete="CASCADE"),
@@ -188,11 +331,18 @@ class PortfolioFill(Base):
     side: Mapped[str] = mapped_column(String(8), nullable=False)
     quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    reference_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     gross_amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     commission: Mapped[Decimal] = mapped_column(
         Numeric(20, 4), nullable=False, default=0, server_default=text("0")
     )
     stamp_tax: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    transfer_fee: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4), nullable=False, default=0, server_default=text("0")
+    )
+    cash_fee_total: Mapped[Decimal] = mapped_column(
         Numeric(20, 4), nullable=False, default=0, server_default=text("0")
     )
     slippage_cost: Mapped[Decimal] = mapped_column(

@@ -1207,5 +1207,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - `TopNEqualWeightPolicy`、Domain Contracts 和 Backtest Engine Skeleton 保持纯业务/依赖注入边界；真实成交解析、Broker、PAPER/LIVE 与 Agent Runtime 均未提前实现。
 - 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
 - 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
+
+## Milestone 13.2 Execution Resolver
+
+- `config/execution.yaml` 使用 `execution_v2`，包含 A 股规则版本、价格 tick、禁止 Partial Fill 的成交策略，以及按日期生效的印花税和过户费配置。
+- 内部 `ExecutionApplicationService.execute_open_batch()` 只处理已具有明确 `target_quantity` 的 BACKTEST Pending Order。历史 `execution_v1` Backtest Definition 会被明确拒绝。
+- 执行行情必须同时具备 Raw 日线、current TradeStatus、StockLimit row 和 StockBasic 市场资料；任何缺口整批零写入，不会伪装成市场拒单。
+- `0031_m13_2_execution_audit` 新增逐次开盘尝试账本，并为 Fill 增加 Attempt、Raw reference price、transfer fee 和 cash fee total 审计字段。
+- 当前仍不提供公开 backtest `/run`，不负责 TargetWeight 换算、Rebalance、Position/NAV Accounting、PAPER/LIVE 或券商下单。
 - Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
 - 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。

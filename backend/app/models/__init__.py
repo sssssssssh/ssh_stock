@@ -34,6 +34,7 @@ from app.models.portfolio import (
     PortfolioFill,
     PortfolioNavDaily,
     PortfolioOrder,
+    PortfolioOrderAttempt,
     PortfolioPositionDaily,
 )
 
@@ -48,6 +49,7 @@ __all__ = [
     "PortfolioFill",
     "PortfolioNavDaily",
     "PortfolioOrder",
+    "PortfolioOrderAttempt",
     "PortfolioPositionDaily",
     "ProviderApiLog",
     "ServiceHeartbeat",
