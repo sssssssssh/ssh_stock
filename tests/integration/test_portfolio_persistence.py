@@ -1,13 +1,20 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
-import app.services.portfolio.candidates as candidate_module
+import app.services.portfolio.source_integrity as source_integrity_module
 import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.main import app
-from app.models.market_data import StockOpportunityDaily, StockStateDaily
+from app.models.market_data import (
+    StockBasic,
+    StockDaily,
+    StockFactorDaily,
+    StockOpportunityDaily,
+    StockStateDaily,
+    StockSuspendDaily,
+)
 from app.models.portfolio import (
     PortfolioBacktestRun,
     PortfolioFill,
@@ -19,6 +26,7 @@ from app.repositories.portfolio import PortfolioRepository
 from app.services.analysis_identity import (
     BACKTEST_ENGINE_VERSION,
     EXECUTION_VERSION,
+    FACTOR_CALC_VERSION,
     OPPORTUNITY_CALC_VERSION,
     PORTFOLIO_VERSION,
     TREND_CALC_VERSION,
@@ -26,8 +34,8 @@ from app.services.analysis_identity import (
 )
 from app.services.calc_metadata import config_hash
 from app.services.portfolio.application import PortfolioApplicationService
-from app.services.portfolio.candidates import OpportunityCandidateProvider
 from app.services.portfolio.contracts import SourceReadinessStatus
+from app.services.portfolio.source_integrity import check_portfolio_source_integrity
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -165,13 +173,19 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
         with Session(bind=connection, expire_on_commit=False) as db:
             # Keep the service transaction inside the outer test transaction.
             service = PortfolioApplicationService(db)
+            historical = _run()
+            historical.backtest_engine_version = "backtest_v2"
+            PortfolioRepository(db).create_run(historical)
             run = service.create_backtest_definition(
                 name="identity-test",
                 start_date=date(2026, 9, 1),
                 end_date=date(2026, 9, 30),
             )
             assert run.status == "CREATED"
-            assert run.backtest_engine_version == "backtest_v2"
+            assert run.backtest_engine_version == "backtest_v3"
+            assert service.get_backtest(historical.id).backtest_engine_version == (
+                "backtest_v2"
+            )
             assert set(run.config_snapshot) == {
                 "strategy",
                 "opportunity",
@@ -201,110 +215,143 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
     engine.dispose()
 
 
-def test_candidate_provider_real_db_current_identity_and_no_fallback(monkeypatch) -> None:
+def test_portfolio_source_integrity_real_db_exact_sets_and_current_identity(
+    monkeypatch,
+) -> None:
     settings = get_settings()
-    target = date(2099, 1, 15)
-    old_only = date(2099, 1, 16)
-    common = {
-        "state": "S4",
-        "opportunity_stage": "TREND",
-        "reason_codes": ["TREND"],
-        "calc_version": OPPORTUNITY_CALC_VERSION,
-        "config_hash": config_hash(settings.opportunity_config),
-        "source_strategy_config_hash": analysis_strategy_hash(settings.strategy),
-        "calculated_at": sa.func.now(),
-    }
+    target = date(1900, 1, 15)
+    code_a, code_b, suspended_code = "M1312A.SZ", "M1312B.SZ", "M1312S.SZ"
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    opportunity_hash = config_hash(settings.opportunity_config)
+    calculated_at = datetime.now(UTC)
+    monkeypatch.setattr(
+        source_integrity_module,
+        "is_core_analysis_complete",
+        lambda *a, **k: True,
+    )
+
+    def factor(code: str, *, current: bool) -> StockFactorDaily:
+        return StockFactorDaily(
+            trade_date=target,
+            ts_code=code,
+            eligible=True,
+            calc_version=FACTOR_CALC_VERSION if current else "old-factor",
+            config_hash=strategy_hash if current else "old-strategy",
+            calculated_at=calculated_at,
+        )
+
+    def state(code: str, *, current: bool) -> StockStateDaily:
+        return StockStateDaily(
+            trade_date=target,
+            ts_code=code,
+            algo_version=settings.algo_version if current else "old-algo",
+            state="S4",
+            is_new_state=False,
+            fast_transition=False,
+            calc_version=TREND_CALC_VERSION if current else "old-trend",
+            config_hash=strategy_hash if current else "old-strategy",
+            calculated_at=calculated_at,
+        )
+
+    def opportunity(code: str, *, current: bool) -> StockOpportunityDaily:
+        return StockOpportunityDaily(
+            trade_date=target,
+            ts_code=code,
+            algo_version=settings.algo_version if current else "old-algo",
+            state="S4",
+            left_reversal_new=False,
+            opportunity_stage="TREND",
+            opportunity_score=90,
+            reason_codes=["TREND"],
+            calc_version=(
+                OPPORTUNITY_CALC_VERSION if current else "old-opportunity"
+            ),
+            config_hash=opportunity_hash if current else "old-opportunity-config",
+            source_strategy_config_hash=(
+                strategy_hash if current else "old-strategy"
+            ),
+            calculated_at=calculated_at,
+        )
+
     engine = sa.create_engine(settings.database_url)
-    monkeypatch.setattr(candidate_module, "is_core_analysis_complete", lambda *a, **k: True)
     with engine.connect() as connection:
         transaction = connection.begin()
         with Session(bind=connection) as db:
             db.add_all(
                 [
-                    StockStateDaily(
+                    StockBasic(
+                        ts_code=code_a,
+                        list_status="L",
+                        list_date=date(1899, 1, 1),
+                    ),
+                    StockBasic(
+                        ts_code=code_b,
+                        list_status="L",
+                        list_date=date(1899, 1, 1),
+                    ),
+                    StockBasic(
+                        ts_code=suspended_code,
+                        list_status="L",
+                        list_date=date(1899, 1, 1),
+                    ),
+                    StockSuspendDaily(
                         trade_date=target,
-                        ts_code="990001.SZ",
-                        algo_version=settings.algo_version,
-                        state="S4",
-                        is_new_state=False,
-                        fast_transition=False,
-                        calc_version=TREND_CALC_VERSION,
-                        config_hash=analysis_strategy_hash(settings.strategy),
+                        ts_code=suspended_code,
+                        suspend_type="S",
                     ),
-                    StockStateDaily(
-                        trade_date=target,
-                        ts_code="990000.SZ",
-                        algo_version=settings.algo_version,
-                        state="S4",
-                        is_new_state=False,
-                        fast_transition=False,
-                        calc_version=TREND_CALC_VERSION,
-                        config_hash=analysis_strategy_hash(settings.strategy),
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990001.SZ",
-                        algo_version=settings.algo_version,
-                        opportunity_score=90,
-                        **common,
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990000.SZ",
-                        algo_version=settings.algo_version,
-                        opportunity_score=90,
-                        **common,
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990099.SZ",
-                        algo_version="old-algo",
-                        opportunity_score=99,
-                        **common,
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990097.SZ",
-                        algo_version=settings.algo_version,
-                        opportunity_score=99,
-                        **{**common, "calc_version": "old-opportunity"},
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990096.SZ",
-                        algo_version=settings.algo_version,
-                        opportunity_score=99,
-                        **{**common, "config_hash": "old-opportunity-config"},
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=target,
-                        ts_code="990095.SZ",
-                        algo_version=settings.algo_version,
-                        opportunity_score=99,
-                        **{**common, "source_strategy_config_hash": "old-strategy"},
-                    ),
-                    StockOpportunityDaily(
-                        trade_date=old_only,
-                        ts_code="990098.SZ",
-                        algo_version="old-algo",
-                        opportunity_score=99,
-                        **common,
-                    ),
+                    StockDaily(trade_date=target, ts_code=code_b),
+                    factor(code_b, current=True),
+                    state(code_b, current=True),
+                    opportunity(code_b, current=True),
                 ]
             )
             db.flush()
-            provider = OpportunityCandidateProvider(db, settings)
-            current = provider.list_candidates(target, settings.portfolio_config)
-            unavailable = provider.list_candidates(old_only, settings.portfolio_config)
-            no_fallback = provider.list_candidates(date(2099, 1, 17), settings.portfolio_config)
-            assert [item.ts_code for item in current.candidates] == [
-                "990000.SZ",
-                "990001.SZ",
-            ]
-            assert current.source_status == SourceReadinessStatus.READY
-            assert current.state_count == current.opportunity_count == 2
-            assert unavailable.source_status == SourceReadinessStatus.UNAVAILABLE
-            assert no_fallback.source_status == SourceReadinessStatus.UNAVAILABLE
+
+            same_missing = check_portfolio_source_integrity(
+                db, target, settings=settings
+            )
+            assert same_missing.status == SourceReadinessStatus.INCOMPLETE
+            assert same_missing.reason == "RAW_UNIVERSE_SET_MISMATCH"
+            assert same_missing.missing_code_samples["stock_daily"] == (code_a,)
+
+            old_factor = factor(code_a, current=False)
+            db.add_all(
+                [
+                    StockDaily(trade_date=target, ts_code=code_a),
+                    old_factor,
+                    state(code_a, current=False),
+                    opportunity(code_a, current=False),
+                ]
+            )
+            db.flush()
+            raw_only = check_portfolio_source_integrity(db, target, settings=settings)
+            assert raw_only.reason == "RAW_FACTOR_SET_MISMATCH"
+            assert raw_only.factor_count == 1
+
+            old_factor.calc_version = FACTOR_CALC_VERSION
+            old_factor.config_hash = strategy_hash
+            db.flush()
+            factor_only = check_portfolio_source_integrity(
+                db, target, settings=settings
+            )
+            assert factor_only.reason == "FACTOR_STATE_SET_MISMATCH"
+            assert factor_only.state_count == 1
+
+            db.add(state(code_a, current=True))
+            db.flush()
+            state_only = check_portfolio_source_integrity(
+                db, target, settings=settings
+            )
+            assert state_only.reason == "STATE_OPPORTUNITY_SET_MISMATCH"
+            assert state_only.opportunity_count == 1
+
+            db.add(opportunity(code_a, current=True))
+            db.flush()
+            ready = check_portfolio_source_integrity(db, target, settings=settings)
+            assert ready.status == SourceReadinessStatus.READY
+            assert ready.reason is None
+            assert ready.expected_count == ready.stock_daily_count == 2
+            assert ready.factor_count == ready.state_count == ready.opportunity_count == 2
         transaction.rollback()
     engine.dispose()
 

@@ -20,8 +20,8 @@ or bypass the identity and authorization boundaries.
   configuration snapshots and their hashes.
 - The identity tuple contains the analysis algorithm version, Strategy hash,
   `opportunity_v1` plus its config hash, `portfolio_v1` plus its config hash,
-  `execution_v1` plus its config hash, and `backtest_v2`.
-- Existing `backtest_v1` definitions remain immutable history. A future run command must reject
+  `execution_v1` plus its config hash, and `backtest_v3`.
+- Existing `backtest_v1` and `backtest_v2` definitions remain immutable history. A future run command must reject
   any definition whose stored Backtest Engine version differs from the current engine version.
 - M13.1 application APIs accept only `BACKTEST`. `PAPER` and `LIVE` are reserved schema values,
   not enabled operating modes.
@@ -34,13 +34,22 @@ Opportunity identity filters. It never falls back to an earlier date and never r
 Factor, State, Sector or Theme data. Ranking fields are whitelisted and ordering is stable:
 score descending, then code ascending.
 
-An empty filtered result and an unready source are distinct. Readiness compares the exact
-current-identity `StockStateDaily` and `StockOpportunityDaily` code sets and requires current
-Core Analysis completeness. `READY` means both non-empty sets match exactly; `UNAVAILABLE`
-means both sets are absent; every partial, mismatched, or Core-incomplete source is
-`INCOMPLETE`. Portfolio construction fails closed unless the source is `READY`. A `READY`
-source with zero candidates after portfolio filters is a valid no-signal day and produces an
-all-cash target.
+An empty filtered result and an unready source are distinct. M13.1.2 uses an independent
+Portfolio source-integrity gate. For the requested date it compares exact code sets across:
+
+1. the Point-in-Time expected universe from `expected_stock_daily_codes()`;
+2. `StockDaily` Raw rows;
+3. current Strategy identity `StockFactorDaily` rows;
+4. current algorithm and Strategy identity `StockStateDaily` rows;
+5. current Opportunity identity `StockOpportunityDaily` rows.
+
+`READY` requires all five non-empty sets to be identical and the existing Core context gate to
+pass for Market and Sector context. All five sets empty is `UNAVAILABLE`; an unavailable
+expected universe, any missing or extra code, an old identity row, or incomplete Core context is
+`INCOMPLETE`. Diagnostics expose stable layer names, all five counts, and at most 20 sorted
+missing/extra code samples per layer. Portfolio construction fails closed unless the source is
+`READY`. A `READY` source with zero candidates after portfolio filters remains a valid no-signal
+day and produces an all-cash target.
 
 ## Portfolio policy
 

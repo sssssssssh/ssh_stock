@@ -16,10 +16,9 @@ from app.domain.portfolio import (
     OrderIntent,
     SignalCandidate,
 )
-from app.models.market_data import StockOpportunityDaily, StockStateDaily
+from app.models.market_data import StockOpportunityDaily
 from app.services.analysis_identity import (
     OPPORTUNITY_CALC_VERSION,
-    TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
@@ -31,6 +30,10 @@ from app.services.portfolio.contracts import (
     SourceReadinessStatus,
 )
 from app.services.portfolio.policy import TopNEqualWeightPolicy
+from app.services.portfolio.source_integrity import (
+    PortfolioSourceIntegrityResult,
+    evaluate_portfolio_source_integrity,
+)
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import JSONB
@@ -66,6 +69,51 @@ def _candidate(code: str, score: str) -> SignalCandidate:
             opportunity_config_hash="opportunity",
             source_strategy_config_hash="strategy",
         ),
+    )
+
+
+def _batch(
+    trade_date: date,
+    *,
+    candidates: tuple[SignalCandidate, ...] = (),
+    status: SourceReadinessStatus = SourceReadinessStatus.READY,
+    reason: str | None = None,
+    counts: tuple[int, int, int, int, int] = (1, 1, 1, 1, 1),
+    mismatch_layers: tuple[str, ...] = (),
+) -> CandidateBatch:
+    return CandidateBatch(
+        trade_date=trade_date,
+        candidates=candidates,
+        source_status=status,
+        source_reason=reason,
+        expected_count=counts[0],
+        stock_daily_count=counts[1],
+        factor_count=counts[2],
+        state_count=counts[3],
+        opportunity_count=counts[4],
+        mismatch_layers=mismatch_layers,
+    )
+
+
+def _integrity(
+    trade_date: date,
+    *,
+    status: SourceReadinessStatus = SourceReadinessStatus.READY,
+    reason: str | None = None,
+    counts: tuple[int, int, int, int, int] = (2, 2, 2, 2, 2),
+) -> PortfolioSourceIntegrityResult:
+    return PortfolioSourceIntegrityResult(
+        trade_date=trade_date,
+        status=status,
+        reason=reason,
+        expected_count=counts[0],
+        stock_daily_count=counts[1],
+        factor_count=counts[2],
+        state_count=counts[3],
+        opportunity_count=counts[4],
+        mismatch_layers=(),
+        missing_code_samples={},
+        extra_code_samples={},
     )
 
 
@@ -167,14 +215,7 @@ def test_preview_allows_ready_empty_signal_and_returns_all_cash() -> None:
 
     class Provider:
         def list_candidates(self, trade_date, config):
-            return CandidateBatch(
-                trade_date,
-                (),
-                SourceReadinessStatus.READY,
-                None,
-                2,
-                2,
-            )
+            return _batch(trade_date)
 
     service.candidate_provider = Provider()
     target = service.preview_target(date(2026, 9, 1))
@@ -190,13 +231,12 @@ def test_preview_rejects_unready_source_before_policy_is_called() -> None:
 
     class Provider:
         def list_candidates(self, trade_date, config):
-            return CandidateBatch(
+            return _batch(
                 trade_date,
-                (),
-                SourceReadinessStatus.INCOMPLETE,
-                "STATE_OPPORTUNITY_SET_MISMATCH",
-                100,
-                99,
+                status=SourceReadinessStatus.INCOMPLETE,
+                reason="STATE_OPPORTUNITY_SET_MISMATCH",
+                counts=(100, 100, 100, 100, 99),
+                mismatch_layers=("opportunity",),
             )
 
     class Policy:
@@ -231,13 +271,16 @@ def test_candidate_provider_uses_exact_date_current_identity_and_stable_order(
     monkeypatch,
 ) -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
-    StockStateDaily.__table__.create(engine)
     StockOpportunityDaily.__table__.create(engine)
     settings = get_settings()
     strategy_hash = analysis_strategy_hash(settings.strategy)
     opportunity_hash = config_hash(settings.opportunity_config)
     target = date(2026, 9, 1)
-    monkeypatch.setattr(candidate_module, "is_core_analysis_complete", lambda *a, **k: True)
+    monkeypatch.setattr(
+        candidate_module,
+        "check_portfolio_source_integrity",
+        lambda *a, **k: _integrity(target),
+    )
 
     def row(code: str, *, score: float, algo: str | None = None, day: date = target):
         return StockOpportunityDaily(
@@ -257,26 +300,6 @@ def test_candidate_provider_uses_exact_date_current_identity_and_stable_order(
     with Session(engine) as db:
         db.add_all(
             [
-                StockStateDaily(
-                    trade_date=target,
-                    ts_code="A.SZ",
-                    algo_version=settings.algo_version,
-                    state="S4",
-                    is_new_state=False,
-                    fast_transition=False,
-                    calc_version=TREND_CALC_VERSION,
-                    config_hash=strategy_hash,
-                ),
-                StockStateDaily(
-                    trade_date=target,
-                    ts_code="B.SZ",
-                    algo_version=settings.algo_version,
-                    state="S4",
-                    is_new_state=False,
-                    fast_transition=False,
-                    calc_version=TREND_CALC_VERSION,
-                    config_hash=strategy_hash,
-                ),
                 row("B.SZ", score=90),
                 row("A.SZ", score=90),
                 row("OLD.SZ", score=100, algo="old"),
@@ -287,18 +310,13 @@ def test_candidate_provider_uses_exact_date_current_identity_and_stable_order(
         batch = OpportunityCandidateProvider(db, settings).list_candidates(
             target, settings.portfolio_config
         )
-        missing = OpportunityCandidateProvider(db, settings).list_candidates(
-            date(2026, 9, 2), settings.portfolio_config
-        )
 
     assert batch.source_status == SourceReadinessStatus.READY
-    assert batch.state_count == batch.opportunity_count == 2
+    assert batch.expected_count == batch.opportunity_count == 2
     assert [item.ts_code for item in batch.candidates] == ["A.SZ", "B.SZ"]
-    assert missing.candidates == ()
-    assert missing.source_status == SourceReadinessStatus.UNAVAILABLE
 
 
-def test_candidate_source_is_unavailable_when_only_old_identity_exists() -> None:
+def test_candidate_source_is_unavailable_when_only_old_identity_exists(monkeypatch) -> None:
     class Scalar:
         def scalar_one(self):
             return 0
@@ -314,6 +332,16 @@ def test_candidate_source_is_unavailable_when_only_old_identity_exists() -> None
             return Scalar()
 
     settings = get_settings()
+    monkeypatch.setattr(
+        candidate_module,
+        "check_portfolio_source_integrity",
+        lambda *a, **k: _integrity(
+            date(2026, 9, 1),
+            status=SourceReadinessStatus.UNAVAILABLE,
+            reason="CURRENT_PORTFOLIO_SOURCE_UNAVAILABLE",
+            counts=(0, 0, 0, 0, 0),
+        ),
+    )
     result = OpportunityCandidateProvider(FakeDb(), settings).list_candidates(
         date(2026, 9, 1), settings.portfolio_config
     )
@@ -321,53 +349,108 @@ def test_candidate_source_is_unavailable_when_only_old_identity_exists() -> None
 
 
 @pytest.mark.parametrize(
-    ("state_codes", "opportunity_codes", "core_ready", "expected", "reason"),
+    (
+        "expected_codes",
+        "stock_daily_codes",
+        "factor_codes",
+        "state_codes",
+        "opportunity_codes",
+        "context_ready",
+        "expected_status",
+        "expected_reason",
+        "first_layer",
+    ),
     [
-        ({"A", "B"}, {"A", "B"}, True, SourceReadinessStatus.READY, None),
         (
-            {"A", "B"},
-            {"A"},
-            True,
-            SourceReadinessStatus.INCOMPLETE,
-            "STATE_OPPORTUNITY_SET_MISMATCH",
+            {"A", "B"}, {"B"}, {"B"}, {"B"}, {"B"}, True,
+            SourceReadinessStatus.INCOMPLETE, "RAW_UNIVERSE_SET_MISMATCH", "stock_daily",
         ),
         (
-            {"A", "B"},
-            {"A", "C"},
-            True,
-            SourceReadinessStatus.INCOMPLETE,
-            "STATE_OPPORTUNITY_SET_MISMATCH",
+            {"A", "B"}, {"A", "B"}, {"B"}, {"B"}, {"B"}, True,
+            SourceReadinessStatus.INCOMPLETE, "RAW_FACTOR_SET_MISMATCH", "factor",
         ),
         (
-            set(),
-            set(),
-            False,
+            {"A", "B"}, {"A", "B"}, {"A", "B"}, {"B"}, {"B"}, True,
+            SourceReadinessStatus.INCOMPLETE, "FACTOR_STATE_SET_MISMATCH", "state",
+        ),
+        (
+            {"A", "B"}, {"A", "B"}, {"A", "B"}, {"A", "B"}, {"B"}, True,
+            SourceReadinessStatus.INCOMPLETE,
+            "STATE_OPPORTUNITY_SET_MISMATCH",
+            "opportunity",
+        ),
+        (
+            {"A", "B"}, {"A", "B"}, {"A", "B"}, {"A", "B"}, {"A", "C"}, True,
+            SourceReadinessStatus.INCOMPLETE,
+            "STATE_OPPORTUNITY_SET_MISMATCH",
+            "opportunity",
+        ),
+        (
+            {"A"}, {"A"}, {"A"}, {"A"}, {"A"}, True,
+            SourceReadinessStatus.READY, None, None,
+        ),
+        (
+            {"A"}, {"A"}, {"A"}, {"A"}, {"A"}, False,
+            SourceReadinessStatus.INCOMPLETE,
+            "CORE_CONTEXT_INCOMPLETE",
+            "core_context",
+        ),
+        (
+            set(), set(), set(), set(), set(), False,
             SourceReadinessStatus.UNAVAILABLE,
-            "CURRENT_STATE_AND_OPPORTUNITY_UNAVAILABLE",
+            "CURRENT_PORTFOLIO_SOURCE_UNAVAILABLE",
+            None,
         ),
         (
-            {"A"},
-            {"A"},
-            False,
+            set(), {"A"}, {"A"}, {"A"}, {"A"}, True,
             SourceReadinessStatus.INCOMPLETE,
-            "CORE_ANALYSIS_INCOMPLETE",
+            "EXPECTED_UNIVERSE_UNAVAILABLE_OR_MISMATCH",
+            "expected_universe",
         ),
     ],
 )
-def test_candidate_readiness_requires_core_and_exact_sets(
-    monkeypatch, state_codes, opportunity_codes, core_ready, expected, reason
+def test_portfolio_source_integrity_requires_all_five_exact_sets(
+    expected_codes,
+    stock_daily_codes,
+    factor_codes,
+    state_codes,
+    opportunity_codes,
+    context_ready,
+    expected_status,
+    expected_reason,
+    first_layer,
 ) -> None:
-    monkeypatch.setattr(
-        candidate_module, "is_core_analysis_complete", lambda *a, **k: core_ready
-    )
-    provider = OpportunityCandidateProvider(object(), get_settings())
-    status, actual_reason = provider._source_readiness(
+    result = evaluate_portfolio_source_integrity(
         date(2026, 9, 1),
+        expected_codes=expected_codes,
+        stock_daily_codes=stock_daily_codes,
+        factor_codes=factor_codes,
         state_codes=state_codes,
         opportunity_codes=opportunity_codes,
+        context_ready=context_ready,
     )
-    assert status == expected
-    assert actual_reason == reason
+    assert result.status == expected_status
+    assert result.reason == expected_reason
+    if first_layer is None:
+        assert result.mismatch_layers == ()
+    else:
+        assert result.mismatch_layers[0] == first_layer
+
+
+def test_portfolio_source_integrity_diagnostics_are_sorted_and_bounded() -> None:
+    expected = {f"{index:06d}.SZ" for index in range(25)}
+    result = evaluate_portfolio_source_integrity(
+        date(2026, 9, 1),
+        expected_codes=expected,
+        stock_daily_codes=set(),
+        factor_codes=set(),
+        state_codes=set(),
+        opportunity_codes=set(),
+        context_ready=False,
+    )
+    assert result.expected_count == 25
+    assert result.stock_daily_count == 0
+    assert result.missing_code_samples["stock_daily"] == tuple(sorted(expected)[:20])
 
 
 def test_backtest_engine_uses_open_close_after_close_phases() -> None:
@@ -387,14 +470,7 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
     class Candidates:
         def list_candidates(self, requested, config):
             events.append(("candidates", requested))
-            return CandidateBatch(
-                requested,
-                (candidate,),
-                SourceReadinessStatus.READY,
-                None,
-                1,
-                1,
-            )
+            return _batch(requested, candidates=(candidate,))
 
     class Resolver:
         def resolve(self, intents, market, account, config):
@@ -492,13 +568,11 @@ def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
 
     class Candidates:
         def list_candidates(self, requested, config):
-            return CandidateBatch(
+            return _batch(
                 requested,
-                (),
-                SourceReadinessStatus.INCOMPLETE,
-                "CORE_ANALYSIS_INCOMPLETE",
-                1,
-                1,
+                status=SourceReadinessStatus.INCOMPLETE,
+                reason="CORE_CONTEXT_INCOMPLETE",
+                mismatch_layers=("core_context",),
             )
 
     class Resolver:

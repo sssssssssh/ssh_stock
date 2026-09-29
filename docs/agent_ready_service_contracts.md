@@ -31,6 +31,9 @@ The Agent must use the authenticated API or these application methods. It must n
 - Candidate reads use the exact requested date and current Opportunity identity only.
 - Candidate consumers must inspect `source_status`. `INCOMPLETE` and `UNAVAILABLE` must not be
   interpreted as a valid empty trading signal; only `READY` may enter portfolio construction.
+- Candidate diagnostics include Expected/Raw/Factor/State/Opportunity counts, every mismatched
+  layer, and bounded missing/extra code samples. An Agent must explain source integrity from
+  these fields and must not infer readiness from equal counts alone.
 - A `READY` source with zero filtered candidates is a valid empty signal and all-cash target.
 - Preview is a side-effect-free simulation. Backtest definition creation is also `SIMULATE`, but
   it may persist a `CREATED` simulation draft and still cannot place or execute an order.

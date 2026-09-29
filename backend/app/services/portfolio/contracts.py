@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from enum import StrEnum
 from typing import Protocol
@@ -28,8 +28,14 @@ class CandidateBatch:
     candidates: tuple[SignalCandidate, ...]
     source_status: SourceReadinessStatus
     source_reason: str | None
+    expected_count: int
+    stock_daily_count: int
+    factor_count: int
     state_count: int
     opportunity_count: int
+    mismatch_layers: tuple[str, ...] = ()
+    missing_code_samples: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    extra_code_samples: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     @property
     def source_available(self) -> bool:

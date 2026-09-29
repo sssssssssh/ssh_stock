@@ -55,8 +55,14 @@ def candidates(
             "source_ready": batch.source_ready,
             "source_status": batch.source_status.value,
             "source_reason": batch.source_reason,
+            "expected_count": batch.expected_count,
+            "stock_daily_count": batch.stock_daily_count,
+            "factor_count": batch.factor_count,
             "state_count": batch.state_count,
             "opportunity_count": batch.opportunity_count,
+            "mismatch_layers": list(batch.mismatch_layers),
+            "missing_code_samples": _sample_payload(batch.missing_code_samples),
+            "extra_code_samples": _sample_payload(batch.extra_code_samples),
             "count": len(batch.candidates),
         },
     )
@@ -77,8 +83,16 @@ def preview_target(
                 "code": "PORTFOLIO_SOURCE_NOT_READY",
                 "source_status": exc.batch.source_status.value,
                 "source_reason": exc.batch.source_reason,
+                "expected_count": exc.batch.expected_count,
+                "stock_daily_count": exc.batch.stock_daily_count,
+                "factor_count": exc.batch.factor_count,
                 "state_count": exc.batch.state_count,
                 "opportunity_count": exc.batch.opportunity_count,
+                "mismatch_layers": list(exc.batch.mismatch_layers),
+                "missing_code_samples": _sample_payload(
+                    exc.batch.missing_code_samples
+                ),
+                "extra_code_samples": _sample_payload(exc.batch.extra_code_samples),
             },
         ) from exc
     return envelope(_target_payload(target), service.identity_meta())
@@ -153,6 +167,10 @@ def _candidate_payload(candidate: SignalCandidate) -> dict[str, Any]:
         },
         "reason_codes": list(candidate.reason_codes),
     }
+
+
+def _sample_payload(samples: dict[str, tuple[str, ...]]) -> dict[str, list[str]]:
+    return {layer: list(codes) for layer, codes in samples.items()}
 
 
 def _target_payload(target: PortfolioTarget) -> dict[str, Any]:

@@ -341,9 +341,18 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 
 ## Milestone 13.1.1 Portfolio 正确性收口规则
 
-- Backtest Engine identity 为 `backtest_v2`；历史 `backtest_v1` Definition 不改写。未来运行入口必须拒绝 stored engine version 与 current engine version 不一致的 Definition。
+- M13.1.1 当时的 Backtest Engine identity 为 `backtest_v2`；历史 `backtest_v1` Definition 不改写。未来运行入口必须拒绝 stored engine version 与 current engine version 不一致的 Definition。
 - 每个交易日严格按 `OPEN execution -> CLOSE valuation -> AFTER_CLOSE signal` 编排。D 日收盘候选只能生成下一真实开市日的 OrderIntent，不得在 D 日开盘执行。
 - Portfolio Candidate source 必须基于 current Core Analysis 与 current identity State/Opportunity `ts_code` 精确集合判定。只有 `READY` 可构建 Target；`INCOMPLETE/UNAVAILABLE` 必须 fail closed，不能解释为无机会。
 - `READY` 且筛选后无 Candidate 是合法空信号，Target 保持 100% 现金。
 - Fill 必须通过 `(order_id, run_id)` 复合外键归属同一 Run；持仓可用数量不得超过数量，long-only Position/Target weight 必须位于 0..1。
 - M13.1.1 不开放 `/run`，不实现真实 Execution Resolver，不接 Broker/PAPER/LIVE，不修改 M12 Research 语义。
+
+## Milestone 13.1.2 Portfolio Source Integrity 规则
+
+- Backtest Engine identity 为 `backtest_v3`；历史 `backtest_v1/v2` Definition 不改写。
+- Portfolio Source READY 必须同时满足 Core context ready，且 Expected Universe、StockDaily Raw、current Factor、current State、current Opportunity 的 `ts_code` 集合完全一致。
+- Expected Universe 必须复用 `expected_stock_daily_codes()`；不得在 Portfolio 内重写 active/suspend 规则，也不得修改 Production/Research 的全局覆盖率语义。
+- 任意一层 missing/extra code 或 old identity 均为 `INCOMPLETE` 并 fail closed；五层全空为 `UNAVAILABLE`。诊断样本每层最多返回 20 个排序后的代码。
+- 五层完整但 Portfolio stage/score 过滤后无 Candidate 仍为 READY，合法生成 100% 现金 Target。
+- M13.1.2 不新增迁移，不修改 0030，不修改 OPEN/CLOSE/AFTER_CLOSE 时间模型，不实现 M13.2 Execution。

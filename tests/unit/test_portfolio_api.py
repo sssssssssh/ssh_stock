@@ -23,7 +23,7 @@ class FakePortfolioService:
         return {
             "portfolio_version": "portfolio_v1",
             "execution_version": "execution_v1",
-            "backtest_engine_version": "backtest_v2",
+            "backtest_engine_version": "backtest_v3",
         }
 
     def get_config_status(self):
@@ -31,12 +31,18 @@ class FakePortfolioService:
 
     def list_candidates(self, trade_date):
         return CandidateBatch(
-            trade_date,
-            (),
-            SourceReadinessStatus.UNAVAILABLE,
-            "CURRENT_STATE_AND_OPPORTUNITY_UNAVAILABLE",
-            0,
-            0,
+            trade_date=trade_date,
+            candidates=(),
+            source_status=SourceReadinessStatus.INCOMPLETE,
+            source_reason="RAW_UNIVERSE_SET_MISMATCH",
+            expected_count=2,
+            stock_daily_count=1,
+            factor_count=1,
+            state_count=1,
+            opportunity_count=1,
+            mismatch_layers=("stock_daily",),
+            missing_code_samples={"stock_daily": ("000001.SZ",)},
+            extra_code_samples={},
         )
 
     def preview_target(self, trade_date):
@@ -87,9 +93,15 @@ def test_portfolio_read_and_preview_endpoints_return_identity_without_writes(
 
     assert config.status_code == 200
     assert config.json()["meta"]["portfolio_version"] == "portfolio_v1"
-    assert candidates.json()["meta"]["source_available"] is False
-    assert candidates.json()["meta"]["source_status"] == "UNAVAILABLE"
-    assert candidates.json()["meta"]["state_count"] == 0
+    assert candidates.json()["meta"]["source_available"] is True
+    assert candidates.json()["meta"]["source_ready"] is False
+    assert candidates.json()["meta"]["source_status"] == "INCOMPLETE"
+    assert candidates.json()["meta"]["expected_count"] == 2
+    assert candidates.json()["meta"]["factor_count"] == 1
+    assert candidates.json()["meta"]["mismatch_layers"] == ["stock_daily"]
+    assert candidates.json()["meta"]["missing_code_samples"] == {
+        "stock_daily": ["000001.SZ"]
+    }
     assert preview.json()["data"]["targets"][0]["target_weight"] == "0.1"
     assert listing.status_code == 200
     assert missing.status_code == 404
@@ -120,7 +132,9 @@ def test_preview_returns_409_when_portfolio_source_is_not_ready(monkeypatch) -> 
 
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "PORTFOLIO_SOURCE_NOT_READY"
-    assert response.json()["detail"]["source_status"] == "UNAVAILABLE"
+    assert response.json()["detail"]["source_status"] == "INCOMPLETE"
+    assert response.json()["detail"]["expected_count"] == 2
+    assert response.json()["detail"]["mismatch_layers"] == ["stock_daily"]
 
 
 def test_backtest_create_request_validates_dates_and_money(monkeypatch) -> None:

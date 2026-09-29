@@ -15,7 +15,7 @@ RESEARCH_VERSION = "research_v1"
 RESEARCH_EVAL_VERSION = "research_eval_v11"
 PORTFOLIO_VERSION = "portfolio_v1"
 EXECUTION_VERSION = "execution_v1"
-BACKTEST_ENGINE_VERSION = "backtest_v2"
+BACKTEST_ENGINE_VERSION = "backtest_v3"
 ANALYSIS_STRATEGY_KEYS = (
     "universe",
     "benchmark",
