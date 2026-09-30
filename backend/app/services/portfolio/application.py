@@ -10,6 +10,7 @@ from app.domain.portfolio import AccountState, PortfolioTarget
 from app.models.portfolio import PortfolioBacktestRun
 from app.repositories.portfolio import PortfolioRepository
 from app.services.analysis_identity import (
+    ACCOUNTING_VERSION,
     BACKTEST_ENGINE_VERSION,
     EXECUTION_VERSION,
     OPPORTUNITY_CALC_VERSION,
@@ -31,10 +32,13 @@ class PortfolioApplicationService:
         self.settings = settings or get_settings()
         if self.settings.portfolio_config is None or self.settings.execution_config is None:
             raise RuntimeError("portfolio and execution configuration must be loaded")
+        if self.settings.accounting_config is None:
+            raise RuntimeError("accounting configuration must be loaded")
         if self.settings.portfolio_config.account_mode != "BACKTEST":
             raise ValueError("M13.1 application service only supports BACKTEST account mode")
         self.portfolio_config = self.settings.portfolio_config
         self.execution_config = self.settings.execution_config
+        self.accounting_config = self.settings.accounting_config
         self.repository = PortfolioRepository(db)
         self.candidate_provider = OpportunityCandidateProvider(db, self.settings)
         self.policy = TopNEqualWeightPolicy()
@@ -42,10 +46,12 @@ class PortfolioApplicationService:
     def get_config_status(self) -> dict[str, Any]:
         portfolio = self.portfolio_config.model_dump(mode="json")
         execution = self.execution_config.model_dump(mode="json")
+        accounting = self.accounting_config.model_dump(mode="json")
         return {
             "account_mode": self.portfolio_config.account_mode,
             "portfolio": portfolio,
             "execution": execution,
+            "accounting": accounting,
             **self.identity_meta(),
         }
 
@@ -98,6 +104,7 @@ class PortfolioApplicationService:
             raise ValueError("benchmark_code must be nonempty")
         portfolio_snapshot = effective_portfolio.model_dump(mode="json")
         execution_snapshot = self.execution_config.model_dump(mode="json")
+        accounting_snapshot = self.accounting_config.model_dump(mode="json")
         run = PortfolioBacktestRun(
             name=name,
             account_mode="BACKTEST",
@@ -114,12 +121,15 @@ class PortfolioApplicationService:
             portfolio_config_hash=config_hash(portfolio_snapshot),
             execution_version=EXECUTION_VERSION,
             execution_config_hash=config_hash(execution_snapshot),
+            accounting_version=ACCOUNTING_VERSION,
+            accounting_config_hash=config_hash(accounting_snapshot),
             backtest_engine_version=BACKTEST_ENGINE_VERSION,
             config_snapshot={
                 "strategy": self.settings.strategy,
                 "opportunity": self.settings.opportunity_config,
                 "portfolio": portfolio_snapshot,
                 "execution": execution_snapshot,
+                "accounting": accounting_snapshot,
             },
         )
         try:
@@ -139,6 +149,7 @@ class PortfolioApplicationService:
     def identity_meta(self) -> dict[str, str]:
         portfolio = self.portfolio_config.model_dump(mode="json")
         execution = self.execution_config.model_dump(mode="json")
+        accounting = self.accounting_config.model_dump(mode="json")
         return {
             "algo_version": self.settings.algo_version,
             "source_strategy_config_hash": analysis_strategy_hash(self.settings.strategy),
@@ -148,5 +159,7 @@ class PortfolioApplicationService:
             "portfolio_config_hash": config_hash(portfolio),
             "execution_version": EXECUTION_VERSION,
             "execution_config_hash": config_hash(execution),
+            "accounting_version": ACCOUNTING_VERSION,
+            "accounting_config_hash": config_hash(accounting),
             "backtest_engine_version": BACKTEST_ENGINE_VERSION,
         }

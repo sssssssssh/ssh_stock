@@ -357,6 +357,17 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 五层完整但 Portfolio stage/score 过滤后无 Candidate 仍为 READY，合法生成 100% 现金 Target。
 - M13.1.2 不新增迁移，不修改 0030，不修改 OPEN/CLOSE/AFTER_CLOSE 时间模型，不实现 M13.2 Execution。
 
+## Milestone 13.3 Rebalance and Accounting rules
+
+- Current immutable identities are `portfolio_v2`, `execution_v3`, `accounting_v1`, and `backtest_v4`. Historical accounting identities are not upgraded in place and M13.3 accounting rejects them.
+- Every real trading day is ordered as START_OF_DAY -> OPEN -> CLOSE -> AFTER_CLOSE. A target built at D close may only create `NEXT_OPEN` orders for the next real trading day.
+- `RebalancePlanner` and `AccountingEngine` are pure domain services and must not import ORM or Session. Providers use fixed batch queries; repositories contain persistence only.
+- Rebalance source gaps are fail-closed and must not cancel existing pending orders. Pending reconciliation is deterministic and all M13.3 orders belong to a persisted same-run rebalance plan.
+- Accounting is rebuilt from the prior close snapshot plus persisted fills. T+1 unlock occurs at the next trade-day open; BUY fees are capitalized, SELL fees affect realized PnL, and slippage is not deducted from cash a second time.
+- Existing holdings require current Trade Status and previous/current adjustment factors. Inactive holdings, missing required sources, or an adjustment-factor change fail closed before OPEN. Corporate-action settlement is not inferred.
+- Execution, Accounting, and Rebalance writes require a `BACKTEST/RUNNING` run and the same run-row `SELECT FOR UPDATE` lock.
+- M13.3 does not implement Performance, Benchmark returns, public `/run`, corporate-action settlement, PAPER/LIVE, Broker access, or Agent tuning.
+
 ## Milestone 13.2.1 Execution Integrity 规则
 
 - Execution identity 为 `execution_v3`、ruleset 为 `cn_a_share_2026_v2`，固定 synthetic order style 为 `LIMIT_AT_OPEN`；Backtest Engine 保持 `backtest_v3`。历史 `execution_v1/v2` Definition 不改写且执行服务必须拒绝。

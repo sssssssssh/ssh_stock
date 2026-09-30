@@ -1,0 +1,16 @@
+accounting:
+  version: accounting_v1
+  cost_basis_method: MOVING_AVERAGE
+  buy_fee_treatment: CAPITALIZE
+  sell_fee_treatment: REALIZED_PNL
+  t_plus_one:
+    unlock: NEXT_TRADE_DAY_OPEN
+  valuation:
+    normal_price: RAW_CLOSE
+    suspended_policy: CARRY_FORWARD_LAST_CLOSE
+    inactive_holding_policy: FAIL_CLOSED
+  corporate_action:
+    policy: FAIL_CLOSED_ON_ADJ_FACTOR_CHANGE
+  nav:
+    base: INITIAL_CASH
+    trading_cost_metric: CASH_FEE_PLUS_SLIPPAGE

@@ -66,6 +66,12 @@ class PortfolioBacktestRun(Base):
     portfolio_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     execution_version: Mapped[str] = mapped_column(String(32), nullable=False)
     execution_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    accounting_version: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="accounting_v0_unimplemented"
+    )
+    accounting_config_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="UNAVAILABLE"
+    )
     backtest_engine_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     result_summary: Mapped[dict[str, Any]] = mapped_column(
@@ -82,6 +88,39 @@ class PortfolioBacktestRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class PortfolioRebalancePlan(Base):
+    __tablename__ = "portfolio_rebalance_plan"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "signal_trade_date",
+            name=conv("uq_portfolio_rebalance_plan_run_signal_date"),
+        ),
+        UniqueConstraint(
+            "id", "run_id", name=conv("uq_portfolio_rebalance_plan_id_run_id")
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("portfolio_backtest_run.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    signal_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    total_assets: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    portfolio_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    account_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    plan_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class PortfolioOrder(Base):
     __tablename__ = "portfolio_order"
     __table_args__ = (
@@ -89,7 +128,7 @@ class PortfolioOrder(Base):
             "side IN ('BUY', 'SELL')", name=conv("ck_portfolio_order_side")
         ),
         CheckConstraint(
-            "order_type IN ('NEXT_OPEN', 'MARKET_ON_OPEN')",
+            "order_type = 'NEXT_OPEN'",
             name=conv("ck_portfolio_order_type"),
         ),
         CheckConstraint(
@@ -107,8 +146,30 @@ class PortfolioOrder(Base):
         CheckConstraint(
             "attempt_count >= 0", name=conv("ck_portfolio_order_attempt_count")
         ),
+        CheckConstraint(
+            "child_index IS NULL OR child_index > 0",
+            name=conv("ck_portfolio_order_child_index"),
+        ),
+        CheckConstraint(
+            "(rebalance_plan_id IS NULL AND child_index IS NULL) OR "
+            "(rebalance_plan_id IS NOT NULL AND child_index IS NOT NULL)",
+            name=conv("ck_portfolio_order_plan_child_pair"),
+        ),
+        ForeignKeyConstraint(
+            ["rebalance_plan_id", "run_id"],
+            ["portfolio_rebalance_plan.id", "portfolio_rebalance_plan.run_id"],
+            name=conv("fk_portfolio_order_plan_run_portfolio_rebalance_plan"),
+            ondelete="CASCADE",
+        ),
         UniqueConstraint(
             "id", "run_id", name=conv("uq_portfolio_order_id_run_id")
+        ),
+        UniqueConstraint(
+            "rebalance_plan_id",
+            "ts_code",
+            "side",
+            "child_index",
+            name=conv("uq_portfolio_order_plan_code_side_child"),
         ),
         Index(
             "idx_portfolio_order_run_schedule_status",
@@ -126,6 +187,8 @@ class PortfolioOrder(Base):
         ForeignKey("portfolio_backtest_run.id", ondelete="CASCADE"),
         nullable=False,
     )
+    rebalance_plan_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    child_index: Mapped[int | None] = mapped_column(Integer)
     signal_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     scheduled_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -426,12 +489,14 @@ class PortfolioPositionDaily(Base):
     ts_code: Mapped[str] = mapped_column(String(16), nullable=False)
     quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
     available_quantity: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    avg_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    avg_cost: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     close_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     market_value: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     weight: Mapped[Decimal] = mapped_column(Numeric(12, 8), nullable=False)
     unrealized_pnl: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     realized_pnl: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
+    valuation_source: Mapped[str | None] = mapped_column(String(24))
+    adj_factor: Mapped[Decimal | None] = mapped_column(Numeric(24, 10))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

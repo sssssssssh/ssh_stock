@@ -142,3 +142,33 @@ All endpoints are authenticated and live under `/api/v1/portfolio`:
 
 Creating a backtest stores a `CREATED` definition only. There is no run, broker or live-trading
 endpoint in this milestone. Candidate and preview requests are read-only.
+
+## M13.3 deterministic rebalance and accounting
+
+M13.3 advances the immutable identities to `portfolio_v2`, `accounting_v1`, and
+`backtest_v4`; `execution_v3` remains unchanged. A definition now freezes the strict
+Accounting configuration beside Strategy, Opportunity, Portfolio, and Execution.
+
+The daily protocol is START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE. At START_OF_DAY, the prior close
+snapshot is rolled forward and all prior shares become available under T+1. Current Trade
+Status and previous/current adjustment factors are loaded in batches. Missing factors, a factor
+change, or an inactive held instrument fail closed before execution. No corporate action is
+inferred from an adjustment factor.
+
+At CLOSE, `AccountingEngine` replays persisted fills in SELL-before-BUY order. BUY cash fees are
+capitalized into moving-average cost; SELL cash fees reduce realized PnL; slippage is already in
+the fill price and is not deducted from cash again. Active holdings require positive Raw close.
+A suspended holding without a Raw close may carry only its prior persisted close. Position and
+NAV rows are rebuilt for the same run/date, making accounting retries idempotent.
+
+At AFTER_CLOSE, `RebalancePlanner` converts target weights using close total assets and Raw
+close, floors quantities to instrument rules, applies the daily new-position cap, reconciles
+existing pending orders, and splits residuals into legal deterministic child orders. Source
+gaps produce no plan, order, or cancellation writes. Every new order is `NEXT_OPEN` and belongs
+to the same-run persisted `portfolio_rebalance_plan`.
+
+All Execution, Accounting, and Rebalance write services require a `BACKTEST/RUNNING` run and
+acquire the same run row with `SELECT FOR UPDATE`. Migration
+`0033_m13_3_rebalance_accounting` supplies the plan ledger and accounting lineage. Public run
+lifecycle orchestration, performance/benchmark calculations, corporate-action settlement,
+PAPER/LIVE, and Broker integration remain deferred.

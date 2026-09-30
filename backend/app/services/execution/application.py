@@ -16,6 +16,7 @@ from app.services.execution.contracts import (
 )
 from app.services.execution.market_data import ExecutionMarketDataProvider
 from app.services.execution.resolver import AshareExecutionResolver
+from app.services.portfolio.run_guard import validate_writable_run
 
 
 class ExecutionApplicationService:
@@ -46,11 +47,18 @@ class ExecutionApplicationService:
         run_id: uuid.UUID,
         trade_date: date,
     ) -> ExecutionBatchResult:
-        run = self.repository.get_run(run_id)
-        if run is None:
-            raise LookupError(f"portfolio backtest run not found: {run_id}")
-        if run.account_mode != "BACKTEST":
-            raise ValueError("M13.2 execution supports BACKTEST account mode only")
+        try:
+            return self._execute_open_batch(run_id, trade_date)
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def _execute_open_batch(
+        self,
+        run_id: uuid.UUID,
+        trade_date: date,
+    ) -> ExecutionBatchResult:
+        run = validate_writable_run(self.repository.get_run_for_update(run_id))
         if run.execution_version != EXECUTION_VERSION:
             raise ExecutionVersionMismatchError(
                 "backtest execution version mismatch: "

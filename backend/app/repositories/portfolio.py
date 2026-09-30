@@ -13,6 +13,7 @@ from app.models.portfolio import (
     PortfolioOrder,
     PortfolioOrderAttempt,
     PortfolioPositionDaily,
+    PortfolioRebalancePlan,
 )
 
 
@@ -38,6 +39,13 @@ class PortfolioRepository:
 
     def get_run(self, run_id: uuid.UUID) -> PortfolioBacktestRun | None:
         return self.db.get(PortfolioBacktestRun, run_id)
+
+    def get_run_for_update(self, run_id: uuid.UUID) -> PortfolioBacktestRun | None:
+        return self.db.execute(
+            select(PortfolioBacktestRun)
+            .where(PortfolioBacktestRun.id == run_id)
+            .with_for_update()
+        ).scalar_one_or_none()
 
     def list_runs(self, *, limit: int = 50, offset: int = 0) -> list[PortfolioBacktestRun]:
         return list(
@@ -103,6 +111,31 @@ class PortfolioRepository:
             .scalars()
             .all()
         )
+
+    def list_active_pending_orders(self, run_id: uuid.UUID) -> list[PortfolioOrder]:
+        return list(
+            self.db.execute(
+                select(PortfolioOrder)
+                .where(
+                    PortfolioOrder.run_id == run_id,
+                    PortfolioOrder.status == "PENDING",
+                )
+                .order_by(
+                    PortfolioOrder.scheduled_trade_date,
+                    PortfolioOrder.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    def cancel_order(self, order_id: uuid.UUID, reason_code: str) -> PortfolioOrder:
+        order = self.db.get(PortfolioOrder, order_id)
+        if order is None:
+            raise LookupError(f"portfolio order not found: {order_id}")
+        order.status = "CANCELLED"
+        order.reason_code = reason_code
+        return order
 
     def update_order_execution_state(
         self,
@@ -172,6 +205,29 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_fills_for_date(
+        self, run_id: uuid.UUID, trade_date: date
+    ) -> list[tuple[PortfolioFill, PortfolioOrder]]:
+        return list(
+            self.db.execute(
+                select(PortfolioFill, PortfolioOrder)
+                .join(
+                    PortfolioOrder,
+                    (PortfolioOrder.id == PortfolioFill.order_id)
+                    & (PortfolioOrder.run_id == PortfolioFill.run_id),
+                )
+                .where(
+                    PortfolioFill.run_id == run_id,
+                    PortfolioFill.trade_date == trade_date,
+                )
+                .order_by(
+                    PortfolioOrder.scheduled_trade_date,
+                    PortfolioOrder.id,
+                    PortfolioFill.id,
+                )
+            ).all()
+        )
+
     def replace_position_snapshot(
         self,
         run_id: uuid.UUID,
@@ -204,6 +260,22 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_position_snapshot(
+        self, run_id: uuid.UUID, trade_date: date
+    ) -> list[PortfolioPositionDaily]:
+        return list(
+            self.db.execute(
+                select(PortfolioPositionDaily)
+                .where(
+                    PortfolioPositionDaily.run_id == run_id,
+                    PortfolioPositionDaily.trade_date == trade_date,
+                )
+                .order_by(PortfolioPositionDaily.ts_code)
+            )
+            .scalars()
+            .all()
+        )
+
     def upsert_nav(self, run_id: uuid.UUID, row: PortfolioNavDaily) -> PortfolioNavDaily:
         self._assert_run_id(run_id, [row])
         current = self.db.get(PortfolioNavDaily, (run_id, row.trade_date))
@@ -227,6 +299,40 @@ class PortfolioRepository:
             .scalars()
             .all()
         )
+
+    def get_nav(self, run_id: uuid.UUID, trade_date: date) -> PortfolioNavDaily | None:
+        return self.db.get(PortfolioNavDaily, (run_id, trade_date))
+
+    def get_latest_nav_before(
+        self, run_id: uuid.UUID, trade_date: date
+    ) -> PortfolioNavDaily | None:
+        return self.db.execute(
+            select(PortfolioNavDaily)
+            .where(
+                PortfolioNavDaily.run_id == run_id,
+                PortfolioNavDaily.trade_date < trade_date,
+            )
+            .order_by(PortfolioNavDaily.trade_date.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+    def get_rebalance_plan(
+        self, run_id: uuid.UUID, signal_trade_date: date
+    ) -> PortfolioRebalancePlan | None:
+        return self.db.execute(
+            select(PortfolioRebalancePlan).where(
+                PortfolioRebalancePlan.run_id == run_id,
+                PortfolioRebalancePlan.signal_trade_date == signal_trade_date,
+            )
+        ).scalar_one_or_none()
+
+    def insert_rebalance_plan(
+        self, run_id: uuid.UUID, row: PortfolioRebalancePlan
+    ) -> PortfolioRebalancePlan:
+        self._assert_run_id(run_id, [row])
+        self.db.add(row)
+        self.db.flush()
+        return row
 
     @staticmethod
     def _assert_run_id(run_id: uuid.UUID, rows: Sequence[Any]) -> None:

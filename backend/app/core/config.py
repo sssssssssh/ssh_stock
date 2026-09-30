@@ -6,6 +6,7 @@ import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.accounting_config import AccountingConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.portfolio_config import PortfolioConfig
 from app.core.strategy_config import StrategyConfig
@@ -57,6 +58,7 @@ class Settings(BaseSettings):
     research_config: dict[str, Any] = Field(default_factory=dict)
     portfolio_config: PortfolioConfig | None = None
     execution_config: ExecutionConfig | None = None
+    accounting_config: AccountingConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -104,6 +106,11 @@ class Settings(BaseSettings):
         execution_config = ExecutionConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "execution.yaml").get("execution", {})
         )
+        accounting_config = AccountingConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "accounting.yaml").get(
+                "accounting", {}
+            )
+        )
         _validate_opportunity_weights(opportunity_config)
         _validate_research_config(research_config, opportunity_config)
         app_section = app_config.get("app", {})
@@ -117,6 +124,7 @@ class Settings(BaseSettings):
         settings.research_config = research_config
         settings.portfolio_config = portfolio_config
         settings.execution_config = execution_config
+        settings.accounting_config = accounting_config
         return settings
 
 

@@ -1,5 +1,5 @@
 portfolio:
-  version: portfolio_v1
+  version: portfolio_v2
   account_mode: BACKTEST
   initial_cash_cny: 1000000
   benchmark_code: "000300.SH"
@@ -21,3 +21,9 @@ portfolio:
     min_cash_ratio: 0.02
     max_new_positions_per_day: 3
     rebalance_frequency: DAILY
+    sizing_basis: SIGNAL_CLOSE_TOTAL_ASSETS
+    sizing_price: RAW_CLOSE
+    quantity_rounding: FLOOR_TO_TRADABLE
+    pending_order_policy: RECONCILE
+    order_type: NEXT_OPEN
+    small_delta_policy: SKIP

@@ -12,9 +12,16 @@ from alembic.operations import Operations
 from alembic.script import ScriptDirectory
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.domain.portfolio import AccountState
+from app.domain.execution import InstrumentExecutionProfile
+from app.domain.portfolio import (
+    AccountState,
+    DailyPortfolioSnapshot,
+    PortfolioTarget,
+    TargetPosition,
+)
 from app.main import app
 from app.models.market_data import (
+    StockAdjFactor,
     StockBasic,
     StockDaily,
     StockFactorDaily,
@@ -31,9 +38,11 @@ from app.models.portfolio import (
     PortfolioOrder,
     PortfolioOrderAttempt,
     PortfolioPositionDaily,
+    PortfolioRebalancePlan,
 )
 from app.repositories.portfolio import PortfolioRepository
 from app.services.analysis_identity import (
+    ACCOUNTING_VERSION,
     BACKTEST_ENGINE_VERSION,
     EXECUTION_VERSION,
     FACTOR_CALC_VERSION,
@@ -49,8 +58,11 @@ from app.services.execution.contracts import (
     ExecutionSourceNotReadyError,
     ExecutionVersionMismatchError,
 )
+from app.services.portfolio.accounting_application import AccountingApplicationService
 from app.services.portfolio.application import PortfolioApplicationService
 from app.services.portfolio.contracts import SourceReadinessStatus
+from app.services.portfolio.rebalance_application import RebalanceApplicationService
+from app.services.portfolio.rebalance_market_data import RebalanceMarketDataProvider
 from app.services.portfolio.source_integrity import check_portfolio_source_integrity
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -60,9 +72,10 @@ def _run() -> PortfolioBacktestRun:
     settings = get_settings()
     portfolio = settings.portfolio_config.model_dump(mode="json")
     execution = settings.execution_config.model_dump(mode="json")
+    accounting = settings.accounting_config.model_dump(mode="json")
     return PortfolioBacktestRun(
         account_mode="BACKTEST",
-        status="CREATED",
+        status="RUNNING",
         start_date=date(2026, 9, 1),
         end_date=date(2026, 9, 2),
         initial_cash=Decimal("1000000"),
@@ -75,12 +88,15 @@ def _run() -> PortfolioBacktestRun:
         portfolio_config_hash=config_hash(portfolio),
         execution_version=EXECUTION_VERSION,
         execution_config_hash=config_hash(execution),
+        accounting_version=ACCOUNTING_VERSION,
+        accounting_config_hash=config_hash(accounting),
         backtest_engine_version=BACKTEST_ENGINE_VERSION,
         config_snapshot={
             "strategy": settings.strategy,
             "opportunity": settings.opportunity_config,
             "portfolio": portfolio,
             "execution": execution,
+            "accounting": accounting,
         },
     )
 
@@ -223,7 +239,7 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
                 end_date=date(2026, 9, 30),
             )
             assert run.status == "CREATED"
-            assert run.backtest_engine_version == "backtest_v3"
+            assert run.backtest_engine_version == "backtest_v4"
             assert service.get_backtest(historical.id).backtest_engine_version == (
                 "backtest_v2"
             )
@@ -232,9 +248,13 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
                 "opportunity",
                 "portfolio",
                 "execution",
+                "accounting",
             }
             assert run.portfolio_config_hash == config_hash(run.config_snapshot["portfolio"])
             assert run.execution_config_hash == config_hash(run.config_snapshot["execution"])
+            assert run.accounting_config_hash == config_hash(
+                run.config_snapshot["accounting"]
+            )
             assert service.get_backtest(run.id).id == run.id
             duplicate = service.create_backtest_definition(
                 name="identity-test-copy",
@@ -393,6 +413,298 @@ def test_portfolio_source_integrity_real_db_exact_sets_and_current_identity(
             assert ready.reason is None
             assert ready.expected_count == ready.stock_daily_count == 2
             assert ready.factor_count == ready.state_count == ready.opportunity_count == 2
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_m13_3_accounting_rebuild_is_idempotent_and_precise() -> None:
+    settings = get_settings()
+    trade_date = date(1900, 2, 1)
+    code = "M133A.SZ"
+    strategy_hash = analysis_strategy_hash(settings.strategy)
+    engine = sa.create_engine(settings.database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            definition = _run()
+            definition.start_date = trade_date
+            definition.end_date = trade_date
+            run = repository.create_run(definition)
+            order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(1900, 1, 31),
+                scheduled_trade_date=trade_date,
+                ts_code=code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=100,
+                status="EXECUTED",
+            )
+            repository.insert_orders(run.id, [order])
+            repository.insert_fills(
+                run.id,
+                [
+                    PortfolioFill(
+                        order_id=order.id,
+                        attempt_id=None,
+                        run_id=run.id,
+                        trade_date=trade_date,
+                        ts_code=code,
+                        side="BUY",
+                        quantity=100,
+                        price=Decimal("10"),
+                        reference_price=Decimal("10"),
+                        gross_amount=Decimal("1000"),
+                        commission=Decimal("5"),
+                        stamp_tax=Decimal("0"),
+                        transfer_fee=Decimal("0"),
+                        cash_fee_total=Decimal("5"),
+                        slippage_cost=Decimal("1"),
+                        total_cost=Decimal("6"),
+                    )
+                ],
+            )
+            db.add_all(
+                [
+                    StockDaily(
+                        trade_date=trade_date, ts_code=code, open=10, close=12
+                    ),
+                    StockAdjFactor(
+                        trade_date=trade_date, ts_code=code, adj_factor=1
+                    ),
+                    StockTradeStatusDaily(
+                        trade_date=trade_date,
+                        ts_code=code,
+                        is_active=True,
+                        is_suspended=False,
+                        st_status_unknown=False,
+                        tradable=True,
+                        strategy_eligible=True,
+                        calc_version=TRADE_STATUS_CALC_VERSION,
+                        config_hash=strategy_hash,
+                        calculated_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            db.flush()
+            monkey_commit = db.commit
+            db.commit = db.flush
+            try:
+                service = AccountingApplicationService(db)
+                first = service.rebuild_close_snapshot(
+                    run.id, trade_date, previous_trade_date=None
+                )
+                second = service.rebuild_close_snapshot(
+                    run.id, trade_date, previous_trade_date=None
+                )
+            finally:
+                db.commit = monkey_commit
+            assert first == second
+            assert first.cash == Decimal("998995")
+            assert first.total_assets == Decimal("1000195")
+            position = repository.list_position_snapshot(run.id, trade_date)[0]
+            assert position.avg_cost == Decimal("10.05000000")
+            assert position.available_quantity == 0
+            assert position.valuation_source == "RAW_CLOSE"
+            assert position.adj_factor == Decimal("1.0000000000")
+            assert len(repository.list_nav(run.id)) == 1
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_m13_3_rebalance_application_is_idempotent() -> None:
+    signal_date = date(1900, 2, 3)
+    next_date = date(1900, 2, 4)
+    code = "M133R.SZ"
+
+    class Provider:
+        def load(self, trade_date, ts_codes):
+            assert trade_date == signal_date
+            assert tuple(ts_codes) == (code,)
+            return (
+                {code: Decimal("10")},
+                {
+                    code: InstrumentExecutionProfile(
+                        ts_code=code,
+                        exchange="SZSE",
+                        market="main",
+                        min_buy_quantity=100,
+                        buy_step=100,
+                        max_buy_quantity=1_000_000,
+                        min_sell_quantity=100,
+                        sell_step=100,
+                        max_sell_quantity=1_000_000,
+                    )
+                },
+            )
+
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run())
+            target = PortfolioTarget(
+                signal_trade_date=signal_date,
+                targets=(
+                    TargetPosition(code, Decimal("0.1"), Decimal("90")),
+                ),
+                target_cash_ratio=Decimal("0.9"),
+                source_available=True,
+            )
+            account = DailyPortfolioSnapshot(
+                trade_date=signal_date,
+                cash=Decimal("1000000"),
+                total_assets=Decimal("1000000"),
+                nav=Decimal("1"),
+                positions=(),
+            )
+            original_commit = db.commit
+            db.commit = db.flush
+            try:
+                service = RebalanceApplicationService(
+                    db, repository=repository, provider=Provider()
+                )
+                first = service.plan_and_persist(
+                    run.id,
+                    target=target,
+                    account=account,
+                    scheduled_trade_date=next_date,
+                )
+                second = service.plan_and_persist(
+                    run.id,
+                    target=target,
+                    account=account,
+                    scheduled_trade_date=next_date,
+                )
+            finally:
+                db.commit = original_commit
+            assert first.id == second.id
+            orders = repository.list_orders(run.id)
+            assert len(orders) == 1
+            assert orders[0].rebalance_plan_id == first.id
+            assert orders[0].child_index == 1
+            assert orders[0].target_quantity == 10000
+            assert orders[0].order_type == "NEXT_OPEN"
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_m13_3_rebalance_market_provider_batches_close_and_profile() -> None:
+    trade_date = date(1900, 2, 5)
+    code = "M133P.SZ"
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            db.add_all(
+                [
+                    StockBasic(
+                        ts_code=code,
+                        exchange="SZSE",
+                        market="主板",
+                    ),
+                    StockDaily(
+                        trade_date=trade_date,
+                        ts_code=code,
+                        open=Decimal("9.8"),
+                        close=Decimal("10.2"),
+                    ),
+                ]
+            )
+            db.flush()
+            closes, profiles = RebalanceMarketDataProvider(db).load(
+                trade_date, [code]
+            )
+            assert closes == {code: Decimal("10.2")}
+            assert profiles[code].buy_step == 100
+        transaction.rollback()
+    engine.dispose()
+
+
+def test_m13_3_run_guard_rejects_created_accounting_write() -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            run = _run()
+            run.status = "CREATED"
+            PortfolioRepository(db).create_run(run)
+            with pytest.raises(ValueError, match="RUNNING"):
+                AccountingApplicationService(db).rebuild_close_snapshot(
+                    run.id, date(1900, 2, 1), previous_trade_date=None
+                )
+        if transaction.is_active:
+            transaction.rollback()
+    engine.dispose()
+
+
+def test_m13_3_plan_order_same_run_fk_and_unique_date() -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            repository = PortfolioRepository(db)
+            run_a = repository.create_run(_run())
+            run_b = repository.create_run(_run())
+            plan = PortfolioRebalancePlan(
+                run_id=run_a.id,
+                signal_trade_date=date(1900, 2, 1),
+                scheduled_trade_date=date(1900, 2, 2),
+                total_assets=Decimal("1000000"),
+                portfolio_version=PORTFOLIO_VERSION,
+                target_snapshot={},
+                account_snapshot={},
+                plan_snapshot={},
+            )
+            repository.insert_rebalance_plan(run_a.id, plan)
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(
+                    PortfolioOrder(
+                        run_id=run_a.id,
+                        rebalance_plan_id=plan.id,
+                        child_index=None,
+                        signal_trade_date=plan.signal_trade_date,
+                        scheduled_trade_date=plan.scheduled_trade_date,
+                        ts_code="M133C.SZ",
+                        side="BUY",
+                        order_type="NEXT_OPEN",
+                        target_quantity=100,
+                        status="PENDING",
+                    )
+                )
+                db.flush()
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(
+                    PortfolioRebalancePlan(
+                        run_id=run_a.id,
+                        signal_trade_date=plan.signal_trade_date,
+                        scheduled_trade_date=plan.scheduled_trade_date,
+                        total_assets=Decimal("1000000"),
+                        portfolio_version=PORTFOLIO_VERSION,
+                        target_snapshot={},
+                        account_snapshot={},
+                        plan_snapshot={},
+                    )
+                )
+                db.flush()
+            with pytest.raises(sa.exc.IntegrityError), db.begin_nested():
+                db.add(
+                    PortfolioOrder(
+                        run_id=run_b.id,
+                        rebalance_plan_id=plan.id,
+                        child_index=1,
+                        signal_trade_date=plan.signal_trade_date,
+                        scheduled_trade_date=plan.scheduled_trade_date,
+                        ts_code="M133B.SZ",
+                        side="BUY",
+                        order_type="NEXT_OPEN",
+                        target_quantity=100,
+                        status="PENDING",
+                    )
+                )
+                db.flush()
         transaction.rollback()
     engine.dispose()
 
@@ -671,7 +983,8 @@ def test_execution_application_persists_attempt_and_fill_and_fails_closed(
             repository.create_run(old_run)
             with pytest.raises(ExecutionVersionMismatchError):
                 service.execute_open_batch(old_run.id, trade_date)
-        transaction.rollback()
+        if transaction.is_active:
+            transaction.rollback()
     engine.dispose()
 
 

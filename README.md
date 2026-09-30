@@ -1208,6 +1208,16 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
 - 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
 
+## Milestone 13.3 Rebalance and Accounting Ledger (2026-09-30)
+
+- Current identities are `portfolio_v2`, `execution_v3`, `accounting_v1`, and `backtest_v4`. New definitions freeze all configuration snapshots and hashes, including Accounting.
+- Run `python -m alembic upgrade head` before using M13.3. Migration `0033_m13_3_rebalance_accounting` adds rebalance plans, order-plan lineage, accounting identity, valuation lineage, adjustment factors, and 8-decimal cost basis.
+- Internal write services accept only `BACKTEST/RUNNING` runs and serialize writes with a run-row lock. M13.3 still does not expose a public `/run` endpoint.
+- The daily order is START_OF_DAY, OPEN execution, CLOSE accounting, and AFTER_CLOSE rebalance. Close targets create only `NEXT_OPEN` orders for the next real trading day.
+- Rebalance uses signal-day Raw close and close total assets, reconciles pending orders, applies the daily new-position cap, and creates legal deterministic child orders. Missing source data causes zero plan/order/cancellation writes.
+- Accounting rebuilds each close from the prior close snapshot plus persisted fills. Buy cash fees enter moving-average cost, sell cash fees enter realized PnL, and slippage is not deducted twice.
+- Held inactive instruments, missing active closes, missing adjustment factors, and adjustment-factor changes fail closed. A suspended holding may carry only its prior persisted close.
+
 ## Milestone 13.2.1 Execution Integrity
 
 - `config/execution.yaml` 使用 `execution_v3`、`cn_a_share_2026_v2` 和固定 `LIMIT_AT_OPEN` 口径，包含价格 tick、禁止 Partial Fill 的成交策略，以及按日期生效的印花税和过户费配置。

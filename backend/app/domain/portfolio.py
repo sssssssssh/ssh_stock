@@ -39,6 +39,11 @@ class PositionState:
     available_quantity: int
     avg_cost: Decimal
     market_value: Decimal
+    close_price: Decimal | None = None
+    unrealized_pnl: Decimal = Decimal("0")
+    realized_pnl: Decimal = Decimal("0")
+    valuation_source: str | None = None
+    adj_factor: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -73,3 +78,59 @@ class DailyPortfolioSnapshot:
     positions: tuple[PositionState, ...]
     market_value: Decimal = Decimal("0")
     trading_cost: Decimal = Decimal("0")
+
+
+@dataclass(frozen=True)
+class RebalanceTarget:
+    ts_code: str
+    target_weight: Decimal
+    target_quantity: int
+    current_quantity: int
+    projected_quantity: int
+    delta_quantity: int
+    source_score: Decimal
+    reason_codes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PendingOrderState:
+    order_id: object
+    ts_code: str
+    side: str
+    quantity: int
+    attempt_count: int = 0
+
+
+@dataclass(frozen=True)
+class PendingOrderAction:
+    order_id: object
+    action: str
+    reason_code: str | None = None
+
+
+@dataclass(frozen=True)
+class PlannedOrder:
+    ts_code: str
+    side: str
+    target_weight: Decimal
+    quantity: int
+    child_index: int
+    order_type: str = "NEXT_OPEN"
+    reason_codes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SkippedTarget:
+    ts_code: str
+    reason_code: str
+
+
+@dataclass(frozen=True)
+class RebalancePlanResult:
+    signal_trade_date: date
+    scheduled_trade_date: date
+    total_assets: Decimal
+    targets: tuple[RebalanceTarget, ...]
+    pending_actions: tuple[PendingOrderAction, ...]
+    new_orders: tuple[PlannedOrder, ...]
+    skipped_targets: tuple[SkippedTarget, ...]

@@ -42,10 +42,16 @@ class PortfolioConstructionConfig(StrictPortfolioConfig):
     min_cash_ratio: Decimal = Field(ge=0, lt=1)
     max_new_positions_per_day: int = Field(gt=0)
     rebalance_frequency: Literal["DAILY"]
+    sizing_basis: Literal["SIGNAL_CLOSE_TOTAL_ASSETS"]
+    sizing_price: Literal["RAW_CLOSE"]
+    quantity_rounding: Literal["FLOOR_TO_TRADABLE"]
+    pending_order_policy: Literal["RECONCILE"]
+    order_type: Literal["NEXT_OPEN"]
+    small_delta_policy: Literal["SKIP"]
 
 
 class PortfolioConfig(StrictPortfolioConfig):
-    version: Literal["portfolio_v1"]
+    version: Literal["portfolio_v2"]
     account_mode: Literal["BACKTEST", "PAPER", "LIVE"]
     initial_cash_cny: Decimal = Field(gt=0)
     benchmark_code: str = Field(min_length=1)
