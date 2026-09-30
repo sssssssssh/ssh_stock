@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -155,3 +156,105 @@ def test_backtest_create_request_validates_dates_and_money(monkeypatch) -> None:
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 422
+
+
+def test_backtest_lifecycle_endpoints_are_async_and_report_progress(
+    monkeypatch,
+) -> None:
+    run_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+    run = SimpleNamespace(id=run_id, status="CREATED")
+    job = SimpleNamespace(
+        id=job_id,
+        status="QUEUED",
+        cancel_requested=False,
+    )
+
+    class FakeBacktestService:
+        def __init__(self, _db) -> None:
+            pass
+
+        def execute(self, requested_run_id):
+            assert requested_run_id == run_id
+            return run, job
+
+        def resume(self, requested_run_id):
+            assert requested_run_id == run_id
+            return run, job
+
+        def cancel(self, requested_run_id):
+            assert requested_run_id == run_id
+            job.cancel_requested = True
+            return run, job
+
+        def progress(self, requested_run_id):
+            assert requested_run_id == run_id
+            return SimpleNamespace(
+                run=SimpleNamespace(id=run_id, status="RUNNING"),
+                job=SimpleNamespace(id=job_id, status="RUNNING"),
+                current_trade_date=date(2026, 9, 30),
+                current_phase="CLOSE",
+                total_trade_days=5,
+                completed_trade_days=2,
+                progress_pct=40.0,
+                error_code=None,
+                error_message=None,
+            )
+
+    monkeypatch.setattr(
+        portfolio_api, "BacktestApplicationService", FakeBacktestService
+    )
+    app.dependency_overrides[require_authenticated_user] = lambda: SimpleNamespace(
+        username="test"
+    )
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        client = TestClient(app)
+        execute = client.post(f"/api/v1/portfolio/backtests/{run_id}/execute")
+        resume = client.post(f"/api/v1/portfolio/backtests/{run_id}/resume")
+        cancel = client.post(f"/api/v1/portfolio/backtests/{run_id}/cancel")
+        progress = client.get(f"/api/v1/portfolio/backtests/{run_id}/progress")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert execute.status_code == 202
+    assert execute.json()["data"]["job_status"] == "QUEUED"
+    assert resume.status_code == 202
+    assert resume.json()["meta"]["resume"] is True
+    assert cancel.status_code == 200
+    assert cancel.json()["data"]["cancel_requested"] is True
+    assert progress.status_code == 200
+    assert progress.json()["data"]["current_phase"] == "CLOSE"
+    assert progress.json()["data"]["completed_trade_days"] == 2
+
+
+def test_duplicate_backtest_execute_returns_current_job_conflict(monkeypatch) -> None:
+    run_id = uuid.uuid4()
+    job_id = uuid.uuid4()
+
+    class ConflictService:
+        def __init__(self, _db) -> None:
+            pass
+
+        def execute(self, _run_id):
+            raise portfolio_api.BacktestConflictError(
+                "already active", job_id=job_id
+            )
+
+    monkeypatch.setattr(
+        portfolio_api, "BacktestApplicationService", ConflictService
+    )
+    app.dependency_overrides[require_authenticated_user] = lambda: SimpleNamespace(
+        username="test"
+    )
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        response = TestClient(app).post(
+            f"/api/v1/portfolio/backtests/{run_id}/execute"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "BACKTEST_EXECUTION_CONFLICT"
+    assert response.json()["detail"]["job_id"] == str(job_id)

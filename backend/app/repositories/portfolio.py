@@ -3,10 +3,11 @@ from collections.abc import Sequence
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.portfolio import (
+    PortfolioBacktestCheckpoint,
     PortfolioBacktestRun,
     PortfolioFill,
     PortfolioNavDaily,
@@ -27,6 +28,8 @@ class PortfolioRepository:
         "error_message",
         "started_at",
         "finished_at",
+        "owner_worker_id",
+        "ownership_version",
     }
 
     def __init__(self, db: Session) -> None:
@@ -89,6 +92,35 @@ class PortfolioRepository:
             )
             .scalars()
             .all()
+        )
+
+    def list_orders_page(
+        self, run_id: uuid.UUID, *, limit: int, offset: int
+    ) -> list[PortfolioOrder]:
+        return list(
+            self.db.execute(
+                select(PortfolioOrder)
+                .where(PortfolioOrder.run_id == run_id)
+                .order_by(
+                    PortfolioOrder.scheduled_trade_date,
+                    PortfolioOrder.ts_code,
+                    PortfolioOrder.id,
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+
+    def count_orders(self, run_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(PortfolioOrder)
+                .where(PortfolioOrder.run_id == run_id)
+            )
+            or 0
         )
 
     def list_pending_orders(
@@ -260,6 +292,34 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_positions_page(
+        self, run_id: uuid.UUID, *, limit: int, offset: int
+    ) -> list[PortfolioPositionDaily]:
+        return list(
+            self.db.execute(
+                select(PortfolioPositionDaily)
+                .where(PortfolioPositionDaily.run_id == run_id)
+                .order_by(
+                    PortfolioPositionDaily.trade_date,
+                    PortfolioPositionDaily.ts_code,
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+
+    def count_positions(self, run_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(PortfolioPositionDaily)
+                .where(PortfolioPositionDaily.run_id == run_id)
+            )
+            or 0
+        )
+
     def list_position_snapshot(
         self, run_id: uuid.UUID, trade_date: date
     ) -> list[PortfolioPositionDaily]:
@@ -300,6 +360,31 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_nav_page(
+        self, run_id: uuid.UUID, *, limit: int, offset: int
+    ) -> list[PortfolioNavDaily]:
+        return list(
+            self.db.execute(
+                select(PortfolioNavDaily)
+                .where(PortfolioNavDaily.run_id == run_id)
+                .order_by(PortfolioNavDaily.trade_date)
+                .limit(limit)
+                .offset(offset)
+            )
+            .scalars()
+            .all()
+        )
+
+    def count_nav(self, run_id: uuid.UUID) -> int:
+        return int(
+            self.db.scalar(
+                select(func.count())
+                .select_from(PortfolioNavDaily)
+                .where(PortfolioNavDaily.run_id == run_id)
+            )
+            or 0
+        )
+
     def get_nav(self, run_id: uuid.UUID, trade_date: date) -> PortfolioNavDaily | None:
         return self.db.get(PortfolioNavDaily, (run_id, trade_date))
 
@@ -333,6 +418,54 @@ class PortfolioRepository:
         self.db.add(row)
         self.db.flush()
         return row
+
+    def get_checkpoint(
+        self, run_id: uuid.UUID, trade_date: date, phase: str
+    ) -> PortfolioBacktestCheckpoint | None:
+        return self.db.execute(
+            select(PortfolioBacktestCheckpoint).where(
+                PortfolioBacktestCheckpoint.run_id == run_id,
+                PortfolioBacktestCheckpoint.trade_date == trade_date,
+                PortfolioBacktestCheckpoint.phase == phase,
+            )
+        ).scalar_one_or_none()
+
+    def get_checkpoint_for_update(
+        self, run_id: uuid.UUID, trade_date: date, phase: str
+    ) -> PortfolioBacktestCheckpoint | None:
+        return self.db.execute(
+            select(PortfolioBacktestCheckpoint)
+            .where(
+                PortfolioBacktestCheckpoint.run_id == run_id,
+                PortfolioBacktestCheckpoint.trade_date == trade_date,
+                PortfolioBacktestCheckpoint.phase == phase,
+            )
+            .with_for_update()
+        ).scalar_one_or_none()
+
+    def insert_checkpoint(
+        self, checkpoint: PortfolioBacktestCheckpoint
+    ) -> PortfolioBacktestCheckpoint:
+        self.db.add(checkpoint)
+        self.db.flush()
+        return checkpoint
+
+    def list_checkpoints(
+        self, run_id: uuid.UUID
+    ) -> list[PortfolioBacktestCheckpoint]:
+        return list(
+            self.db.execute(
+                select(PortfolioBacktestCheckpoint)
+                .where(PortfolioBacktestCheckpoint.run_id == run_id)
+                .order_by(
+                    PortfolioBacktestCheckpoint.trade_date,
+                    PortfolioBacktestCheckpoint.started_at,
+                    PortfolioBacktestCheckpoint.phase,
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     @staticmethod
     def _assert_run_id(run_id: uuid.UUID, rows: Sequence[Any]) -> None:

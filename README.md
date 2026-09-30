@@ -1238,3 +1238,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 当前仍不提供公开 backtest `/run`，不负责 TargetWeight 换算、Rebalance、Position/NAV Accounting、PAPER/LIVE 或券商下单。
 - Opportunity Research 使用 `opportunity_vs_state`，Theme Research 使用 `ths_theme_daily` 源状态与 `theme_factor_vs_theme_daily` 覆盖质量作为日期级 ready gate。质量为 ERROR 的日期不会进入 replace-slice，保留已有 Research 结果；生产数据完整但研究筛选为空时仍允许正常替换为空结果。
 - 股票与题材共 8 个 `final_exit_status` 字段增加数据库 CHECK，仅允许 NULL、SUCCESS、PENDING、UNRESOLVED、DATA_INCOMPLETE。
+
+## Milestone 13.4 完整回测运行器（2026-09-30）
+
+- 当前不可变身份升级为 `portfolio_v3`、`execution_v3`、`accounting_v3`、`backtest_v7`。历史 Backtest Definition 不改写，版本不兼容时拒绝执行或恢复。
+- `0035_m13_4_backtest_runner` 为 Run 增加 Worker 所有权，并新增按 `run_id + trade_date + phase` 唯一的阶段检查点。协议固定为 `START_OF_DAY → OPEN → CLOSE → AFTER_CLOSE → DAY_COMPLETED`。
+- HTTP 只负责提交 `portfolio_backtest` Job；Worker 领取后才把 Run 转为 `RUNNING`。重复 execute 返回冲突，取消只在阶段边界生效，心跳超时只转 `FAILED` 并等待显式 resume，不自动重放。
+- Execution、Accounting、Rebalance 保留原有独立事务模式；Runner 使用外部事务控制，使阶段业务结果与 COMPLETED 检查点在同一事务提交。恢复前核对冻结身份、阶段输入指纹与订单/尝试/Fill/NAV/Position/RebalancePlan 证据，任何漂移或未封存业务结果都拒绝恢复。
+- D 日 AFTER_CLOSE 只为区间内下一真实开市日生成计划；区间最后一天记录 `NO_PLAN_OUTSIDE_RANGE`，不会产生区间外订单。
+- 新增受认证保护的 `execute`、`cancel`、`resume`、`progress`、`nav`、`positions`、`orders` 接口；结果查询按 run_id 隔离并分页，订单结果同时携带 Attempt 与 Fill 审计线索。
+- 当前输入指纹用于检测运行期间及恢复时的历史数据漂移，但不等价于完整行情版本快照。复杂 Performance、PAPER/LIVE、Broker 和 Agent Runtime 仍不在本里程碑范围。

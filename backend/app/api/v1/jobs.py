@@ -23,9 +23,19 @@ from app.services.job_guard import (
     create_queued_ingestion_job,
     scheduler_setting,
 )
+from app.services.portfolio.backtest_application import (
+    BACKTEST_JOB_TYPE,
+    BacktestApplicationService,
+    BacktestConflictError,
+)
 
 router = APIRouter()
-CANCELLABLE_RUNNING_JOB_TYPES = {"backfill", "recalculate", "RESEARCH_EVAL"}
+CANCELLABLE_RUNNING_JOB_TYPES = {
+    "backfill",
+    "recalculate",
+    "RESEARCH_EVAL",
+    "portfolio_backtest",
+}
 
 
 class DailyJobRequest(BaseModel):
@@ -217,6 +227,21 @@ def cancel_job(job_id: UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
     job = db.get(JobRun, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
+    if job.job_type == BACKTEST_JOB_TYPE:
+        raw_run_id = dict(job.job_metadata or {}).get("portfolio_run_id")
+        try:
+            run_id = UUID(str(raw_run_id))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="portfolio backtest job has invalid run identity",
+            ) from exc
+        try:
+            _, job = BacktestApplicationService(db).cancel(run_id)
+        except BacktestConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        assert job is not None
+        return envelope(_job_payload(job))
     if job.status == "QUEUED":
         job.status = "CANCELLED"
         job.cancel_requested = True

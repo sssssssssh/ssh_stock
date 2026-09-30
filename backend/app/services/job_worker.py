@@ -32,6 +32,11 @@ from app.services.job_guard import (
     research_can_run,
     scheduler_setting,
 )
+from app.services.portfolio.backtest_application import (
+    BACKTEST_JOB_TYPE,
+    BacktestRunner,
+    recover_stale_backtest_jobs,
+)
 from app.services.quality.history_quality import (
     HistoricalDataQualityService,
     HistoricalQualitySummary,
@@ -47,6 +52,7 @@ WORKER_JOB_TYPES = (
     "validate_data",
     "catchup",
     RESEARCH_JOB_TYPE,
+    BACKTEST_JOB_TYPE,
 )
 
 
@@ -156,6 +162,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             )
         elif job.job_type == RESEARCH_JOB_TYPE:
             run_research_eval(db, job)
+        elif job.job_type == BACKTEST_JOB_TYPE:
+            BacktestRunner(db).run_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -206,6 +214,14 @@ def run_worker() -> None:
                 if now - last_recovery >= recovery_interval:
                     recovered_jobs = recover_stale_ingestion_jobs(db)
                     recovered_research = recover_stale_research_jobs(db)
+                    recovered_backtests = recover_stale_backtest_jobs(
+                        db,
+                        timeout_minutes=float(
+                            scheduler_setting(
+                                "running_heartbeat_timeout_minutes", 15
+                            )
+                        ),
+                    )
                     recovered_dirty = recover_stale_processing_ranges(
                         db,
                         stale_minutes=float(
@@ -214,10 +230,12 @@ def run_worker() -> None:
                     )
                     logger.info(
                         "worker recovery id={} recovered_jobs={} "
-                        "recovered_research={} recovered_dirty={}",
+                        "recovered_research={} recovered_backtests={} "
+                        "recovered_dirty={}",
                         worker_id,
                         recovered_jobs,
                         recovered_research,
+                        recovered_backtests,
                         recovered_dirty,
                     )
                     last_recovery = now

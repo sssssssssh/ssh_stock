@@ -12,6 +12,11 @@ from app.core.db import get_db
 from app.domain.portfolio import PortfolioTarget, SignalCandidate
 from app.models.portfolio import PortfolioBacktestRun
 from app.services.portfolio.application import PortfolioApplicationService
+from app.services.portfolio.backtest_application import (
+    BacktestApplicationService,
+    BacktestConflictError,
+    BacktestRecoveryRejectedError,
+)
 from app.services.portfolio.contracts import PortfolioSourceNotReadyError
 
 router = APIRouter()
@@ -144,6 +149,202 @@ def get_backtest(
     return envelope(_run_payload(run), service.identity_meta())
 
 
+@router.post(
+    "/backtests/{run_id}/execute", status_code=status.HTTP_202_ACCEPTED
+)
+def execute_backtest(
+    run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    try:
+        run, job = service.execute(run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BacktestConflictError as exc:
+        raise _backtest_conflict(exc) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BACKTEST_CONTRACT_INCOMPATIBLE", "message": str(exc)},
+        ) from exc
+    return envelope(
+        {
+            "run_id": str(run.id),
+            "run_status": run.status,
+            "job_id": str(job.id),
+            "job_status": job.status,
+        },
+        {"accepted": True},
+    )
+
+
+@router.post(
+    "/backtests/{run_id}/resume", status_code=status.HTTP_202_ACCEPTED
+)
+def resume_backtest(
+    run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    try:
+        run, job = service.resume(run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BacktestConflictError as exc:
+        raise _backtest_conflict(exc) from exc
+    except BacktestRecoveryRejectedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "BACKTEST_RECOVERY_REJECTED", "message": str(exc)},
+        ) from exc
+    return envelope(
+        {
+            "run_id": str(run.id),
+            "run_status": run.status,
+            "job_id": str(job.id),
+            "job_status": job.status,
+        },
+        {"accepted": True, "resume": True},
+    )
+
+
+@router.post("/backtests/{run_id}/cancel")
+def cancel_backtest(
+    run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    try:
+        run, job = service.cancel(run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BacktestConflictError as exc:
+        raise _backtest_conflict(exc) from exc
+    return envelope(
+        {
+            "run_id": str(run.id),
+            "run_status": run.status,
+            "job_id": str(job.id) if job else None,
+            "job_status": job.status if job else None,
+            "cancel_requested": job.cancel_requested if job else False,
+        }
+    )
+
+
+@router.get("/backtests/{run_id}/progress")
+def backtest_progress(
+    run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        progress = BacktestApplicationService(db).progress(run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return envelope(
+        {
+            "run_id": str(progress.run.id),
+            "run_status": progress.run.status,
+            "job_id": str(progress.job.id) if progress.job else None,
+            "job_status": progress.job.status if progress.job else None,
+            "current_trade_date": (
+                progress.current_trade_date.isoformat()
+                if progress.current_trade_date
+                else None
+            ),
+            "current_phase": progress.current_phase,
+            "total_trade_days": progress.total_trade_days,
+            "completed_trade_days": progress.completed_trade_days,
+            "progress_pct": progress.progress_pct,
+            "error_code": progress.error_code,
+            "error_message": progress.error_message,
+        }
+    )
+
+
+@router.get("/backtests/{run_id}/nav")
+def backtest_nav(
+    run_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    row_limit, row_offset = clamp_limit(limit, maximum=500), clamp_offset(offset)
+    try:
+        rows, total = service.nav_page(
+            run_id, limit=row_limit, offset=row_offset
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return envelope(
+        [_orm_payload(row) for row in rows],
+        {"limit": row_limit, "offset": row_offset, "total": total},
+    )
+
+
+@router.get("/backtests/{run_id}/positions")
+def backtest_positions(
+    run_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    row_limit, row_offset = clamp_limit(limit, maximum=500), clamp_offset(offset)
+    try:
+        rows, total = service.positions_page(
+            run_id, limit=row_limit, offset=row_offset
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return envelope(
+        [_orm_payload(row) for row in rows],
+        {"limit": row_limit, "offset": row_offset, "total": total},
+    )
+
+
+@router.get("/backtests/{run_id}/orders")
+def backtest_orders(
+    run_id: uuid.UUID,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    service = BacktestApplicationService(db)
+    row_limit, row_offset = clamp_limit(limit, maximum=500), clamp_offset(offset)
+    try:
+        rows, total = service.orders_page(
+            run_id, limit=row_limit, offset=row_offset
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    attempts = service.repository.list_order_attempts(run_id)
+    fills = service.repository.list_fills(run_id)
+    attempt_by_order: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    fill_by_order: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for item in attempts:
+        attempt_by_order.setdefault(item.order_id, []).append(_orm_payload(item))
+    for item in fills:
+        fill_by_order.setdefault(item.order_id, []).append(_orm_payload(item))
+    return envelope(
+        [
+            {
+                **_orm_payload(row),
+                "attempts": attempt_by_order.get(row.id, []),
+                "fills": fill_by_order.get(row.id, []),
+            }
+            for row in rows
+        ],
+        {"limit": row_limit, "offset": row_offset, "total": total},
+    )
+
+
 def _candidate_payload(candidate: SignalCandidate) -> dict[str, Any]:
     return {
         "trade_date": candidate.trade_date.isoformat(),
@@ -199,3 +400,25 @@ def _run_payload(run: PortfolioBacktestRun) -> dict[str, Any]:
         )
         for column in PortfolioBacktestRun.__table__.columns
     }
+
+
+def _orm_payload(row: Any) -> dict[str, Any]:
+    return {
+        column.name: (
+            str(value)
+            if isinstance(value := getattr(row, column.name), (Decimal, uuid.UUID))
+            else iso(value)
+        )
+        for column in row.__table__.columns
+    }
+
+
+def _backtest_conflict(exc: BacktestConflictError) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "code": "BACKTEST_EXECUTION_CONFLICT",
+            "message": str(exc),
+            "job_id": str(exc.job_id) if exc.job_id else None,
+        },
+    )

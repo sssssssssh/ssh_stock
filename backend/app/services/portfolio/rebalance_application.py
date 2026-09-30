@@ -83,6 +83,7 @@ class RebalanceApplicationService:
         target: PortfolioTarget,
         account: DailyPortfolioSnapshot,
         scheduled_trade_date: date,
+        commit: bool = True,
     ) -> PortfolioRebalancePlan:
         try:
             contract = validate_current_backtest_contract(
@@ -131,7 +132,10 @@ class RebalanceApplicationService:
                         "rebalance input conflicts with the persisted plan: "
                         f"stored={existing.input_hash}, current={input_hash}"
                     )
-                self.db.commit()
+                if commit:
+                    self.db.commit()
+                else:
+                    self.db.flush()
                 return existing
 
             pending_rows = self.repository.list_active_pending_orders(run_id)
@@ -203,7 +207,10 @@ class RebalanceApplicationService:
                 for item in result.new_orders
             ]
             self.repository.insert_orders(run_id, orders)
-            self.db.commit()
+            if commit:
+                self.db.commit()
+            else:
+                self.db.flush()
             return plan
         except Exception:
             self.db.rollback()

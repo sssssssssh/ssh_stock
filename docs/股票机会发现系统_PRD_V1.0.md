@@ -1301,3 +1301,13 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - Previous ledger validation covers weight, exposure, unrealized PnL, valuation source, adjustment factor, invalid numerics, suspended carry-forward valuation, and pure-cash accounts.
 - Complete odd-lot liquidation follows the same quantity rules as Execution. Every generated child must be executable; an unsafe decomposition produces an explicit skip instead of an illegal order.
 - Existing frozen identities remain unchanged. Runtime source-identity drift stays fail-closed, while compatible recovery orchestration remains outside this milestone.
+
+## Milestone 13.4 完整回测运行器需求（2026-09-30）
+
+- 用户可从 CREATED Backtest Definition 异步发起历史回测，并查询 Run、关联 Job、当前交易日/阶段、完成天数、进度及错误；重复提交不得产生多个执行者。
+- 每个真实交易日固定执行 START_OF_DAY、OPEN、CLOSE、AFTER_CLOSE、DAY_COMPLETED。D 日收盘目标仅影响区间内下一开市日，末日不得执行或生成区间外交易。
+- 系统必须持久化订单、尝试、成交、每日持仓、NAV、调仓计划与阶段检查点；阶段业务结果和完成检查点保持原子一致。
+- 取消只在安全阶段边界生效并保留完成结果。FAILED/CANCELLED 只有经过显式恢复审核才能重新进入 RUNNING；心跳超时不得自动重放。
+- 恢复审核必须验证冻结配置、算法/来源身份、输入指纹及账本证据；历史数据漂移、检查点与业务结果冲突、或无法证明安全时拒绝恢复并返回明确错误。
+- READY 空候选是合法空目标；INCOMPLETE/UNAVAILABLE 阻断运行。回测执行不拉取、不重算、不改写上游历史数据。
+- 提供 NAV、持仓、订单/尝试/成交的 run_id 隔离分页查询。复杂绩效归因、风险指标、PAPER/LIVE、券商和 Agent 不属于 M13.4。

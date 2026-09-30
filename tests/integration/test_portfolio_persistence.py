@@ -240,7 +240,7 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
                 end_date=date(2026, 9, 30),
             )
             assert run.status == "CREATED"
-            assert run.backtest_engine_version == "backtest_v6"
+            assert run.backtest_engine_version == "backtest_v7"
             assert service.get_backtest(historical.id).backtest_engine_version == (
                 "backtest_v2"
             )

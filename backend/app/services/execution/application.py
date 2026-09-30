@@ -50,9 +50,11 @@ class ExecutionApplicationService:
         self,
         run_id: uuid.UUID,
         trade_date: date,
+        *,
+        commit: bool = True,
     ) -> ExecutionBatchResult:
         try:
-            return self._execute_open_batch(run_id, trade_date)
+            return self._execute_open_batch(run_id, trade_date, commit=commit)
         except Exception:
             self.db.rollback()
             raise
@@ -61,6 +63,8 @@ class ExecutionApplicationService:
         self,
         run_id: uuid.UUID,
         trade_date: date,
+        *,
+        commit: bool,
     ) -> ExecutionBatchResult:
         contract = validate_current_backtest_contract(
             self.repository.get_run_for_update(run_id), settings=self.settings
@@ -164,7 +168,10 @@ class ExecutionApplicationService:
                     )
             self.repository.insert_order_attempts(run_id, attempts)
             self.repository.insert_fills(run_id, fills)
-            self.db.commit()
+            if commit:
+                self.db.commit()
+            else:
+                self.db.flush()
             return result
         except Exception:
             self.db.rollback()

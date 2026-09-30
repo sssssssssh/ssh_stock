@@ -141,7 +141,7 @@ def test_m13_3_versions_and_strict_accounting_config() -> None:
     settings = get_settings()
     assert PORTFOLIO_VERSION == settings.portfolio_config.version == "portfolio_v3"
     assert ACCOUNTING_VERSION == settings.accounting_config.version == "accounting_v3"
-    assert BACKTEST_ENGINE_VERSION == "backtest_v6"
+    assert BACKTEST_ENGINE_VERSION == "backtest_v7"
     raw = settings.accounting_config.model_dump(mode="python")
     raw["unknown"] = True
     with pytest.raises(ValidationError):

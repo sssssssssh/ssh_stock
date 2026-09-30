@@ -44,6 +44,9 @@ class PortfolioBacktestRun(Base):
             "initial_cash > 0", name=conv("ck_portfolio_backtest_run_initial_cash")
         ),
         Index("idx_portfolio_backtest_status_created", "status", "created_at"),
+        UniqueConstraint(
+            "job_id", name=conv("uq_portfolio_backtest_run_job_id")
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -80,12 +83,80 @@ class PortfolioBacktestRun(Base):
     job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="SET NULL")
     )
+    owner_worker_id: Mapped[str | None] = mapped_column(String(128))
+    ownership_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     error_message: Mapped[str | None] = mapped_column(String(2048))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PortfolioBacktestCheckpoint(Base):
+    __tablename__ = "portfolio_backtest_checkpoint"
+    __table_args__ = (
+        CheckConstraint(
+            "phase IN ('START_OF_DAY', 'OPEN', 'CLOSE', 'AFTER_CLOSE', "
+            "'DAY_COMPLETED')",
+            name=conv("ck_portfolio_backtest_checkpoint_phase"),
+        ),
+        CheckConstraint(
+            "phase_status IN ('STARTED', 'COMPLETED', 'FAILED')",
+            name=conv("ck_portfolio_backtest_checkpoint_status"),
+        ),
+        CheckConstraint(
+            "attempt > 0", name=conv("ck_portfolio_backtest_checkpoint_attempt")
+        ),
+        CheckConstraint(
+            "version > 0", name=conv("ck_portfolio_backtest_checkpoint_version")
+        ),
+        UniqueConstraint(
+            "run_id",
+            "trade_date",
+            "phase",
+            name=conv("uq_portfolio_backtest_checkpoint_run_date_phase"),
+        ),
+        Index(
+            "idx_portfolio_backtest_checkpoint_run_status",
+            "run_id",
+            "phase_status",
+            "trade_date",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("portfolio_backtest_run.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trade_date: Mapped[date] = mapped_column(Date, nullable=False)
+    phase: Mapped[str] = mapped_column(String(24), nullable=False)
+    phase_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    input_identity: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    result_identity: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_code: Mapped[str | None] = mapped_column(String(64))
+    error_message: Mapped[str | None] = mapped_column(String(2048))
+    attempt: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    worker_owner: Mapped[str | None] = mapped_column(String(128))
 
 
 class PortfolioRebalancePlan(Base):

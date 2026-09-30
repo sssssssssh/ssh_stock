@@ -30,6 +30,7 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.models.portfolio import (
+    PortfolioBacktestCheckpoint,
     PortfolioBacktestRun,
     PortfolioFill,
     PortfolioNavDaily,
@@ -47,6 +48,7 @@ __all__ = [
     "JobRun",
     "MarketDaily",
     "PortfolioBacktestRun",
+    "PortfolioBacktestCheckpoint",
     "PortfolioFill",
     "PortfolioNavDaily",
     "PortfolioOrder",

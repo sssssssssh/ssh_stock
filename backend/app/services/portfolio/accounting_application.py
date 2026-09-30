@@ -53,6 +53,8 @@ class AccountingApplicationService:
         self,
         run_id: uuid.UUID,
         trade_date: date,
+        *,
+        commit: bool = True,
     ) -> DailyPortfolioSnapshot:
         try:
             contract = validate_current_backtest_contract(
@@ -107,10 +109,16 @@ class AccountingApplicationService:
                         "recalculated close differs from sealed close: "
                         f"run={run_id}, date={trade_date}"
                     )
-                self.db.commit()
+                if commit:
+                    self.db.commit()
+                else:
+                    self.db.flush()
                 return persisted
             self._persist(run_id, snapshot)
-            self.db.commit()
+            if commit:
+                self.db.commit()
+            else:
+                self.db.flush()
             return snapshot
         except Exception:
             self.db.rollback()

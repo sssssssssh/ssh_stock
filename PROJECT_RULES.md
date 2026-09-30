@@ -388,3 +388,15 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 每次真实开盘尝试写入 `portfolio_order_attempt`；第 5 次临时阻塞转 `CANCELLED/EXPIRED`，Attempt 保留底层 blocker。Fill 必须通过复合外键归属同 Run 的 Order 和 Attempt。
 - `0032_m13_2_1_execution_integrity` 对 Order quantity 和 Attempt outcome/reason/quantity/price/cost 一致性提供数据库 CHECK；若历史 0 quantity Order 或脏 Attempt 存在，升级必须明确失败。存在 0 quantity Attempt 时禁止降级到 0031。
 - M13.2 不实现 TargetWeight 到股数换算、Rebalance、Position/NAV Accounting、公开 `/run`、PAPER/LIVE 或 Broker 接入，不修改 M12 Research 语义。
+
+## Milestone 13.4 Backtest Runner 规则
+
+- 当前不可变身份为 `portfolio_v3`、`execution_v3`、`accounting_v3`、`backtest_v7`；历史 Run 不得原地升级，stored/current 版本或冻结哈希不一致时必须拒绝执行和恢复。
+- 正式生产路径只有 `BacktestRunner`。每日严格执行 `START_OF_DAY → OPEN → CLOSE → AFTER_CLOSE → DAY_COMPLETED`，只遍历真实开市日；D 日信号只能形成下一段内开市日的 NEXT_OPEN 订单，末日不得生成区间外计划。
+- `portfolio_backtest_checkpoint` 是恢复依据，不是普通日志。每个阶段必须记录输入与结果身份、状态、时间、attempt/version、Worker owner 和明确错误；阶段业务写入与 COMPLETED 检查点必须同事务提交。
+- Execution、Accounting、Rebalance 的单独调用继续自行提交；Runner 调用必须关闭内部 commit，由 Runner 统一提交或回滚，不得通过提前写完成检查点、覆盖历史账本或删除历史记录制造幂等。
+- HTTP 只创建 `portfolio_backtest` QUEUED Job。Run 所有权由 run-row lock、当前 `job_id`、`owner_worker_id` 和 Job worker identity 联合校验；同一 Run 不得有两个有效执行者，且回测不占用生产采集任务的长期互斥锁。
+- 取消只在阶段安全边界生效。Worker 心跳超时只把 Job/Run 转为 FAILED 并要求显式 resume，不得自动假设阶段未提交并重放。
+- 显式恢复必须逐阶段核对冻结配置、当前源算法身份、输入指纹和真实 Order/Attempt/Fill/Position/NAV/RebalancePlan 证据。输入漂移、检查点顺序异常、未封存业务证据或结果不一致时 fail closed。
+- READY 且候选为空是合法空目标；INCOMPLETE/UNAVAILABLE 必须阻断。运行期间不得隐式拉取或重算 Raw/Factor/State/Opportunity。
+- M13.4 不实现复杂 Performance、PAPER/LIVE、Broker、真实下单或 Agent Runtime；输入指纹不得描述为完整历史行情快照。

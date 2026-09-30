@@ -58,6 +58,20 @@ def validate_current_backtest_contract(
     except (LookupError, ValueError) as exc:
         raise BacktestContractMismatchError(str(exc)) from exc
 
+    return validate_resumable_backtest_contract(current, settings=settings)
+
+
+def validate_resumable_backtest_contract(
+    run: PortfolioBacktestRun | None,
+    *,
+    settings: Settings | None = None,
+) -> FrozenRunConfig:
+    if run is None:
+        raise BacktestContractMismatchError("portfolio backtest run not found")
+    if run.account_mode != "BACKTEST":
+        raise BacktestContractMismatchError(
+            "portfolio write services support BACKTEST account mode only"
+        )
     expected = {
         "portfolio_version": PORTFOLIO_VERSION,
         "execution_version": EXECUTION_VERSION,
@@ -65,15 +79,15 @@ def validate_current_backtest_contract(
         "backtest_engine_version": BACKTEST_ENGINE_VERSION,
     }
     mismatches = [
-        f"{field}: stored={getattr(current, field)}, current={value}"
+        f"{field}: stored={getattr(run, field)}, current={value}"
         for field, value in expected.items()
-        if getattr(current, field) != value
+        if getattr(run, field) != value
     ]
     if mismatches:
         raise BacktestContractMismatchError(
             "backtest contract mismatch: " + "; ".join(mismatches)
         )
-    return validate_frozen_run_snapshot(current, settings=settings)
+    return validate_frozen_run_snapshot(run, settings=settings)
 
 
 def validate_frozen_run_snapshot(

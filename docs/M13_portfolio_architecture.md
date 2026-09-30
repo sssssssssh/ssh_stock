@@ -212,3 +212,42 @@ Frozen Portfolio/Execution/Accounting business configuration remains executable 
 YAML changes. Strategy, Opportunity, and algorithm source identity changes remain incompatible.
 A future M13.4 runner may route an interrupted Run to a compatible worker or explicitly create a
 new Run, but cannot silently substitute source identity or mutate the frozen snapshot.
+
+## M13.4 persistent backtest runner
+
+`backtest_v7` introduces one production execution path: `BacktestRunner`. HTTP lifecycle methods
+only queue a `portfolio_backtest` JobRun. The worker claims that job, acquires the matching Run
+ownership, and executes each real open date as START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE, then
+DAY_COMPLETED. AFTER_CLOSE schedules only the next open date inside the Run interval; the final
+date records the explicit `NO_PLAN_OUTSIDE_RANGE` policy.
+
+Migration `0035_m13_4_backtest_runner` adds `owner_worker_id` and `ownership_version` to the Run
+and creates `portfolio_backtest_checkpoint`. The unique Run/date/phase row stores STARTED,
+COMPLETED, or FAILED status, canonical input and result identities, timestamps, error details,
+attempt/version, and Worker owner. A durable STARTED row identifies in-flight work. Business
+results and the COMPLETED update are committed together.
+
+Execution, Accounting, and Rebalance retain their default standalone transaction behavior. The
+Runner calls them with external transaction control, appends the result identity and completed
+checkpoint, and then commits once. A pre-checkpoint exception rolls back both business data and
+the checkpoint completion. A process loss after commit leaves a completed checkpoint whose
+stored evidence is verified before it is skipped.
+
+Resume is explicit. It first validates the frozen configuration and current source algorithm
+identity, checkpoint order, and persisted business evidence. The running worker additionally
+recomputes phase input fingerprints and compares current historical inputs. Missing seals,
+changed inputs, conflicting ledger rows, or unverifiable business evidence reject recovery.
+Heartbeat timeout marks the Job and Run FAILED for review and never replays automatically.
+
+Authenticated lifecycle/result APIs are:
+
+- `POST /api/v1/portfolio/backtests/{run_id}/execute`
+- `POST /api/v1/portfolio/backtests/{run_id}/cancel`
+- `POST /api/v1/portfolio/backtests/{run_id}/resume`
+- `GET /api/v1/portfolio/backtests/{run_id}/progress`
+- `GET /api/v1/portfolio/backtests/{run_id}/nav`
+- `GET /api/v1/portfolio/backtests/{run_id}/positions`
+- `GET /api/v1/portfolio/backtests/{run_id}/orders`
+
+The source fingerprints detect drift but are not a complete immutable market-data snapshot.
+Performance attribution, PAPER/LIVE, Broker integration, and Agent runtime remain out of scope.
