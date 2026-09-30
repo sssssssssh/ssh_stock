@@ -1,5 +1,5 @@
 accounting:
-  version: accounting_v1
+  version: accounting_v2
   cost_basis_method: MOVING_AVERAGE
   buy_fee_treatment: CAPITALIZE
   sell_fee_treatment: REALIZED_PNL

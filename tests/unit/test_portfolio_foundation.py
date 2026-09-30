@@ -118,8 +118,8 @@ def _integrity(
 
 def test_portfolio_and_execution_config_are_strict_and_decimal() -> None:
     settings = get_settings()
-    assert settings.portfolio_config.version == "portfolio_v2"
-    assert settings.accounting_config.version == "accounting_v1"
+    assert settings.portfolio_config.version == "portfolio_v3"
+    assert settings.accounting_config.version == "accounting_v2"
     assert settings.execution_config.version == "execution_v3"
     assert settings.execution_config.ruleset_version == "cn_a_share_2026_v2"
     assert settings.execution_config.simulated_order_style == "LIMIT_AT_OPEN"
@@ -483,7 +483,8 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
         def __init__(self):
             self.pending = []
 
-        def account_state(self, requested):
+        def start_of_day(self, requested):
+            events.append(("start", requested))
             return AccountState(requested, Decimal("100"))
 
         def pending_order_intents(self, requested):
@@ -499,7 +500,7 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
         def apply_execution(self, requested, decisions):
             events.append(("apply", requested, tuple(decisions)))
 
-        def mark_to_market(self, requested):
+        def close_account(self, requested):
             events.append(("mark", requested))
             return DailyPortfolioSnapshot(
                 trade_date=requested,
@@ -509,7 +510,7 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
                 positions=(),
             )
 
-        def create_order_intents(self, target, account, scheduled_trade_date):
+        def create_rebalance_plan(self, target, account, scheduled_trade_date):
             intents = (
                 OrderIntent(
                     signal_trade_date=target.signal_trade_date,
@@ -522,7 +523,6 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
             )
             self.pending.extend(intents)
             events.append(("create", target.signal_trade_date, scheduled_trade_date))
-            return intents
 
     settings = get_settings()
     ledger = Ledger()
@@ -545,11 +545,13 @@ def test_backtest_engine_uses_open_close_after_close_phases() -> None:
     assert ("create", monday, tuesday) in events
     assert all(event[1] != tuesday for event in executions)
     for day in (friday, monday):
+        assert events.index(("start", day)) < events.index(("mark", day))
         assert events.index(("mark", day)) < events.index(("candidates", day))
 
 
 def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
     day = date(2026, 9, 1)
+    events = []
 
     class Calendar:
         def trade_dates(self, start, end):
@@ -560,6 +562,7 @@ def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
 
     class Candidates:
         def list_candidates(self, requested, config):
+            events.append("candidates")
             return _batch(
                 requested,
                 status=SourceReadinessStatus.INCOMPLETE,
@@ -572,7 +575,8 @@ def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
             return ()
 
     class Ledger:
-        def account_state(self, requested):
+        def start_of_day(self, requested):
+            events.append("start")
             return AccountState(requested, Decimal("100"))
 
         def pending_order_intents(self, requested):
@@ -582,14 +586,16 @@ def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
             return ()
 
         def apply_execution(self, requested, decisions):
+            events.append("apply")
             return None
 
-        def mark_to_market(self, requested):
+        def close_account(self, requested):
+            events.append("close")
             return DailyPortfolioSnapshot(
                 requested, Decimal("100"), Decimal("100"), Decimal("1"), ()
             )
 
-        def create_order_intents(self, target, account, scheduled_trade_date):
+        def create_rebalance_plan(self, target, account, scheduled_trade_date):
             raise AssertionError("not-ready source must not create orders")
 
     settings = get_settings()
@@ -604,6 +610,82 @@ def test_backtest_engine_fails_closed_when_source_is_not_ready() -> None:
     )
     with pytest.raises(PortfolioSourceNotReadyError):
         engine.run(day, day)
+    assert events == ["start", "apply", "close", "candidates"]
+
+
+@pytest.mark.parametrize(
+    ("failure_stage", "expected_events"),
+    [
+        ("start", ["start"]),
+        ("open", ["start", "pending", "market"]),
+        ("close", ["start", "pending", "market", "resolve", "apply", "close"]),
+    ],
+)
+def test_backtest_engine_stops_after_failed_phase(failure_stage, expected_events) -> None:
+    day = date(2026, 9, 1)
+    events = []
+
+    class Calendar:
+        def trade_dates(self, start, end):
+            return [day]
+
+        def next_trade_date(self, requested):
+            return date(2026, 9, 2)
+
+    class Candidates:
+        def list_candidates(self, requested, config):
+            events.append("candidates")
+            return _batch(requested)
+
+    class Resolver:
+        def resolve(self, intents, market, account, config):
+            events.append("resolve")
+            return ()
+
+    class Ledger:
+        def start_of_day(self, requested):
+            events.append("start")
+            if failure_stage == "start":
+                raise RuntimeError("start failed")
+            return AccountState(requested, Decimal("100"))
+
+        def pending_order_intents(self, requested):
+            events.append("pending")
+            return ()
+
+        def market_snapshot(self, requested, intents):
+            events.append("market")
+            if failure_stage == "open":
+                raise RuntimeError("open failed")
+            return ()
+
+        def apply_execution(self, requested, decisions):
+            events.append("apply")
+
+        def close_account(self, requested):
+            events.append("close")
+            if failure_stage == "close":
+                raise RuntimeError("close failed")
+            return DailyPortfolioSnapshot(
+                requested, Decimal("100"), Decimal("100"), Decimal("1"), ()
+            )
+
+        def create_rebalance_plan(self, target, account, scheduled_trade_date):
+            events.append("plan")
+
+    settings = get_settings()
+    engine = BacktestEngine(
+        calendar=Calendar(),
+        candidates=Candidates(),
+        policy=TopNEqualWeightPolicy(),
+        execution=Resolver(),
+        ledger=Ledger(),
+        portfolio_config=settings.portfolio_config,
+        execution_config=settings.execution_config,
+    )
+    with pytest.raises(RuntimeError, match=failure_stage):
+        engine.run(day, day)
+    assert events == expected_events
 
 
 def test_domain_module_has_no_sqlalchemy_dependency() -> None:

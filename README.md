@@ -1208,15 +1208,16 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
 - 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
 
-## Milestone 13.3 Rebalance and Accounting Ledger (2026-09-30)
+## Milestone 13.3.1 Accounting and Rebalance Correctness (2026-09-30)
 
-- Current identities are `portfolio_v2`, `execution_v3`, `accounting_v1`, and `backtest_v4`. New definitions freeze all configuration snapshots and hashes, including Accounting.
-- Run `python -m alembic upgrade head` before using M13.3. Migration `0033_m13_3_rebalance_accounting` adds rebalance plans, order-plan lineage, accounting identity, valuation lineage, adjustment factors, and 8-decimal cost basis.
-- Internal write services accept only `BACKTEST/RUNNING` runs and serialize writes with a run-row lock. M13.3 still does not expose a public `/run` endpoint.
-- The daily order is START_OF_DAY, OPEN execution, CLOSE accounting, and AFTER_CLOSE rebalance. Close targets create only `NEXT_OPEN` orders for the next real trading day.
-- Rebalance uses signal-day Raw close and close total assets, reconciles pending orders, applies the daily new-position cap, and creates legal deterministic child orders. Missing source data causes zero plan/order/cancellation writes.
-- Accounting rebuilds each close from the prior close snapshot plus persisted fills. Buy cash fees enter moving-average cost, sell cash fees enter realized PnL, and slippage is not deducted twice.
-- Held inactive instruments, missing active closes, missing adjustment factors, and adjustment-factor changes fail closed. A suspended holding may carry only its prior persisted close.
+- Current identities are `portfolio_v3`, `execution_v3`, `accounting_v2`, and `backtest_v5`. Older definitions are query-only.
+- Run `python -m alembic upgrade head` after updating. Migration `0034_m13_3_1_closeout` adds `portfolio_rebalance_plan.input_hash` and requires it for `portfolio_v3` plans; it does not rewrite historical v2 rows.
+- Execution, Accounting, Rebalance, and AccountGateway use one current-contract guard and the run-row lock. A held-position gate failure occurs before execution market loading and leaves orders, attempts, and fills unchanged.
+- START_OF_DAY reads the exact calendar `pretrade_date` NAV and positions, unlocks T+1 quantity, and validates current status plus D-1/D adjustment factors. No latest-snapshot fallback is allowed.
+- CLOSE applies persisted fills first, loads current status/close/factor only for post-fill holdings, and replaces the same-date Position/NAV snapshot idempotently.
+- Existing holdings keep their raw economic target quantity; only new positions are floored to legal buy quantities. Illegal small deltas remain unapplied and are visible through executable `projected_quantity`.
+- Rebalance plans hash canonical target and close-account inputs. Repeating the same input returns the existing plan; changed input for the same run/date fails with zero order or cancellation mutations.
+- The internal daily protocol is START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE. Public run lifecycle, Performance, corporate-action settlement, PAPER/LIVE, and Broker integration remain deferred.
 
 ## Milestone 13.2.1 Execution Integrity
 

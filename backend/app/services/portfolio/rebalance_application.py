@@ -15,9 +15,14 @@ from app.domain.portfolio import (
 from app.models.portfolio import PortfolioOrder, PortfolioRebalancePlan
 from app.repositories.portfolio import PortfolioRepository
 from app.services.analysis_identity import PORTFOLIO_VERSION
+from app.services.calc_metadata import config_hash
 from app.services.portfolio.rebalance import RebalancePlanner
 from app.services.portfolio.rebalance_market_data import RebalanceMarketDataProvider
-from app.services.portfolio.run_guard import validate_writable_run
+from app.services.portfolio.run_guard import validate_current_backtest_contract
+
+
+class RebalancePlanConflictError(RuntimeError):
+    pass
 
 
 def _json_value(value: Any) -> Any:
@@ -28,6 +33,22 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (tuple, list)):
         return [_json_value(item) for item in value]
     return value
+
+
+def _canonical_target_snapshot(target: PortfolioTarget) -> dict[str, Any]:
+    snapshot = _json_value(asdict(target))
+    snapshot["targets"] = sorted(snapshot["targets"], key=lambda item: item["ts_code"])
+    for item in snapshot["targets"]:
+        item["reason_codes"] = sorted(item["reason_codes"])
+    return snapshot
+
+
+def _canonical_account_snapshot(account: DailyPortfolioSnapshot) -> dict[str, Any]:
+    snapshot = _json_value(asdict(account))
+    snapshot["positions"] = sorted(
+        snapshot["positions"], key=lambda item: item["ts_code"]
+    )
+    return snapshot
 
 
 class RebalanceApplicationService:
@@ -58,20 +79,33 @@ class RebalanceApplicationService:
         scheduled_trade_date: date,
     ) -> PortfolioRebalancePlan:
         try:
-            run = validate_writable_run(self.repository.get_run_for_update(run_id))
-            if run.portfolio_version != PORTFOLIO_VERSION:
-                raise ValueError(
-                    "backtest portfolio version mismatch: "
-                    f"stored={run.portfolio_version}, current={PORTFOLIO_VERSION}"
-                )
+            run = validate_current_backtest_contract(
+                self.repository.get_run_for_update(run_id)
+            )
             if target.signal_trade_date != account.trade_date:
                 raise ValueError("target and close account trade dates must match")
             if scheduled_trade_date <= target.signal_trade_date:
                 raise ValueError("scheduled trade date must follow signal trade date")
-            existing = self.repository.get_rebalance_plan(
-                run_id, target.signal_trade_date
+            target_snapshot = _canonical_target_snapshot(target)
+            account_snapshot = _canonical_account_snapshot(account)
+            input_hash = config_hash(
+                {
+                    "hash_version": "rebalance_input_v1",
+                    "signal_trade_date": str(target.signal_trade_date),
+                    "scheduled_trade_date": str(scheduled_trade_date),
+                    "portfolio_version": PORTFOLIO_VERSION,
+                    "portfolio_config_hash": run.portfolio_config_hash,
+                    "target": target_snapshot,
+                    "account": account_snapshot,
+                }
             )
+            existing = self.repository.get_rebalance_plan(run_id, target.signal_trade_date)
             if existing is not None:
+                if existing.input_hash != input_hash:
+                    raise RebalancePlanConflictError(
+                        "rebalance input conflicts with the persisted plan: "
+                        f"stored={existing.input_hash}, current={input_hash}"
+                    )
                 self.db.commit()
                 return existing
 
@@ -107,9 +141,19 @@ class RebalanceApplicationService:
                 scheduled_trade_date=result.scheduled_trade_date,
                 total_assets=result.total_assets,
                 portfolio_version=PORTFOLIO_VERSION,
-                target_snapshot=_json_value(asdict(target)),
-                account_snapshot=_json_value(asdict(account)),
-                plan_snapshot=_json_value(asdict(result)),
+                input_hash=input_hash,
+                target_snapshot=target_snapshot,
+                account_snapshot=account_snapshot,
+                plan_snapshot={
+                    "pre_plan_pending": _json_value(
+                        [asdict(item) for item in pending]
+                    ),
+                    "close_prices": _json_value(closes),
+                    "instrument_profiles": _json_value(
+                        {key: asdict(value) for key, value in profiles.items()}
+                    ),
+                    "result": _json_value(asdict(result)),
+                },
             )
             self.repository.insert_rebalance_plan(run_id, plan)
             for action in result.pending_actions:

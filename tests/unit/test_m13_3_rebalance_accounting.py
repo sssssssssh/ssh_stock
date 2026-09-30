@@ -31,16 +31,14 @@ from app.services.portfolio.accounting import (
     AccountingMarketSnapshot,
     AccountingSourceError,
 )
-from app.services.portfolio.accounting_application import (
-    AccountingApplicationService,
-    AccountingVersionMismatchError,
-)
+from app.services.portfolio.accounting_application import AccountingApplicationService
 from app.services.portfolio.rebalance import (
     DELTA_BELOW_MIN_ORDER,
     NEW_POSITION_DAILY_CAP,
     SUPERSEDED_BY_REBALANCE,
     RebalancePlanner,
 )
+from app.services.portfolio.run_guard import BacktestContractMismatchError
 from pydantic import ValidationError
 
 DAY = date(2026, 9, 1)
@@ -139,9 +137,9 @@ def _market(
 
 def test_m13_3_versions_and_strict_accounting_config() -> None:
     settings = get_settings()
-    assert PORTFOLIO_VERSION == settings.portfolio_config.version == "portfolio_v2"
-    assert ACCOUNTING_VERSION == settings.accounting_config.version == "accounting_v1"
-    assert BACKTEST_ENGINE_VERSION == "backtest_v4"
+    assert PORTFOLIO_VERSION == settings.portfolio_config.version == "portfolio_v3"
+    assert ACCOUNTING_VERSION == settings.accounting_config.version == "accounting_v2"
+    assert BACKTEST_ENGINE_VERSION == "backtest_v5"
     raw = settings.accounting_config.model_dump(mode="python")
     raw["unknown"] = True
     with pytest.raises(ValidationError):
@@ -161,13 +159,16 @@ def test_accounting_application_rejects_historical_identity() -> None:
             return SimpleNamespace(
                 account_mode="BACKTEST",
                 status="RUNNING",
+                portfolio_version="portfolio_v3",
+                execution_version="execution_v3",
                 accounting_version="accounting_v0_unimplemented",
+                backtest_engine_version="backtest_v5",
             )
 
     database = Database()
     service = AccountingApplicationService(database, repository=Repository())
-    with pytest.raises(AccountingVersionMismatchError, match="accounting_v0"):
-        service.rebuild_close_snapshot(uuid.uuid4(), DAY, previous_trade_date=None)
+    with pytest.raises(BacktestContractMismatchError, match="accounting_v0"):
+        service.rebuild_close_snapshot(uuid.uuid4(), DAY)
     assert database.rolled_back is True
 
 
@@ -306,6 +307,83 @@ def test_rebalance_sizing_main_star_bse_and_small_delta() -> None:
     quantities = {item.ts_code: item.target_quantity for item in result.targets}
     assert quantities == {"BSE.BJ": 0, "MAIN.SZ": 10000, "STAR.SH": 0}
     assert {item.reason_code for item in result.skipped_targets} == set()
+
+
+@pytest.mark.parametrize(
+    ("code", "current", "target_quantity", "minimum", "step", "expected_order", "projected"),
+    [
+        ("STAR.SH", 250, 150, 200, 1, None, 250),
+        ("STAR.SH", 250, 50, 200, 1, ("SELL", 200), 50),
+        ("MAIN.SZ", 100, 150, 100, 100, None, 100),
+        ("BSE.BJ", 150, 90, 100, 100, None, 150),
+    ],
+)
+def test_existing_position_preserves_economic_target_and_skips_illegal_delta(
+    code,
+    current,
+    target_quantity,
+    minimum,
+    step,
+    expected_order,
+    projected,
+) -> None:
+    total = Decimal("10000")
+    price = Decimal("10")
+    result = RebalancePlanner().plan(
+        target=_target((code, str(Decimal(target_quantity) * price / total), "90")),
+        account=_snapshot(
+            _position(code, quantity=current, available=current, close="10"),
+            total=str(total),
+        ),
+        pending_orders=(),
+        close_prices={code: price},
+        instrument_profiles={
+            code: _profile(code, minimum=minimum, step=step, maximum=1_000_000)
+        },
+        scheduled_trade_date=NEXT_DAY,
+        config=get_settings().portfolio_config,
+    )
+    planned = result.targets[0]
+    assert planned.target_quantity == target_quantity
+    assert planned.projected_quantity == projected
+    orders = [(item.side, item.quantity) for item in result.new_orders]
+    assert orders == ([] if expected_order is None else [expected_order])
+    if expected_order is None:
+        assert result.skipped_targets[0].reason_code == DELTA_BELOW_MIN_ORDER
+
+
+def test_existing_position_full_liquidation_and_new_star_threshold() -> None:
+    profile = _profile("STAR.SH", minimum=200, step=1, maximum=100_000)
+    liquidation = RebalancePlanner().plan(
+        target=_target(),
+        account=_snapshot(
+            _position("STAR.SH", quantity=250, available=250, close="10"),
+            total="10000",
+        ),
+        pending_orders=(),
+        close_prices={},
+        instrument_profiles={"STAR.SH": profile},
+        scheduled_trade_date=NEXT_DAY,
+        config=get_settings().portfolio_config,
+    )
+    assert [(item.side, item.quantity) for item in liquidation.new_orders] == [
+        ("SELL", 250)
+    ]
+    assert liquidation.targets[0].projected_quantity == 0
+
+    for raw, expected in ((199, 0), (200, 200)):
+        total = Decimal(raw * 10)
+        opened = RebalancePlanner().plan(
+            target=_target(("STAR.SH", "1", "90")),
+            account=_snapshot(total=str(total)),
+            pending_orders=(),
+            close_prices={"STAR.SH": Decimal("10")},
+            instrument_profiles={"STAR.SH": profile},
+            scheduled_trade_date=NEXT_DAY,
+            config=get_settings().portfolio_config,
+        )
+        assert opened.targets[0].target_quantity == expected
+        assert opened.targets[0].projected_quantity == expected
 
 
 def test_pending_reconcile_keep_cancel_and_topup() -> None:

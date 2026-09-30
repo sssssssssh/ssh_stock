@@ -51,7 +51,7 @@ class PortfolioConstructionConfig(StrictPortfolioConfig):
 
 
 class PortfolioConfig(StrictPortfolioConfig):
-    version: Literal["portfolio_v2"]
+    version: Literal["portfolio_v3"]
     account_mode: Literal["BACKTEST", "PAPER", "LIVE"]
     initial_cash_cny: Decimal = Field(gt=0)
     benchmark_code: str = Field(min_length=1)

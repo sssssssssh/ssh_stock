@@ -27,7 +27,7 @@ class TradingCalendarGateway(Protocol):
 
 
 class AccountingLedger(Protocol):
-    def account_state(self, trade_date: date) -> AccountState: ...
+    def start_of_day(self, trade_date: date) -> AccountState: ...
 
     def pending_order_intents(self, trade_date: date) -> Sequence[OrderIntent]: ...
 
@@ -39,14 +39,14 @@ class AccountingLedger(Protocol):
         self, trade_date: date, decisions: Sequence[ExecutionDecision]
     ) -> None: ...
 
-    def mark_to_market(self, trade_date: date) -> DailyPortfolioSnapshot: ...
+    def close_account(self, trade_date: date) -> DailyPortfolioSnapshot: ...
 
-    def create_order_intents(
+    def create_rebalance_plan(
         self,
         target: PortfolioTarget,
-        account: AccountState,
+        account: DailyPortfolioSnapshot,
         scheduled_trade_date: date,
-    ) -> Sequence[OrderIntent]: ...
+    ) -> None: ...
 
 
 class BacktestEngine:
@@ -74,8 +74,10 @@ class BacktestEngine:
     def run(self, start: date, end: date) -> tuple[DailyPortfolioSnapshot, ...]:
         snapshots: list[DailyPortfolioSnapshot] = []
         for trade_date in self.calendar.trade_dates(start, end):
+            # START_OF_DAY: exact previous snapshot, T+1 and corporate-action gates.
+            account_open = self.ledger.start_of_day(trade_date)
+
             # OPEN: only orders created from information available before this day.
-            account_open = self.ledger.account_state(trade_date)
             pending = self.ledger.pending_order_intents(trade_date)
             market = self.ledger.market_snapshot(trade_date, pending)
             decisions = self.execution.resolve(
@@ -84,7 +86,7 @@ class BacktestEngine:
             self.ledger.apply_execution(trade_date, decisions)
 
             # CLOSE: value the account after today's executions.
-            snapshot = self.ledger.mark_to_market(trade_date)
+            snapshot = self.ledger.close_account(trade_date)
             snapshots.append(snapshot)
 
             # AFTER_CLOSE: today's signal can only create an intent for a later open.
@@ -104,9 +106,9 @@ class BacktestEngine:
             )
             next_trade_date = self.calendar.next_trade_date(trade_date)
             if next_trade_date is not None:
-                self.ledger.create_order_intents(
+                self.ledger.create_rebalance_plan(
                     target,
-                    account_close,
+                    snapshot,
                     scheduled_trade_date=next_trade_date,
                 )
         return tuple(snapshots)

@@ -69,6 +69,7 @@ class RebalancePlanner:
                 item.target_weight,
                 close_prices[code],
                 instrument_profiles[code],
+                current_quantity=current_by_code.get(code, 0),
             )
         for code in current_by_code:
             desired.setdefault(code, 0)
@@ -109,11 +110,12 @@ class RebalancePlanner:
             target_weight = target_item.target_weight if target_item else Decimal("0")
             source_score = target_item.source_score if target_item else Decimal("0")
             desired_qty = desired.get(code, 0)
+            executable_desired = desired_qty
             if code in capped:
-                desired_qty = 0
+                executable_desired = 0
                 skipped.append(SkippedTarget(code, NEW_POSITION_DAILY_CAP))
 
-            delta = desired_qty - current
+            delta = executable_desired - current
             code_pending = sorted(
                 pending_by_code.get(code, ()), key=lambda item: str(item.order_id)
             )
@@ -175,8 +177,9 @@ class RebalancePlanner:
                         )
 
             projected = current + kept_buy - kept_sell
-            if not any(item.ts_code == code for item in skipped):
-                projected = desired_qty
+            for order in new_orders:
+                if order.ts_code == code:
+                    projected += order.quantity if order.side == "BUY" else -order.quantity
             targets.append(
                 RebalanceTarget(
                     ts_code=code,
@@ -206,12 +209,16 @@ class RebalancePlanner:
         weight: Decimal,
         close_price: Decimal,
         profile: InstrumentExecutionProfile,
+        *,
+        current_quantity: int,
     ) -> int:
         raw = int(
             (total_assets * weight / close_price).to_integral_value(
                 rounding=ROUND_FLOOR
             )
         )
+        if current_quantity > 0:
+            return raw
         rounded = raw - (raw % profile.buy_step)
         return rounded if rounded >= profile.min_buy_quantity else 0
 

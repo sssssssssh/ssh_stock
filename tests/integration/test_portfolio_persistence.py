@@ -30,6 +30,7 @@ from app.models.market_data import (
     StockStateDaily,
     StockSuspendDaily,
     StockTradeStatusDaily,
+    TradeCalendar,
 )
 from app.models.portfolio import (
     PortfolioBacktestRun,
@@ -56,13 +57,13 @@ from app.services.calc_metadata import config_hash
 from app.services.execution.application import ExecutionApplicationService
 from app.services.execution.contracts import (
     ExecutionSourceNotReadyError,
-    ExecutionVersionMismatchError,
 )
 from app.services.portfolio.accounting_application import AccountingApplicationService
 from app.services.portfolio.application import PortfolioApplicationService
 from app.services.portfolio.contracts import SourceReadinessStatus
 from app.services.portfolio.rebalance_application import RebalanceApplicationService
 from app.services.portfolio.rebalance_market_data import RebalanceMarketDataProvider
+from app.services.portfolio.run_guard import BacktestContractMismatchError
 from app.services.portfolio.source_integrity import check_portfolio_source_integrity
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -239,7 +240,7 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
                 end_date=date(2026, 9, 30),
             )
             assert run.status == "CREATED"
-            assert run.backtest_engine_version == "backtest_v4"
+            assert run.backtest_engine_version == "backtest_v5"
             assert service.get_backtest(historical.id).backtest_engine_version == (
                 "backtest_v2"
             )
@@ -485,6 +486,12 @@ def test_m13_3_accounting_rebuild_is_idempotent_and_precise() -> None:
                         config_hash=strategy_hash,
                         calculated_at=datetime.now(UTC),
                     ),
+                    TradeCalendar(
+                        cal_date=trade_date,
+                        is_open=True,
+                        pretrade_date=date(1900, 1, 31),
+                        exchange="SSE",
+                    ),
                 ]
             )
             db.flush()
@@ -492,12 +499,8 @@ def test_m13_3_accounting_rebuild_is_idempotent_and_precise() -> None:
             db.commit = db.flush
             try:
                 service = AccountingApplicationService(db)
-                first = service.rebuild_close_snapshot(
-                    run.id, trade_date, previous_trade_date=None
-                )
-                second = service.rebuild_close_snapshot(
-                    run.id, trade_date, previous_trade_date=None
-                )
+                first = service.rebuild_close_snapshot(run.id, trade_date)
+                second = service.rebuild_close_snapshot(run.id, trade_date)
             finally:
                 db.commit = monkey_commit
             assert first == second
@@ -631,9 +634,9 @@ def test_m13_3_run_guard_rejects_created_accounting_write() -> None:
             run = _run()
             run.status = "CREATED"
             PortfolioRepository(db).create_run(run)
-            with pytest.raises(ValueError, match="RUNNING"):
+            with pytest.raises(BacktestContractMismatchError, match="RUNNING"):
                 AccountingApplicationService(db).rebuild_close_snapshot(
-                    run.id, date(1900, 2, 1), previous_trade_date=None
+                    run.id, date(1900, 2, 1)
                 )
         if transaction.is_active:
             transaction.rollback()
@@ -654,6 +657,7 @@ def test_m13_3_plan_order_same_run_fk_and_unique_date() -> None:
                 scheduled_trade_date=date(1900, 2, 2),
                 total_assets=Decimal("1000000"),
                 portfolio_version=PORTFOLIO_VERSION,
+                input_hash="a" * 64,
                 target_snapshot={},
                 account_snapshot={},
                 plan_snapshot={},
@@ -683,6 +687,7 @@ def test_m13_3_plan_order_same_run_fk_and_unique_date() -> None:
                         scheduled_trade_date=plan.scheduled_trade_date,
                         total_assets=Decimal("1000000"),
                         portfolio_version=PORTFOLIO_VERSION,
+                        input_hash="b" * 64,
                         target_snapshot={},
                         account_snapshot={},
                         plan_snapshot={},
@@ -981,7 +986,7 @@ def test_execution_application_persists_attempt_and_fill_and_fails_closed(
             old_run = _run()
             old_run.execution_version = "execution_v2"
             repository.create_run(old_run)
-            with pytest.raises(ExecutionVersionMismatchError):
+            with pytest.raises(BacktestContractMismatchError):
                 service.execute_open_batch(old_run.id, trade_date)
         if transaction.is_active:
             transaction.rollback()

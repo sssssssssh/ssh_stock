@@ -7,16 +7,15 @@ from app.core.config import Settings, get_settings
 from app.domain.execution import ExecutionBatchResult, OrderIntent
 from app.models.portfolio import PortfolioFill, PortfolioOrderAttempt
 from app.repositories.portfolio import PortfolioRepository
-from app.services.analysis_identity import EXECUTION_VERSION
 from app.services.execution.contracts import (
     AccountGateway,
     ExecutionOutcome,
     ExecutionSourceNotReadyError,
-    ExecutionVersionMismatchError,
 )
 from app.services.execution.market_data import ExecutionMarketDataProvider
 from app.services.execution.resolver import AshareExecutionResolver
-from app.services.portfolio.run_guard import validate_writable_run
+from app.services.portfolio.account_gateway import PortfolioAccountingAccountGateway
+from app.services.portfolio.run_guard import validate_current_backtest_contract
 
 
 class ExecutionApplicationService:
@@ -24,7 +23,7 @@ class ExecutionApplicationService:
         self,
         db: Session,
         *,
-        account_gateway: AccountGateway,
+        account_gateway: AccountGateway | None = None,
         settings: Settings | None = None,
         market_provider: ExecutionMarketDataProvider | None = None,
         resolver: AshareExecutionResolver | None = None,
@@ -35,8 +34,10 @@ class ExecutionApplicationService:
         if self.settings.execution_config is None:
             raise RuntimeError("execution configuration must be loaded")
         self.config = self.settings.execution_config
-        self.account_gateway = account_gateway
         self.repository = repository or PortfolioRepository(db)
+        self.account_gateway = account_gateway or PortfolioAccountingAccountGateway(
+            db, repository=self.repository
+        )
         self.market_provider = market_provider or ExecutionMarketDataProvider(
             db, self.settings
         )
@@ -58,12 +59,9 @@ class ExecutionApplicationService:
         run_id: uuid.UUID,
         trade_date: date,
     ) -> ExecutionBatchResult:
-        run = validate_writable_run(self.repository.get_run_for_update(run_id))
-        if run.execution_version != EXECUTION_VERSION:
-            raise ExecutionVersionMismatchError(
-                "backtest execution version mismatch: "
-                f"stored={run.execution_version}, current={EXECUTION_VERSION}"
-            )
+        validate_current_backtest_contract(self.repository.get_run_for_update(run_id))
+
+        account = self.account_gateway.account_state(run_id, trade_date)
 
         orders = self.repository.list_pending_orders(run_id, trade_date)
         intents = tuple(
@@ -80,7 +78,6 @@ class ExecutionApplicationService:
             )
             for order in orders
         )
-        account = self.account_gateway.account_state(run_id, trade_date)
         market = self.market_provider.load(trade_date, intents)
         if not market.source_ready:
             raise ExecutionSourceNotReadyError(market)

@@ -1282,3 +1282,9 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 ## Milestone 13.2.1 Execution Integrity（2026-09-29）
 
 模拟执行身份升级为 `execution_v3`，固定使用 `LIMIT_AT_OPEN` 数量口径。沪深主板、创业板、科创板和北交所分别执行 100 万、30 万、10 万和 100 万股的单笔申报上限；超限订单直接以 `MAX_QUANTITY_EXCEEDED` 拒绝，不自动拆单或缩量。历史或异常的 NULL 数量订单只影响自身，记录 `INVALID_QUANTITY` Attempt 后继续处理同批合法订单。数据源缺口仍保持整批 fail-closed。本阶段不提供 Rebalance、Position/NAV Accounting、公开运行接口或 Broker 接入。
+## Milestone 13.3.1 correctness closeout (2026-09-30)
+
+- New backtest definitions use Portfolio v3, Execution v3, Accounting v2, and Backtest Engine v5. Older definitions remain visible but cannot be resumed by current write services.
+- A trading day cannot execute orders until its exact prior open-day account snapshot, held-stock status, and adjustment factors pass validation.
+- Rebalance retries are idempotent only when the canonical target and closing account inputs are identical. Conflicting same-day inputs are rejected without changing pending orders.
+- Existing-position targets are not rounded as new positions. An illegal small adjustment is retained as an unmet economic target and is not represented as executed exposure.

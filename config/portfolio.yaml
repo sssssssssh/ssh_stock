@@ -1,5 +1,5 @@
 portfolio:
-  version: portfolio_v2
+  version: portfolio_v3
   account_mode: BACKTEST
   initial_cash_cny: 1000000
   benchmark_code: "000300.SH"

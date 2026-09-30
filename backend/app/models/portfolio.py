@@ -99,6 +99,10 @@ class PortfolioRebalancePlan(Base):
         UniqueConstraint(
             "id", "run_id", name=conv("uq_portfolio_rebalance_plan_id_run_id")
         ),
+        CheckConstraint(
+            "portfolio_version <> 'portfolio_v3' OR input_hash IS NOT NULL",
+            name=conv("ck_portfolio_rebalance_plan_v3_input_hash"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -113,6 +117,7 @@ class PortfolioRebalancePlan(Base):
     scheduled_trade_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_assets: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     portfolio_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    input_hash: Mapped[str | None] = mapped_column(String(64))
     target_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     account_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     plan_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
