@@ -27,7 +27,7 @@ class NavConfig(StrictAccountingConfig):
 
 
 class AccountingConfig(StrictAccountingConfig):
-    version: Literal["accounting_v2"]
+    version: Literal["accounting_v3"]
     cost_basis_method: Literal["MOVING_AVERAGE"]
     buy_fee_treatment: Literal["CAPITALIZE"]
     sell_fee_treatment: Literal["REALIZED_PNL"]

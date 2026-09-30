@@ -1288,3 +1288,9 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - A trading day cannot execute orders until its exact prior open-day account snapshot, held-stock status, and adjustment factors pass validation.
 - Rebalance retries are idempotent only when the canonical target and closing account inputs are identical. Conflicting same-day inputs are rejected without changing pending orders.
 - Existing-position targets are not rounded as new positions. An illegal small adjustment is retained as an unmet economic target and is not represented as executed exposure.
+## Milestone 13.3.2 ledger consistency closeout (2026-09-30)
+
+- New definitions use Portfolio v3, Execution v3, Accounting v3, and Backtest Engine v6. Older accounting v2/backtest v5 definitions remain visible but read-only.
+- A Run always executes its frozen Portfolio, Execution, and Accounting configuration. Changing deployment YAML cannot silently change an existing Run.
+- Previous-day NAV and position details must reconcile before OPEN. Missing position rows, inconsistent market value, or a material NAV mismatch stop execution without order mutations.
+- NAV and RebalancePlan rows seal completed phases. Rebalance only accepts the persisted Close, and a sealed Plan prevents later fills from rewriting that day's account truth.

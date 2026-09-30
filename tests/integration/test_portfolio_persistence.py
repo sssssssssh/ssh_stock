@@ -240,7 +240,7 @@ def test_create_backtest_definition_freezes_all_config_identities() -> None:
                 end_date=date(2026, 9, 30),
             )
             assert run.status == "CREATED"
-            assert run.backtest_engine_version == "backtest_v5"
+            assert run.backtest_engine_version == "backtest_v6"
             assert service.get_backtest(historical.id).backtest_engine_version == (
                 "backtest_v2"
             )
@@ -562,6 +562,21 @@ def test_m13_3_rebalance_application_is_idempotent() -> None:
                 total_assets=Decimal("1000000"),
                 nav=Decimal("1"),
                 positions=(),
+            )
+            repository.upsert_nav(
+                run.id,
+                PortfolioNavDaily(
+                    run_id=run.id,
+                    trade_date=signal_date,
+                    cash=Decimal("1000000"),
+                    market_value=Decimal("0"),
+                    total_assets=Decimal("1000000"),
+                    nav=Decimal("1"),
+                    gross_exposure=Decimal("0"),
+                    net_exposure=Decimal("0"),
+                    position_count=0,
+                    trading_cost=Decimal("0"),
+                ),
             )
             original_commit = db.commit
             db.commit = db.flush

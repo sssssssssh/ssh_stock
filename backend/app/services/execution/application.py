@@ -18,6 +18,10 @@ from app.services.portfolio.account_gateway import PortfolioAccountingAccountGat
 from app.services.portfolio.run_guard import validate_current_backtest_contract
 
 
+class BacktestPhaseClosedError(RuntimeError):
+    pass
+
+
 class ExecutionApplicationService:
     def __init__(
         self,
@@ -33,10 +37,9 @@ class ExecutionApplicationService:
         self.settings = settings or get_settings()
         if self.settings.execution_config is None:
             raise RuntimeError("execution configuration must be loaded")
-        self.config = self.settings.execution_config
         self.repository = repository or PortfolioRepository(db)
         self.account_gateway = account_gateway or PortfolioAccountingAccountGateway(
-            db, repository=self.repository
+            db, repository=self.repository, settings=self.settings
         )
         self.market_provider = market_provider or ExecutionMarketDataProvider(
             db, self.settings
@@ -59,7 +62,18 @@ class ExecutionApplicationService:
         run_id: uuid.UUID,
         trade_date: date,
     ) -> ExecutionBatchResult:
-        validate_current_backtest_contract(self.repository.get_run_for_update(run_id))
+        contract = validate_current_backtest_contract(
+            self.repository.get_run_for_update(run_id), settings=self.settings
+        )
+        if self.repository.get_nav(run_id, trade_date) is not None:
+            raise BacktestPhaseClosedError(
+                f"OPEN phase is sealed by NAV for run={run_id}, date={trade_date}"
+            )
+        if self.repository.get_rebalance_plan(run_id, trade_date) is not None:
+            raise BacktestPhaseClosedError(
+                f"OPEN phase is sealed by rebalance plan for run={run_id}, "
+                f"date={trade_date}"
+            )
 
         account = self.account_gateway.account_state(run_id, trade_date)
 
@@ -83,7 +97,9 @@ class ExecutionApplicationService:
             raise ExecutionSourceNotReadyError(market)
 
         try:
-            result = self.resolver.resolve_batch(intents, market, account, self.config)
+            result = self.resolver.resolve_batch(
+                intents, market, account, contract.execution
+            )
             attempts: list[PortfolioOrderAttempt] = []
             fills: list[PortfolioFill] = []
             for decision in result.decisions:

@@ -1208,15 +1208,16 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新增受认证保护的 `/api/v1/portfolio` 配置、候选、目标预览及 Backtest Definition 创建/查询接口；创建操作只落 `CREATED` 定义，没有运行接口。
 - 详细边界见 `docs/M13_portfolio_architecture.md` 和 `docs/agent_ready_service_contracts.md`。
 
-## Milestone 13.3.1 Accounting and Rebalance Correctness (2026-09-30)
+## Milestone 13.3.2 Ledger and Frozen Run Consistency (2026-09-30)
 
-- Current identities are `portfolio_v3`, `execution_v3`, `accounting_v2`, and `backtest_v5`. Older definitions are query-only.
+- Current identities are `portfolio_v3`, `execution_v3`, `accounting_v3`, and `backtest_v6`. Accounting v2/backtest v5 and older definitions are query-only.
 - Run `python -m alembic upgrade head` after updating. Migration `0034_m13_3_1_closeout` adds `portfolio_rebalance_plan.input_hash` and requires it for `portfolio_v3` plans; it does not rewrite historical v2 rows.
-- Execution, Accounting, Rebalance, and AccountGateway use one current-contract guard and the run-row lock. A held-position gate failure occurs before execution market loading and leaves orders, attempts, and fills unchanged.
-- START_OF_DAY reads the exact calendar `pretrade_date` NAV and positions, unlocks T+1 quantity, and validates current status plus D-1/D adjustment factors. No latest-snapshot fallback is allowed.
-- CLOSE applies persisted fills first, loads current status/close/factor only for post-fill holdings, and replaces the same-date Position/NAV snapshot idempotently.
+- Execution, Accounting, Rebalance, and AccountGateway validate the frozen Strategy, Opportunity, Portfolio, Execution, and Accounting snapshots and hashes under the run-row lock. Runtime Strategy/Opportunity identity drift fails closed.
+- Execution and Rebalance reconstruct decision configuration from the Run snapshot. Per-run initial cash and benchmark overrides are frozen into that snapshot and validated against Run columns.
+- START_OF_DAY reads the exact calendar `pretrade_date` NAV and positions, reconciles count/value/total/NAV invariants, unlocks T+1 quantity, and then validates current status plus D-1/D adjustment factors.
+- Same-day NAV or Plan rows seal OPEN. A sealed Plan permits only an identical Accounting retry, and Rebalance accepts only the persisted, internally consistent Close snapshot.
 - Existing holdings keep their raw economic target quantity; only new positions are floored to legal buy quantities. Illegal small deltas remain unapplied and are visible through executable `projected_quantity`.
-- Rebalance plans hash canonical target and close-account inputs. Repeating the same input returns the existing plan; changed input for the same run/date fails with zero order or cancellation mutations.
+- Rebalance plans hash canonical target and authoritative close-account inputs. Missing Close, external DTO drift, persisted Close tampering, or changed same-day inputs fail with zero plan/order/cancellation mutations.
 - The internal daily protocol is START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE. Public run lifecycle, Performance, corporate-action settlement, PAPER/LIVE, and Broker integration remain deferred.
 
 ## Milestone 13.2.1 Execution Integrity

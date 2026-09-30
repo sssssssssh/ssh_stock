@@ -143,17 +143,20 @@ All endpoints are authenticated and live under `/api/v1/portfolio`:
 Creating a backtest stores a `CREATED` definition only. There is no run, broker or live-trading
 endpoint in this milestone. Candidate and preview requests are read-only.
 
-## M13.3.1 deterministic rebalance and accounting closeout
+## M13.3.2 ledger and frozen run consistency closeout
 
-M13.3.1 advances the immutable identities to `portfolio_v3`, `accounting_v2`, and
-`backtest_v5`; `execution_v3` remains unchanged. Historical v2/v1/v4 definitions are
-read-only. All four write paths use the same current-contract guard.
+M13.3.2 keeps `portfolio_v3` and `execution_v3`, and advances the immutable identities to
+`accounting_v3` and `backtest_v6`. Historical accounting v2/backtest v5 definitions are
+read-only. All four write paths use the same current-contract guard, which validates typed
+frozen snapshots, hashes, effective cash/benchmark values, and runtime source compatibility.
 
 The daily protocol is START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE. AccountGateway resolves the first
 real open date from the run interval. Later dates must use the current calendar row's exact
 `pretrade_date` NAV and Position snapshot; latest-before fallback is forbidden. The prior shares
 become available under T+1, then current Trade Status and D-1/D adjustment factors are checked
 only for those prior holdings. A gate failure occurs before any execution Attempt or Fill.
+Before rollover, NAV and PositionDaily rows reconcile by count, quantities, prices, market value,
+total assets, and NAV ratio. Missing position rows cannot silently turn a portfolio into cash.
 
 At CLOSE, `AccountingEngine` replays persisted fills in SELL-before-BUY order, then the provider
 loads current status, Raw close, and current factor only for post-fill holdings. BUY cash fees are
@@ -172,6 +175,12 @@ Every portfolio_v3 plan stores a canonical `rebalance_input_v1` hash over signal
 the frozen portfolio config hash, target snapshot, and close account snapshot. Live pending
 orders are audit evidence in `plan_snapshot`, not hash input. Same-hash retries return the plan;
 different-hash retries fail before loading pending state or mutating orders.
+
+NavDaily and RebalancePlan also form the minimal phase seal. Either row closes same-day OPEN.
+Once a Plan exists, Accounting can only return an identical rebuilt Close. Rebalance reloads the
+authoritative NavDaily and PositionDaily snapshot, validates the caller DTO against it, and uses
+the persisted snapshot for planning and hashing. This is a ledger seal, not the M13.4 runner or
+checkpoint state machine.
 
 All Execution, Accounting, and Rebalance write services require a `BACKTEST/RUNNING` run and
 acquire the same run row with `SELECT FOR UPDATE`. Migration

@@ -119,7 +119,7 @@ def _integrity(
 def test_portfolio_and_execution_config_are_strict_and_decimal() -> None:
     settings = get_settings()
     assert settings.portfolio_config.version == "portfolio_v3"
-    assert settings.accounting_config.version == "accounting_v2"
+    assert settings.accounting_config.version == "accounting_v3"
     assert settings.execution_config.version == "execution_v3"
     assert settings.execution_config.ruleset_version == "cn_a_share_2026_v2"
     assert settings.execution_config.simulated_order_style == "LIMIT_AT_OPEN"

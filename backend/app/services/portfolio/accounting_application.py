@@ -3,16 +3,25 @@ from datetime import date
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.domain.portfolio import DailyPortfolioSnapshot
 from app.models.portfolio import PortfolioNavDaily, PortfolioPositionDaily
 from app.repositories.portfolio import PortfolioRepository
-from app.services.portfolio.account_gateway import PortfolioAccountingAccountGateway
+from app.services.portfolio.account_gateway import (
+    PortfolioAccountingAccountGateway,
+    canonical_account_snapshot,
+    load_persisted_close_snapshot,
+)
 from app.services.portfolio.accounting import (
     AccountingEngine,
     AccountingFill,
 )
 from app.services.portfolio.accounting_market_data import AccountingMarketDataProvider
 from app.services.portfolio.run_guard import validate_current_backtest_contract
+
+
+class CloseSnapshotSealedError(RuntimeError):
+    pass
 
 
 class AccountingApplicationService:
@@ -24,16 +33,19 @@ class AccountingApplicationService:
         provider: AccountingMarketDataProvider | None = None,
         engine: AccountingEngine | None = None,
         account_gateway: PortfolioAccountingAccountGateway | None = None,
+        settings: Settings | None = None,
     ) -> None:
         self.db = db
+        self.settings = settings or get_settings()
         self.repository = repository or PortfolioRepository(db)
-        self.provider = provider or AccountingMarketDataProvider(db)
+        self.provider = provider or AccountingMarketDataProvider(db, self.settings)
         self.engine = engine or AccountingEngine()
         self.account_gateway = account_gateway or PortfolioAccountingAccountGateway(
             db,
             repository=self.repository,
             provider=self.provider,
             engine=self.engine,
+            settings=self.settings,
         )
 
     def rebuild_close_snapshot(
@@ -42,9 +54,11 @@ class AccountingApplicationService:
         trade_date: date,
     ) -> DailyPortfolioSnapshot:
         try:
-            run = validate_current_backtest_contract(
-                self.repository.get_run_for_update(run_id)
+            contract = validate_current_backtest_contract(
+                self.repository.get_run_for_update(run_id), settings=self.settings
             )
+            run = contract.run
+            sealed_plan = self.repository.get_rebalance_plan(run_id, trade_date)
             open_account = self.account_gateway.account_state(run_id, trade_date)
             fill_rows = self.repository.list_fills_for_date(run_id, trade_date)
             fills = tuple(
@@ -73,6 +87,24 @@ class AccountingApplicationService:
                 initial_cash=run.initial_cash,
                 trading_cost=trading_cost,
             )
+            if sealed_plan is not None:
+                persisted = load_persisted_close_snapshot(
+                    self.repository, run, trade_date
+                )
+                persisted_payload = canonical_account_snapshot(persisted)
+                proposed_payload = canonical_account_snapshot(snapshot)
+                if sealed_plan.account_snapshot != persisted_payload:
+                    raise CloseSnapshotSealedError(
+                        "sealed plan account snapshot differs from persisted close: "
+                        f"run={run_id}, date={trade_date}"
+                    )
+                if proposed_payload != persisted_payload:
+                    raise CloseSnapshotSealedError(
+                        "recalculated close differs from sealed close: "
+                        f"run={run_id}, date={trade_date}"
+                    )
+                self.db.commit()
+                return persisted
             self._persist(run_id, snapshot)
             self.db.commit()
             return snapshot

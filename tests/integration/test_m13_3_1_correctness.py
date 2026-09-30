@@ -66,6 +66,8 @@ def _run(start: date, end: date) -> PortfolioBacktestRun:
         accounting_config_hash=config_hash(accounting),
         backtest_engine_version=BACKTEST_ENGINE_VERSION,
         config_snapshot={
+            "strategy": settings.strategy,
+            "opportunity": settings.opportunity_config,
             "portfolio": portfolio,
             "execution": execution,
             "accounting": accounting,
@@ -73,18 +75,27 @@ def _run(start: date, end: date) -> PortfolioBacktestRun:
     )
 
 
-def _nav(run_id: uuid.UUID, day: date, cash: str) -> PortfolioNavDaily:
+def _nav(
+    run_id: uuid.UUID,
+    day: date,
+    cash: str,
+    *,
+    market_value: str = "0",
+    position_count: int = 0,
+) -> PortfolioNavDaily:
     amount = Decimal(cash)
+    market = Decimal(market_value)
+    total = amount + market
     return PortfolioNavDaily(
         run_id=run_id,
         trade_date=day,
         cash=amount,
-        market_value=Decimal("0"),
-        total_assets=amount,
-        nav=amount / Decimal("1000000"),
+        market_value=market,
+        total_assets=total,
+        nav=total / Decimal("1000000"),
         gross_exposure=Decimal("0"),
         net_exposure=Decimal("0"),
-        position_count=0,
+        position_count=position_count,
         trading_cost=Decimal("0"),
     )
 
@@ -153,9 +164,17 @@ def test_account_gateway_requires_exact_pretrade_snapshot() -> None:
             with pytest.raises(AccountingSourceError) as exc:
                 gateway.account_state(run.id, d3)
             assert exc.value.reason_code == ACCOUNTING_SOURCE_INCOMPLETE
-            assert "exact previous NAV" in str(exc.value)
+            assert "missing exact NAV" in str(exc.value)
 
-            db.add(_nav(run.id, d2, "222"))
+            db.add(
+                _nav(
+                    run.id,
+                    d2,
+                    "222",
+                    market_value="2500",
+                    position_count=1,
+                )
+            )
             db.flush()
             account = gateway.account_state(run.id, d3)
             assert account.cash == Decimal("222")
@@ -190,7 +209,13 @@ def test_execution_start_gate_failure_writes_no_attempt_or_fill(
                     TradeCalendar(
                         cal_date=d2, is_open=True, pretrade_date=d1, exchange="SSE"
                     ),
-                    _nav(run.id, d1, "997500"),
+                    _nav(
+                        run.id,
+                        d1,
+                        "997500",
+                        market_value="2500",
+                        position_count=1,
+                    ),
                     PortfolioPositionDaily(
                         run_id=run.id,
                         trade_date=d1,
@@ -301,6 +326,7 @@ def test_rebalance_same_hash_is_idempotent_and_changed_hash_conflicts() -> None:
             repository = PortfolioRepository(db)
             run = repository.create_run(_run(day, scheduled))
             run_id = run.id
+            repository.upsert_nav(run.id, _nav(run.id, day, "1000000"))
             db.commit()
             service = RebalanceApplicationService(db, provider=Provider())
             target = PortfolioTarget(
@@ -321,14 +347,17 @@ def test_rebalance_same_hash_is_idempotent_and_changed_hash_conflicts() -> None:
             assert first.id == second.id
             assert first.input_hash is not None
 
-            changed = DailyPortfolioSnapshot(
-                day, Decimal("900000"), Decimal("900000"), Decimal("0.9"), ()
+            changed_target = PortfolioTarget(
+                day,
+                (TargetPosition(code, Decimal("0.2"), Decimal("90")),),
+                Decimal("0.8"),
+                True,
             )
             with pytest.raises(RebalancePlanConflictError):
                 service.plan_and_persist(
                     run.id,
-                    target=target,
-                    account=changed,
+                    target=changed_target,
+                    account=account,
                     scheduled_trade_date=scheduled,
                 )
             assert len(repository.list_orders(run.id)) == 1

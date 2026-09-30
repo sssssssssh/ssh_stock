@@ -357,16 +357,17 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 五层完整但 Portfolio stage/score 过滤后无 Candidate 仍为 READY，合法生成 100% 现金 Target。
 - M13.1.2 不新增迁移，不修改 0030，不修改 OPEN/CLOSE/AFTER_CLOSE 时间模型，不实现 M13.2 Execution。
 
-## Milestone 13.3.1 Accounting and Rebalance Correctness rules
+## Milestone 13.3.2 Ledger and Frozen Run Consistency rules
 
-- Current immutable identities are `portfolio_v3`, `execution_v3`, `accounting_v2`, and `backtest_v5`. Historical v2/v1/v4 definitions remain read-only and are never upgraded in place.
-- Execution, Accounting, Rebalance, and the production AccountGateway share `validate_current_backtest_contract()`. Every write requires a current-identity `BACKTEST/RUNNING` run under the same run-row `SELECT FOR UPDATE` lock.
+- Current immutable identities are `portfolio_v3`, `execution_v3`, `accounting_v3`, and `backtest_v6`. Historical accounting v2/backtest v5 definitions remain read-only and are never upgraded in place.
+- Execution, Accounting, Rebalance, and the production AccountGateway share `validate_current_backtest_contract()`. Every write requires a current-identity `BACKTEST/RUNNING` run, valid frozen config snapshots and hashes, current source identity compatibility, and the same run-row `SELECT FOR UPDATE` lock.
+- Portfolio and Execution decisions use typed configuration reconstructed from `run.config_snapshot`, never mutable runtime YAML. Effective per-run initial cash and benchmark values are part of the frozen portfolio snapshot.
 - Every real trading day is ordered as START_OF_DAY -> OPEN -> CLOSE -> AFTER_CLOSE. START_OF_DAY uses the calendar row's exact `pretrade_date`; it never falls back to the latest NAV. A target built at D close may create only `NEXT_OPEN` orders for the next real trading day.
-- Only positions held at D-1 enter the inactive-instrument and previous/current adjustment-factor gates. Missing exact snapshots or source rows, inactive holdings, and factor changes fail closed before any OPEN Attempt or Fill is written.
-- CLOSE replays persisted fills and then values only post-fill holdings. Accounting reruns replace the same date snapshot and remain idempotent.
+- A persisted NAV and all PositionDaily rows must reconcile by count, positive quantities, available quantity, price, market value, total assets, and NAV ratio before use. Missing or inconsistent rows are `ACCOUNTING_SOURCE_INCOMPLETE`, never an inferred empty account.
+- A same-day NAV or RebalancePlan seals OPEN. Once a Plan exists, Accounting may only return an identical rebuilt Close and Rebalance must match the authoritative persisted Close; conflicting retries make zero writes.
 - Existing positions preserve raw economic target quantities. New positions are floored to legal buy quantities. Illegal small deltas are skipped without pretending that `projected_quantity` reached the economic target; full liquidation may sell the complete odd lot.
 - Each `portfolio_v3` rebalance plan has a canonical `rebalance_input_v1` hash over dates, frozen portfolio config identity, target, and close account snapshot. The same hash is idempotent; a different hash raises a conflict before pending-order or plan mutations.
-- `RebalancePlanner` and `AccountingEngine` remain pure domain services. M13.3.1 does not add Performance, public `/run`, corporate-action settlement, PAPER/LIVE, Broker access, or M13.4 behavior.
+- `RebalancePlanner` and `AccountingEngine` remain pure domain services. M13.3.2 does not add Performance, public `/run`, corporate-action settlement, PAPER/LIVE, Broker access, or M13.4 behavior.
 
 ## Milestone 13.2.1 Execution Integrity 规则
 
