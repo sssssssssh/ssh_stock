@@ -22,6 +22,7 @@ from app.services.analysis_identity import (
     BACKTEST_ENGINE_VERSION,
     PORTFOLIO_VERSION,
 )
+from app.services.execution.instrument_rules import AshareInstrumentRuleResolver
 from app.services.portfolio.accounting import (
     ACCOUNTING_SOURCE_INCOMPLETE,
     UNSUPPORTED_CORPORATE_ACTION,
@@ -36,6 +37,7 @@ from app.services.portfolio.rebalance import (
     DELTA_BELOW_MIN_ORDER,
     NEW_POSITION_DAILY_CAP,
     SUPERSEDED_BY_REBALANCE,
+    UNSPLITTABLE_QUANTITY,
     RebalancePlanner,
 )
 from app.services.portfolio.run_guard import BacktestContractMismatchError
@@ -460,6 +462,108 @@ def test_deterministic_child_split_and_odd_lot_liquidation() -> None:
         full_liquidation=False,
     ) == ()
     assert DELTA_BELOW_MIN_ORDER == "DELTA_BELOW_MIN_ORDER"
+
+
+@pytest.mark.parametrize("quantity", [50, 100, 150, 250])
+def test_full_liquidation_children_follow_execution_quantity_rules(quantity) -> None:
+    profile = _profile("A.SZ", maximum=1_000_000)
+    children = RebalancePlanner._split_quantity(
+        quantity,
+        side="SELL",
+        profile=profile,
+        full_liquidation=True,
+    )
+
+    assert sum(children) == quantity
+    remaining = quantity
+    for child in children:
+        validation = AshareInstrumentRuleResolver.validate_sell(
+            profile, child, remaining
+        )
+        assert validation.valid, validation.reason
+        remaining -= child
+    assert remaining == 0
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [
+        _profile("MAIN.SZ", minimum=100, step=100),
+        _profile("STAR.SH", minimum=200, step=1, maximum=100_000),
+        _profile("BSE.BJ", minimum=100, step=1),
+    ],
+)
+def test_full_liquidation_rule_is_shared_across_market_profiles(profile) -> None:
+    children = RebalancePlanner._split_quantity(
+        250,
+        side="SELL",
+        profile=profile,
+        full_liquidation=True,
+    )
+    assert children == (250,)
+    assert AshareInstrumentRuleResolver.validate_sell(profile, 250, 250).valid
+
+
+def test_full_liquidation_splits_only_into_order_independent_legal_children() -> None:
+    profile = _profile("A.SZ", maximum=1_000)
+    children = RebalancePlanner._split_quantity(
+        1_500,
+        side="SELL",
+        profile=profile,
+        full_liquidation=True,
+    )
+    assert children == (1_000, 500)
+    for child in children:
+        assert AshareInstrumentRuleResolver.validate_sell(
+            profile, child, 1_500
+        ).valid
+
+    assert RebalancePlanner._split_quantity(
+        1_050,
+        side="SELL",
+        profile=profile,
+        full_liquidation=True,
+    ) == ()
+
+
+def test_full_liquidation_replaces_pending_sell_when_odd_remainder_is_illegal() -> None:
+    pending_id = uuid.uuid4()
+    result = RebalancePlanner().plan(
+        target=_target(),
+        account=_snapshot(
+            _position("A.SZ", quantity=250, available=250, close="10")
+        ),
+        pending_orders=(PendingOrderState(pending_id, "A.SZ", "SELL", 100),),
+        close_prices={},
+        instrument_profiles={"A.SZ": _profile("A.SZ")},
+        scheduled_trade_date=NEXT_DAY,
+        config=get_settings().portfolio_config,
+    )
+    assert [(item.action, item.reason_code) for item in result.pending_actions] == [
+        ("CANCEL", SUPERSEDED_BY_REBALANCE)
+    ]
+    assert [(item.side, item.quantity) for item in result.new_orders] == [
+        ("SELL", 250)
+    ]
+    assert result.targets[0].projected_quantity == 0
+
+
+def test_unsplittable_large_odd_lot_liquidation_has_explicit_reason() -> None:
+    result = RebalancePlanner().plan(
+        target=_target(),
+        account=_snapshot(
+            _position("A.SZ", quantity=1_050, available=1_050, close="10"),
+            total="20000",
+        ),
+        pending_orders=(),
+        close_prices={},
+        instrument_profiles={"A.SZ": _profile("A.SZ", maximum=1_000)},
+        scheduled_trade_date=NEXT_DAY,
+        config=get_settings().portfolio_config,
+    )
+    assert result.new_orders == ()
+    assert result.targets[0].projected_quantity == 1_050
+    assert result.skipped_targets[0].reason_code == UNSPLITTABLE_QUANTITY
 
 
 def test_0033_migration_rejects_market_on_open_history(monkeypatch) -> None:

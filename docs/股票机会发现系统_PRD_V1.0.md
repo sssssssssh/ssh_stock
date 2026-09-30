@@ -1294,3 +1294,10 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - A Run always executes its frozen Portfolio, Execution, and Accounting configuration. Changing deployment YAML cannot silently change an existing Run.
 - Previous-day NAV and position details must reconcile before OPEN. Missing position rows, inconsistent market value, or a material NAV mismatch stop execution without order mutations.
 - NAV and RebalancePlan rows seal completed phases. Rebalance only accepts the persisted Close, and a sealed Plan prevents later fills from rewriting that day's account truth.
+
+## Milestone 13.3.3 accounting precision and liquidation correctness (2026-09-30)
+
+- Accounting output and persisted Position/NAV rows share one field-level Decimal normalization contract, preventing a valid close or rebalance from failing only because PostgreSQL rounded the stored value.
+- Previous ledger validation covers weight, exposure, unrealized PnL, valuation source, adjustment factor, invalid numerics, suspended carry-forward valuation, and pure-cash accounts.
+- Complete odd-lot liquidation follows the same quantity rules as Execution. Every generated child must be executable; an unsafe decomposition produces an explicit skip instead of an illegal order.
+- Existing frozen identities remain unchanged. Runtime source-identity drift stays fail-closed, while compatible recovery orchestration remains outside this milestone.

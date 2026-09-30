@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.domain.portfolio import AccountState, DailyPortfolioSnapshot, PositionState
+from app.services.portfolio.ledger_precision import ratio
 
 ACCOUNTING_SOURCE_INCOMPLETE = "ACCOUNTING_SOURCE_INCOMPLETE"
 UNSUPPORTED_CORPORATE_ACTION = "UNSUPPORTED_CORPORATE_ACTION"
@@ -255,7 +256,7 @@ class AccountingEngine:
             PositionDailyRecord(
                 position=item,
                 weight=(
-                    item.market_value / snapshot.total_assets
+                    ratio(item.market_value / snapshot.total_assets)
                     if snapshot.total_assets
                     else Decimal("0")
                 ),
@@ -266,7 +267,7 @@ class AccountingEngine:
     @staticmethod
     def build_nav_row(snapshot: DailyPortfolioSnapshot) -> NavDailyRecord:
         exposure = (
-            snapshot.market_value / snapshot.total_assets
+            ratio(snapshot.market_value / snapshot.total_assets)
             if snapshot.total_assets
             else Decimal("0")
         )

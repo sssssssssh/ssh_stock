@@ -369,6 +369,16 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Each `portfolio_v3` rebalance plan has a canonical `rebalance_input_v1` hash over dates, frozen portfolio config identity, target, and close account snapshot. The same hash is idempotent; a different hash raises a conflict before pending-order or plan mutations.
 - `RebalancePlanner` and `AccountingEngine` remain pure domain services. M13.3.2 does not add Performance, public `/run`, corporate-action settlement, PAPER/LIVE, Broker access, or M13.4 behavior.
 
+## Milestone 13.3.3 Accounting Precision and Rebalance Integrity rules
+
+- Current immutable identities remain `portfolio_v3`, `execution_v3`, `accounting_v3`, and `backtest_v6`; M13.3.3 adds no migration and never upgrades historical Runs in place.
+- Accounting keeps full Decimal precision through fill replay and valuation, then applies PostgreSQL column semantics exactly once at the persistence boundary: money/price 4 decimals, average cost/NAV/weight/exposure 8 decimals, and adjustment factor 10 decimals, all with `ROUND_HALF_UP`.
+- Accounting return values, Position/NAV rows, authoritative Close loading, Rebalance DTO comparison, and plan account snapshots use the same persisted representation. Snapshot canonicalization quantizes fields but must not repair inconsistent caller data.
+- Historical Position/NAV validation includes finite values, weight/exposure, unrealized PnL, valuation source, adjustment factor, market value, total assets, and NAV. `realized_pnl` is cumulative only for the current holding cycle and disappears when the position is fully closed; run-level cumulative realized performance remains deferred.
+- Rebalance and Execution share `AshareInstrumentRuleResolver` quantity legality. A complete odd-lot sale is legal as one order within the per-order maximum; larger quantities are split only when every child is independently legal. Unsafe splits return `UNSPLITTABLE_QUANTITY` and create no order.
+- Mutable Portfolio/Execution/Accounting deployment configuration cannot alter an existing Run because decisions use its frozen typed snapshot. Strategy, Opportunity, and algorithm source identity drift remains a hard rejection. M13.4 may later select a compatible worker or explicitly restart a new Run, but must never silently resume under a different source identity.
+- M13.3.3 does not add a runner, checkpoint recovery, Performance, corporate-action settlement, PAPER/LIVE, Broker access, or Agent table access.
+
 ## Milestone 13.2.1 Execution Integrity 规则
 
 - Execution identity 为 `execution_v3`、ruleset 为 `cn_a_share_2026_v2`，固定 synthetic order style 为 `LIMIT_AT_OPEN`；Backtest Engine 保持 `backtest_v3`。历史 `execution_v1/v2` Definition 不改写且执行服务必须拒绝。

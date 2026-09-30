@@ -16,11 +16,13 @@ from app.domain.portfolio import (
     DailyPortfolioSnapshot,
     PortfolioTarget,
     RebalancePlanResult,
+    TargetPosition,
 )
 from app.models.market_data import (
     StockAdjFactor,
     StockBasic,
     StockDaily,
+    StockLimitDaily,
     StockTradeStatusDaily,
     TradeCalendar,
 )
@@ -46,6 +48,8 @@ from app.services.execution.application import (
     BacktestPhaseClosedError,
     ExecutionApplicationService,
 )
+from app.services.execution.instrument_rules import AshareInstrumentRuleResolver
+from app.services.execution.resolver import AshareExecutionResolver
 from app.services.portfolio.account_gateway import canonical_account_snapshot
 from app.services.portfolio.accounting import (
     ACCOUNTING_SOURCE_INCOMPLETE,
@@ -141,6 +145,9 @@ def _cleanup(engine, run_ids, days=(), codes=()) -> None:
                 )
             )
         if codes:
+            connection.execute(
+                sa.delete(StockLimitDaily).where(StockLimitDaily.ts_code.in_(codes))
+            )
             connection.execute(
                 sa.delete(StockTradeStatusDaily).where(
                     StockTradeStatusDaily.ts_code.in_(codes)
@@ -545,6 +552,257 @@ def test_sealed_close_is_idempotent_and_rejects_late_fill() -> None:
             assert repository.list_position_snapshot(run.id, day)[0].quantity == 100
     finally:
         _cleanup(engine, [run_id] if run_id else [], [day], [code])
+        engine.dispose()
+
+
+def test_close_rebalance_and_sealed_retry_share_persisted_precision() -> None:
+    day = date(1893, 5, 5)
+    code = "M1333P.SZ"
+    engine = sa.create_engine(get_settings().database_url)
+    run_id = None
+
+    class RebalanceProvider:
+        def load(self, trade_date, ts_codes):
+            return {code: Decimal("10.1234")}, {
+                code: InstrumentExecutionProfile(
+                    code,
+                    "SZSE",
+                    "main",
+                    100,
+                    100,
+                    1_000_000,
+                    100,
+                    100,
+                    1_000_000,
+                )
+            }
+
+    try:
+        with Session(engine, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = repository.create_run(_run(day))
+            run_id = run.id
+            db.add_all(
+                [
+                    TradeCalendar(cal_date=day, is_open=True, exchange="SSE"),
+                    StockBasic(ts_code=code, exchange="SZSE", market="main"),
+                    StockDaily(
+                        trade_date=day,
+                        ts_code=code,
+                        open=Decimal("10"),
+                        close=Decimal("10.1234"),
+                    ),
+                    StockAdjFactor(trade_date=day, ts_code=code, adj_factor=1),
+                    StockTradeStatusDaily(
+                        trade_date=day,
+                        ts_code=code,
+                        is_active=True,
+                        is_suspended=False,
+                        st_status_unknown=False,
+                        tradable=True,
+                        strategy_eligible=True,
+                        calc_version=TRADE_STATUS_CALC_VERSION,
+                        config_hash=analysis_strategy_hash(get_settings().strategy),
+                        calculated_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            order = PortfolioOrder(
+                run_id=run.id,
+                signal_trade_date=date(1893, 5, 4),
+                scheduled_trade_date=day,
+                ts_code=code,
+                side="BUY",
+                order_type="NEXT_OPEN",
+                target_quantity=300,
+                status="EXECUTED",
+            )
+            repository.insert_orders(run.id, [order])
+            repository.insert_fills(
+                run.id,
+                [
+                    PortfolioFill(
+                        order_id=order.id,
+                        attempt_id=None,
+                        run_id=run.id,
+                        trade_date=day,
+                        ts_code=code,
+                        side="BUY",
+                        quantity=300,
+                        price=Decimal("10"),
+                        reference_price=Decimal("10"),
+                        gross_amount=Decimal("3000"),
+                        commission=Decimal("5"),
+                        stamp_tax=Decimal("0"),
+                        transfer_fee=Decimal("0"),
+                        cash_fee_total=Decimal("5"),
+                        slippage_cost=Decimal("0"),
+                        total_cost=Decimal("5"),
+                    )
+                ],
+            )
+            db.commit()
+
+            accounting = AccountingApplicationService(db)
+            close = accounting.rebuild_close_snapshot(run.id, day)
+            persisted_position = repository.list_position_snapshot(run.id, day)[0]
+            assert close.positions[0].avg_cost == Decimal("10.01666667")
+            assert close.positions[0].avg_cost == persisted_position.avg_cost
+
+            RebalanceApplicationService(
+                db, provider=RebalanceProvider()
+            ).plan_and_persist(
+                run.id,
+                target=PortfolioTarget(day, (), Decimal("1"), True),
+                account=close,
+                scheduled_trade_date=date(1893, 5, 6),
+            )
+            repeated = accounting.rebuild_close_snapshot(run.id, day)
+            assert canonical_account_snapshot(repeated) == canonical_account_snapshot(
+                close
+            )
+    finally:
+        _cleanup(engine, [run_id] if run_id else [], [day], [code])
+        engine.dispose()
+
+
+def test_two_day_target_to_nav_flow_uses_real_postgresql_ledger() -> None:
+    first_day, second_day = date(2098, 5, 8), date(2098, 5, 9)
+    code = "M1333E.SZ"
+    profile = InstrumentExecutionProfile(
+        code,
+        "SZSE",
+        "main",
+        100,
+        100,
+        1_000_000,
+        100,
+        100,
+        1_000_000,
+    )
+    engine = sa.create_engine(get_settings().database_url)
+    run_id = None
+
+    class RebalanceProvider:
+        def load(self, trade_date, ts_codes):
+            return {code: Decimal("10")}, {code: profile}
+
+    class MainRules(AshareInstrumentRuleResolver):
+        def resolve(self, *, ts_code, exchange, market):
+            return profile
+
+    try:
+        with Session(engine, expire_on_commit=False) as db:
+            repository = PortfolioRepository(db)
+            run = _run(first_day)
+            run.end_date = second_day
+            run = repository.create_run(run)
+            run_id = run.id
+            db.add_all(
+                [
+                    TradeCalendar(
+                        cal_date=first_day, is_open=True, exchange="SSE"
+                    ),
+                    TradeCalendar(
+                        cal_date=second_day,
+                        is_open=True,
+                        pretrade_date=first_day,
+                        exchange="SSE",
+                    ),
+                    StockBasic(ts_code=code, exchange="SZSE", market="main"),
+                    StockDaily(
+                        trade_date=first_day,
+                        ts_code=code,
+                        open=Decimal("10"),
+                        close=Decimal("10"),
+                    ),
+                    StockDaily(
+                        trade_date=second_day,
+                        ts_code=code,
+                        open=Decimal("10"),
+                        close=Decimal("10.1234"),
+                    ),
+                    StockLimitDaily(
+                        trade_date=second_day,
+                        ts_code=code,
+                        up_limit=Decimal("11"),
+                        down_limit=Decimal("9"),
+                    ),
+                    StockAdjFactor(
+                        trade_date=second_day, ts_code=code, adj_factor=1
+                    ),
+                    StockTradeStatusDaily(
+                        trade_date=second_day,
+                        ts_code=code,
+                        is_active=True,
+                        is_suspended=False,
+                        st_status_unknown=False,
+                        tradable=True,
+                        strategy_eligible=True,
+                        calc_version=TRADE_STATUS_CALC_VERSION,
+                        config_hash=analysis_strategy_hash(get_settings().strategy),
+                        calculated_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            db.commit()
+
+            first_close = AccountingApplicationService(db).rebuild_close_snapshot(
+                run.id, first_day
+            )
+            target = PortfolioTarget(
+                signal_trade_date=first_day,
+                targets=(
+                    TargetPosition(
+                        ts_code=code,
+                        target_weight=Decimal("0.003"),
+                        source_score=Decimal("90"),
+                    ),
+                ),
+                target_cash_ratio=Decimal("0.997"),
+                source_available=True,
+            )
+            plan = RebalanceApplicationService(
+                db, provider=RebalanceProvider()
+            ).plan_and_persist(
+                run.id,
+                target=target,
+                account=first_close,
+                scheduled_trade_date=second_day,
+            )
+            orders = repository.list_orders(run.id)
+            assert plan.signal_trade_date == first_day
+            assert [(order.side, order.target_quantity) for order in orders] == [
+                ("BUY", 300)
+            ]
+
+            execution = ExecutionApplicationService(
+                db,
+                resolver=AshareExecutionResolver(instrument_rules=MainRules()),
+            ).execute_open_batch(run.id, second_day)
+            assert execution.decisions[0].outcome == "EXECUTED"
+            fills = repository.list_fills(run.id)
+            assert len(fills) == 1
+            assert fills[0].quantity == 300
+
+            second_close = AccountingApplicationService(db).rebuild_close_snapshot(
+                run.id, second_day
+            )
+            persisted_nav = repository.get_nav(run.id, second_day)
+            positions = repository.list_position_snapshot(run.id, second_day)
+            assert persisted_nav is not None
+            assert persisted_nav.total_assets == second_close.total_assets
+            assert persisted_nav.position_count == 1
+            assert len(positions) == 1
+            assert positions[0].quantity == 300
+            assert positions[0].avg_cost == second_close.positions[0].avg_cost
+    finally:
+        _cleanup(
+            engine,
+            [run_id] if run_id else [],
+            [first_day, second_day],
+            [code],
+        )
         engine.dispose()
 
 

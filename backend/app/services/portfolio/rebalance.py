@@ -17,11 +17,13 @@ from app.domain.portfolio import (
     RebalanceTarget,
     SkippedTarget,
 )
+from app.services.execution.instrument_rules import AshareInstrumentRuleResolver
 
 SUPERSEDED_BY_REBALANCE = "SUPERSEDED_BY_REBALANCE"
 DELTA_BELOW_MIN_ORDER = "DELTA_BELOW_MIN_ORDER"
 NEW_POSITION_DAILY_CAP = "NEW_POSITION_DAILY_CAP"
 REBALANCE_SOURCE_INCOMPLETE = "REBALANCE_SOURCE_INCOMPLETE"
+UNSPLITTABLE_QUANTITY = "UNSPLITTABLE_QUANTITY"
 
 
 class RebalanceSourceIncompleteError(RuntimeError):
@@ -134,7 +136,23 @@ class RebalancePlanner:
                     )
                 )
             same_total = sum(item.quantity for item in same_side)
-            if wanted_side is not None and same_total <= wanted_quantity:
+            keep_same_side = wanted_side is not None and same_total <= wanted_quantity
+            full_liquidation_request = (
+                wanted_side == "SELL" and wanted_quantity == current
+            )
+            if (
+                keep_same_side
+                and full_liquidation_request
+                and 0 < same_total < wanted_quantity
+                and not self._split_quantity(
+                    wanted_quantity - same_total,
+                    side="SELL",
+                    profile=instrument_profiles[code],
+                    full_liquidation=False,
+                )
+            ):
+                keep_same_side = False
+            if keep_same_side:
                 for item in same_side:
                     actions.append(PendingOrderAction(item.order_id, "KEEP"))
                 keep_quantity = same_total
@@ -153,9 +171,7 @@ class RebalancePlanner:
             residual = max(0, wanted_quantity - keep_quantity)
             profile = instrument_profiles[code]
             if residual:
-                is_full_liquidation = (
-                    wanted_side == "SELL" and residual == current and keep_quantity == 0
-                )
+                is_full_liquidation = full_liquidation_request and keep_quantity == 0
                 children = self._split_quantity(
                     residual,
                     side=wanted_side or "BUY",
@@ -163,7 +179,12 @@ class RebalancePlanner:
                     full_liquidation=is_full_liquidation,
                 )
                 if not children:
-                    skipped.append(SkippedTarget(code, DELTA_BELOW_MIN_ORDER))
+                    reason = (
+                        UNSPLITTABLE_QUANTITY
+                        if is_full_liquidation
+                        else DELTA_BELOW_MIN_ORDER
+                    )
+                    skipped.append(SkippedTarget(code, reason))
                 else:
                     for index, quantity in enumerate(children, start=1):
                         new_orders.append(
@@ -230,29 +251,9 @@ class RebalancePlanner:
         profile: InstrumentExecutionProfile,
         full_liquidation: bool,
     ) -> tuple[int, ...]:
-        minimum = profile.min_buy_quantity if side == "BUY" else profile.min_sell_quantity
-        step = profile.buy_step if side == "BUY" else profile.sell_step
-        maximum = profile.max_buy_quantity if side == "BUY" else profile.max_sell_quantity
-        if side == "SELL" and full_liquidation and quantity < minimum:
-            return (quantity,)
-        if quantity < minimum or (quantity - minimum) % step != 0:
-            return ()
-
-        children: list[int] = []
-        remaining = quantity
-        while remaining > maximum:
-            child = maximum - ((maximum - minimum) % step)
-            remainder = remaining - child
-            if remainder < minimum:
-                shift = minimum - remainder
-                shift += (-shift) % step
-                child -= shift
-                remainder += shift
-            if child < minimum or (child - minimum) % step or remainder < minimum:
-                return ()
-            children.append(child)
-            remaining = remainder
-        if remaining < minimum or (remaining - minimum) % step:
-            return ()
-        children.append(remaining)
-        return tuple(children)
+        return AshareInstrumentRuleResolver.split_quantity(
+            profile,
+            quantity=quantity,
+            side=side,
+            full_liquidation=full_liquidation,
+        )

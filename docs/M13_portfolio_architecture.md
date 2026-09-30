@@ -187,3 +187,28 @@ acquire the same run row with `SELECT FOR UPDATE`. Migration
 `0034_m13_3_1_closeout` adds plan input identity and its portfolio_v3 constraint. Public run
 lifecycle orchestration, performance/benchmark calculations, corporate-action settlement,
 PAPER/LIVE, and Broker integration remain deferred.
+
+## M13.3.3 persistence precision and quantity closeout
+
+Accounting retains full Decimal precision while replaying fills and valuing holdings. The final
+snapshot crosses one explicit persistence boundary before it is returned or written: cash,
+market value, total assets, PnL, trading cost, and close price use scale 4; moving-average cost,
+NAV, weight, and exposure use scale 8; adjustment factor uses scale 10. `ROUND_HALF_UP` matches
+PostgreSQL Numeric behavior. Persisted market value, unrealized PnL, total assets, and NAV are
+derived from the final quantized inputs so a database round trip cannot create a false conflict.
+
+Canonical account payloads quantize supplied fields and sort positions, but do not repair a
+caller-provided inconsistency. The integrity gate validates finite values, Position weight,
+unrealized PnL, valuation source, adjustment factor, NAV exposure, and the earlier count/value/NAV
+invariants. Position `realized_pnl` accumulates partial-sale results only while that holding exists;
+full liquidation removes it. Run-level realized performance is a later Performance concern.
+
+`AshareInstrumentRuleResolver` is the shared quantity authority for Rebalance and Execution.
+Rebalance may emit a complete odd-lot sale as one child when it is within the instrument maximum.
+Over-cap quantities are split only into children that remain legal regardless of execution order;
+otherwise planning records `UNSPLITTABLE_QUANTITY` and leaves projected holdings unchanged.
+
+Frozen Portfolio/Execution/Accounting business configuration remains executable after deployment
+YAML changes. Strategy, Opportunity, and algorithm source identity changes remain incompatible.
+A future M13.4 runner may route an interrupted Run to a compatible worker or explicitly create a
+new Run, but cannot silently substitute source identity or mutate the frozen snapshot.

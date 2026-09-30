@@ -17,6 +17,7 @@ from app.services.portfolio.accounting import (
     AccountingFill,
 )
 from app.services.portfolio.accounting_market_data import AccountingMarketDataProvider
+from app.services.portfolio.ledger_precision import normalize_snapshot_for_persistence
 from app.services.portfolio.run_guard import validate_current_backtest_contract
 
 
@@ -81,11 +82,14 @@ class AccountingApplicationService:
                 trade_date=trade_date,
                 held_codes=tuple(item.ts_code for item in post_fill.positions),
             )
-            snapshot = self.engine.mark_to_market(
-                account=post_fill,
-                market=market,
+            snapshot = normalize_snapshot_for_persistence(
+                self.engine.mark_to_market(
+                    account=post_fill,
+                    market=market,
+                    initial_cash=run.initial_cash,
+                    trading_cost=trading_cost,
+                ),
                 initial_cash=run.initial_cash,
-                trading_cost=trading_cost,
             )
             if sealed_plan is not None:
                 persisted = load_persisted_close_snapshot(

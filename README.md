@@ -1220,6 +1220,14 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Rebalance plans hash canonical target and authoritative close-account inputs. Missing Close, external DTO drift, persisted Close tampering, or changed same-day inputs fail with zero plan/order/cancellation mutations.
 - The internal daily protocol is START_OF_DAY, OPEN, CLOSE, AFTER_CLOSE. Public run lifecycle, Performance, corporate-action settlement, PAPER/LIVE, and Broker integration remain deferred.
 
+## Milestone 13.3.3 Accounting Precision and Rebalance Integrity (2026-09-30)
+
+- Identities remain `portfolio_v3`, `execution_v3`, `accounting_v3`, and `backtest_v6`; there is no new migration after `0034_m13_3_1_closeout`.
+- Accounting calculates with full Decimal precision and normalizes only the final ledger snapshot to the real PostgreSQL scales: money and prices use 4 decimals, average cost/NAV/weights/exposures use 8, and adjustment factors use 10. CLOSE return values and database reloads therefore compare identically.
+- Previous snapshots additionally validate position weights, NAV exposure, unrealized PnL, valuation source, adjustment factor, finite numeric values, and pure-cash boundaries. Position `realized_pnl` is current-holding-cycle cumulative, not run-level cumulative performance.
+- Rebalance delegates lot legality and child splitting to the Execution instrument rules. Complete `50/100/150/250` share liquidation is allowed when it is the whole holding and within the order cap; unsafe over-cap odd-lot decompositions return `UNSPLITTABLE_QUANTITY` without creating an illegal order.
+- Existing Runs continue to use frozen business configuration. Runtime Strategy/Opportunity/algo identity drift remains fail-closed; compatible-worker selection and interrupted-run recovery are deferred to M13.4.
+
 ## Milestone 13.2.1 Execution Integrity
 
 - `config/execution.yaml` 使用 `execution_v3`、`cn_a_share_2026_v2` 和固定 `LIMIT_AT_OPEN` 口径，包含价格 tick、禁止 Partial Fill 的成交策略，以及按日期生效的印花税和过户费配置。

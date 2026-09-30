@@ -22,14 +22,14 @@ from app.services.portfolio.accounting import (
     AccountingSourceError,
 )
 from app.services.portfolio.accounting_market_data import AccountingMarketDataProvider
+from app.services.portfolio.ledger_precision import (
+    adj_factor,
+    cost,
+    money,
+    quantize_snapshot_fields,
+    ratio,
+)
 from app.services.portfolio.run_guard import validate_current_backtest_contract
-
-MONEY_QUANTUM = Decimal("0.0001")
-NAV_QUANTUM = Decimal("0.00000001")
-
-
-def _money(value: Decimal) -> Decimal:
-    return Decimal(value).quantize(MONEY_QUANTUM)
 
 
 def _canonical_value(value: Any) -> Any:
@@ -46,11 +46,18 @@ def _canonical_value(value: Any) -> Any:
 
 
 def canonical_account_snapshot(snapshot: DailyPortfolioSnapshot) -> dict[str, Any]:
-    payload = _canonical_value(asdict(snapshot))
+    payload = _canonical_value(asdict(quantize_snapshot_fields(snapshot)))
     payload["positions"] = sorted(
         payload["positions"], key=lambda item: item["ts_code"]
     )
     return payload
+
+
+def _finite_decimal(value: Any) -> bool:
+    try:
+        return Decimal(value).is_finite()
+    except (TypeError, ValueError):
+        return False
 
 
 def validate_previous_snapshot_integrity(
@@ -59,6 +66,39 @@ def validate_previous_snapshot_integrity(
     initial_cash: Decimal,
 ) -> None:
     day = nav.trade_date
+    nav_values = {
+        "cash": nav.cash,
+        "market_value": nav.market_value,
+        "total_assets": nav.total_assets,
+        "nav": nav.nav,
+        "gross_exposure": nav.gross_exposure,
+        "net_exposure": nav.net_exposure,
+        "trading_cost": nav.trading_cost,
+    }
+    invalid_nav_values = [
+        name for name, value in nav_values.items() if not _finite_decimal(value)
+    ]
+    if invalid_nav_values:
+        raise AccountingSourceError(
+            ACCOUNTING_SOURCE_INCOMPLETE,
+            f"{day} invalid NAV numeric fields: {invalid_nav_values}",
+        )
+    if any(
+        Decimal(value) < 0
+        for value in (
+            nav.cash,
+            nav.market_value,
+            nav.total_assets,
+            nav.nav,
+            nav.gross_exposure,
+            nav.net_exposure,
+            nav.trading_cost,
+        )
+    ):
+        raise AccountingSourceError(
+            ACCOUNTING_SOURCE_INCOMPLETE,
+            f"{day} NAV fields must be non-negative",
+        )
     expected_count = nav.position_count
     actual_count = len(positions)
     if expected_count != actual_count:
@@ -68,6 +108,11 @@ def validate_previous_snapshot_integrity(
         )
 
     for row in positions:
+        if row.trade_date != day:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} position date mismatch: {row.trade_date}",
+            )
         if row.quantity <= 0:
             raise AccountingSourceError(
                 ACCOUNTING_SOURCE_INCOMPLETE,
@@ -79,23 +124,58 @@ def validate_previous_snapshot_integrity(
                 f"{day} {row.ts_code} invalid available quantity: "
                 f"available={row.available_quantity}, quantity={row.quantity}",
             )
+        if (
+            not _finite_decimal(row.close_price)
+            or Decimal(row.close_price) <= 0
+        ):
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} invalid close price: {row.close_price}",
+            )
+        numeric_fields = {
+            "avg_cost": row.avg_cost,
+            "market_value": row.market_value,
+            "weight": row.weight,
+            "unrealized_pnl": row.unrealized_pnl,
+            "realized_pnl": row.realized_pnl,
+            "adj_factor": row.adj_factor,
+        }
+        invalid_fields = [
+            name for name, value in numeric_fields.items() if not _finite_decimal(value)
+        ]
+        if invalid_fields:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} invalid numeric fields: {invalid_fields}",
+            )
         if row.market_value < 0:
             raise AccountingSourceError(
                 ACCOUNTING_SOURCE_INCOMPLETE,
                 f"{day} {row.ts_code} negative market value: {row.market_value}",
-            )
-        if row.close_price is None or row.close_price <= 0:
-            raise AccountingSourceError(
-                ACCOUNTING_SOURCE_INCOMPLETE,
-                f"{day} {row.ts_code} invalid close price: {row.close_price}",
             )
         if row.avg_cost < 0:
             raise AccountingSourceError(
                 ACCOUNTING_SOURCE_INCOMPLETE,
                 f"{day} {row.ts_code} negative average cost: {row.avg_cost}",
             )
-        expected_market_value = _money(row.close_price * row.quantity)
-        actual_market_value = _money(row.market_value)
+        if row.weight < 0 or row.weight > 1:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} invalid weight: {row.weight}",
+            )
+        if row.valuation_source not in {"RAW_CLOSE", "CARRY_FORWARD"}:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} invalid valuation source: "
+                f"{row.valuation_source}",
+            )
+        if row.adj_factor is None or adj_factor(row.adj_factor) <= 0:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} invalid adjustment factor: {row.adj_factor}",
+            )
+        expected_market_value = money(row.close_price * row.quantity)
+        actual_market_value = money(row.market_value)
         if actual_market_value != expected_market_value:
             raise AccountingSourceError(
                 ACCOUNTING_SOURCE_INCOMPLETE,
@@ -103,37 +183,75 @@ def validate_previous_snapshot_integrity(
                 f"stored={actual_market_value}, expected={expected_market_value}, "
                 f"delta={actual_market_value - expected_market_value}",
             )
+        expected_unrealized = money(
+            (row.close_price - cost(row.avg_cost)) * row.quantity
+        )
+        actual_unrealized = money(row.unrealized_pnl)
+        if actual_unrealized != expected_unrealized:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} unrealized PnL mismatch: "
+                f"stored={actual_unrealized}, expected={expected_unrealized}, "
+                f"delta={actual_unrealized - expected_unrealized}",
+            )
 
-    actual_market_value = _money(
+    actual_market_value = money(
         sum((Decimal(row.market_value) for row in positions), Decimal("0"))
     )
-    nav_market_value = _money(nav.market_value)
+    nav_market_value = money(nav.market_value)
     if actual_market_value != nav_market_value:
         raise AccountingSourceError(
             ACCOUNTING_SOURCE_INCOMPLETE,
             f"{day} position market value mismatch: rows={actual_market_value}, "
             f"nav={nav_market_value}, delta={actual_market_value - nav_market_value}",
         )
-    expected_total_assets = _money(nav.cash + nav.market_value)
-    total_assets = _money(nav.total_assets)
+    expected_total_assets = money(nav.cash + nav.market_value)
+    total_assets = money(nav.total_assets)
     if expected_total_assets != total_assets:
         raise AccountingSourceError(
             ACCOUNTING_SOURCE_INCOMPLETE,
             f"{day} total assets mismatch: cash_plus_market={expected_total_assets}, "
             f"stored={total_assets}, delta={expected_total_assets - total_assets}",
         )
+    expected_exposure = (
+        ratio(nav_market_value / total_assets) if total_assets else Decimal("0")
+    )
+    for name, value in (
+        ("gross_exposure", nav.gross_exposure),
+        ("net_exposure", nav.net_exposure),
+    ):
+        stored_exposure = ratio(value)
+        if stored_exposure != expected_exposure:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {name} mismatch: stored={stored_exposure}, "
+                f"expected={expected_exposure}",
+            )
+    for row in positions:
+        expected_weight = (
+            ratio(Decimal(row.market_value) / total_assets)
+            if total_assets
+            else Decimal("0")
+        )
+        stored_weight = ratio(row.weight)
+        if stored_weight != expected_weight:
+            raise AccountingSourceError(
+                ACCOUNTING_SOURCE_INCOMPLETE,
+                f"{day} {row.ts_code} weight mismatch: stored={stored_weight}, "
+                f"expected={expected_weight}",
+            )
     if initial_cash <= 0:
         raise AccountingSourceError(
             ACCOUNTING_SOURCE_INCOMPLETE,
             f"{day} initial cash must be positive: {initial_cash}",
         )
-    expected_nav = total_assets / Decimal(initial_cash)
-    nav_delta = abs(Decimal(nav.nav) - expected_nav)
-    if nav_delta > NAV_QUANTUM / 2:
+    expected_nav = ratio(total_assets / Decimal(initial_cash))
+    stored_nav = ratio(nav.nav)
+    if stored_nav != expected_nav:
         raise AccountingSourceError(
             ACCOUNTING_SOURCE_INCOMPLETE,
-            f"{day} NAV ratio mismatch: stored={nav.nav}, expected={expected_nav}, "
-            f"delta={nav_delta}",
+            f"{day} NAV ratio mismatch: stored={stored_nav}, expected={expected_nav}, "
+            f"delta={stored_nav - expected_nav}",
         )
 
 

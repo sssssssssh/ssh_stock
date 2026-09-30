@@ -97,3 +97,56 @@ class AshareInstrumentRuleResolver:
             return QuantityValidation(False, _INVALID_LOT)
         valid = (quantity - profile.min_sell_quantity) % profile.sell_step == 0
         return QuantityValidation(valid, None if valid else _INVALID_LOT)
+
+    @classmethod
+    def split_quantity(
+        cls,
+        profile: InstrumentExecutionProfile,
+        *,
+        quantity: int,
+        side: str,
+        full_liquidation: bool = False,
+    ) -> tuple[int, ...]:
+        """Split into children accepted by the same rules used at execution."""
+        if quantity <= 0 or side not in {"BUY", "SELL"}:
+            return ()
+        if side == "SELL" and full_liquidation:
+            whole_order = cls.validate_sell(profile, quantity, quantity)
+            if whole_order.valid:
+                return (quantity,)
+        minimum = (
+            profile.min_buy_quantity if side == "BUY" else profile.min_sell_quantity
+        )
+        step = profile.buy_step if side == "BUY" else profile.sell_step
+        maximum = (
+            profile.max_buy_quantity if side == "BUY" else profile.max_sell_quantity
+        )
+        if quantity < minimum or (quantity - minimum) % step != 0:
+            return ()
+
+        largest_child = maximum - ((maximum - minimum) % step)
+        if largest_child < minimum:
+            return ()
+        children: list[int] = []
+        remaining = quantity
+        while remaining > maximum:
+            child = largest_child
+            remainder = remaining - child
+            if remainder < minimum:
+                shift = minimum - remainder
+                shift += (-shift) % step
+                child -= shift
+                remainder += shift
+            if child < minimum or (child - minimum) % step or remainder < minimum:
+                return ()
+            children.append(child)
+            remaining = remainder
+        validation = (
+            cls.validate_buy(profile, remaining)
+            if side == "BUY"
+            else cls.validate_sell(profile, remaining, remaining + 1)
+        )
+        if not validation.valid:
+            return ()
+        children.append(remaining)
+        return tuple(children)

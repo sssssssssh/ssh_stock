@@ -81,6 +81,9 @@ def _nav(**changes):
         "market_value": Decimal("1000"),
         "total_assets": Decimal("10000"),
         "nav": Decimal("1"),
+        "gross_exposure": Decimal("0.1"),
+        "net_exposure": Decimal("0.1"),
+        "trading_cost": Decimal("0"),
     }
     values.update(changes)
     return SimpleNamespace(**values)
@@ -89,11 +92,17 @@ def _nav(**changes):
 def _position(**changes):
     values = {
         "ts_code": "000001.SZ",
+        "trade_date": DAY,
         "quantity": 100,
         "available_quantity": 50,
         "avg_cost": Decimal("9"),
         "close_price": Decimal("10"),
         "market_value": Decimal("1000"),
+        "weight": Decimal("0.1"),
+        "unrealized_pnl": Decimal("100"),
+        "realized_pnl": Decimal("0"),
+        "valuation_source": "RAW_CLOSE",
+        "adj_factor": Decimal("1"),
     }
     values.update(changes)
     return SimpleNamespace(**values)
@@ -153,6 +162,8 @@ def test_previous_snapshot_integrity_accepts_valid_position_and_empty_account() 
             cash=Decimal("10000"),
             market_value=Decimal("0"),
             total_assets=Decimal("10000"),
+            gross_exposure=Decimal("0"),
+            net_exposure=Decimal("0"),
         ),
         [],
         Decimal("10000"),
@@ -181,5 +192,37 @@ def test_previous_snapshot_integrity_fails_closed(nav, positions, message) -> No
 
 def test_previous_snapshot_nav_allows_only_numeric_scale_rounding() -> None:
     validate_previous_snapshot_integrity(
-        _nav(nav=Decimal("1.000000005")), [_position()], Decimal("10000")
+        _nav(nav=Decimal("1.000000004")), [_position()], Decimal("10000")
+    )
+
+
+@pytest.mark.parametrize(
+    ("nav_changes", "position_changes", "message"),
+    [
+        ({"gross_exposure": Decimal("0.2")}, {}, "gross_exposure mismatch"),
+        ({}, {"weight": Decimal("0.2")}, "weight mismatch"),
+        ({}, {"unrealized_pnl": Decimal("99")}, "unrealized PnL mismatch"),
+        ({}, {"valuation_source": None}, "valuation source"),
+        ({}, {"adj_factor": None}, "numeric fields"),
+        ({}, {"adj_factor": Decimal("-1")}, "adjustment factor"),
+        ({}, {"realized_pnl": Decimal("NaN")}, "numeric fields"),
+        ({"trading_cost": Decimal("-1")}, {}, "non-negative"),
+    ],
+)
+def test_previous_snapshot_integrity_rejects_extended_ledger_corruption(
+    nav_changes, position_changes, message
+) -> None:
+    with pytest.raises(AccountingSourceError, match=message):
+        validate_previous_snapshot_integrity(
+            _nav(**nav_changes),
+            [_position(**position_changes)],
+            Decimal("10000"),
+        )
+
+
+def test_previous_snapshot_accepts_suspended_carry_forward_valuation() -> None:
+    validate_previous_snapshot_integrity(
+        _nav(),
+        [_position(valuation_source="CARRY_FORWARD")],
+        Decimal("10000"),
     )
