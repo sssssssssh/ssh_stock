@@ -169,7 +169,11 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
     except Exception as exc:
         db.rollback()
         failed = db.get(JobRun, job_id)
-        if failed is not None and failed.status not in {"SUCCESS", "FAILED", "CANCELLED"}:
+        if (
+            failed is not None
+            and job.job_type != BACKTEST_JOB_TYPE
+            and failed.status not in {"SUCCESS", "FAILED", "CANCELLED"}
+        ):
             update_job(
                 db,
                 failed,

@@ -58,6 +58,7 @@ PHASES = (
 )
 _ACTIVE_JOB_STATUSES = {"QUEUED", "RUNNING"}
 _TERMINAL_RUN_STATUSES = {"SUCCESS", "FAILED", "CANCELLED"}
+_AFTER_CLOSE_RESULT_IDENTITY_VERSION = "after_close_result_v2"
 
 
 class BacktestConflictError(RuntimeError):
@@ -67,6 +68,10 @@ class BacktestConflictError(RuntimeError):
 
 
 class BacktestOwnershipError(RuntimeError):
+    pass
+
+
+class _BacktestCancellationRequested(RuntimeError):
     pass
 
 
@@ -87,6 +92,14 @@ class BacktestProgress:
     progress_pct: float
     error_code: str | None
     error_message: str | None
+
+
+@dataclass(frozen=True)
+class BacktestExecutionLease:
+    run_id: uuid.UUID
+    job_id: uuid.UUID
+    worker_id: str
+    ownership_version: int
 
 
 class BacktestApplicationService:
@@ -137,10 +150,34 @@ class BacktestApplicationService:
         return self._queue(run, resume=True)
 
     def cancel(self, run_id: uuid.UUID) -> tuple[PortfolioBacktestRun, JobRun | None]:
-        run = self._locked_run(run_id)
-        job = self.db.get(JobRun, run.job_id) if run.job_id else None
+        # Lock order is JobRun -> PortfolioBacktestRun everywhere that needs both.
+        # The initial scalar read only discovers the current job pointer; both rows
+        # are revalidated after the locks have been acquired.
+        job_id = self.db.scalar(
+            select(PortfolioBacktestRun.job_id).where(
+                PortfolioBacktestRun.id == run_id
+            )
+        )
+        if job_id is None:
+            run = self._locked_run(run_id)
+            job = None
+        else:
+            job = self.db.execute(
+                select(JobRun)
+                .where(JobRun.id == job_id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
+            ).scalar_one_or_none()
+            run = self._locked_run(run_id)
+            if run.job_id != job_id:
+                self.db.rollback()
+                raise BacktestConflictError(
+                    "backtest execution changed while cancellation was requested",
+                    job_id=run.job_id,
+                )
         now = datetime.now(UTC)
         if run.status == "CANCELLED":
+            self.db.commit()
             return run, job
         if job is None or job.status not in _ACTIVE_JOB_STATUSES:
             raise BacktestConflictError(
@@ -292,7 +329,7 @@ class BacktestRunner:
 
     def run_job(self, job_id: uuid.UUID) -> None:
         try:
-            run, job, worker_id = self._claim_run(job_id)
+            run, job, lease = self._claim_run(job_id)
         except Exception as exc:
             self._mark_claim_failed(job_id, exc)
             raise
@@ -304,17 +341,26 @@ class BacktestRunner:
             for trade_date in self._dates:
                 for phase in PHASES:
                     if self._cancel_requested(job_id):
-                        self._finish_cancelled(run_id, job_id, worker_id)
+                        self._finish_cancelled(lease)
                         return
-                    self._run_phase(run_id, job_id, worker_id, trade_date, phase)
-            self._finish_success(run_id, job_id, worker_id)
+                    try:
+                        self._run_phase(lease, trade_date, phase)
+                    except _BacktestCancellationRequested:
+                        self._finish_cancelled(lease)
+                        return
+            self._finish_success(lease)
         except Exception as exc:
-            self._mark_run_failed(run_id, job_id, worker_id, exc)
+            self._mark_run_failed(lease, exc)
             raise
 
     def _mark_claim_failed(self, job_id: uuid.UUID, exc: Exception) -> None:
         self.db.rollback()
-        job = self.db.get(JobRun, job_id)
+        job = self.db.execute(
+            select(JobRun)
+            .where(JobRun.id == job_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one_or_none()
         if job is None:
             return
         if (
@@ -328,23 +374,31 @@ class BacktestRunner:
             run_id = uuid.UUID(str(raw_run_id))
         except (TypeError, ValueError):
             run_id = None
+        run = (
+            self.repository.get_run_for_update(run_id)
+            if run_id is not None
+            else None
+        )
+        # A competing runner may already own the current generation. A failed
+        # duplicate claim must never fail or detach that execution.
+        if run is not None and run.status == "RUNNING":
+            self.db.rollback()
+            return
         now = datetime.now(UTC)
         job.status = "FAILED"
         job.finished_at = now
         job.error_message = str(exc)[:2048]
         job.step = "backtest ownership or compatibility check failed"
-        if run_id is not None:
-            run = self.repository.get_run_for_update(run_id)
-            if run is not None and run.job_id == job.id:
-                run.status = "FAILED"
-                run.finished_at = now
-                run.owner_worker_id = None
-                run.error_message = str(exc)[:2048]
-                run.result_summary = {
-                    **dict(run.result_summary or {}),
-                    "stage": "failed",
-                    "error_code": _error_code(exc),
-                }
+        if run is not None and run.job_id == job.id:
+            run.status = "FAILED"
+            run.finished_at = now
+            run.owner_worker_id = None
+            run.error_message = str(exc)[:2048]
+            run.result_summary = {
+                **dict(run.result_summary or {}),
+                "stage": "failed",
+                "error_code": _error_code(exc),
+            }
         self.db.commit()
 
     def audit_checkpoint_sequence(
@@ -387,24 +441,16 @@ class BacktestRunner:
                 if validate_sources:
                     self._validate_completed_checkpoint(checkpoint)
                 elif phase != "START_OF_DAY":
-                    current_result = self._result_identity(
-                        checkpoint.run_id,
-                        checkpoint.trade_date,
-                        checkpoint.phase,
-                    )
-                    if current_result.get("hash") != checkpoint.result_identity.get(
-                        "hash"
-                    ):
-                        raise BacktestRecoveryRejectedError(
-                            "CHECKPOINT_EVIDENCE_MISMATCH",
-                            "persisted business evidence differs from checkpoint",
-                        )
+                    self._validate_checkpoint_result(checkpoint)
 
     def _claim_run(
         self, job_id: uuid.UUID
-    ) -> tuple[PortfolioBacktestRun, JobRun, str]:
+    ) -> tuple[PortfolioBacktestRun, JobRun, BacktestExecutionLease]:
         job = self.db.execute(
-            select(JobRun).where(JobRun.id == job_id).with_for_update()
+            select(JobRun)
+            .where(JobRun.id == job_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
         ).scalar_one_or_none()
         if job is None or job.job_type != BACKTEST_JOB_TYPE:
             raise BacktestOwnershipError("portfolio backtest job not found")
@@ -418,10 +464,7 @@ class BacktestRunner:
         run = self.repository.get_run_for_update(run_id)
         if run is None or run.job_id != job.id:
             raise BacktestOwnershipError("job is not the current execution for this run")
-        if run.status == "RUNNING":
-            if run.owner_worker_id != job.worker_id:
-                raise BacktestOwnershipError("run is owned by another worker")
-        elif run.status in {"CREATED", "FAILED", "CANCELLED"}:
+        if run.status in {"CREATED", "FAILED", "CANCELLED"}:
             run.status = "RUNNING"
             run.owner_worker_id = job.worker_id
             run.ownership_version += 1
@@ -432,28 +475,40 @@ class BacktestRunner:
             raise BacktestOwnershipError(f"run cannot start from {run.status}")
         validate_resumable_backtest_contract(run, settings=self.settings)
         job.step = "backtest ownership acquired"
+        job.job_metadata = {
+            **dict(job.job_metadata or {}),
+            "ownership_version": run.ownership_version,
+        }
         self.db.add_all([run, job])
         self.db.commit()
-        return run, job, job.worker_id
+        lease = BacktestExecutionLease(
+            run_id=run.id,
+            job_id=job.id,
+            worker_id=job.worker_id,
+            ownership_version=run.ownership_version,
+        )
+        return run, job, lease
 
     def _run_phase(
         self,
-        run_id: uuid.UUID,
-        job_id: uuid.UUID,
-        worker_id: str,
+        lease: BacktestExecutionLease,
         trade_date: date,
         phase: str,
     ) -> None:
+        run_id = lease.run_id
+        job_id = lease.job_id
+        worker_id = lease.worker_id
+        self._assert_ownership(lease, allow_cancel=False)
         existing = self.repository.get_checkpoint(run_id, trade_date, phase)
         if existing is not None and existing.phase_status == "COMPLETED":
             self._validate_completed_checkpoint(existing)
+            self.db.commit()
             return
         if self._phase_has_business_evidence(run_id, trade_date, phase):
             raise BacktestRecoveryRejectedError(
                 "UNSEALED_PHASE_EVIDENCE",
                 f"{phase} has business evidence without a completed checkpoint",
             )
-        self._assert_ownership(run_id, job_id, worker_id)
         input_identity = self._input_identity(run_id, trade_date, phase, completed=False)
         checkpoint = self.repository.get_checkpoint_for_update(
             run_id, trade_date, phase
@@ -490,10 +545,13 @@ class BacktestRunner:
         self.db.commit()
 
         try:
+            # Begin the business transaction with the canonical Job -> Run locks.
+            # Nested services may re-lock Run, but they never invert the order.
+            self._assert_ownership(lease, allow_cancel=True)
             self._fault(phase, "before_business")
             self._execute_phase(run_id, trade_date, phase)
             self._fault(phase, "after_business_before_checkpoint")
-            self._assert_ownership(run_id, job_id, worker_id)
+            self._assert_ownership(lease, allow_cancel=True)
             checkpoint = self.repository.get_checkpoint_for_update(
                 run_id, trade_date, phase
             )
@@ -516,7 +574,7 @@ class BacktestRunner:
         except Exception as exc:
             self.db.rollback()
             self._mark_checkpoint_failed(
-                run_id, job_id, worker_id, trade_date, phase, exc
+                lease, trade_date, phase, exc
             )
             raise
 
@@ -683,7 +741,12 @@ class BacktestRunner:
         return {"hash": config_hash(evidence), "evidence": evidence}
 
     def _result_identity(
-        self, run_id: uuid.UUID, trade_date: date, phase: str
+        self,
+        run_id: uuid.UUID,
+        trade_date: date,
+        phase: str,
+        *,
+        legacy_after_close: bool = False,
     ) -> dict[str, Any]:
         if phase == "START_OF_DAY":
             payload = self._input_identity(
@@ -740,6 +803,14 @@ class BacktestRunner:
                     "plan": _model_payload(plan),
                     "orders": [_order_payload(item) for item in orders],
                 }
+                if not legacy_after_close:
+                    payload = {
+                        "identity_version": _AFTER_CLOSE_RESULT_IDENTITY_VERSION,
+                        **payload,
+                        "cancelled_prior_orders": self._after_close_cancel_evidence(
+                            run_id, plan
+                        ),
+                    }
         elif phase == "DAY_COMPLETED":
             payload = {
                 item: self._completed_result_hash(run_id, trade_date, item)
@@ -764,15 +835,120 @@ class BacktestRunner:
                 "HISTORICAL_INPUT_DRIFT",
                 f"input identity changed for {checkpoint.trade_date} {checkpoint.phase}",
             )
-        current_result = self._result_identity(
-            checkpoint.run_id, checkpoint.trade_date, checkpoint.phase
+        self._validate_checkpoint_result(checkpoint)
+
+    def _validate_checkpoint_result(
+        self, checkpoint: PortfolioBacktestCheckpoint
+    ) -> None:
+        saved_evidence = checkpoint.result_identity.get("evidence")
+        legacy_after_close = (
+            checkpoint.phase == "AFTER_CLOSE"
+            and isinstance(saved_evidence, dict)
+            and "plan" in saved_evidence
+            and saved_evidence.get("identity_version") is None
         )
+        if legacy_after_close:
+            plan = self.repository.get_rebalance_plan(
+                checkpoint.run_id, checkpoint.trade_date
+            )
+            if plan is not None and self._cancel_actions(plan):
+                raise BacktestRecoveryRejectedError(
+                    "LEGACY_AFTER_CLOSE_CANCEL_EVIDENCE_UNVERIFIABLE",
+                    "legacy AFTER_CLOSE checkpoint omitted prior-order cancellation evidence",
+                )
+            current_result = self._result_identity(
+                checkpoint.run_id,
+                checkpoint.trade_date,
+                checkpoint.phase,
+                legacy_after_close=True,
+            )
+        else:
+            current_result = self._result_identity(
+                checkpoint.run_id, checkpoint.trade_date, checkpoint.phase
+            )
         if current_result.get("hash") != checkpoint.result_identity.get("hash"):
             raise BacktestRecoveryRejectedError(
                 "CHECKPOINT_EVIDENCE_MISMATCH",
                 f"business evidence changed for {checkpoint.trade_date} "
                 f"{checkpoint.phase}",
             )
+
+    def _cancel_actions(self, plan: Any) -> list[dict[str, Any]]:
+        result = dict(plan.plan_snapshot or {}).get("result", {})
+        actions = result.get("pending_actions", []) if isinstance(result, dict) else []
+        return sorted(
+            [
+                item
+                for item in actions
+                if isinstance(item, dict) and item.get("action") == "CANCEL"
+            ],
+            key=lambda item: str(item.get("order_id", "")),
+        )
+
+    def _after_close_cancel_evidence(
+        self, run_id: uuid.UUID, plan: Any
+    ) -> list[dict[str, Any]]:
+        pre_pending = dict(plan.plan_snapshot or {}).get("pre_plan_pending", [])
+        pre_ids = {
+            str(item.get("order_id"))
+            for item in pre_pending
+            if isinstance(item, dict) and item.get("order_id") is not None
+        }
+        actions = self._cancel_actions(plan)
+        action_by_id: dict[uuid.UUID, dict[str, Any]] = {}
+        for action in actions:
+            raw_order_id = str(action.get("order_id", ""))
+            try:
+                order_id = uuid.UUID(raw_order_id)
+            except ValueError as exc:
+                raise BacktestRecoveryRejectedError(
+                    "AFTER_CLOSE_CANCEL_EVIDENCE_INVALID",
+                    f"invalid cancelled prior order id: {raw_order_id}",
+                ) from exc
+            if raw_order_id not in pre_ids or order_id in action_by_id:
+                raise BacktestRecoveryRejectedError(
+                    "AFTER_CLOSE_CANCEL_EVIDENCE_INVALID",
+                    "cancel action must identify one unique pre-plan pending order",
+                )
+            action_by_id[order_id] = action
+        if not action_by_id:
+            return []
+        orders = {
+            row.id: row
+            for row in self.db.execute(
+                select(PortfolioOrder)
+                .where(PortfolioOrder.id.in_(action_by_id))
+                .execution_options(populate_existing=True)
+            ).scalars()
+        }
+        evidence: list[dict[str, Any]] = []
+        for order_id, action in sorted(
+            action_by_id.items(), key=lambda item: str(item[0])
+        ):
+            order = orders.get(order_id)
+            expected_reason = str(
+                action.get("reason_code") or "SUPERSEDED_BY_REBALANCE"
+            )
+            if (
+                order is None
+                or order.run_id != run_id
+                or order.status != "CANCELLED"
+                or order.reason_code != expected_reason
+            ):
+                raise BacktestRecoveryRejectedError(
+                    "AFTER_CLOSE_CANCEL_EVIDENCE_MISMATCH",
+                    f"cancelled prior order evidence changed: {order_id}",
+                )
+            evidence.append(
+                {
+                    "order_id": str(order.id),
+                    "run_id": str(order.run_id),
+                    "decision": "CANCEL",
+                    "status": order.status,
+                    "reason_code": order.reason_code,
+                }
+            )
+        return evidence
 
     def _target_for_day(
         self, run_id: uuid.UUID, trade_date: date
@@ -938,35 +1114,48 @@ class BacktestRunner:
         return None
 
     def _assert_ownership(
-        self, run_id: uuid.UUID, job_id: uuid.UUID, worker_id: str
-    ) -> None:
-        run = self.repository.get_run_for_update(run_id)
+        self, lease: BacktestExecutionLease, *, allow_cancel: bool
+    ) -> tuple[JobRun, PortfolioBacktestRun]:
         job = self.db.execute(
-            select(JobRun).where(JobRun.id == job_id).with_for_update()
+            select(JobRun)
+            .where(JobRun.id == lease.job_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
         ).scalar_one_or_none()
+        run = self.repository.get_run_for_update(lease.run_id)
+        metadata_version = (
+            dict(job.job_metadata or {}).get("ownership_version")
+            if job is not None
+            else None
+        )
         if (
             run is None
             or job is None
             or run.status != "RUNNING"
-            or run.job_id != job_id
-            or run.owner_worker_id != worker_id
+            or run.job_id != lease.job_id
+            or run.owner_worker_id != lease.worker_id
+            or run.ownership_version != lease.ownership_version
             or job.status != "RUNNING"
-            or job.worker_id != worker_id
+            or job.worker_id != lease.worker_id
+            or metadata_version != lease.ownership_version
         ):
             raise BacktestOwnershipError("backtest execution ownership was lost")
+        if job.cancel_requested and not allow_cancel:
+            raise _BacktestCancellationRequested(
+                "backtest cancellation won at the phase boundary"
+            )
+        return job, run
 
     def _cancel_requested(self, job_id: uuid.UUID) -> bool:
-        job = self.db.get(JobRun, job_id)
-        return bool(job is not None and job.cancel_requested)
+        # Scalar-column reads bypass the identity map used by expire_on_commit=False.
+        value = self.db.scalar(
+            select(JobRun.cancel_requested).where(JobRun.id == job_id)
+        )
+        return bool(value)
 
-    def _finish_cancelled(
-        self, run_id: uuid.UUID, job_id: uuid.UUID, worker_id: str
-    ) -> None:
-        self._assert_ownership(run_id, job_id, worker_id)
+    def _finish_cancelled(self, lease: BacktestExecutionLease) -> None:
+        job, run = self._assert_ownership(lease, allow_cancel=True)
         now = datetime.now(UTC)
-        run = self.repository.get_run(run_id)
-        job = self.db.get(JobRun, job_id)
-        assert run is not None and job is not None
         run.status = "CANCELLED"
         run.finished_at = now
         run.owner_worker_id = None
@@ -975,15 +1164,22 @@ class BacktestRunner:
         job.step = "cancelled at safe phase boundary"
         self.db.commit()
 
-    def _finish_success(
-        self, run_id: uuid.UUID, job_id: uuid.UUID, worker_id: str
-    ) -> None:
-        self._assert_ownership(run_id, job_id, worker_id)
+    def _finish_success(self, lease: BacktestExecutionLease) -> None:
+        job, run = self._assert_ownership(lease, allow_cancel=True)
+        # The Job row lock is the terminal-state linearization point. A cancel
+        # committed before this lock wins; a later cancel observes SUCCESS.
+        if job.cancel_requested:
+            now = datetime.now(UTC)
+            run.status = "CANCELLED"
+            run.finished_at = now
+            run.owner_worker_id = None
+            job.status = "CANCELLED"
+            job.finished_at = now
+            job.step = "cancelled at final safe phase boundary"
+            self.db.commit()
+            return
         now = datetime.now(UTC)
-        run = self.repository.get_run(run_id)
-        job = self.db.get(JobRun, job_id)
-        assert run is not None and job is not None
-        nav = self.repository.list_nav(run_id)
+        nav = self.repository.list_nav(lease.run_id)
         run.status = "SUCCESS"
         run.finished_at = now
         run.owner_worker_id = None
@@ -1009,29 +1205,18 @@ class BacktestRunner:
 
     def _mark_checkpoint_failed(
         self,
-        run_id: uuid.UUID,
-        job_id: uuid.UUID,
-        worker_id: str,
+        lease: BacktestExecutionLease,
         trade_date: date,
         phase: str,
         exc: Exception,
     ) -> None:
-        run = self.repository.get_run_for_update(run_id)
-        job = self.db.execute(
-            select(JobRun).where(JobRun.id == job_id).with_for_update()
-        ).scalar_one_or_none()
-        if (
-            run is None
-            or job is None
-            or run.job_id != job_id
-            or run.owner_worker_id != worker_id
-            or job.status != "RUNNING"
-            or job.worker_id != worker_id
-        ):
+        try:
+            job, _ = self._assert_ownership(lease, allow_cancel=True)
+        except BacktestOwnershipError:
             self.db.rollback()
             return
         checkpoint = self.repository.get_checkpoint_for_update(
-            run_id, trade_date, phase
+            lease.run_id, trade_date, phase
         )
         if checkpoint is not None and checkpoint.phase_status != "COMPLETED":
             checkpoint.phase_status = "FAILED"
@@ -1043,23 +1228,13 @@ class BacktestRunner:
 
     def _mark_run_failed(
         self,
-        run_id: uuid.UUID,
-        job_id: uuid.UUID,
-        worker_id: str,
+        lease: BacktestExecutionLease,
         exc: Exception,
     ) -> None:
         self.db.rollback()
-        run = self.repository.get_run_for_update(run_id)
-        job = self.db.get(JobRun, job_id)
-        if (
-            run is None
-            or job is None
-            or run.job_id != job_id
-            or run.status != "RUNNING"
-            or run.owner_worker_id != worker_id
-            or job.status != "RUNNING"
-            or job.worker_id != worker_id
-        ):
+        try:
+            job, run = self._assert_ownership(lease, allow_cancel=True)
+        except BacktestOwnershipError:
             self.db.rollback()
             return
         now = datetime.now(UTC)
@@ -1110,49 +1285,84 @@ def recover_stale_backtest_jobs(
     *,
     timeout_minutes: float,
     now: datetime | None = None,
+    before_lock_hook: Callable[[uuid.UUID], None] | None = None,
 ) -> int:
     """Fail stale ownership for review; never auto-replay a backtest phase."""
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
         current = current.replace(tzinfo=UTC)
     cutoff = current - timedelta(minutes=timeout_minutes)
-    jobs = list(
+    candidate_ids = list(
         db.execute(
-            select(JobRun).where(
+            select(JobRun.id)
+            .where(
                 JobRun.job_type == BACKTEST_JOB_TYPE,
                 JobRun.status == "RUNNING",
                 JobRun.heartbeat_at < cutoff,
             )
+            .order_by(JobRun.id)
         )
         .scalars()
         .all()
     )
     recovered = 0
-    for job in jobs:
+    for job_id in candidate_ids:
+        if before_lock_hook is not None:
+            before_lock_hook(job_id)
+        # Candidate discovery is deliberately unlocked. The actual decision is
+        # made only after taking the canonical JobRun -> Run locks and refreshing
+        # both objects, so a concurrent heartbeat can invalidate the candidate.
+        job = db.execute(
+            select(JobRun)
+            .where(JobRun.id == job_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if (
+            job is None
+            or job.job_type != BACKTEST_JOB_TYPE
+            or job.status != "RUNNING"
+            or job.heartbeat_at is None
+            or job.heartbeat_at >= cutoff
+        ):
+            continue
         raw_run_id = dict(job.job_metadata or {}).get("portfolio_run_id")
         try:
             run_id = uuid.UUID(str(raw_run_id))
         except (TypeError, ValueError):
-            run_id = None
+            continue
+        run = db.execute(
+            select(PortfolioBacktestRun)
+            .where(PortfolioBacktestRun.id == run_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one_or_none()
+        metadata_version = dict(job.job_metadata or {}).get(
+            "ownership_version", run.ownership_version if run is not None else None
+        )
+        if (
+            run is None
+            or run.job_id != job.id
+            or run.status != "RUNNING"
+            or run.owner_worker_id != job.worker_id
+            or run.ownership_version != metadata_version
+        ):
+            continue
         job.status = "FAILED"
         job.finished_at = current
         job.error_message = "WORKER_HEARTBEAT_TIMEOUT: explicit resume required"
         job.step = "worker heartbeat stale; awaiting review"
-        if run_id is not None:
-            run = db.get(PortfolioBacktestRun, run_id)
-            if run is not None and run.job_id == job.id and run.status == "RUNNING":
-                run.status = "FAILED"
-                run.finished_at = current
-                run.owner_worker_id = None
-                run.error_message = job.error_message
-                run.result_summary = {
-                    **dict(run.result_summary or {}),
-                    "stage": "failed",
-                    "error_code": "WORKER_HEARTBEAT_TIMEOUT",
-                }
+        run.status = "FAILED"
+        run.finished_at = current
+        run.owner_worker_id = None
+        run.error_message = job.error_message
+        run.result_summary = {
+            **dict(run.result_summary or {}),
+            "stage": "failed",
+            "error_code": "WORKER_HEARTBEAT_TIMEOUT",
+        }
         recovered += 1
-    if recovered:
-        db.commit()
+    db.commit()
     return recovered
 
 

@@ -324,8 +324,11 @@ def backtest_orders(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    attempts = service.repository.list_order_attempts(run_id)
-    fills = service.repository.list_fills(run_id)
+    page_order_ids = [row.id for row in rows]
+    attempts = service.repository.list_order_attempts_for_orders(
+        run_id, page_order_ids
+    )
+    fills = service.repository.list_fills_for_orders(run_id, page_order_ids)
     attempt_by_order: dict[uuid.UUID, list[dict[str, Any]]] = {}
     fill_by_order: dict[uuid.UUID, list[dict[str, Any]]] = {}
     for item in attempts:

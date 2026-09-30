@@ -47,6 +47,7 @@ class PortfolioRepository:
         return self.db.execute(
             select(PortfolioBacktestRun)
             .where(PortfolioBacktestRun.id == run_id)
+            .execution_options(populate_existing=True)
             .with_for_update()
         ).scalar_one_or_none()
 
@@ -214,6 +215,29 @@ class PortfolioRepository:
             .all()
         )
 
+    def list_order_attempts_for_orders(
+        self, run_id: uuid.UUID, order_ids: Sequence[uuid.UUID]
+    ) -> list[PortfolioOrderAttempt]:
+        if not order_ids:
+            return []
+        return list(
+            self.db.execute(
+                select(PortfolioOrderAttempt)
+                .where(
+                    PortfolioOrderAttempt.run_id == run_id,
+                    PortfolioOrderAttempt.order_id.in_(order_ids),
+                )
+                .order_by(
+                    PortfolioOrderAttempt.order_id,
+                    PortfolioOrderAttempt.attempt_trade_date,
+                    PortfolioOrderAttempt.attempt_no,
+                    PortfolioOrderAttempt.id,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
     def insert_fills(self, run_id: uuid.UUID, rows: Sequence[PortfolioFill]) -> None:
         self._assert_run_id(run_id, rows)
         for row in rows:
@@ -232,6 +256,28 @@ class PortfolioRepository:
                 select(PortfolioFill)
                 .where(PortfolioFill.run_id == run_id)
                 .order_by(PortfolioFill.trade_date, PortfolioFill.ts_code, PortfolioFill.id)
+            )
+            .scalars()
+            .all()
+        )
+
+    def list_fills_for_orders(
+        self, run_id: uuid.UUID, order_ids: Sequence[uuid.UUID]
+    ) -> list[PortfolioFill]:
+        if not order_ids:
+            return []
+        return list(
+            self.db.execute(
+                select(PortfolioFill)
+                .where(
+                    PortfolioFill.run_id == run_id,
+                    PortfolioFill.order_id.in_(order_ids),
+                )
+                .order_by(
+                    PortfolioFill.order_id,
+                    PortfolioFill.trade_date,
+                    PortfolioFill.id,
+                )
             )
             .scalars()
             .all()
@@ -408,7 +454,7 @@ class PortfolioRepository:
             select(PortfolioRebalancePlan).where(
                 PortfolioRebalancePlan.run_id == run_id,
                 PortfolioRebalancePlan.signal_trade_date == signal_trade_date,
-            )
+            ).execution_options(populate_existing=True)
         ).scalar_one_or_none()
 
     def insert_rebalance_plan(
@@ -427,7 +473,7 @@ class PortfolioRepository:
                 PortfolioBacktestCheckpoint.run_id == run_id,
                 PortfolioBacktestCheckpoint.trade_date == trade_date,
                 PortfolioBacktestCheckpoint.phase == phase,
-            )
+            ).execution_options(populate_existing=True)
         ).scalar_one_or_none()
 
     def get_checkpoint_for_update(
@@ -440,6 +486,7 @@ class PortfolioRepository:
                 PortfolioBacktestCheckpoint.trade_date == trade_date,
                 PortfolioBacktestCheckpoint.phase == phase,
             )
+            .execution_options(populate_existing=True)
             .with_for_update()
         ).scalar_one_or_none()
 

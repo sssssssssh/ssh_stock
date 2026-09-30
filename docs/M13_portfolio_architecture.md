@@ -1,8 +1,12 @@
 # M13 Portfolio / Backtest Architecture
 
+Current production identity is `portfolio_v3 / execution_v3 / accounting_v3 / backtest_v7`.
+Sections describing M13.1 are retained as historical design context; they are not the current
+runtime contract.
+
 ## Scope
 
-M13.1 establishes the portfolio backtest foundation without claiming a production-grade
+Historical M13.1 established the portfolio backtest foundation without claiming a production-grade
 execution engine. The dependency direction is fixed:
 
 `Data / Analysis -> Strategy / Opportunity -> Portfolio -> Execution -> Accounting -> Backtest -> Agent`
@@ -18,9 +22,9 @@ or bypass the identity and authorization boundaries.
   `Numeric` in PostgreSQL.
 - A backtest definition freezes the complete Strategy, Opportunity, Portfolio and Execution
   configuration snapshots and their hashes.
-- The identity tuple contains the analysis algorithm version, Strategy hash,
-  `opportunity_v1` plus its config hash, `portfolio_v1` plus its config hash,
-  `execution_v3` plus its config hash, and `backtest_v3`.
+- The historical M13.1 identity tuple used `portfolio_v1` and `backtest_v3`. The current
+  executable contract is `portfolio_v3`, `execution_v3`, `accounting_v3`, and `backtest_v7`;
+  older identities remain immutable history and are not silently upgraded.
 - Existing `execution_v1/v2` definitions remain immutable history and are rejected by the
   execution application service. Newly created definitions freeze `execution_v3`, ruleset
   `cn_a_share_2026_v2` and synthetic order style `LIMIT_AT_OPEN`.
@@ -251,3 +255,44 @@ Authenticated lifecycle/result APIs are:
 
 The source fingerprints detect drift but are not a complete immutable market-data snapshot.
 Performance attribution, PAPER/LIVE, Broker integration, and Agent runtime remain out of scope.
+
+### Concurrency, cancellation, and stale recovery
+
+Every execution claim produces a lease containing `job_id`, `worker_id`, and the incremented
+Run `ownership_version`. Phase-start, phase-result/checkpoint commit, cancellation, terminal
+transition, failure handling, and stale recovery lock rows in one order: `JobRun` first, then
+`PortfolioBacktestRun`. Locked ORM reads use `populate_existing`; every phase commit verifies
+the fresh Job/Run relationship and the exact ownership generation. A former worker therefore
+rolls back its business transaction and cannot fail, cancel, or complete a replacement job.
+
+Cancellation is linearized by the Job row lock. A queued Job is cancelled immediately. A running
+Job records the request and the runner observes it from a scalar database read at the next safe
+phase boundary. If a phase already owns the locks, that phase's business data and COMPLETED
+checkpoint commit together, and no following phase starts. At the final boundary, a committed
+cancel request wins over SUCCESS; once SUCCESS holds and commits the Job lock, a later request
+cannot rewrite either terminal state.
+
+Stale recovery first discovers candidates without locks, then locks Job followed by Run and
+revalidates job type, status, heartbeat, current Run pointer, worker, and ownership generation.
+Only a still-stale current lease is marked FAILED. Recovery never replays phases; continuation is
+always an explicit resume that creates and claims a new generation.
+
+AFTER_CLOSE result identity version `after_close_result_v2` seals CANCEL decisions for prior
+pending orders (order ID, Run ownership, final CANCELLED status, and reason). Later OPEN/status
+changes to new orders and KEEP decisions remain legitimate and are not hashed as cancellation
+evidence. A legacy `backtest_v7` checkpoint with no cancel decisions remains verifiable; a legacy
+checkpoint that omitted actual cancellation evidence is rejected explicitly rather than rewritten.
+
+### Downgrade operations rule
+
+Migration `0035_m13_4_backtest_runner` is deployed history and must not be edited. Before any
+downgrade below it, operations must run:
+
+```bash
+python scripts/check_m13_4_downgrade.py
+```
+
+If checkpoint rows exist, the command refuses the downgrade. Export and retain the audit history,
+obtain explicit data-loss approval, and rerun with `--allow-checkpoint-data-loss` before invoking
+Alembic. Direct production downgrade without this preflight is prohibited because 0035 downgrade
+drops the checkpoint table.
