@@ -64,6 +64,11 @@ _PRE_OWNERSHIP_TIMEOUT_MESSAGE = (
     "worker heartbeat expired after JobRun claim but before backtest ownership "
     "lease was established; explicit resume required"
 )
+_GENERATION_QUEUED = "QUEUED"
+_GENERATION_RUNNING_PRE_LEASE = "RUNNING_PRE_LEASE"
+_GENERATION_RUNNING_LEASED = "RUNNING_LEASED"
+_GENERATION_TERMINAL = "TERMINAL"
+_GENERATION_INVALID_OR_STALE = "INVALID_OR_STALE"
 
 
 class BacktestConflictError(RuntimeError):
@@ -181,25 +186,43 @@ class BacktestApplicationService:
                     job_id=run.job_id,
                 )
         now = datetime.now(UTC)
-        if run.status == "CANCELLED":
-            self.db.commit()
-            return run, job
-        if job is None or job.status not in _ACTIVE_JOB_STATUSES:
-            raise BacktestConflictError(
-                f"backtest has no cancellable job in status {run.status}",
-                job_id=run.job_id,
-            )
-        job.cancel_requested = True
-        if job.status == "QUEUED":
+        generation_state = (
+            _execution_generation_state(job, run)
+            if job is not None
+            else _GENERATION_TERMINAL
+        )
+        if generation_state in {
+            _GENERATION_QUEUED,
+            _GENERATION_RUNNING_PRE_LEASE,
+        }:
+            job.cancel_requested = True
             job.status = "CANCELLED"
             job.finished_at = now
-            job.step = "cancelled before execution"
+            job.step = (
+                "cancelled before execution"
+                if generation_state == _GENERATION_QUEUED
+                else "cancelled before execution lease"
+            )
             run.status = "CANCELLED"
             run.finished_at = now
             run.owner_worker_id = None
             run.error_message = None
-        else:
+        elif generation_state == _GENERATION_RUNNING_LEASED:
+            job.cancel_requested = True
             job.step = "cancellation requested; waiting for phase boundary"
+        elif run.status == "CANCELLED" and generation_state == _GENERATION_TERMINAL:
+            self.db.commit()
+            return run, job
+        elif job is None or job.status not in _ACTIVE_JOB_STATUSES:
+            raise BacktestConflictError(
+                f"backtest has no cancellable job in status {run.status}",
+                job_id=run.job_id,
+            )
+        else:
+            raise BacktestConflictError(
+                "backtest execution generation is not safely cancellable",
+                job_id=run.job_id,
+            )
         self.db.add_all([run, job])
         self.db.commit()
         self.db.refresh(run)
@@ -1353,15 +1376,11 @@ def recover_stale_backtest_jobs(
             continue
         metadata = dict(job.job_metadata or {})
         metadata_version = metadata.get("ownership_version")
-        established_lease = (
-            run.status == "RUNNING"
-            and run.owner_worker_id == job.worker_id
-            and metadata_version is not None
-            and run.ownership_version == metadata_version
-        )
-        pre_ownership_claim = _is_pre_ownership_claim(
+        generation_state = _execution_generation_state(
             job, run, metadata_version=metadata_version
         )
+        established_lease = generation_state == _GENERATION_RUNNING_LEASED
+        pre_ownership_claim = generation_state == _GENERATION_RUNNING_PRE_LEASE
         if not established_lease and not pre_ownership_claim:
             continue
         job.status = "FAILED"
@@ -1404,6 +1423,49 @@ def _is_pre_ownership_claim(
         and bool(job.worker_id)
         and metadata_version is None
     )
+
+
+def _execution_generation_state(
+    job: JobRun,
+    run: PortfolioBacktestRun,
+    *,
+    metadata_version: object | None = None,
+) -> str:
+    """Classify the current Job-to-Run generation under the canonical locks."""
+    if run.job_id != job.id:
+        return _GENERATION_INVALID_OR_STALE
+    resolved_version = (
+        dict(job.job_metadata or {}).get("ownership_version")
+        if metadata_version is None
+        else metadata_version
+    )
+    if job.status == "QUEUED":
+        if (
+            run.status in {"CREATED", "FAILED", "CANCELLED"}
+            and job.worker_id is None
+            and run.owner_worker_id is None
+            and resolved_version is None
+        ):
+            return _GENERATION_QUEUED
+        return _GENERATION_INVALID_OR_STALE
+    if _is_pre_ownership_claim(
+        job,
+        run,
+        metadata_version=resolved_version,
+    ):
+        return _GENERATION_RUNNING_PRE_LEASE
+    if (
+        job.status == "RUNNING"
+        and bool(job.worker_id)
+        and run.status == "RUNNING"
+        and run.owner_worker_id == job.worker_id
+        and resolved_version is not None
+        and run.ownership_version == resolved_version
+    ):
+        return _GENERATION_RUNNING_LEASED
+    if job.status not in _ACTIVE_JOB_STATUSES:
+        return _GENERATION_TERMINAL
+    return _GENERATION_INVALID_OR_STALE
 
 
 def _trade_dates(db: Session, run: PortfolioBacktestRun) -> list[date]:
