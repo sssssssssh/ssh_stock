@@ -1359,12 +1359,8 @@ def recover_stale_backtest_jobs(
             and metadata_version is not None
             and run.ownership_version == metadata_version
         )
-        pre_ownership_claim = (
-            run.status == "CREATED"
-            and run.owner_worker_id is None
-            and run.ownership_version == 0
-            and job.worker_id is not None
-            and metadata_version is None
+        pre_ownership_claim = _is_pre_ownership_claim(
+            job, run, metadata_version=metadata_version
         )
         if not established_lease and not pre_ownership_claim:
             continue
@@ -1391,6 +1387,23 @@ def recover_stale_backtest_jobs(
         recovered += 1
     db.commit()
     return recovered
+
+
+def _is_pre_ownership_claim(
+    job: JobRun,
+    run: PortfolioBacktestRun,
+    *,
+    metadata_version: object,
+) -> bool:
+    """Return whether this claimed Job has not established its own Run lease."""
+    return (
+        run.status in {"CREATED", "FAILED", "CANCELLED"}
+        and run.job_id == job.id
+        and run.owner_worker_id is None
+        and job.status == "RUNNING"
+        and bool(job.worker_id)
+        and metadata_version is None
+    )
 
 
 def _trade_dates(db: Session, run: PortfolioBacktestRun) -> list[date]:

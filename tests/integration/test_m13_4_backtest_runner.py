@@ -195,7 +195,24 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                     BacktestApplicationService(db).execute(normal.id)
                 BacktestRunner(db).run_job(normal_job.id)
 
-                _, preownership_job = BacktestApplicationService(db).execute(
+                _, first_generation_job = BacktestApplicationService(db).execute(
+                    preownership_recovered.id
+                )
+                _claim(db, first_generation_job, "worker-preownership-a")
+                _, _, first_generation_lease = BacktestRunner(db)._claim_run(
+                    first_generation_job.id
+                )
+                BacktestRunner(db)._mark_run_failed(
+                    first_generation_lease,
+                    RuntimeError("injected first generation failure"),
+                )
+                db.refresh(preownership_recovered)
+                db.refresh(first_generation_job)
+                assert preownership_recovered.status == "FAILED"
+                assert first_generation_job.status == "FAILED"
+                assert preownership_recovered.ownership_version == 1
+
+                _, preownership_job = BacktestApplicationService(db).resume(
                     preownership_recovered.id
                 )
                 _claim(db, preownership_job, "worker-preownership-old")
@@ -211,6 +228,7 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                 db.refresh(preownership_job)
                 assert preownership_recovered.status == "FAILED"
                 assert preownership_job.status == "FAILED"
+                assert preownership_recovered.ownership_version == 1
                 assert preownership_recovered.result_summary["error_code"] == (
                     "BACKTEST_PRE_OWNERSHIP_TIMEOUT"
                 )
@@ -467,7 +485,7 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                 assert recovered_run is not None and recovered_run.status == "SUCCESS"
                 assert preownership_recovered_run is not None
                 assert preownership_recovered_run.status == "SUCCESS"
-                assert preownership_recovered_run.ownership_version == 1
+                assert preownership_recovered_run.ownership_version == 2
                 assert rolled_back_run is not None
                 assert rolled_back_run.status == "SUCCESS"
                 _assert_complete_protocol(db, normal.id, days)
