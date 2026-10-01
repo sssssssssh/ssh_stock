@@ -280,6 +280,10 @@ def test_stale_recovery_revalidates_heartbeat_under_lock_and_preserves_history()
             )
             assert run is not None and run.status == "FAILED"
             assert job is not None and job.status == "FAILED"
+            assert run.result_summary["error_code"] == "WORKER_HEARTBEAT_TIMEOUT"
+            assert job.error_message == (
+                "WORKER_HEARTBEAT_TIMEOUT: explicit resume required"
+            )
             assert history == 1
     finally:
         _cleanup(name)

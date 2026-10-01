@@ -59,6 +59,11 @@ PHASES = (
 _ACTIVE_JOB_STATUSES = {"QUEUED", "RUNNING"}
 _TERMINAL_RUN_STATUSES = {"SUCCESS", "FAILED", "CANCELLED"}
 _AFTER_CLOSE_RESULT_IDENTITY_VERSION = "after_close_result_v2"
+_PRE_OWNERSHIP_TIMEOUT_CODE = "BACKTEST_PRE_OWNERSHIP_TIMEOUT"
+_PRE_OWNERSHIP_TIMEOUT_MESSAGE = (
+    "worker heartbeat expired after JobRun claim but before backtest ownership "
+    "lease was established; explicit resume required"
+)
 
 
 class BacktestConflictError(RuntimeError):
@@ -219,6 +224,7 @@ class BacktestApplicationService:
         total = len(dates)
         pct = round(completed_days / total * 100, 2) if total else 0.0
         job = self.db.get(JobRun, run.job_id) if run.job_id else None
+        summary_error_code = dict(run.result_summary or {}).get("error_code")
         return BacktestProgress(
             run=run,
             job=job,
@@ -227,7 +233,13 @@ class BacktestApplicationService:
             total_trade_days=total,
             completed_trade_days=completed_days,
             progress_pct=pct,
-            error_code=failed.error_code if failed else None,
+            error_code=(
+                failed.error_code
+                if failed
+                else str(summary_error_code)
+                if summary_error_code is not None
+                else None
+            ),
             error_message=(failed.error_message if failed else run.error_message),
         )
 
@@ -1337,29 +1349,44 @@ def recover_stale_backtest_jobs(
             .execution_options(populate_existing=True)
             .with_for_update()
         ).scalar_one_or_none()
-        metadata_version = dict(job.job_metadata or {}).get(
-            "ownership_version", run.ownership_version if run is not None else None
+        if run is None or run.job_id != job.id:
+            continue
+        metadata = dict(job.job_metadata or {})
+        metadata_version = metadata.get("ownership_version")
+        established_lease = (
+            run.status == "RUNNING"
+            and run.owner_worker_id == job.worker_id
+            and metadata_version is not None
+            and run.ownership_version == metadata_version
         )
-        if (
-            run is None
-            or run.job_id != job.id
-            or run.status != "RUNNING"
-            or run.owner_worker_id != job.worker_id
-            or run.ownership_version != metadata_version
-        ):
+        pre_ownership_claim = (
+            run.status == "CREATED"
+            and run.owner_worker_id is None
+            and run.ownership_version == 0
+            and job.worker_id is not None
+            and metadata_version is None
+        )
+        if not established_lease and not pre_ownership_claim:
             continue
         job.status = "FAILED"
         job.finished_at = current
-        job.error_message = "WORKER_HEARTBEAT_TIMEOUT: explicit resume required"
-        job.step = "worker heartbeat stale; awaiting review"
+        if pre_ownership_claim:
+            error_code = _PRE_OWNERSHIP_TIMEOUT_CODE
+            error_message = _PRE_OWNERSHIP_TIMEOUT_MESSAGE
+            job.step = "pre-ownership heartbeat stale; explicit resume required"
+        else:
+            error_code = "WORKER_HEARTBEAT_TIMEOUT"
+            error_message = "WORKER_HEARTBEAT_TIMEOUT: explicit resume required"
+            job.step = "worker heartbeat stale; awaiting review"
+        job.error_message = error_message
         run.status = "FAILED"
         run.finished_at = current
         run.owner_worker_id = None
-        run.error_message = job.error_message
+        run.error_message = error_message
         run.result_summary = {
             **dict(run.result_summary or {}),
             "stage": "failed",
-            "error_code": "WORKER_HEARTBEAT_TIMEOUT",
+            "error_code": error_code,
         }
         recovered += 1
     db.commit()

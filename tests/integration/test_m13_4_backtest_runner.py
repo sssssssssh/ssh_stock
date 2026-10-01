@@ -39,6 +39,7 @@ from app.services.portfolio.backtest_application import (
     PHASES,
     BacktestApplicationService,
     BacktestConflictError,
+    BacktestOwnershipError,
     BacktestRecoveryRejectedError,
     BacktestRunner,
     recover_stale_backtest_jobs,
@@ -61,6 +62,13 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                 )
                 recovered = PortfolioApplicationService(db).create_backtest_definition(
                     start_date=days[0], end_date=days[-1], name="m13.4-recovered"
+                )
+                preownership_recovered = PortfolioApplicationService(
+                    db
+                ).create_backtest_definition(
+                    start_date=days[0],
+                    end_date=days[-1],
+                    name="m13.4-preownership-recovered",
                 )
                 rolled_back = PortfolioApplicationService(
                     db
@@ -141,8 +149,7 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                     lifecycle.id
                 )
                 _claim(db, stale_job, "worker-stale")
-                stale_run.status = "RUNNING"
-                stale_run.owner_worker_id = "worker-stale"
+                BacktestRunner(db)._claim_run(stale_job.id)
                 stale_job.heartbeat_at = datetime.now(UTC) - timedelta(minutes=30)
                 db.commit()
                 assert recover_stale_backtest_jobs(
@@ -187,6 +194,42 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                 with pytest.raises(BacktestConflictError):
                     BacktestApplicationService(db).execute(normal.id)
                 BacktestRunner(db).run_job(normal_job.id)
+
+                _, preownership_job = BacktestApplicationService(db).execute(
+                    preownership_recovered.id
+                )
+                _claim(db, preownership_job, "worker-preownership-old")
+                preownership_job.heartbeat_at = datetime.now(UTC) - timedelta(
+                    minutes=30
+                )
+                db.commit()
+                old_preownership_job_id = preownership_job.id
+                assert recover_stale_backtest_jobs(
+                    db, timeout_minutes=15, now=datetime.now(UTC)
+                ) == 1
+                db.refresh(preownership_recovered)
+                db.refresh(preownership_job)
+                assert preownership_recovered.status == "FAILED"
+                assert preownership_job.status == "FAILED"
+                assert preownership_recovered.result_summary["error_code"] == (
+                    "BACKTEST_PRE_OWNERSHIP_TIMEOUT"
+                )
+                assert PortfolioRepository(db).list_checkpoints(
+                    preownership_recovered.id
+                ) == []
+
+                with Session(engine) as old_worker:
+                    with pytest.raises(BacktestOwnershipError):
+                        BacktestRunner(old_worker)._claim_run(
+                            old_preownership_job_id
+                        )
+
+                _, preownership_resume_job = BacktestApplicationService(db).resume(
+                    preownership_recovered.id
+                )
+                assert preownership_resume_job.id != old_preownership_job_id
+                _claim(db, preownership_resume_job, "worker-preownership-new")
+                BacktestRunner(db).run_job(preownership_resume_job.id)
 
                 recovered_job = _enqueue_and_claim(
                     db, recovered.id, "worker-interrupted"
@@ -416,14 +459,24 @@ def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
                 db.expire_all()
                 normal_run = db.get(PortfolioBacktestRun, normal.id)
                 recovered_run = db.get(PortfolioBacktestRun, recovered.id)
+                preownership_recovered_run = db.get(
+                    PortfolioBacktestRun, preownership_recovered.id
+                )
                 rolled_back_run = db.get(PortfolioBacktestRun, rolled_back.id)
                 assert normal_run is not None and normal_run.status == "SUCCESS"
                 assert recovered_run is not None and recovered_run.status == "SUCCESS"
+                assert preownership_recovered_run is not None
+                assert preownership_recovered_run.status == "SUCCESS"
+                assert preownership_recovered_run.ownership_version == 1
                 assert rolled_back_run is not None
                 assert rolled_back_run.status == "SUCCESS"
                 _assert_complete_protocol(db, normal.id, days)
                 _assert_complete_protocol(db, recovered.id, days)
+                _assert_complete_protocol(db, preownership_recovered.id, days)
                 _assert_business_results_equal(db, normal.id, recovered.id)
+                _assert_business_results_equal(
+                    db, normal.id, preownership_recovered.id
+                )
                 _assert_business_results_equal(db, normal.id, rolled_back.id)
                 _assert_business_results_equal(db, normal.id, open_rolled_back.id)
                 _assert_business_results_equal(
@@ -688,6 +741,7 @@ def _cleanup(engine, days: tuple[date, ...], code: str) -> None:
                         (
                             "m13.4-normal",
                             "m13.4-recovered",
+                            "m13.4-preownership-recovered",
                             "m13.4-rolled-back",
                             "m13.4-open-rolled-back",
                             "m13.4-rebalance-rolled-back",
