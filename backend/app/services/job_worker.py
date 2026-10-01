@@ -32,6 +32,10 @@ from app.services.job_guard import (
     research_can_run,
     scheduler_setting,
 )
+from app.services.performance.application import (
+    PERFORMANCE_JOB_TYPE,
+    PerformanceApplicationService,
+)
 from app.services.portfolio.backtest_application import (
     BACKTEST_JOB_TYPE,
     BacktestRunner,
@@ -53,6 +57,7 @@ WORKER_JOB_TYPES = (
     "catchup",
     RESEARCH_JOB_TYPE,
     BACKTEST_JOB_TYPE,
+    PERFORMANCE_JOB_TYPE,
 )
 
 
@@ -164,6 +169,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             run_research_eval(db, job)
         elif job.job_type == BACKTEST_JOB_TYPE:
             BacktestRunner(db).run_job(job.id)
+        elif job.job_type == PERFORMANCE_JOB_TYPE:
+            PerformanceApplicationService(db).run_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:

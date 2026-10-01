@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.accounting_config import AccountingConfig
 from app.core.execution_config import ExecutionConfig
+from app.core.performance_config import PerformanceConfig
 from app.core.portfolio_config import PortfolioConfig
 from app.core.strategy_config import StrategyConfig
 
@@ -59,6 +60,7 @@ class Settings(BaseSettings):
     portfolio_config: PortfolioConfig | None = None
     execution_config: ExecutionConfig | None = None
     accounting_config: AccountingConfig | None = None
+    performance_config: PerformanceConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -111,6 +113,11 @@ class Settings(BaseSettings):
                 "accounting", {}
             )
         )
+        performance_config = PerformanceConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "performance.yaml").get(
+                "performance", {}
+            )
+        )
         _validate_opportunity_weights(opportunity_config)
         _validate_research_config(research_config, opportunity_config)
         app_section = app_config.get("app", {})
@@ -125,6 +132,7 @@ class Settings(BaseSettings):
         settings.portfolio_config = portfolio_config
         settings.execution_config = execution_config
         settings.accounting_config = accounting_config
+        settings.performance_config = performance_config
         return settings
 
 

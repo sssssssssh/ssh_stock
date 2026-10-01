@@ -1,0 +1,5 @@
+performance:
+  version: performance_v1
+  annualization_trade_days: 252
+  short_sample_warning_trade_days: 20
+  zero_return_epsilon: 0

@@ -29,6 +29,7 @@ from app.models.market_data import (
     ThemeMoneyflowDaily,
     TradeCalendar,
 )
+from app.models.performance import PortfolioPerformanceDaily, PortfolioPerformanceReport
 from app.models.portfolio import (
     PortfolioBacktestCheckpoint,
     PortfolioBacktestRun,
@@ -51,6 +52,8 @@ __all__ = [
     "PortfolioBacktestCheckpoint",
     "PortfolioFill",
     "PortfolioNavDaily",
+    "PortfolioPerformanceDaily",
+    "PortfolioPerformanceReport",
     "PortfolioOrder",
     "PortfolioOrderAttempt",
     "PortfolioPositionDaily",
