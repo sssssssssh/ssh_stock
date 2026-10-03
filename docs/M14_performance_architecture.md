@@ -74,3 +74,84 @@ Read APIs are:
 - `GET /api/v1/portfolio/backtests/{run_id}/performance/daily?limit=&offset=`
 
 All three endpoints call only the performance application service.
+
+## M14.2 benchmark and risk boundary
+
+M14.2 adds an independent immutable `risk_v1` artifact. It does not change the M13 facts,
+the M14.1 `performance_v1` schema, or any M14.1 return/drawdown calculation. The source is
+exactly one successful M14.1 report and its complete daily rows, the owning run's frozen
+`benchmark_code`, and `index_daily` rows for the exact same date set. Strategy returns come
+only from `portfolio_performance_daily.daily_return`; callers cannot override the benchmark.
+
+Benchmark Float values cross the source boundary as `Decimal(str(value))`, quantized to
+`0.0001` with `ROUND_HALF_UP`. Day one uses `pre_close`; later days use the preceding
+`close`, while every later `pre_close` must equal that close at the frozen precision. Missing,
+non-finite, non-positive, extra/misaligned, or discontinuous benchmark facts fail closed.
+
+The risk configuration is loaded independently from `config/performance_risk.yaml`; changing
+it cannot alter `performance_config_hash` or create a new M14.1 artifact. Annualization days
+are inherited from the base report's persisted `result_summary` rather than duplicated in the
+risk configuration.
+
+## Risk formulas and identity
+
+`app.domain.performance.risk_engine` and `statistics` are ORM-free and Decimal-only. They
+freeze the following formulas, with sample variance/covariance using `N - 1`:
+
+- benchmark NAV compounds benchmark daily returns; relative NAV is strategy NAV divided by
+  benchmark NAV; cumulative excess is relative NAV minus one;
+- strategy/benchmark volatility and tracking error are sample standard deviations multiplied
+  by `sqrt(A)`;
+- the annual effective risk-free rate becomes a daily effective rate with Decimal `ln/exp`;
+- Sharpe uses mean strategy excess over the daily risk-free rate divided by strategy sample
+  standard deviation, then multiplied by `sqrt(A)`;
+- downside deviation uses `sqrt(sum(min(strategy - rf_daily, 0)^2) / N)`, and Sortino uses
+  the same excess-return mean divided by that daily deviation and multiplied by `sqrt(A)`;
+- Calmar directly divides the M14.1 persisted annualized return by absolute persisted maximum
+  drawdown;
+- information ratio is mean active return divided by active sample standard deviation and
+  multiplied by `sqrt(A)`;
+- beta is sample covariance of strategy and benchmark divided by benchmark sample variance;
+  daily alpha is `mean(strategy-rf) - beta * mean(benchmark-rf)`, and annual alpha is the
+  arithmetic `alpha_daily * A`;
+- correlation is sample covariance divided by the product of the two sample deviations.
+
+With too few observations, daily benchmark/relative facts and Calmar remain available while
+sample-statistical fields are null. Zero denominators also produce null ratios, not fabricated
+values. Persisted warnings are deduplicated and sorted:
+`INSUFFICIENT_RISK_OBSERVATIONS`, `RISK_SHORT_SAMPLE`, `ZERO_STRATEGY_VOLATILITY`,
+`ZERO_BENCHMARK_VOLATILITY`, `ZERO_DOWNSIDE_DEVIATION`, `ZERO_MAX_DRAWDOWN`,
+`ZERO_TRACKING_ERROR`, `ZERO_BENCHMARK_VARIANCE`, and `CORRELATION_UNDEFINED`.
+
+`benchmark_source_hash` is SHA-256 over the benchmark code, frozen price precision identity,
+and ascending `(trade_date, pre_close, close)` values. `risk_source_hash` adds the M14.1
+artifact identity and source hash plus the risk version/config hash. The database identity is
+`(performance_id, risk_version, risk_config_hash, benchmark_source_hash)`. A benchmark
+revision therefore creates a new report and daily set without updating history.
+
+Migration 0038 creates `portfolio_performance_risk_report` and
+`portfolio_performance_risk_daily`. Composite foreign keys enforce same-run ownership,
+same-performance ownership, and that every risk date exists in the selected M14.1 daily
+artifact. Downgrade refuses to drop either table while risk data exists.
+
+## Risk jobs, recovery, APIs, and errors
+
+`portfolio_performance_risk` jobs serialize queueing and artifact calculation with a stable
+per-performance advisory lock. The first report/daily write is flushed without commit, the
+immutable `(job_id, worker_id, run_id, performance_id)` lease is rechecked under `FOR UPDATE`,
+and artifact plus Job SUCCESS commit together. Recovery refreshes and locks each stale
+candidate before marking it FAILED; a fresh heartbeat wins, a fenced old worker rolls back its
+uncommitted artifact, and an explicit retry may reuse an already committed identity.
+
+The application-service-only endpoints are:
+
+- `POST /api/v1/portfolio/backtests/{run_id}/performance/risk/calculate`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/risk?performance_id=`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/risk/daily?performance_id=&limit=&offset=`
+
+Stable source/job error codes are `PERFORMANCE_BASE_NOT_FOUND`,
+`PERFORMANCE_ARTIFACT_RUN_MISMATCH`, `PERFORMANCE_BASE_IDENTITY_INVALID`,
+`PERFORMANCE_BASE_DAILY_INCOMPLETE`, `BENCHMARK_CODE_MISSING`,
+`BENCHMARK_SOURCE_INCOMPLETE`, `BENCHMARK_SOURCE_INVALID`,
+`BENCHMARK_PRE_CLOSE_MISMATCH`, `PERFORMANCE_RISK_CALCULATION_CONFLICT`,
+`PERFORMANCE_RISK_OWNERSHIP_LOST`, and `PERFORMANCE_RISK_WORKER_HEARTBEAT_TIMEOUT`.

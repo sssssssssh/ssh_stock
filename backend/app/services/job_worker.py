@@ -37,6 +37,13 @@ from app.services.performance.application import (
     PerformanceApplicationService,
 )
 from app.services.performance.recovery import recover_stale_performance_jobs
+from app.services.performance.risk_application import (
+    PERFORMANCE_RISK_JOB_TYPE,
+    PerformanceRiskApplicationService,
+)
+from app.services.performance.risk_recovery import (
+    recover_stale_performance_risk_jobs,
+)
 from app.services.portfolio.backtest_application import (
     BACKTEST_JOB_TYPE,
     BacktestRunner,
@@ -59,6 +66,7 @@ WORKER_JOB_TYPES = (
     RESEARCH_JOB_TYPE,
     BACKTEST_JOB_TYPE,
     PERFORMANCE_JOB_TYPE,
+    PERFORMANCE_RISK_JOB_TYPE,
 )
 
 
@@ -172,6 +180,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             BacktestRunner(db).run_job(job.id)
         elif job.job_type == PERFORMANCE_JOB_TYPE:
             PerformanceApplicationService(db).run_job(job.id)
+        elif job.job_type == PERFORMANCE_RISK_JOB_TYPE:
+            PerformanceRiskApplicationService(db).run_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -188,6 +198,19 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                 status="FAILED",
                 step=failed.step or "worker execution failed",
                 error_message=str(exc),
+                metadata=(
+                    {
+                        **dict(failed.job_metadata or {}),
+                        "stage": "failed",
+                        **(
+                            {"error_code": str(exc.code)}
+                            if getattr(exc, "code", None)
+                            else {}
+                        ),
+                    }
+                    if job.job_type == PERFORMANCE_RISK_JOB_TYPE
+                    else None
+                ),
             )
         logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
     finally:
@@ -242,6 +265,14 @@ def run_worker() -> None:
                             )
                         ),
                     )
+                    recovered_performance_risk = recover_stale_performance_risk_jobs(
+                        db,
+                        timeout_minutes=float(
+                            scheduler_setting(
+                                "running_heartbeat_timeout_minutes", 15
+                            )
+                        ),
+                    )
                     recovered_dirty = recover_stale_processing_ranges(
                         db,
                         stale_minutes=float(
@@ -251,12 +282,14 @@ def run_worker() -> None:
                     logger.info(
                         "worker recovery id={} recovered_jobs={} "
                         "recovered_research={} recovered_backtests={} "
-                        "recovered_performance={} recovered_dirty={}",
+                        "recovered_performance={} recovered_performance_risk={} "
+                        "recovered_dirty={}",
                         worker_id,
                         recovered_jobs,
                         recovered_research,
                         recovered_backtests,
                         recovered_performance,
+                        recovered_performance_risk,
                         recovered_dirty,
                     )
                     last_recovery = now

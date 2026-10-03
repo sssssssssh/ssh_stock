@@ -5,6 +5,7 @@ from app.domain.performance.contracts import (
     PerformanceSourceSnapshot,
 )
 from app.domain.performance.engine import PerformanceEngine
+from app.domain.performance.risk_engine import RiskEngine
 
 __all__ = [
     "PerformanceDailyPoint",
@@ -12,4 +13,5 @@ __all__ = [
     "PerformanceResult",
     "PerformanceSourceRow",
     "PerformanceSourceSnapshot",
+    "RiskEngine",
 ]
