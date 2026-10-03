@@ -1,10 +1,17 @@
 import hashlib
 import json
+import uuid
 from decimal import Decimal
 from typing import Any
 
 from app.domain.performance.contracts import PerformanceSourceRow
 from app.models.portfolio import PortfolioBacktestRun
+
+
+def performance_run_lock_key(run_id: uuid.UUID) -> int:
+    """Return one stable signed bigint key for all same-run M14 locks."""
+    digest = hashlib.sha256(f"portfolio_performance:{run_id}".encode()).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=True)
 
 
 def canonical_decimal(value: Decimal) -> str:

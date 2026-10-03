@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
 from app.models.job import JobRun
@@ -85,6 +86,20 @@ def _source_run(
     return run
 
 
+def _nav_business_values(row: PortfolioNavDaily) -> tuple:
+    return (
+        row.trade_date,
+        row.cash,
+        row.market_value,
+        row.total_assets,
+        row.nav,
+        row.gross_exposure,
+        row.net_exposure,
+        row.position_count,
+        row.trading_cost,
+    )
+
+
 def test_postgresql_performance_artifact_is_idempotent_and_source_versioned() -> None:
     engine = sa.create_engine(get_settings().database_url)
     dates = (date(2041, 1, 2), date(2041, 1, 3), date(2041, 1, 4))
@@ -99,7 +114,7 @@ def test_postgresql_performance_artifact_is_idempotent_and_source_versioned() ->
                     .order_by(PortfolioNavDaily.trade_date)
                 ).all()
             )
-            original_values = tuple(row.nav for row in original_nav)
+            original_values = tuple(_nav_business_values(row) for row in original_nav)
             service = PerformanceApplicationService(db)
 
             first = service.calculate_now(run.id)
@@ -118,11 +133,16 @@ def test_postgresql_performance_artifact_is_idempotent_and_source_versioned() ->
                     PortfolioPerformanceDaily.run_id == run.id
                 )
             ) == 3
-            assert tuple(row.nav for row in original_nav) == original_values
+            assert (
+                tuple(_nav_business_values(row) for row in original_nav)
+                == original_values
+            )
 
             final_nav = original_nav[-1]
             final_nav.nav = Decimal("0.95")
             final_nav.total_assets = Decimal("950000")
+            final_nav.cash = Decimal("380000")
+            final_nav.market_value = Decimal("570000")
             run.result_summary = {"final_nav": "0.95"}
             db.flush()
             changed = service.calculate_now(run.id)
@@ -190,6 +210,8 @@ def test_performance_job_failure_leaves_no_partial_artifact() -> None:
             status="RUNNING",
             step="claimed by worker",
             row_count=0,
+            worker_id="worker-failure",
+            heartbeat_at=datetime.now(UTC),
             job_metadata={"portfolio_run_id": str(run.id)},
         )
         db.add(job)
@@ -232,6 +254,8 @@ def test_performance_worker_persists_artifact_and_completes_job() -> None:
                 status="RUNNING",
                 step="claimed by worker",
                 row_count=0,
+                worker_id="worker-success",
+                heartbeat_at=datetime.now(UTC),
                 job_metadata={"portfolio_run_id": str(run.id)},
             )
             db.add(job)
@@ -253,4 +277,60 @@ def test_performance_worker_persists_artifact_and_completes_job() -> None:
                     PortfolioPerformanceDaily.performance_id == report.id
                 )
             ) == 2
+        transaction.rollback()
+
+
+@pytest.mark.parametrize(
+    ("trade_date", "nav"),
+    [
+        (date(2041, 5, 2), "1.10"),
+        (date(2041, 6, 3), "1.20"),
+        (date(2041, 7, 1), "0.01"),
+    ],
+)
+def test_extreme_single_day_annualized_return_persists(trade_date, nav) -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            run = _source_run(db, (trade_date,), (nav,))
+            artifact = PerformanceApplicationService(db).calculate_now(run.id)
+            db.flush()
+
+            persisted = db.get(PortfolioPerformanceReport, artifact.report.id)
+            assert persisted.annualized_return == artifact.report.annualized_return
+            assert persisted.annualized_return.is_finite()
+        transaction.rollback()
+
+
+def test_database_rejects_daily_row_owned_by_different_run() -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection) as db:
+            run_a = _source_run(db, (date(2041, 8, 1),), ("1.01",))
+            run_b = _source_run(db, (date(2041, 8, 2),), ("1.02",))
+            report = PerformanceApplicationService(db).calculate_now(run_a.id).report
+            savepoint = db.begin_nested()
+            db.add(
+                PortfolioPerformanceDaily(
+                    performance_id=report.id,
+                    run_id=run_b.id,
+                    trade_date=date(2041, 8, 3),
+                    nav=Decimal("1"),
+                    daily_return=Decimal("0"),
+                    cumulative_return=Decimal("0"),
+                    running_peak_nav=Decimal("1"),
+                    drawdown=Decimal("0"),
+                    drawdown_duration_days=0,
+                    cash_ratio=Decimal("1"),
+                    gross_exposure=Decimal("0"),
+                    net_exposure=Decimal("0"),
+                    position_count=0,
+                    trading_cost=Decimal("0"),
+                )
+            )
+            with pytest.raises(sa.exc.IntegrityError):
+                db.flush()
+            savepoint.rollback()
         transaction.rollback()

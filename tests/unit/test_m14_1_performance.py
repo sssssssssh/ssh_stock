@@ -1,6 +1,8 @@
+import importlib.util
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -62,6 +64,37 @@ def _snapshot(*navs: str) -> PerformanceSourceSnapshot:
     )
 
 
+def _validation_run(*, final_nav: str = "1") -> SimpleNamespace:
+    return SimpleNamespace(
+        initial_cash=Decimal("1000000"),
+        result_summary={"final_nav": final_nav},
+    )
+
+
+def _validation_row(
+    *,
+    nav: str = "1",
+    total_assets: str = "1000000",
+    cash: str = "400000",
+    market_value: str = "600000",
+    position_count: int = 1,
+    gross_exposure: str = "0.6",
+    net_exposure: str = "0.6",
+    trading_cost: str = "0",
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        trade_date=date(2026, 1, 5),
+        nav=Decimal(nav),
+        total_assets=Decimal(total_assets),
+        cash=Decimal(cash),
+        market_value=Decimal(market_value),
+        position_count=position_count,
+        gross_exposure=Decimal(gross_exposure),
+        net_exposure=Decimal(net_exposure),
+        trading_cost=Decimal(trading_cost),
+    )
+
+
 def test_performance_config_is_strict_and_positive() -> None:
     with pytest.raises(ValidationError):
         _config(benchmark_code="000300.SH")
@@ -100,6 +133,10 @@ def test_continuous_rise_has_no_drawdown() -> None:
     assert result.max_drawdown == 0
     assert all(point.drawdown == 0 for point in result.daily)
     assert result.positive_days == 3
+    assert result.max_drawdown_peak_date is None
+    assert result.max_drawdown_trough_date is None
+    assert result.max_drawdown_recovery_date is None
+    assert result.max_drawdown_duration_days == 0
 
 
 def test_continuous_fall_tracks_baseline_peak_and_duration() -> None:
@@ -126,6 +163,19 @@ def test_unrecovered_drawdown_has_null_recovery() -> None:
     result = PerformanceEngine().calculate(_snapshot("1.2", "1.0", "1.1"), _config())
     assert result.max_drawdown_recovery_date is None
     assert result.max_drawdown == Decimal("1.0") / Decimal("1.2") - Decimal("1")
+    assert result.max_drawdown_duration_days == 2
+
+
+def test_max_drawdown_duration_belongs_to_deep_episode_not_longer_shallow_one() -> None:
+    result = PerformanceEngine().calculate(
+        _snapshot("1.2", "0.84", "1.2", "1.15", "1.14", "1.13", "1.12"),
+        _config(),
+    )
+    assert result.max_drawdown == Decimal("-0.3")
+    assert result.max_drawdown_peak_date == date(2026, 1, 5)
+    assert result.max_drawdown_trough_date == date(2026, 1, 6)
+    assert result.max_drawdown_recovery_date == date(2026, 1, 7)
+    assert result.max_drawdown_duration_days == 1
 
 
 def test_single_day_result_is_computed_with_short_sample_warning() -> None:
@@ -133,6 +183,12 @@ def test_single_day_result_is_computed_with_short_sample_warning() -> None:
     assert result.trade_days == 1
     assert result.annualized_return > Decimal("1")
     assert result.warnings == ("SHORT_SAMPLE_ANNUALIZATION",)
+
+
+@pytest.mark.parametrize("nav", ["1.10", "1.20", "0.01"])
+def test_single_day_extreme_annualized_return_remains_decimal(nav) -> None:
+    result = PerformanceEngine().calculate(_snapshot(nav), _config())
+    assert result.annualized_return.is_finite()
 
 
 def test_warning_threshold_does_not_suppress_annualization() -> None:
@@ -162,11 +218,8 @@ def test_daily_exposure_and_cash_ratio_are_preserved() -> None:
 
 
 def test_source_validation_rejects_missing_and_extra_dates() -> None:
-    run = SimpleNamespace(result_summary={"final_nav": "1"})
-    rows = tuple(
-        SimpleNamespace(trade_date=row.trade_date, nav=row.nav, total_assets=1)
-        for row in _rows("1")
-    )
+    run = _validation_run()
+    rows = (_validation_row(),)
     with pytest.raises(PerformanceSourceError, match="PERFORMANCE_SOURCE_INCOMPLETE"):
         PerformanceSourceProvider._validate(
             run,
@@ -182,27 +235,67 @@ def test_source_validation_rejects_missing_and_extra_dates() -> None:
 
 
 @pytest.mark.parametrize(
-    ("nav", "assets", "code"),
+    "overrides",
     [
-        (Decimal("0"), Decimal("1"), "PERFORMANCE_SOURCE_INCOMPLETE"),
-        (Decimal("1"), Decimal("-1"), "PERFORMANCE_SOURCE_INCOMPLETE"),
-        (Decimal("1.1"), Decimal("1"), "PERFORMANCE_NAV_IDENTITY_MISMATCH"),
+        {"nav": "0"},
+        {"total_assets": "0", "cash": "0", "market_value": "0"},
+        {"cash": "-1", "market_value": "1000001"},
+        {"market_value": "-1", "cash": "1000001"},
+        {"position_count": -1},
+        {"gross_exposure": "-0.1"},
+        {"net_exposure": "-0.1"},
+        {"trading_cost": "-0.01"},
     ],
 )
-def test_source_validation_fails_closed_for_invalid_values(nav, assets, code) -> None:
-    run = SimpleNamespace(result_summary={"final_nav": "1"})
-    row = SimpleNamespace(trade_date=date(2026, 1, 5), nav=nav, total_assets=assets)
-    with pytest.raises(PerformanceSourceError, match=code):
-        PerformanceSourceProvider._validate(run, (row.trade_date,), (row,))
+def test_source_validation_fails_closed_for_invalid_values(overrides) -> None:
+    row = _validation_row(**overrides)
+    with pytest.raises(PerformanceSourceError, match="PERFORMANCE_SOURCE_INCOMPLETE"):
+        PerformanceSourceProvider._validate(
+            _validation_run(), (row.trade_date,), (row,)
+        )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"cash": "399999"},
+        {"nav": "1.01"},
+    ],
+)
+def test_source_validation_rejects_ledger_identity_mismatch(overrides) -> None:
+    row = _validation_row(**overrides)
+    with pytest.raises(
+        PerformanceSourceError, match="PERFORMANCE_LEDGER_IDENTITY_MISMATCH"
+    ):
+        PerformanceSourceProvider._validate(
+            _validation_run(final_nav=str(row.nav)), (row.trade_date,), (row,)
+        )
+
+
+def test_source_validation_rejects_final_nav_mismatch() -> None:
+    row = _validation_row(
+        nav="1.1",
+        total_assets="1100000",
+        cash="440000",
+        market_value="660000",
+    )
+    with pytest.raises(
+        PerformanceSourceError, match="PERFORMANCE_NAV_IDENTITY_MISMATCH"
+    ):
+        PerformanceSourceProvider._validate(
+            _validation_run(), (row.trade_date,), (row,)
+        )
 
 
 def test_source_validation_rejects_empty_calendar_and_missing_final_nav() -> None:
     with pytest.raises(PerformanceSourceError, match="PERFORMANCE_SOURCE_INCOMPLETE"):
         PerformanceSourceProvider._validate(SimpleNamespace(), (), ())
-    row = SimpleNamespace(trade_date=date(2026, 1, 5), nav=Decimal("1"), total_assets=1)
+    row = _validation_row()
     with pytest.raises(PerformanceSourceError, match="PERFORMANCE_NAV_IDENTITY_MISMATCH"):
         PerformanceSourceProvider._validate(
-            SimpleNamespace(result_summary={}), (row.trade_date,), (row,)
+            SimpleNamespace(initial_cash=Decimal("1000000"), result_summary={}),
+            (row.trade_date,),
+            (row,),
         )
 
 
@@ -247,3 +340,26 @@ def test_performance_domain_does_not_import_orm() -> None:
     source = inspect.getsource(engine_module)
     assert "sqlalchemy" not in source.lower()
     assert "app.models" not in source
+
+
+def test_0037_migration_preflights_cross_run_and_unsafe_downgrade(monkeypatch) -> None:
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / "versions"
+        / "20261002_0037_m14_1_1_performance_closeout.py"
+    )
+    spec = importlib.util.spec_from_file_location("m14_1_1_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    class Connection:
+        def scalar(self, _statement):
+            return 1
+
+    monkeypatch.setattr(migration.op, "get_bind", lambda: Connection())
+    with pytest.raises(RuntimeError, match="cross-run daily"):
+        migration.upgrade()
+    with pytest.raises(RuntimeError, match="cannot safely narrow"):
+        migration.downgrade()

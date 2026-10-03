@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.performance import PortfolioPerformanceDaily, PortfolioPerformanceReport
+from app.services.performance.identity import performance_run_lock_key
 
 
 class PerformanceRepository:
@@ -12,15 +13,13 @@ class PerformanceRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def lock_run_calculation(self, run_id: uuid.UUID) -> None:
-        """Serialize same-run calculations without locking or updating M13 rows."""
+    def lock_run(self, run_id: uuid.UUID) -> None:
+        """Serialize queueing and calculation with one stable per-run lock."""
+        if self.db.get_bind().dialect.name != "postgresql":
+            return
         self.db.execute(
-            select(
-                func.pg_advisory_xact_lock(
-                    func.hashtextextended(str(run_id), 0)
-                )
-            )
-        )
+            select(func.pg_advisory_xact_lock(performance_run_lock_key(run_id)))
+        ).scalar_one()
 
     def find_by_identity(
         self,

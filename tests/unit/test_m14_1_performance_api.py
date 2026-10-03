@@ -8,7 +8,10 @@ from app.core.db import get_db
 from app.main import app
 from app.models.performance import PortfolioPerformanceDaily, PortfolioPerformanceReport
 from app.services.auth.dependencies import require_authenticated_user
-from app.services.performance.application import PerformanceConflictError
+from app.services.performance.application import (
+    PerformanceConflictError,
+    PerformanceRunNotSuccessError,
+)
 from fastapi.testclient import TestClient
 
 
@@ -142,3 +145,29 @@ def test_performance_api_reports_not_found_and_active_job_conflict(monkeypatch) 
     assert conflict.json()["detail"]["code"] == "PERFORMANCE_CALCULATION_CONFLICT"
     assert conflict.json()["detail"]["job_id"] == str(job_id)
     assert missing.status_code == 404
+
+
+def test_performance_api_rejects_non_success_run_before_queue(monkeypatch) -> None:
+    run_id = uuid.uuid4()
+
+    class FakeService:
+        def __init__(self, _db) -> None:
+            pass
+
+        def queue_calculation(self, _run_id):
+            raise PerformanceRunNotSuccessError("run is not a successful BACKTEST")
+
+    monkeypatch.setattr(performance_api, "PerformanceApplicationService", FakeService)
+    app.dependency_overrides[require_authenticated_user] = lambda: SimpleNamespace(
+        username="test"
+    )
+    app.dependency_overrides[get_db] = lambda: object()
+    try:
+        response = TestClient(app).post(
+            f"/api/v1/portfolio/backtests/{run_id}/performance/calculate"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "PERFORMANCE_RUN_NOT_SUCCESS"

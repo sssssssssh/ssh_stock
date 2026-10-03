@@ -26,12 +26,12 @@ class PerformanceEngine:
         running_peak = ONE
         running_peak_date = None
         underwater_days = 0
-        max_underwater_days = 0
         max_drawdown = ZERO
         max_peak_date = None
         max_peak_nav = ONE
         max_trough_date = None
         recovery_date = None
+        max_episode_duration_days = 0
         positive_days = negative_days = flat_days = 0
         daily_points: list[PerformanceDailyPoint] = []
 
@@ -46,12 +46,17 @@ class PerformanceEngine:
 
             if row.nav > running_peak:
                 running_peak = row.nav
-                running_peak_date = row.trade_date
             drawdown = row.nav / running_peak - ONE
             if drawdown < ZERO:
                 underwater_days += 1
-                max_underwater_days = max(max_underwater_days, underwater_days)
             else:
+                if (
+                    max_trough_date is not None
+                    and recovery_date is None
+                    and row.trade_date > max_trough_date
+                    and row.nav >= max_peak_nav
+                ):
+                    recovery_date = row.trade_date
                 underwater_days = 0
 
             if drawdown < max_drawdown:
@@ -60,13 +65,15 @@ class PerformanceEngine:
                 max_peak_nav = running_peak
                 max_trough_date = row.trade_date
                 recovery_date = None
+                max_episode_duration_days = underwater_days
             elif (
-                max_trough_date is not None
+                drawdown < ZERO
+                and max_trough_date is not None
                 and recovery_date is None
-                and row.trade_date > max_trough_date
-                and row.nav >= max_peak_nav
+                and running_peak == max_peak_nav
+                and running_peak_date == max_peak_date
             ):
-                recovery_date = row.trade_date
+                max_episode_duration_days = underwater_days
 
             daily_points.append(
                 PerformanceDailyPoint(
@@ -84,6 +91,10 @@ class PerformanceEngine:
                     trading_cost=row.trading_cost,
                 )
             )
+            if drawdown == ZERO:
+                # A repeated high-water mark starts a new episode for any later
+                # drawdown, while an already-recorded episode keeps its own peak.
+                running_peak_date = row.trade_date
             previous_nav = row.nav
 
         trade_days = len(source.rows)
@@ -109,7 +120,7 @@ class PerformanceEngine:
             max_drawdown_peak_date=max_peak_date,
             max_drawdown_trough_date=max_trough_date,
             max_drawdown_recovery_date=recovery_date,
-            max_drawdown_duration_days=max_underwater_days,
+            max_drawdown_duration_days=max_episode_duration_days,
             positive_days=positive_days,
             negative_days=negative_days,
             flat_days=flat_days,

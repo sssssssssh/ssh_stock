@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -25,10 +26,25 @@ class PerformanceConflictError(RuntimeError):
         super().__init__(message)
 
 
+class PerformanceRunNotSuccessError(RuntimeError):
+    code = "PERFORMANCE_RUN_NOT_SUCCESS"
+
+
+class PerformanceOwnershipError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class PerformanceArtifact:
     report: PortfolioPerformanceReport
     reused: bool
+
+
+@dataclass(frozen=True)
+class PerformanceExecutionLease:
+    job_id: uuid.UUID
+    worker_id: str
+    run_id: uuid.UUID
 
 
 class PerformanceApplicationService:
@@ -40,6 +56,10 @@ class PerformanceApplicationService:
         repository: PerformanceRepository | None = None,
         source_provider: PerformanceSourceProvider | None = None,
         engine: PerformanceEngine | None = None,
+        before_terminal_hook: Callable[
+            [PerformanceExecutionLease, PerformanceArtifact], None
+        ]
+        | None = None,
     ) -> None:
         self.db = db
         self.settings = settings or get_settings()
@@ -49,10 +69,21 @@ class PerformanceApplicationService:
         self.repository = repository or PerformanceRepository(db)
         self.source_provider = source_provider or PerformanceSourceProvider(db)
         self.engine = engine or PerformanceEngine()
+        self.before_terminal_hook = before_terminal_hook
 
     def queue_calculation(self, run_id: uuid.UUID) -> JobRun:
-        if self.db.get(PortfolioBacktestRun, run_id) is None:
+        self.repository.lock_run(run_id)
+        run = self.db.execute(
+            select(PortfolioBacktestRun)
+            .where(PortfolioBacktestRun.id == run_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
+        if run is None:
             raise LookupError("portfolio backtest run not found")
+        if run.account_mode != "BACKTEST" or run.status != "SUCCESS":
+            raise PerformanceRunNotSuccessError(
+                "performance calculation requires a successful BACKTEST run"
+            )
         active = self.db.scalar(
             select(JobRun)
             .where(
@@ -86,35 +117,51 @@ class PerformanceApplicationService:
         return job
 
     def run_job(self, job_id: uuid.UUID) -> PerformanceArtifact:
-        job = self.db.get(JobRun, job_id)
+        job = self.db.execute(
+            select(JobRun)
+            .where(JobRun.id == job_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
         if job is None or job.job_type != PERFORMANCE_JOB_TYPE:
             raise LookupError("performance job not found")
+        if job.status != "RUNNING" or not job.worker_id:
+            raise PerformanceOwnershipError(
+                "performance job is not owned by a running worker"
+            )
         metadata = dict(job.job_metadata or {})
         try:
             run_id = uuid.UUID(str(metadata["portfolio_run_id"]))
         except (KeyError, TypeError, ValueError) as exc:
             raise RuntimeError("performance job has invalid portfolio_run_id") from exc
+        lease = PerformanceExecutionLease(
+            job_id=job.id,
+            worker_id=job.worker_id,
+            run_id=run_id,
+        )
 
         artifact = self.calculate_now(run_id)
+        if self.before_terminal_hook is not None:
+            self.before_terminal_hook(lease, artifact)
+        terminal_job = self._owned_job_for_terminal_update(lease)
         now = datetime.now(UTC)
-        job.status = "SUCCESS"
-        job.finished_at = now
-        job.step = "performance calculation complete"
-        job.row_count = artifact.report.trade_days
-        job.job_metadata = {
-            **metadata,
+        terminal_job.status = "SUCCESS"
+        terminal_job.finished_at = now
+        terminal_job.step = "performance calculation complete"
+        terminal_job.row_count = artifact.report.trade_days
+        terminal_job.job_metadata = {
+            **dict(terminal_job.job_metadata or {}),
             "stage": "success",
             "performance_id": str(artifact.report.id),
             "source_hash": artifact.report.source_hash,
             "reused": artifact.reused,
         }
-        self.db.add(job)
+        self.db.add(terminal_job)
         self.db.commit()
-        self.db.refresh(job)
+        self.db.refresh(terminal_job)
         return artifact
 
     def calculate_now(self, run_id: uuid.UUID) -> PerformanceArtifact:
-        self.repository.lock_run_calculation(run_id)
+        self.repository.lock_run(run_id)
         config_payload = self.config.model_dump(mode="json")
         performance_config_hash = config_hash(config_payload)
         source = self.source_provider.load(
@@ -184,6 +231,28 @@ class PerformanceApplicationService:
         ]
         self.repository.add_daily(daily)
         return PerformanceArtifact(report, reused=False)
+
+    def _owned_job_for_terminal_update(
+        self, lease: PerformanceExecutionLease
+    ) -> JobRun:
+        job = self.db.execute(
+            select(JobRun)
+            .where(JobRun.id == lease.job_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        ).scalar_one_or_none()
+        metadata = dict(job.job_metadata or {}) if job is not None else {}
+        if (
+            job is None
+            or job.job_type != PERFORMANCE_JOB_TYPE
+            or job.status != "RUNNING"
+            or job.worker_id != lease.worker_id
+            or metadata.get("portfolio_run_id") != str(lease.run_id)
+        ):
+            raise PerformanceOwnershipError(
+                "performance execution lease is no longer current"
+            )
+        return job
 
     def get_report(self, run_id: uuid.UUID) -> PortfolioPerformanceReport:
         report = self.repository.latest_report(run_id)

@@ -8,6 +8,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -39,6 +40,11 @@ class PortfolioPerformanceReport(Base):
             "source_hash",
             name=conv("uq_portfolio_performance_report_identity"),
         ),
+        UniqueConstraint(
+            "id",
+            "run_id",
+            name=conv("uq_portfolio_performance_report_id_run"),
+        ),
         Index("idx_portfolio_performance_report_run_calculated", "run_id", "calculated_at"),
     )
 
@@ -62,7 +68,7 @@ class PortfolioPerformanceReport(Base):
     initial_nav: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     final_nav: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     cumulative_return: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
-    annualized_return: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
+    annualized_return: Mapped[Decimal] = mapped_column(Numeric(60, 18), nullable=False)
     max_drawdown: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
     max_drawdown_peak_date: Mapped[date | None] = mapped_column(Date)
     max_drawdown_trough_date: Mapped[date | None] = mapped_column(Date)
@@ -92,12 +98,20 @@ class PortfolioPerformanceDaily(Base):
     __tablename__ = "portfolio_performance_daily"
     __table_args__ = (
         PrimaryKeyConstraint("performance_id", "trade_date"),
+        ForeignKeyConstraint(
+            ("performance_id", "run_id"),
+            (
+                "portfolio_performance_report.id",
+                "portfolio_performance_report.run_id",
+            ),
+            name=conv("fk_portfolio_performance_daily_report_run"),
+            ondelete="CASCADE",
+        ),
         Index("idx_portfolio_performance_daily_run_date", "run_id", "trade_date"),
     )
 
     performance_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("portfolio_performance_report.id", ondelete="CASCADE"),
         nullable=False,
     )
     run_id: Mapped[uuid.UUID] = mapped_column(

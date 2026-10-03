@@ -10,6 +10,7 @@ from app.core.db import get_db
 from app.services.performance.application import (
     PerformanceApplicationService,
     PerformanceConflictError,
+    PerformanceRunNotSuccessError,
 )
 
 router = APIRouter()
@@ -26,6 +27,11 @@ def calculate_performance(
         job = PerformanceApplicationService(db).queue_calculation(run_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PerformanceRunNotSuccessError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except PerformanceConflictError as exc:
         raise HTTPException(
             status_code=409,

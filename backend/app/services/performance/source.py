@@ -1,5 +1,5 @@
 import uuid
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from app.models.portfolio import PortfolioBacktestRun, PortfolioNavDaily
 from app.services.performance.identity import performance_source_hash
 
 NAV_PERSISTENCE_QUANTUM = Decimal("0.00000001")
+MONEY_PERSISTENCE_QUANTUM = Decimal("0.0001")
 
 
 class PerformanceSourceError(RuntimeError):
@@ -121,20 +122,58 @@ class PerformanceSourceProvider:
                 "PERFORMANCE_SOURCE_INCOMPLETE",
                 "NAV date set must exactly match the run open-date set",
             )
-        if any(row.nav <= 0 or row.total_assets < 0 for row in rows):
+        if run.initial_cash <= 0 or any(
+            row.nav <= 0
+            or row.total_assets <= 0
+            or row.cash < 0
+            or row.market_value < 0
+            or row.position_count < 0
+            or row.gross_exposure < 0
+            or row.net_exposure < 0
+            or row.trading_cost < 0
+            for row in rows
+        ):
             raise PerformanceSourceError(
                 "PERFORMANCE_SOURCE_INCOMPLETE",
-                "NAV must be positive and total assets nonnegative",
+                "performance source contains invalid ledger values",
             )
+        for row in rows:
+            total_components = (row.cash + row.market_value).quantize(
+                MONEY_PERSISTENCE_QUANTUM,
+                rounding=ROUND_HALF_UP,
+            )
+            persisted_total = row.total_assets.quantize(
+                MONEY_PERSISTENCE_QUANTUM,
+                rounding=ROUND_HALF_UP,
+            )
+            expected_nav = (row.total_assets / run.initial_cash).quantize(
+                NAV_PERSISTENCE_QUANTUM,
+                rounding=ROUND_HALF_UP,
+            )
+            persisted_nav = row.nav.quantize(
+                NAV_PERSISTENCE_QUANTUM,
+                rounding=ROUND_HALF_UP,
+            )
+            if total_components != persisted_total or expected_nav != persisted_nav:
+                raise PerformanceSourceError(
+                    "PERFORMANCE_LEDGER_IDENTITY_MISMATCH",
+                    "cash, market value, total assets, and NAV do not reconcile",
+                )
         final_value = dict(run.result_summary or {}).get("final_nav")
         try:
-            expected = Decimal(str(final_value)).quantize(NAV_PERSISTENCE_QUANTUM)
+            expected = Decimal(str(final_value)).quantize(
+                NAV_PERSISTENCE_QUANTUM,
+                rounding=ROUND_HALF_UP,
+            )
         except (InvalidOperation, TypeError, ValueError) as exc:
             raise PerformanceSourceError(
                 "PERFORMANCE_NAV_IDENTITY_MISMATCH",
                 "backtest result_summary.final_nav is missing or invalid",
             ) from exc
-        actual = rows[-1].nav.quantize(NAV_PERSISTENCE_QUANTUM)
+        actual = rows[-1].nav.quantize(
+            NAV_PERSISTENCE_QUANTUM,
+            rounding=ROUND_HALF_UP,
+        )
         if actual != expected:
             raise PerformanceSourceError(
                 "PERFORMANCE_NAV_IDENTITY_MISMATCH",

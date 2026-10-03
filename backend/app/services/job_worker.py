@@ -36,6 +36,7 @@ from app.services.performance.application import (
     PERFORMANCE_JOB_TYPE,
     PerformanceApplicationService,
 )
+from app.services.performance.recovery import recover_stale_performance_jobs
 from app.services.portfolio.backtest_application import (
     BACKTEST_JOB_TYPE,
     BacktestRunner,
@@ -233,6 +234,14 @@ def run_worker() -> None:
                             )
                         ),
                     )
+                    recovered_performance = recover_stale_performance_jobs(
+                        db,
+                        timeout_minutes=float(
+                            scheduler_setting(
+                                "running_heartbeat_timeout_minutes", 15
+                            )
+                        ),
+                    )
                     recovered_dirty = recover_stale_processing_ranges(
                         db,
                         stale_minutes=float(
@@ -242,11 +251,12 @@ def run_worker() -> None:
                     logger.info(
                         "worker recovery id={} recovered_jobs={} "
                         "recovered_research={} recovered_backtests={} "
-                        "recovered_dirty={}",
+                        "recovered_performance={} recovered_dirty={}",
                         worker_id,
                         recovered_jobs,
                         recovered_research,
                         recovered_backtests,
+                        recovered_performance,
                         recovered_dirty,
                     )
                     last_recovery = now
