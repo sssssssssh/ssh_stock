@@ -17,6 +17,7 @@ from app.models.performance_trade import (
 )
 from app.repositories.performance_trade import PerformanceTradeRepository
 from app.services.calc_metadata import config_hash
+from app.services.performance.analytics_bundle import AnalyticsBundleError
 from app.services.performance.trade_source import PerformanceTradeSourceProvider
 
 PERFORMANCE_TRADE_JOB_TYPE = "portfolio_performance_trade"
@@ -273,8 +274,24 @@ class PerformanceTradeApplicationService:
         return PerformanceTradeArtifact(report, reused=False)
 
     def get_report(
-        self, run_id: uuid.UUID, performance_id: uuid.UUID | None = None
+        self,
+        run_id: uuid.UUID,
+        performance_id: uuid.UUID | None = None,
+        trade_id: uuid.UUID | None = None,
     ) -> PortfolioPerformanceTradeReport:
+        if trade_id is not None:
+            report = self.repository.get_report(trade_id)
+            if report is None:
+                raise LookupError("portfolio performance trade report not found")
+            if report.run_id != run_id or (
+                performance_id is not None
+                and report.performance_id != performance_id
+            ):
+                raise AnalyticsBundleError(
+                    "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+                    "trade artifact does not belong to the selected performance and run",
+                )
+            return report
         base = self.source_provider.select_base(run_id, performance_id)
         report = self.repository.latest_report(base.report.id)
         if report is None:
@@ -306,12 +323,13 @@ class PerformanceTradeApplicationService:
         limit: int,
         offset: int,
         classification: str | None = None,
+        trade_id: uuid.UUID | None = None,
     ) -> tuple[
         PortfolioPerformanceTradeReport,
         list[PortfolioPerformanceTradeEpisode],
         int,
     ]:
-        report = self.get_report(run_id, performance_id)
+        report = self.get_report(run_id, performance_id, trade_id)
         return (
             report,
             self.repository.list_episodes(

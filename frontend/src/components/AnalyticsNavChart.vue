@@ -4,18 +4,18 @@ import { GridComponent, LegendComponent, TooltipComponent } from "echarts/compon
 import { init, use, type EChartsType } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { PerformanceDaily, RiskDaily } from "../types";
+import type { AnalyticsSeries } from "../types";
 import { buildNavSeries } from "../services/analytics";
 
-const props = defineProps<{ performance: PerformanceDaily[]; risk: RiskDaily[] }>();
+const props = defineProps<{ rows: AnalyticsSeries[] }>();
 const chartRef = ref<HTMLDivElement | null>(null);
 let chart: EChartsType | null = null;
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
 function render() {
-  if (!chartRef.value || !props.performance.length) return;
+  if (!chartRef.value || !props.rows.length) return;
   chart ||= init(chartRef.value);
-  const series = buildNavSeries(props.performance, props.risk);
+  const series = buildNavSeries(props.rows);
   chart.setOption({
     animation: false,
     tooltip: { trigger: "axis" },
@@ -32,7 +32,7 @@ function render() {
 
 function resize() { chart?.resize(); }
 onMounted(async () => { window.addEventListener("resize", resize); await nextTick(); render(); });
-watch(() => [props.performance, props.risk], async () => { await nextTick(); render(); }, { deep: true });
+watch(() => props.rows, async () => { await nextTick(); render(); }, { deep: true });
 onBeforeUnmount(() => { window.removeEventListener("resize", resize); chart?.dispose(); });
 </script>
 

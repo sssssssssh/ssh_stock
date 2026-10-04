@@ -1,8 +1,8 @@
-export type ApiEnvelope<T> = {
+export type ApiEnvelope<T, M = Record<string, unknown>> = {
   code: number;
   message: string;
   data: T;
-  meta: Record<string, unknown>;
+  meta: M;
 };
 
 export type BacktestRun = {
@@ -121,6 +121,31 @@ export type PerformanceDaily = {
 export type RiskDaily = {
   trade_date: string;
   benchmark_nav: string;
+};
+
+export type AnalyticsSeries = {
+  trade_date: string;
+  strategy_nav: string;
+  strategy_daily_return: string;
+  strategy_cumulative_return: string;
+  drawdown: string;
+  benchmark_nav: string;
+  benchmark_daily_return: string;
+  active_return: string;
+};
+
+export type AnalyticsSeriesMeta = AnalyticsIdentity & {
+  limit: number;
+  offset: number;
+  total: number;
+};
+
+export type TradeEpisodeMeta = {
+  trade_id: string;
+  performance_id: string;
+  limit: number;
+  offset: number;
+  total: number;
 };
 
 export type TradeEpisode = {

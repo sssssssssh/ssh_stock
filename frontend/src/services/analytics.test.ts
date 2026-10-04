@@ -6,6 +6,7 @@ import {
   buildDrawdownSeries,
   buildNavSeries,
   compareAnalytics,
+  fetchAllAnalyticsSeries,
   fetchPeriods,
   fetchTradeEpisodes,
   formatAnalyticsPercent,
@@ -90,10 +91,15 @@ afterEach(() => vi.restoreAllMocks());
 describe("analytics service and presentation contract", () => {
   it("builds period endpoint parameters", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => response([]));
-    await fetchPeriods("run-a", "MONTH");
-    expect(fetchMock.mock.calls[0][0]).toContain(
-      "/portfolio/backtests/run-a/performance/period?period_type=MONTH&limit=500"
-    );
+    const identity = summary("run-a").identity;
+    identity.period_id = "x";
+    await fetchPeriods("run-a", "MONTH", identity);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("performance_id=p");
+    expect(url).toContain("risk_id=r");
+    expect(url).toContain("trade_id=t");
+    expect(url).toContain("period_id=x");
+    expect(url).toContain("period_type=MONTH");
   });
 
   it("sends compare items in request order", async () => {
@@ -110,14 +116,14 @@ describe("analytics service and presentation contract", () => {
 
   it("builds episode filters and pagination", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() => response([]));
-    await fetchTradeEpisodes("run-a", {
+    await fetchTradeEpisodes("run-a", summary("run-a").identity, {
       status: "CLOSED",
       tsCode: "000001.SZ",
       limit: 20,
       offset: 40
     });
     expect(fetchMock.mock.calls[0][0]).toContain(
-      "status=CLOSED&ts_code=000001.SZ&limit=20&offset=40"
+      "performance_id=p&trade_id=t&status=CLOSED&ts_code=000001.SZ&limit=20&offset=40"
     );
   });
 
@@ -136,16 +142,105 @@ describe("analytics service and presentation contract", () => {
   it("uses persisted NAV and benchmark NAV without recalculation", () => {
     expect(
       buildNavSeries(
-        [{ trade_date: "2026-01-02", nav: "1.234", drawdown: "-0.01" }],
-        [{ trade_date: "2026-01-02", benchmark_nav: "1.111" }]
+        [{
+          trade_date: "2026-01-02",
+          strategy_nav: "1.234",
+          strategy_daily_return: "0.01",
+          strategy_cumulative_return: "0.234",
+          drawdown: "-0.01",
+          benchmark_nav: "1.111",
+          benchmark_daily_return: "0.005",
+          active_return: "0.005"
+        }]
       )
     ).toEqual({ dates: ["2026-01-02"], strategy: [1.234], benchmark: [1.111] });
   });
 
   it("uses persisted API drawdown", () => {
     expect(
-      buildDrawdownSeries([{ trade_date: "2026-01-02", nav: "1.2", drawdown: "-0.123" }])
+      buildDrawdownSeries([{
+        trade_date: "2026-01-02",
+        strategy_nav: "1.2",
+        strategy_daily_return: "0",
+        strategy_cumulative_return: "0.2",
+        drawdown: "-0.123",
+        benchmark_nav: "1.1",
+        benchmark_daily_return: "0",
+        active_return: "0"
+      }])
     ).toEqual([["2026-01-02", -0.123]]);
+  });
+
+  it("loads all 1200 bundle-pinned series rows in three ordered pages", async () => {
+    const identity = summary("run-a").identity;
+    identity.period_id = "x";
+    const allRows = Array.from({ length: 1200 }, (_, index) => ({
+      trade_date: new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10),
+      strategy_nav: String(1 + index / 10000),
+      strategy_daily_return: "0.0001",
+      strategy_cumulative_return: String(index / 10000),
+      drawdown: String(-index / 100000),
+      benchmark_nav: String(1 + index / 20000),
+      benchmark_daily_return: "0.00005",
+      active_return: "0.00005"
+    }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const offset = Number(new URL(String(input), "http://local").searchParams.get("offset"));
+      const data = allRows.slice(offset, offset + 500);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          code: 0,
+          message: "ok",
+          data,
+          meta: { ...identity, limit: 500, offset, total: 1200 }
+        })
+      } as Response);
+    });
+    const rows = await fetchAllAnalyticsSeries("run-a", identity);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(rows).toHaveLength(1200);
+    expect(rows[0].trade_date).toBe(allRows[0].trade_date);
+    expect(rows[1199].trade_date).toBe(allRows[1199].trade_date);
+    expect(buildNavSeries(rows).dates).toHaveLength(1200);
+    expect(buildDrawdownSeries(rows)).toHaveLength(1200);
+  });
+
+  it("fails closed when a later series page changes bundle identity", async () => {
+    const identity = summary("run-a").identity;
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      trade_date: new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10),
+      strategy_nav: "1",
+      strategy_daily_return: "0",
+      strategy_cumulative_return: "0",
+      drawdown: "0",
+      benchmark_nav: "1",
+      benchmark_daily_return: "0",
+      active_return: "0"
+    }));
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
+      const offset = Number(new URL(String(input), "http://local").searchParams.get("offset"));
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          code: 0,
+          message: "ok",
+          data: rows.slice(offset, offset + 500),
+          meta: {
+            ...identity,
+            risk_id: offset === 0 ? identity.risk_id : "r2",
+            limit: 500,
+            offset,
+            total: 501
+          }
+        })
+      } as Response);
+    });
+    await expect(fetchAllAnalyticsSeries("run-a", identity)).rejects.toThrow(
+      "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH"
+    );
   });
 
   it("client sorting leaves source array identity and order unchanged", () => {

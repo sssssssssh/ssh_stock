@@ -67,6 +67,13 @@ class PerformanceTradeRepository:
             .limit(1)
         )
 
+    def get_report(self, trade_id: uuid.UUID) -> PortfolioPerformanceTradeReport | None:
+        return self.db.scalar(
+            select(PortfolioPerformanceTradeReport)
+            .where(PortfolioPerformanceTradeReport.id == trade_id)
+            .execution_options(populate_existing=True)
+        )
+
     def list_daily(
         self, trade_id: uuid.UUID, *, limit: int, offset: int
     ) -> list[PortfolioPerformanceTradeDaily]:

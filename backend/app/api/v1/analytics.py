@@ -16,6 +16,10 @@ from app.services.performance.analytics_compare import (
     AnalyticsCompareSelection,
 )
 from app.services.performance.analytics_read import AnalyticsReadApplicationService
+from app.services.performance.analytics_series import (
+    AnalyticsSeriesError,
+    AnalyticsSeriesReadApplicationService,
+)
 from app.services.performance.period_application import (
     PerformancePeriodApplicationService,
     PerformancePeriodConflictError,
@@ -100,6 +104,7 @@ def period_rows(
     performance_id: uuid.UUID | None = Query(default=None),
     risk_id: uuid.UUID | None = Query(default=None),
     trade_id: uuid.UUID | None = Query(default=None),
+    period_id: uuid.UUID | None = Query(default=None),
     period_type: str | None = Query(default=None, pattern="^(MONTH|YEAR)$"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -112,6 +117,7 @@ def period_rows(
             performance_id=performance_id,
             risk_id=risk_id,
             trade_id=trade_id,
+            period_id=period_id,
             period_type=period_type,
             limit=row_limit,
             offset=row_offset,
@@ -132,6 +138,38 @@ def period_rows(
             "offset": row_offset,
             "total": total,
         },
+    )
+
+
+@router.get("/backtests/{run_id}/analytics/series")
+def analytics_series(
+    run_id: uuid.UUID,
+    performance_id: uuid.UUID = Query(...),
+    risk_id: uuid.UUID = Query(...),
+    trade_id: uuid.UUID | None = Query(default=None),
+    period_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    row_limit, row_offset = clamp_limit(limit, maximum=500), clamp_offset(offset)
+    try:
+        page = AnalyticsSeriesReadApplicationService(db).page(
+            run_id,
+            performance_id=performance_id,
+            risk_id=risk_id,
+            trade_id=trade_id,
+            period_id=period_id,
+            limit=row_limit,
+            offset=row_offset,
+        )
+    except AnalyticsBundleError as exc:
+        raise _error(exc, not_found=exc.code == "ANALYTICS_BASE_NOT_FOUND") from exc
+    except AnalyticsSeriesError as exc:
+        raise _error(exc) from exc
+    return envelope(
+        [row.model_dump(mode="json") for row in page.rows],
+        page.meta.model_dump(mode="json"),
     )
 
 

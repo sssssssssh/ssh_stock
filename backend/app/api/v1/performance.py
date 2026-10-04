@@ -10,6 +10,7 @@ from app.api.v1.common import clamp_limit, clamp_offset, envelope, iso
 from app.core.db import get_db
 from app.core.performance_risk_config import RISK_VERSION
 from app.core.performance_trade_config import TRADE_VERSION
+from app.services.performance.analytics_bundle import AnalyticsBundleError
 from app.services.performance.application import (
     PerformanceApplicationService,
     PerformanceConflictError,
@@ -312,6 +313,7 @@ def performance_trade_daily(
 def performance_trade_episodes(
     run_id: uuid.UUID,
     performance_id: uuid.UUID | None = Query(default=None),
+    trade_id: uuid.UUID | None = Query(default=None),
     episode_status: str | None = Query(default=None, alias="status", pattern="^(OPEN|CLOSED)$"),
     ts_code: str | None = Query(default=None, min_length=1, max_length=16),
     classification: str | None = Query(
@@ -332,11 +334,18 @@ def performance_trade_episodes(
         }
         if classification is not None:
             kwargs["classification"] = classification
+        if trade_id is not None:
+            kwargs["trade_id"] = trade_id
         report, rows, total = PerformanceTradeApplicationService(db).episode_page(
             run_id, **kwargs
         )
     except PerformanceTradeSourceError as exc:
         raise _trade_source_http_error(exc) from exc
+    except AnalyticsBundleError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return envelope(

@@ -278,3 +278,31 @@ score, ranking, recommendation, or best strategy.
 The Vue analytics view consumes persisted NAV, benchmark NAV, drawdown, period, and episode
 facts. ECharts only renders those values. Null ratios display `--`; client-side table sorting
 does not change source order or write any result back to the database.
+
+## M14.4.1 productization consistency closeout
+
+M14.4.1 keeps `performance_v1`, `risk_v1`, `trade_v1`, `period_v1`, and
+`analytics_read_v1` unchanged and adds no migration. The product view first resolves Summary,
+then treats its complete identity as the read transaction anchor. Series, Episode, and Period
+reads explicitly carry that identity, so a newer artifact created while the page is loading
+cannot replace one member of the displayed bundle.
+
+`GET /api/v1/portfolio/backtests/{run_id}/analytics/series` requires `performance_id` and
+`risk_id`, accepts the pinned `trade_id` and `period_id`, and returns persisted strategy NAV,
+daily/cumulative return, drawdown, benchmark NAV/return, and active return. It supports
+`limit`/`offset` pagination up to 500 rows and returns the selected bundle plus `total` in
+response metadata. Performance and Risk daily counts must both equal the persisted
+Performance `trade_days`; the joined page must contain every expected date or the read fails
+closed with `ANALYTICS_SERIES_DATE_MISMATCH`. The service never recalculates a metric.
+
+The frontend loads every Series page, rejects changed identities/totals, duplicate or
+non-ascending dates, and incomplete results before rendering any curve. Episode pagination
+retains response metadata and disables the next page from `offset + rows.length >= total`.
+Episode reads accept an exact `trade_id`; Period reads accept an exact `period_id`; both fresh
+read and validate owner identity instead of silently falling back to latest.
+
+Period queue, recovery, and fencing are verified against PostgreSQL with two independent
+sessions and a barrier. Concurrent queueing leaves one active Job, a heartbeat refreshed
+between discovery and row lock survives recovery, and a worker fenced after flushing Period
+rows rolls back those rows and cannot change FAILED back to SUCCESS. A separately queued
+replacement worker may then create the immutable Period artifact.

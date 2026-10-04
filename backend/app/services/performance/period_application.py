@@ -277,6 +277,7 @@ class PerformancePeriodApplicationService:
         performance_id: uuid.UUID | None,
         risk_id: uuid.UUID | None,
         trade_id: uuid.UUID | None,
+        period_id: uuid.UUID | None,
         period_type: str | None,
         limit: int,
         offset: int,
@@ -286,6 +287,7 @@ class PerformancePeriodApplicationService:
             performance_id=performance_id,
             risk_id=risk_id,
             trade_id=trade_id,
+            period_id=period_id,
             require_period=True,
         )
         assert bundle.period is not None

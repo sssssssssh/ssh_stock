@@ -27,10 +27,15 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export type ApiPage<T, M = Record<string, unknown>> = { data: T; meta: M };
+
+async function requestEnvelope<T, M = Record<string, unknown>>(
+  path: string,
+  init?: RequestInit
+): Promise<ApiEnvelope<T, M>> {
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, credentials: "include" });
   const body = (await response.json().catch(() => null)) as
-    | ApiEnvelope<T>
+    | ApiEnvelope<T, M>
     | { detail?: string | { code?: string } }
     | null;
   if (!response.ok) {
@@ -50,7 +55,19 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!body || !("code" in body) || body.code !== 0) {
     throw new Error((body && "message" in body && body.message) || "API_ERROR");
   }
-  return body.data;
+  return body;
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await requestEnvelope<T>(path, init)).data;
+}
+
+export async function requestPage<T, M = Record<string, unknown>>(
+  path: string,
+  init?: RequestInit
+): Promise<ApiPage<T, M>> {
+  const body = await requestEnvelope<T, M>(path, init);
+  return { data: body.data, meta: body.meta };
 }
 
 export function fetchSystemStatus(): Promise<SystemStatus> {

@@ -4,10 +4,10 @@ import { GridComponent, MarkLineComponent, TooltipComponent } from "echarts/comp
 import { init, use, type EChartsType } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import type { AnalyticsSummary, PerformanceDaily } from "../types";
+import type { AnalyticsSeries, AnalyticsSummary } from "../types";
 import { buildDrawdownSeries } from "../services/analytics";
 
-const props = defineProps<{ rows: PerformanceDaily[]; summary: AnalyticsSummary }>();
+const props = defineProps<{ rows: AnalyticsSeries[]; summary: AnalyticsSummary }>();
 const chartRef = ref<HTMLDivElement | null>(null);
 let chart: EChartsType | null = null;
 use([LineChart, GridComponent, MarkLineComponent, TooltipComponent, CanvasRenderer]);

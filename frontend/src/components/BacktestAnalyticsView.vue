@@ -4,19 +4,17 @@ import { ApiError } from "../services/api";
 import {
   calculatePeriods,
   compareAnalytics,
+  fetchAllAnalyticsSeries,
   fetchAnalyticsSummary,
   fetchBacktests,
-  fetchPerformanceDaily,
   fetchPeriods,
-  fetchRiskDaily,
   fetchTradeEpisodes
 } from "../services/analytics";
 import type {
   AnalyticsPeriod,
+  AnalyticsSeries,
   AnalyticsSummary,
   BacktestRun,
-  PerformanceDaily,
-  RiskDaily,
   TradeEpisode
 } from "../types";
 import AnalyticsCompareTable from "./AnalyticsCompareTable.vue";
@@ -28,8 +26,7 @@ import AnalyticsSummaryCards from "./AnalyticsSummaryCards.vue";
 const runs = ref<BacktestRun[]>([]);
 const selectedRunId = ref("");
 const summary = ref<AnalyticsSummary | null>(null);
-const performanceDaily = ref<PerformanceDaily[]>([]);
-const riskDaily = ref<RiskDaily[]>([]);
+const series = ref<AnalyticsSeries[]>([]);
 const monthPeriods = ref<AnalyticsPeriod[]>([]);
 const yearPeriods = ref<AnalyticsPeriod[]>([]);
 const periodType = ref<"MONTH" | "YEAR">("MONTH");
@@ -45,6 +42,11 @@ const episodeClassification = ref("");
 const episodeCode = ref("");
 const episodePage = ref(0);
 const episodes = ref<TradeEpisode[]>([]);
+const episodeTotal = ref(0);
+const episodeLimit = 20;
+let workspaceReady = false;
+let loadGeneration = 0;
+let episodeGeneration = 0;
 
 const successRuns = computed(() => runs.value.filter((row) => row.status === "SUCCESS"));
 const visiblePeriods = computed(() => periodType.value === "MONTH" ? monthPeriods.value : yearPeriods.value);
@@ -55,6 +57,7 @@ function errorText(value: unknown): string {
     ANALYTICS_BASE_NOT_FOUND: "回测尚未成功或不存在",
     ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE: "Performance、Risk 或 Trade 分析尚未生成",
     ANALYTICS_ARTIFACT_BUNDLE_MISMATCH: "分析产物来源不一致，请重新生成",
+    ANALYTICS_SERIES_DATE_MISMATCH: "Performance 与 Risk 每日序列不一致",
     PERIOD_SOURCE_DATE_MISMATCH: "周期分析的每日数据日期不一致",
     PERIOD_CALCULATION_CONFLICT: "周期分析任务正在运行"
   };
@@ -77,51 +80,71 @@ async function loadWorkspace() {
 
 async function loadSelectedRun() {
   if (!selectedRunId.value) return;
+  const runId = selectedRunId.value;
+  const current = ++loadGeneration;
   loading.value = true;
   error.value = "";
   periodMissing.value = false;
   try {
-    summary.value = await fetchAnalyticsSummary(selectedRunId.value);
-    const identity = summary.value.identity;
-    [performanceDaily.value, riskDaily.value] = await Promise.all([
-      fetchPerformanceDaily(selectedRunId.value),
-      fetchRiskDaily(selectedRunId.value, identity.performance_id)
-    ]);
+    const nextSummary = await fetchAnalyticsSummary(runId);
+    const identity = nextSummary.identity;
+    const nextSeries = fetchAllAnalyticsSeries(runId, identity);
+    const nextEpisodes = fetchTradeEpisodes(runId, identity, episodeOptions());
+    let nextMonths: AnalyticsPeriod[] = [];
+    let nextYears: AnalyticsPeriod[] = [];
     if (identity.period_id) {
-      [monthPeriods.value, yearPeriods.value] = await Promise.all([
-        fetchPeriods(selectedRunId.value, "MONTH"),
-        fetchPeriods(selectedRunId.value, "YEAR")
+      [nextMonths, nextYears] = await Promise.all([
+        fetchPeriods(runId, "MONTH", identity),
+        fetchPeriods(runId, "YEAR", identity)
       ]);
-    } else {
-      periodMissing.value = true;
-      monthPeriods.value = [];
-      yearPeriods.value = [];
     }
-    await loadEpisodes();
+    const [nextSeriesRows, nextEpisodePage] = await Promise.all([
+      nextSeries,
+      nextEpisodes
+    ]);
+    if (current !== loadGeneration || runId !== selectedRunId.value) return;
+    summary.value = nextSummary;
+    series.value = nextSeriesRows;
+    monthPeriods.value = nextMonths;
+    yearPeriods.value = nextYears;
+    periodMissing.value = !identity.period_id;
+    episodes.value = nextEpisodePage.data;
+    episodeTotal.value = nextEpisodePage.meta.total;
   } catch (value) {
+    if (current !== loadGeneration) return;
     summary.value = null;
     error.value = errorText(value);
   } finally {
-    loading.value = false;
+    if (current === loadGeneration) loading.value = false;
   }
 }
 
 async function generatePeriods() {
   if (!selectedRunId.value) return;
+  const anchor = summary.value?.identity;
+  if (!anchor) return;
   periodJobRunning.value = true;
   error.value = "";
+  const runId = selectedRunId.value;
+  const current = ++loadGeneration;
   try {
-    await calculatePeriods(selectedRunId.value);
+    await calculatePeriods(runId, anchor);
     for (let attempt = 0; attempt < 30; attempt += 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 1000));
-      const refreshed = await fetchAnalyticsSummary(selectedRunId.value);
+      if (current !== loadGeneration || runId !== selectedRunId.value) return;
+      const refreshed = await fetchAnalyticsSummary(runId, anchor);
       if (refreshed.identity.period_id) {
-        summary.value = refreshed;
-        periodMissing.value = false;
-        [monthPeriods.value, yearPeriods.value] = await Promise.all([
-          fetchPeriods(selectedRunId.value, "MONTH"),
-          fetchPeriods(selectedRunId.value, "YEAR")
+        const [nextSeries, nextMonths, nextYears] = await Promise.all([
+          fetchAllAnalyticsSeries(runId, refreshed.identity),
+          fetchPeriods(runId, "MONTH", refreshed.identity),
+          fetchPeriods(runId, "YEAR", refreshed.identity)
         ]);
+        if (current !== loadGeneration || runId !== selectedRunId.value) return;
+        summary.value = refreshed;
+        series.value = nextSeries;
+        periodMissing.value = false;
+        monthPeriods.value = nextMonths;
+        yearPeriods.value = nextYears;
         return;
       }
     }
@@ -150,19 +173,39 @@ async function runCompare() {
 }
 
 async function loadEpisodes() {
-  if (!selectedRunId.value) return;
-  const rows = await fetchTradeEpisodes(selectedRunId.value, {
+  if (!selectedRunId.value || !summary.value) return;
+  const current = ++episodeGeneration;
+  const runId = selectedRunId.value;
+  const identity = summary.value.identity;
+  const page = await fetchTradeEpisodes(runId, identity, episodeOptions());
+  if (
+    current !== episodeGeneration ||
+    runId !== selectedRunId.value ||
+    identity !== summary.value?.identity
+  ) return;
+  episodes.value = page.data;
+  episodeTotal.value = page.meta.total;
+}
+
+function episodeOptions() {
+  return {
     status: episodeStatus.value || undefined,
     classification: episodeClassification.value || undefined,
     tsCode: episodeCode.value || undefined,
-    limit: 20,
-    offset: episodePage.value * 20
-  });
-  episodes.value = rows;
+    limit: episodeLimit,
+    offset: episodePage.value * episodeLimit
+  };
 }
 
-watch(selectedRunId, () => { episodePage.value = 0; void loadSelectedRun(); });
-onMounted(loadWorkspace);
+watch(selectedRunId, () => {
+  if (!workspaceReady) return;
+  episodePage.value = 0;
+  void loadSelectedRun();
+});
+onMounted(async () => {
+  await loadWorkspace();
+  workspaceReady = true;
+});
 </script>
 
 <template>
@@ -185,8 +228,8 @@ onMounted(loadWorkspace);
       <AnalyticsSummaryCards :summary="summary" />
       <div v-if="summary.warnings.length" class="analytics-warning">{{ summary.warnings.join(" · ") }}</div>
       <section class="analytics-chart-grid">
-        <article class="panel"><div class="panel-title"><h2>NAV / Benchmark</h2></div><AnalyticsNavChart :performance="performanceDaily" :risk="riskDaily" /></article>
-        <article class="panel"><div class="panel-title"><h2>Drawdown</h2></div><AnalyticsDrawdownChart :rows="performanceDaily" :summary="summary" /></article>
+        <article class="panel"><div class="panel-title"><h2>NAV / Benchmark</h2></div><AnalyticsNavChart :rows="series" /></article>
+        <article class="panel"><div class="panel-title"><h2>Drawdown</h2></div><AnalyticsDrawdownChart :rows="series" :summary="summary" /></article>
       </section>
 
       <article class="panel analytics-section">
@@ -210,7 +253,7 @@ onMounted(loadWorkspace);
           <button @click="episodePage = 0; loadEpisodes()">查询</button>
         </div>
         <div class="analytics-table-wrap"><table class="analytics-table"><thead><tr><th>代码</th><th>#</th><th>状态</th><th>Entry</th><th>Exit</th><th>持有日</th><th>Realized PnL</th><th>Unrealized</th><th>Return</th><th>Cost</th><th>分类</th></tr></thead><tbody><tr v-for="row in episodes" :key="`${row.ts_code}-${row.episode_no}`"><td>{{ row.ts_code }}</td><td>{{ row.episode_no }}</td><td>{{ row.status }}</td><td>{{ row.entry_date }}</td><td>{{ row.exit_date || '--' }}</td><td>{{ row.holding_trade_days }}</td><td>{{ row.realized_pnl }}</td><td>{{ row.unrealized_pnl_end }}</td><td>{{ row.episode_return ?? '--' }}</td><td>{{ row.total_execution_cost }}</td><td>{{ row.classification || '--' }}</td></tr><tr v-if="!episodes.length"><td colspan="11" class="analytics-empty">暂无 Episode</td></tr></tbody></table></div>
-        <div class="analytics-pagination"><button :disabled="episodePage === 0" @click="episodePage -= 1; loadEpisodes()">上一页</button><span>第 {{ episodePage + 1 }} 页</span><button :disabled="episodes.length < 20" @click="episodePage += 1; loadEpisodes()">下一页</button></div>
+        <div class="analytics-pagination"><button :disabled="episodePage === 0" @click="episodePage -= 1; loadEpisodes()">上一页</button><span>第 {{ episodePage + 1 }} 页 · 共 {{ episodeTotal }} 条</span><button :disabled="episodePage * episodeLimit + episodes.length >= episodeTotal" @click="episodePage += 1; loadEpisodes()">下一页</button></div>
       </article>
 
       <article class="panel analytics-section">

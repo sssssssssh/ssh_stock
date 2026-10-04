@@ -5,7 +5,8 @@ import {
   fetchDataCalendar,
   fetchRealtimeKline,
   fetchSystemRuntime,
-  request
+  request,
+  requestPage
 } from "./api";
 
 afterEach(() => vi.restoreAllMocks());
@@ -54,5 +55,15 @@ describe("API request mapping", () => {
   it("rejects malformed success envelopes", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ message: "bad" }));
     await expect(request("/bad")).rejects.toThrow("bad");
+  });
+
+  it("preserves pagination metadata with requestPage", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      response({ code: 0, message: "ok", data: [{ id: 1 }], meta: { total: 3 } })
+    );
+    await expect(requestPage<{ id: number }[], { total: number }>("/page")).resolves.toEqual({
+      data: [{ id: 1 }],
+      meta: { total: 3 }
+    });
   });
 });
