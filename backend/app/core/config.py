@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.core.accounting_config import AccountingConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.performance_config import PerformanceConfig
+from app.core.performance_period_config import PerformancePeriodConfig
 from app.core.performance_risk_config import PerformanceRiskConfig
 from app.core.performance_trade_config import PerformanceTradeConfig
 from app.core.portfolio_config import PortfolioConfig
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
     execution_config: ExecutionConfig | None = None
     accounting_config: AccountingConfig | None = None
     performance_config: PerformanceConfig | None = None
+    performance_period_config: PerformancePeriodConfig | None = None
     performance_risk_config: PerformanceRiskConfig | None = None
     performance_trade_config: PerformanceTradeConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
@@ -127,6 +129,11 @@ class Settings(BaseSettings):
                 "risk", {}
             )
         )
+        performance_period_config = PerformancePeriodConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "performance_period.yaml").get(
+                "period", {}
+            )
+        )
         performance_trade_config = PerformanceTradeConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "performance_trade.yaml").get("trade", {})
         )
@@ -146,6 +153,7 @@ class Settings(BaseSettings):
         settings.accounting_config = accounting_config
         settings.performance_config = performance_config
         settings.performance_risk_config = performance_risk_config
+        settings.performance_period_config = performance_period_config
         settings.performance_trade_config = performance_trade_config
         return settings
 

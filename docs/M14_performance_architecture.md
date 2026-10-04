@@ -218,3 +218,63 @@ The application-service-only endpoints are:
 
 Callers may select a base performance artifact and filter reads, but cannot override replay,
 cost, PnL, episode, epsilon, or turnover definitions.
+
+## M14.4 productization, period, and analytics read layer
+
+M14.4 freezes two separate contracts: `period_v1` is an immutable calculation artifact,
+while `analytics_read_v1` is a bounded read DTO for the UI and future agents. It reads only
+one compatible Performance/Risk/Trade bundle and never updates M13, `performance_v1`,
+`risk_v1`, or `trade_v1`. The strict definition-only configuration is
+`config/performance_period.yaml`.
+
+The bundle resolver honors every explicit artifact ID and fails closed on a cross-run or
+cross-performance owner mismatch. Missing IDs use deterministic compatible latest ordering:
+Performance by `(calculated_at DESC, id DESC)`, then Risk and Trade within that Performance,
+then Period within the exact Performance/Risk/Trade triple. It never combines independently
+latest artifacts from different Performance reports. Resolver and source queries use fresh
+ORM reads with `populate_existing=True`.
+
+Period source dates from PerformanceDaily, RiskDaily, and TradeDaily must be identical and
+must equal every upstream report's `trade_days`; an inner join cannot hide gaps. Monthly keys
+are `YYYY-MM`, yearly keys are `YYYY`, and actual first/last trade dates describe partial
+calendar buckets. Strategy and benchmark returns compound their already-persisted daily
+returns. Relative return is `(1 + strategy) / (1 + benchmark) - 1`, while arithmetic spread
+is separately named `return_spread`. Turnover and all cost fields sum TradeDaily facts.
+Closed episodes belong wholly to their exit month/year; open episodes are excluded, and
+breakeven remains in the win-rate denominator.
+
+The Period identity is
+`(performance_id, risk_id, trade_id, period_version, period_config_hash,
+period_source_hash)`. The source hash binds every upstream artifact ID, version, config hash,
+and source hash, including benchmark identity. Repeating the same calculation reuses the
+report; any upstream artifact revision creates a new Period report while preserving history.
+Migration 0040 creates `portfolio_performance_period_report` and
+`portfolio_performance_period`, with composite foreign keys across the complete owner bundle.
+Downgrade refuses to drop either table while rows exist.
+
+`portfolio_performance_period` jobs serialize the artifact triple with a stable advisory
+lock. The immutable lease includes `(job_id, worker_id, run_id, performance_id, risk_id,
+trade_id)`, is rechecked under `FOR UPDATE`, and commits Period rows with terminal SUCCESS.
+Stale recovery uses a locked fresh recheck, emits `PERIOD_WORKER_HEARTBEAT_TIMEOUT`, and
+fences the old worker.
+
+Product APIs are:
+
+- `POST /api/v1/portfolio/backtests/{run_id}/performance/period/calculate`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/period`
+- `GET /api/v1/portfolio/backtests/{run_id}/analytics/summary`
+- `GET /api/v1/portfolio/backtests/{run_id}/analytics/artifacts`
+- `GET /api/v1/portfolio/backtests/{run_id}/analytics/context`
+- `POST /api/v1/portfolio/analytics/compare`
+
+Summary, Compare, and Context use explicit Pydantic DTOs; Decimals remain JSON strings.
+Context returns at most the latest 12 monthly rows plus all yearly rows and never exposes raw
+fills, ORM state, SQL, or Job metadata. Compare accepts 2--20 unique runs, preserves request
+order, and requires equal Performance version/config/date range/trade-day set, equal Risk
+version/config/benchmark, and equal Trade version/config. Incompatibility returns
+`ANALYTICS_COMPARE_INCOMPATIBLE` with exact `mismatch_fields`; the backend never emits a
+score, ranking, recommendation, or best strategy.
+
+The Vue analytics view consumes persisted NAV, benchmark NAV, drawdown, period, and episode
+facts. ECharts only renders those values. Null ratios display `--`; client-side table sorting
+does not change source order or write any result back to the database.

@@ -30,6 +30,10 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.models.performance import PortfolioPerformanceDaily, PortfolioPerformanceReport
+from app.models.performance_period import (
+    PortfolioPerformancePeriod,
+    PortfolioPerformancePeriodReport,
+)
 from app.models.performance_risk import (
     PortfolioPerformanceRiskDaily,
     PortfolioPerformanceRiskReport,
@@ -62,6 +66,8 @@ __all__ = [
     "PortfolioFill",
     "PortfolioNavDaily",
     "PortfolioPerformanceDaily",
+    "PortfolioPerformancePeriod",
+    "PortfolioPerformancePeriodReport",
     "PortfolioPerformanceReport",
     "PortfolioPerformanceRiskDaily",
     "PortfolioPerformanceRiskReport",

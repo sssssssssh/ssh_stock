@@ -314,19 +314,26 @@ def performance_trade_episodes(
     performance_id: uuid.UUID | None = Query(default=None),
     episode_status: str | None = Query(default=None, alias="status", pattern="^(OPEN|CLOSED)$"),
     ts_code: str | None = Query(default=None, min_length=1, max_length=16),
+    classification: str | None = Query(
+        default=None, pattern="^(WIN|LOSS|BREAKEVEN)$"
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     row_limit, row_offset = clamp_limit(limit, maximum=500), clamp_offset(offset)
     try:
+        kwargs = {
+            "performance_id": performance_id,
+            "status": episode_status,
+            "ts_code": ts_code,
+            "limit": row_limit,
+            "offset": row_offset,
+        }
+        if classification is not None:
+            kwargs["classification"] = classification
         report, rows, total = PerformanceTradeApplicationService(db).episode_page(
-            run_id,
-            performance_id=performance_id,
-            status=episode_status,
-            ts_code=ts_code,
-            limit=row_limit,
-            offset=row_offset,
+            run_id, **kwargs
         )
     except PerformanceTradeSourceError as exc:
         raise _trade_source_http_error(exc) from exc
@@ -341,6 +348,7 @@ def performance_trade_episodes(
             "trade_source_hash": report.trade_source_hash,
             "status": episode_status,
             "ts_code": ts_code,
+            "classification": classification,
             "limit": row_limit,
             "offset": row_offset,
             "total": total,

@@ -305,6 +305,7 @@ class PerformanceTradeApplicationService:
         ts_code: str | None,
         limit: int,
         offset: int,
+        classification: str | None = None,
     ) -> tuple[
         PortfolioPerformanceTradeReport,
         list[PortfolioPerformanceTradeEpisode],
@@ -319,8 +320,14 @@ class PerformanceTradeApplicationService:
                 ts_code=ts_code,
                 limit=limit,
                 offset=offset,
+                classification=classification,
             ),
-            self.repository.count_episodes(report.id, status=status, ts_code=ts_code),
+            self.repository.count_episodes(
+                report.id,
+                status=status,
+                ts_code=ts_code,
+                classification=classification,
+            ),
         )
 
     def _owned_job_for_terminal_update(self, lease: PerformanceTradeExecutionLease) -> JobRun:

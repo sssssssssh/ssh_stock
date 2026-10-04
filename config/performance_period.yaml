@@ -1,0 +1,7 @@
+period:
+  version: period_v1
+  period_types:
+    - MONTH
+    - YEAR
+  excess_return_method: RELATIVE
+  closed_episode_attribution: EXIT_DATE

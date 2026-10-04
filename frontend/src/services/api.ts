@@ -17,6 +17,16 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
+export class ApiError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly status: number,
+    public readonly detail: Record<string, unknown> | null = null
+  ) {
+    super(code);
+  }
+}
+
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, credentials: "include" });
   const body = (await response.json().catch(() => null)) as
@@ -30,7 +40,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.status === 403 && code === "PASSWORD_CHANGE_REQUIRED") {
       window.dispatchEvent(new Event("password-change-required"));
     }
-    throw new Error(code || (typeof detail === "string" ? detail : `HTTP ${response.status}`));
+    const message = code || (typeof detail === "string" ? detail : `HTTP ${response.status}`);
+    throw new ApiError(
+      message,
+      response.status,
+      typeof detail === "object" && detail ? detail : null
+    );
   }
   if (!body || !("code" in body) || body.code !== 0) {
     throw new Error((body && "message" in body && body.message) || "API_ERROR");

@@ -36,6 +36,11 @@ from app.services.performance.application import (
     PERFORMANCE_JOB_TYPE,
     PerformanceApplicationService,
 )
+from app.services.performance.period_application import (
+    PERFORMANCE_PERIOD_JOB_TYPE,
+    PerformancePeriodApplicationService,
+)
+from app.services.performance.period_recovery import recover_stale_performance_period_jobs
 from app.services.performance.recovery import recover_stale_performance_jobs
 from app.services.performance.risk_application import (
     PERFORMANCE_RISK_JOB_TYPE,
@@ -75,6 +80,7 @@ WORKER_JOB_TYPES = (
     PERFORMANCE_JOB_TYPE,
     PERFORMANCE_RISK_JOB_TYPE,
     PERFORMANCE_TRADE_JOB_TYPE,
+    PERFORMANCE_PERIOD_JOB_TYPE,
 )
 
 
@@ -192,6 +198,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             PerformanceRiskApplicationService(db).run_job(job.id)
         elif job.job_type == PERFORMANCE_TRADE_JOB_TYPE:
             PerformanceTradeApplicationService(db).run_job(job.id)
+        elif job.job_type == PERFORMANCE_PERIOD_JOB_TYPE:
+            PerformancePeriodApplicationService(db).run_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -219,7 +227,11 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                         ),
                     }
                     if job.job_type
-                    in {PERFORMANCE_RISK_JOB_TYPE, PERFORMANCE_TRADE_JOB_TYPE}
+                    in {
+                        PERFORMANCE_RISK_JOB_TYPE,
+                        PERFORMANCE_TRADE_JOB_TYPE,
+                        PERFORMANCE_PERIOD_JOB_TYPE,
+                    }
                     else None
                 ),
             )
@@ -292,6 +304,12 @@ def run_worker() -> None:
                             )
                         ),
                     )
+                    recovered_performance_period = recover_stale_performance_period_jobs(
+                        db,
+                        timeout_minutes=float(
+                            scheduler_setting("running_heartbeat_timeout_minutes", 15)
+                        ),
+                    )
                     recovered_dirty = recover_stale_processing_ranges(
                         db,
                         stale_minutes=float(
@@ -303,6 +321,7 @@ def run_worker() -> None:
                         "recovered_research={} recovered_backtests={} "
                         "recovered_performance={} recovered_performance_risk={} "
                         "recovered_performance_trade={} "
+                        "recovered_performance_period={} "
                         "recovered_dirty={}",
                         worker_id,
                         recovered_jobs,
@@ -311,6 +330,7 @@ def run_worker() -> None:
                         recovered_performance,
                         recovered_performance_risk,
                         recovered_performance_trade,
+                        recovered_performance_period,
                         recovered_dirty,
                     )
                     last_recovery = now

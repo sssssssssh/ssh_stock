@@ -158,7 +158,8 @@ def seed_trade_case(db: Session, dates: tuple[date, ...]) -> TradeCase:
 
     snapshots = _position_snapshots(dates)
     for index, trade_date in enumerate(dates):
-        db.add(TradeCalendar(cal_date=trade_date, is_open=True, exchange="SSE"))
+        if db.get(TradeCalendar, trade_date) is None:
+            db.add(TradeCalendar(cal_date=trade_date, is_open=True, exchange="SSE"))
         positions = snapshots[index]
         market_value = sum((row[4] for row in positions), Decimal("0"))
         total_assets = Decimal("1000000")

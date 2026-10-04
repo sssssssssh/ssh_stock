@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
+    analytics,
     auth,
     dashboard,
     jobs,
@@ -25,6 +26,7 @@ protected.include_router(themes.router, prefix="/themes", tags=["themes"])
 protected.include_router(opportunities.router, prefix="/opportunities", tags=["opportunities"])
 protected.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio"])
 protected.include_router(performance.router, prefix="/portfolio", tags=["performance"])
+protected.include_router(analytics.router, prefix="/portfolio", tags=["analytics"])
 protected.include_router(stocks.router, prefix="/stocks", tags=["stocks"])
 protected.include_router(research.router, prefix="/research", tags=["research"])
 protected.include_router(jobs.router, prefix="/jobs", tags=["jobs"])

@@ -98,6 +98,7 @@ class PerformanceTradeRepository:
         ts_code: str | None,
         limit: int,
         offset: int,
+        classification: str | None = None,
     ) -> list[PortfolioPerformanceTradeEpisode]:
         statement = select(PortfolioPerformanceTradeEpisode).where(
             PortfolioPerformanceTradeEpisode.trade_id == trade_id
@@ -106,6 +107,10 @@ class PerformanceTradeRepository:
             statement = statement.where(PortfolioPerformanceTradeEpisode.status == status)
         if ts_code is not None:
             statement = statement.where(PortfolioPerformanceTradeEpisode.ts_code == ts_code)
+        if classification is not None:
+            statement = statement.where(
+                PortfolioPerformanceTradeEpisode.classification == classification
+            )
         return list(
             self.db.scalars(
                 statement.order_by(
@@ -124,6 +129,7 @@ class PerformanceTradeRepository:
         *,
         status: str | None,
         ts_code: str | None,
+        classification: str | None = None,
     ) -> int:
         statement = (
             select(func.count())
@@ -134,4 +140,8 @@ class PerformanceTradeRepository:
             statement = statement.where(PortfolioPerformanceTradeEpisode.status == status)
         if ts_code is not None:
             statement = statement.where(PortfolioPerformanceTradeEpisode.ts_code == ts_code)
+        if classification is not None:
+            statement = statement.where(
+                PortfolioPerformanceTradeEpisode.classification == classification
+            )
         return int(self.db.scalar(statement) or 0)

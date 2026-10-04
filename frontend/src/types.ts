@@ -5,6 +5,138 @@ export type ApiEnvelope<T> = {
   meta: Record<string, unknown>;
 };
 
+export type BacktestRun = {
+  id: string;
+  name: string | null;
+  account_mode: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+  initial_cash: string;
+  benchmark_code: string;
+  created_at: string;
+};
+
+export type AnalyticsIdentity = {
+  run_id: string;
+  performance_id: string;
+  risk_id: string;
+  trade_id: string;
+  period_id: string | null;
+};
+
+export type AnalyticsSummary = {
+  schema_version: "analytics_read_v1";
+  identity: AnalyticsIdentity;
+  backtest: {
+    name: string | null;
+    status: string;
+    start_date: string;
+    end_date: string;
+    initial_cash: string;
+    benchmark_code: string;
+  };
+  performance: {
+    cumulative_return: string;
+    annualized_return: string;
+    max_drawdown: string;
+    max_drawdown_peak_date: string | null;
+    max_drawdown_trough_date: string | null;
+    max_drawdown_recovery_date: string | null;
+    trade_days: number;
+  };
+  risk: {
+    benchmark_code: string;
+    benchmark_cumulative_return: string;
+    benchmark_annualized_return: string;
+    excess_cumulative_return: string;
+    strategy_annualized_volatility: string | null;
+    sharpe_ratio: string | null;
+    sortino_ratio: string | null;
+    calmar_ratio: string | null;
+    tracking_error: string | null;
+    information_ratio: string | null;
+    alpha_annualized: string | null;
+    beta: string | null;
+    correlation: string | null;
+  };
+  trade: {
+    total_turnover: string;
+    annualized_turnover: string;
+    traded_gross_amount: string;
+    cash_fee_total: string;
+    slippage_cost_total: string;
+    total_execution_cost: string;
+    total_cost_to_initial_capital: string;
+    closed_episode_count: number;
+    open_episode_count: number;
+    win_rate: string | null;
+    profit_factor: string | null;
+    payoff_ratio: string | null;
+    average_holding_trade_days: string | null;
+    median_holding_trade_days: string | null;
+    closed_realized_pnl: string;
+  };
+  warnings: string[];
+  source_versions: Record<string, string>;
+};
+
+export type AnalyticsPeriod = {
+  period_id: string;
+  run_id: string;
+  performance_id: string;
+  risk_id: string;
+  trade_id: string;
+  period_type: "MONTH" | "YEAR";
+  period_key: string;
+  period_start_date: string;
+  period_end_date: string;
+  trade_days: number;
+  strategy_return: string;
+  benchmark_return: string;
+  relative_return: string;
+  return_spread: string;
+  period_turnover: string;
+  traded_gross_amount: string;
+  commission: string;
+  stamp_tax: string;
+  transfer_fee: string;
+  cash_fee_total: string;
+  slippage_cost: string;
+  total_execution_cost: string;
+  closed_episode_count: number;
+  win_count: number;
+  loss_count: number;
+  breakeven_count: number;
+  win_rate: string | null;
+  closed_realized_pnl: string;
+};
+
+export type PerformanceDaily = {
+  trade_date: string;
+  nav: string;
+  drawdown: string;
+};
+
+export type RiskDaily = {
+  trade_date: string;
+  benchmark_nav: string;
+};
+
+export type TradeEpisode = {
+  ts_code: string;
+  episode_no: number;
+  status: "OPEN" | "CLOSED";
+  classification: "WIN" | "LOSS" | "BREAKEVEN" | null;
+  entry_date: string;
+  exit_date: string | null;
+  holding_trade_days: number;
+  realized_pnl: string;
+  unrealized_pnl_end: string;
+  episode_return: string | null;
+  total_execution_cost: string;
+};
+
 export type AuthUser = {
   username: string;
   must_change_password: boolean;

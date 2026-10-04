@@ -23,6 +23,7 @@ import ThemeHeatTable from "./components/ThemeHeatTable.vue";
 import LoginView from "./components/LoginView.vue";
 import ChangePasswordView from "./components/ChangePasswordView.vue";
 import UserMenu from "./components/UserMenu.vue";
+import BacktestAnalyticsView from "./components/BacktestAnalyticsView.vue";
 import { fetchCurrentUser, logout } from "./services/auth";
 import {
   enqueueBackfillJob,
@@ -65,7 +66,7 @@ import type {
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
-type ViewKey = "overview" | "data" | "long" | "short";
+type ViewKey = "overview" | "data" | "long" | "short" | "analytics";
 type PoolTab = "right" | "trend";
 type DataPanelKey = "recalc" | "tasks" | "coverage";
 
@@ -144,7 +145,8 @@ const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "overview", label: "总览", description: "市场状态与后验表现" },
   { key: "data", label: "数据", description: "覆盖、拉取和任务进度" },
   { key: "long", label: "长线", description: "右侧池、趋势池、行业热度" },
-  { key: "short", label: "短线", description: "风险池、信号和短期动量" }
+  { key: "short", label: "短线", description: "风险池、信号和短期动量" },
+  { key: "analytics", label: "回测分析", description: "收益、风险、交易与周期对比" }
 ];
 
 const activeNav = computed(() => navItems.find((item) => item.key === activeView.value));
@@ -1340,6 +1342,10 @@ function statusLabel(status: string) {
             :format-number="formatNumber"
           />
         </section>
+      </section>
+
+      <section v-show="activeView === 'analytics'" class="view-stack">
+        <BacktestAnalyticsView />
       </section>
     </section>
 
