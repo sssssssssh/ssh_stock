@@ -10,6 +10,7 @@ from app.core.accounting_config import AccountingConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.performance_config import PerformanceConfig
 from app.core.performance_risk_config import PerformanceRiskConfig
+from app.core.performance_trade_config import PerformanceTradeConfig
 from app.core.portfolio_config import PortfolioConfig
 from app.core.strategy_config import StrategyConfig
 
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
     accounting_config: AccountingConfig | None = None
     performance_config: PerformanceConfig | None = None
     performance_risk_config: PerformanceRiskConfig | None = None
+    performance_trade_config: PerformanceTradeConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -125,6 +127,9 @@ class Settings(BaseSettings):
                 "risk", {}
             )
         )
+        performance_trade_config = PerformanceTradeConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "performance_trade.yaml").get("trade", {})
+        )
         _validate_opportunity_weights(opportunity_config)
         _validate_research_config(research_config, opportunity_config)
         app_section = app_config.get("app", {})
@@ -141,6 +146,7 @@ class Settings(BaseSettings):
         settings.accounting_config = accounting_config
         settings.performance_config = performance_config
         settings.performance_risk_config = performance_risk_config
+        settings.performance_trade_config = performance_trade_config
         return settings
 
 

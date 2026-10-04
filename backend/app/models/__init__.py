@@ -34,6 +34,11 @@ from app.models.performance_risk import (
     PortfolioPerformanceRiskDaily,
     PortfolioPerformanceRiskReport,
 )
+from app.models.performance_trade import (
+    PortfolioPerformanceTradeDaily,
+    PortfolioPerformanceTradeEpisode,
+    PortfolioPerformanceTradeReport,
+)
 from app.models.portfolio import (
     PortfolioBacktestCheckpoint,
     PortfolioBacktestRun,
@@ -60,6 +65,9 @@ __all__ = [
     "PortfolioPerformanceReport",
     "PortfolioPerformanceRiskDaily",
     "PortfolioPerformanceRiskReport",
+    "PortfolioPerformanceTradeDaily",
+    "PortfolioPerformanceTradeEpisode",
+    "PortfolioPerformanceTradeReport",
     "PortfolioOrder",
     "PortfolioOrderAttempt",
     "PortfolioPositionDaily",

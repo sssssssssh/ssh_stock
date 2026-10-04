@@ -1,0 +1,4 @@
+trade:
+  version: trade_v1
+  pnl_zero_epsilon_cny: 0.0001
+  short_sample_warning_trade_days: 20

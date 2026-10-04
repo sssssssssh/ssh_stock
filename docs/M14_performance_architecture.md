@@ -155,3 +155,66 @@ Stable source/job error codes are `PERFORMANCE_BASE_NOT_FOUND`,
 `BENCHMARK_SOURCE_INCOMPLETE`, `BENCHMARK_SOURCE_INVALID`,
 `BENCHMARK_PRE_CLOSE_MISMATCH`, `PERFORMANCE_RISK_CALCULATION_CONFLICT`,
 `PERFORMANCE_RISK_OWNERSHIP_LOST`, and `PERFORMANCE_RISK_WORKER_HEARTBEAT_TIMEOUT`.
+
+## M14.3 trade and cost analytics boundary
+
+M14.3 adds an independent immutable `trade_v1` artifact over one successful M14.1
+performance artifact and the owning M13 Order, Attempt, Fill, NAV, and Position ledgers.
+It does not update M13, M14.1, or M14.2 rows. The strict configuration lives in
+`config/performance_trade.yaml`; annualization days are inherited from the selected M14.1
+report. All source queries are fresh reads and fail closed on cross-owner identities,
+Attempt/Fill cardinality or ledger differences, non-finite values, an incomplete performance
+date set, a daily Fill-cost/NAV-cost difference, or a Position replay difference.
+
+The immutable database identity is
+`(performance_id, trade_version, trade_config_hash, trade_source_hash)`. The source hash
+covers the selected performance identity and versions, frozen M13 engine versions and
+initial capital, and every participating Order, Attempt, Fill, NAV, and Position fact in
+canonical order. An identical calculation reuses its artifact; a valid source revision
+creates a new report/daily/episode set and preserves history.
+
+### Episode, PnL, cost, and turnover semantics
+
+Fills replay by date, with SELL before BUY, then `scheduled_trade_date`, `order_id`, and
+`fill_id`, exactly matching M13 accounting. An episode is one continuous positive-quantity
+holding interval. Adds and partial sells stay in the same episode; quantity reaching zero
+closes it; a later buy (including one later in that same date's replay) increments
+`episode_no`.
+
+BUY average cost is `(old_avg_cost * old_quantity + gross_amount + cash_fee_total) /
+new_quantity`. SELL realized PnL is `gross_amount - cash_fee_total - avg_cost * quantity`.
+Slippage remains a separately reported execution cost and is not deducted a second time
+from the fill-price PnL. Only closed episodes participate in win rate, profit factor, payoff,
+best/worst, and holding-period statistics. An open episode reports final persisted realized
+and unrealized PnL but no episode return.
+
+Daily turnover is double-sided `buy_gross + sell_gross` without division by two. Day one
+uses initial cash as denominator and later dates use previous-day total assets. Zero-fill
+dates still persist a zero daily row. Total turnover is the daily sum and annualized turnover
+is average daily turnover multiplied by the inherited M14.1 annualization days. Report,
+daily, and episode fill/cost totals reconcile before persistence.
+
+Migration 0039 creates `portfolio_performance_trade_report`,
+`portfolio_performance_trade_daily`, and `portfolio_performance_trade_episode`. Composite
+foreign keys bind children to the same trade/performance/run owner and bind every daily row
+to both the selected performance date and run NAV date. Downgrade refuses to drop these
+tables while any trade artifact exists.
+
+### Trade jobs and APIs
+
+`portfolio_performance_trade` uses a distinct stable per-performance advisory lock, so it
+can run independently of `portfolio_performance_risk`. Artifact writes remain uncommitted
+until the worker's `(job_id, worker_id, run_id, performance_id)` lease is rechecked under
+`FOR UPDATE`; artifact rows and Job SUCCESS then commit atomically. Stale recovery refreshes
+under lock, marks only still-stale jobs failed with
+`PERFORMANCE_TRADE_WORKER_HEARTBEAT_TIMEOUT`, and never silently retries.
+
+The application-service-only endpoints are:
+
+- `POST /api/v1/portfolio/backtests/{run_id}/performance/trade/calculate`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/trade?performance_id=`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/trade/daily?performance_id=&limit=&offset=`
+- `GET /api/v1/portfolio/backtests/{run_id}/performance/trade/episodes?performance_id=&status=&ts_code=&limit=&offset=`
+
+Callers may select a base performance artifact and filter reads, but cannot override replay,
+cost, PnL, episode, epsilon, or turnover definitions.
