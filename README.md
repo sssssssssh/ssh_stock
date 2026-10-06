@@ -1262,3 +1262,12 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 状态投影补齐全 CANCELLED、SUCCESS+CANCELLED、FAILED+CANCELLED 等终态组合；生命周期结构化日志使用字段白名单，不记录完整配置、参数空间或凭据。
 - 本阶段不自动生成 M14 Performance/Risk/Trade/Period，不做排名、最佳策略、Pareto、Random/Bayesian 搜索、Walk-forward/OOS、前端实验工作台或 Experiment Parent Job。
 - 完整冻结、并发、恢复与取消边界见 `docs/M15_experiment_architecture.md`。
+
+## Milestone 15.2 Experiment Evaluation & Selection（2026-10-06）
+
+- 新增固定 `experiment_eval_v1`、严格 typed Evaluation Policy 与固定方向 Metric Catalog。Policy、静态配置和冻结来源分别生成稳定 SHA-256 identity；相同 identity 复用旧 Artifact，不覆盖历史结果。
+- Evaluation 只读 M15.1 Trial 与 M14 Performance/Risk/Trade/Period 持久化结果。所有 Trial 必须终态；SUCCESS Trial 缺少任一 M14 阶段或跨 Trial 日期、版本、配置、benchmark、period keys 不兼容时整体 fail closed，且不会自动补算 M14。
+- `0042_m15_2_experiment_evaluation` 新增 Report、逐 Trial Evaluation 与 Parameter Sensitivity 三张表。FAILED/CANCELLED Trial 以 EXCLUDED 行留痕；SUCCESS Trial 执行 typed constraints、Decimal Pareto fronts、确定性 ranking 和六参数 marginal sensitivity。
+- 月度稳健性只从 `period_v1` MONTH rows 派生 positive month rate、worst month return 与 N-1 sample volatility，仅表示 in-sample monthly stability。无可行 Trial 仍产生 SUCCESS Artifact，但 shortlist 为空、selected trial 为 NULL。
+- Evaluation Job 以 Experiment + Policy 的稳定 PostgreSQL advisory transaction lock 去重；Artifact flush 与 Job SUCCESS 同事务提交。Heartbeat recovery 先 fresh recheck，旧 Worker 丢失 lease 后回滚未提交 Artifact，且不自动创建 replacement。
+- 新增 readiness、calculate、detail、trial page、sensitivity 与 history API。rank 1 只能称为 selected in-sample research candidate，不是生产最优策略或自动部署建议。详细契约见 `docs/m15_2_experiment_evaluation.md`。

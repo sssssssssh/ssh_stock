@@ -1,0 +1,27 @@
+evaluation:
+  version: experiment_eval_v1
+  max_shortlist_size: 20
+  max_pareto_metrics: 4
+  minimum_month_observations: 2
+  default_policy:
+    primary_objective: annualized_return
+    shortlist_size: 10
+    constraints:
+      min_trade_days: null
+      min_annualized_return: null
+      max_drawdown_abs: null
+      min_sharpe_ratio: null
+      min_calmar_ratio: null
+      max_annualized_turnover: null
+      max_total_cost_to_initial_capital: null
+      min_closed_episode_count: null
+      min_win_rate: null
+      min_profit_factor: null
+    pareto_metrics:
+      - annualized_return
+      - max_drawdown_abs
+      - annualized_turnover
+    tie_breakers:
+      - max_drawdown_abs
+      - sharpe_ratio
+      - annualized_turnover

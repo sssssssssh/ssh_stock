@@ -416,3 +416,13 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 全 CANCELLED 投影为 CANCELLED；SUCCESS+CANCELLED 投影为 COMPLETED_WITH_ERRORS；FAILED+CANCELLED 且零成功投影为 FAILED；Parent cancel gate 已提交且无 active Child 时优先投影 CANCELLED。
 - Experiment 生命周期日志只允许 ID、Trial number、安全 hash、operation/outcome/reason 和 mismatch field names；禁止记录完整 snapshot、parameter space、Token、Cookie 或其他秘密。
 - M15.1 不创建 Parent JobRun，不自动触发 M14 artifacts，不实现 objective/rank/best/Pareto、非 GRID 搜索、Walk-forward/OOS、批量 resume/retry 或前端 Workbench。
+
+## Milestone 15.2 Experiment Evaluation & Selection 规则
+
+- Evaluation identity 固定为 `experiment_eval_v1`。Policy 只能引用固定 Metric Catalog，方向不可由调用方反转；禁止表达式、加权 magic score、任意字段路径与浮点近似 Pareto。
+- 所有 Trial 必须终态且至少一个 SUCCESS。FAILED/CANCELLED 保留为 EXCLUDED 行；每个 SUCCESS 必须绑定同 Run、同 Performance owner 的完整 M14 Performance/Risk/Trade/Period Bundle，缺失或跨 Trial 不可比时整体 fail closed。
+- M15.2 只读 M15.1/M13/M14，不创建或恢复 Child Run、不重算 M14、不回写 Portfolio 配置。历史 Evaluation Artifact 不 UPDATE；Policy 或任一 M14 generation identity 改变必须创建新 Artifact。
+- Constraints 对 nullable required metric fail closed；Pareto 仅处理 feasible Trial 并保存完整 front；正式 rank 固定为 front、primary objective、ordered tie breakers、trial_no。零 feasible 是合法 SUCCESS，但 shortlist 和 selected trial 必须为空。
+- Sensitivity 是六个固定 M15.1 参数的 marginal grid summary；统计使用 Decimal，primary objective 样本包含所有有值的 EVALUATED Trial，不受 feasibility 筛选。月度波动使用 MONTH rows 与 N-1 分母，不得描述为 OOS robustness。
+- 同 Experiment + Policy 只允许一个活跃 Evaluation Job。锁 key 必须稳定 hash 到 PostgreSQL signed bigint，禁止 Python `hash()`；Artifact 与 Job SUCCESS 原子提交，heartbeat recovery fresh recheck，旧 Worker 丢失 ownership 必须回滚未提交 Artifact。
+- API 与文档只能把 selection rank 1 称为 selected in-sample research candidate，不得称为 production best strategy、live recommendation 或自动部署候选。

@@ -1,6 +1,11 @@
 from app.models.auth import AppUser, AuthSession
 from app.models.base import Base
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
+from app.models.experiment_evaluation import (
+    PortfolioExperimentEvaluationReport,
+    PortfolioExperimentParameterSensitivity,
+    PortfolioExperimentTrialEvaluation,
+)
 from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 from app.models.market_data import (
     IndexDaily,
@@ -65,6 +70,9 @@ __all__ = [
     "PortfolioBacktestRun",
     "PortfolioExperiment",
     "PortfolioExperimentTrial",
+    "PortfolioExperimentEvaluationReport",
+    "PortfolioExperimentParameterSensitivity",
+    "PortfolioExperimentTrialEvaluation",
     "PortfolioBacktestCheckpoint",
     "PortfolioFill",
     "PortfolioNavDaily",
