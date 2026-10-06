@@ -400,3 +400,15 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 显式恢复必须逐阶段核对冻结配置、当前源算法身份、输入指纹和真实 Order/Attempt/Fill/Position/NAV/RebalancePlan 证据。输入漂移、检查点顺序异常、未封存业务证据或结果不一致时 fail closed。
 - READY 且候选为空是合法空目标；INCOMPLETE/UNAVAILABLE 必须阻断。运行期间不得隐式拉取或重算 Raw/Factor/State/Opportunity。
 - M13.4 不实现复杂 Performance、PAPER/LIVE、Broker、真实下单或 Agent Runtime；输入指纹不得描述为完整历史行情快照。
+
+## Milestone 15.1 Strategy Experiment Foundation 规则
+
+- 当前 Experiment identity 固定为 `experiment_v1`，搜索方法只允许 `GRID`。可调字段仅限 `candidate.min_score`、`candidate.top_n`、`construction.max_positions`、`construction.max_single_position_weight`、`construction.min_cash_ratio`、`construction.max_new_positions_per_day`。
+- Grid 请求必须是严格嵌套 typed schema；每个 value list 非空、不超 `max_values_per_parameter`、数值升序、Decimal finite 且 canonical 后无重复。Trial 数量必须在 `1..max_trials`，禁止截断或跳过非法组合。
+- 参数展开顺序固定，最右侧变化最快。每个 Trial 保存完整 6 参数、完整 `PortfolioConfig` snapshot、parameter hash 与 portfolio hash；hash 不得包含名称、时间或随机 UUID。
+- `portfolio_experiment` 与 `portfolio_experiment_trial` 是本阶段唯一新增业务表。Trial 不得新增 status/job/error 状态列；`PortfolioBacktestRun.status` 与 `JobRun.status` 是执行权威来源。
+- Create 只在一个事务创建 Experiment 与全部 Trial，且零 Child Run、零 Job。Start Phase A 使用 advisory transaction lock、row lock 和单事务物化全部缺失 Child Run；Phase B 只调用现有 `BacktestApplicationService.execute()`。
+- 单次 Backtest 与 Child Run 必须共用同一未持久化 Run factory。Strategy/Opportunity runtime source identity 与 Experiment 冻结身份不一致时 Start 必须返回 `EXPERIMENT_SOURCE_IDENTITY_DRIFT`，并保持零物化。
+- 重复或并发 Start 不得重复 Child Run 或 active Backtest Job。取消先持久化 `cancel_requested`，再逐个调用既有安全取消；单个 Child 冲突不得回滚 Parent stop gate，PLANNED Trial 不再物化。
+- Experiment/Trial 状态、计数和进度均为动态投影。Trial 列表不得为每行读取 Checkpoint；完整 Backtest progress 只在单 Trial Detail 中查询。
+- M15.1 不创建 Parent JobRun，不自动触发 M14 artifacts，不实现 objective/rank/best/Pareto、非 GRID 搜索、Walk-forward/OOS、批量 resume/retry 或前端 Workbench。

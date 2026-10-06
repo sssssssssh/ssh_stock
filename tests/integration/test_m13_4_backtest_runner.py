@@ -34,6 +34,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.portfolio import candidates as candidates_module
 from app.services.portfolio.application import PortfolioApplicationService
 from app.services.portfolio.backtest_application import (
     PHASES,
@@ -45,14 +46,26 @@ from app.services.portfolio.backtest_application import (
     recover_stale_backtest_jobs,
 )
 from app.services.portfolio.contracts import PortfolioSourceNotReadyError
+from app.services.portfolio.source_integrity import (
+    evaluate_portfolio_source_integrity,
+)
 from sqlalchemy.orm import Session
 
 
-def test_five_day_runner_and_post_commit_recovery_are_equivalent() -> None:
+def test_five_day_runner_and_post_commit_recovery_are_equivalent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = get_settings()
     engine = sa.create_engine(settings.database_url)
-    days = tuple(date(2026, 1, day) for day in range(5, 10))
-    code = "600134.SH"
+    days = tuple(date(2091, 1, day) for day in range(5, 10))
+    code = "M13401.SZ"
+    monkeypatch.setattr(
+        candidates_module,
+        "check_portfolio_source_integrity",
+        lambda db, trade_date, *, settings: _isolated_source_integrity(
+            db, trade_date, code
+        ),
+    )
     _cleanup(engine, days, code)
     try:
         with Session(engine, expire_on_commit=False) as db:
@@ -558,7 +571,7 @@ def _seed_sources(db: Session, days: tuple[date, ...], code: str) -> None:
         [
             StockBasic(
                 ts_code=code,
-                symbol="600134",
+                symbol="M13401",
                 name="M13.4",
                 market="主板",
                 exchange="SSE",
@@ -667,6 +680,32 @@ def _seed_sources(db: Session, days: tuple[date, ...], code: str) -> None:
             ]
         )
     db.commit()
+
+
+def _isolated_source_integrity(
+    db: Session, trade_date: date, code: str
+):
+    def present(model) -> set[str]:
+        return set(
+            db.execute(
+                sa.select(model.ts_code).where(
+                    model.trade_date == trade_date,
+                    model.ts_code == code,
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    return evaluate_portfolio_source_integrity(
+        trade_date,
+        expected_codes={code},
+        stock_daily_codes=present(StockDaily),
+        factor_codes=present(StockFactorDaily),
+        state_codes=present(StockStateDaily),
+        opportunity_codes=present(StockOpportunityDaily),
+        context_ready=True,
+    )
 
 
 def _enqueue_and_claim(db: Session, run_id, worker_id: str) -> JobRun:

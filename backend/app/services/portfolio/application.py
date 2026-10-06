@@ -24,6 +24,7 @@ from app.services.portfolio.contracts import (
     PortfolioSourceNotReadyError,
 )
 from app.services.portfolio.policy import TopNEqualWeightPolicy
+from app.services.portfolio.run_factory import BacktestRunFactory
 
 
 class PortfolioApplicationService:
@@ -102,35 +103,21 @@ class PortfolioApplicationService:
             raise ValueError("initial_cash must be positive")
         if not effective_portfolio.benchmark_code.strip():
             raise ValueError("benchmark_code must be nonempty")
-        portfolio_snapshot = effective_portfolio.model_dump(mode="json")
-        execution_snapshot = self.execution_config.model_dump(mode="json")
-        accounting_snapshot = self.accounting_config.model_dump(mode="json")
-        run = PortfolioBacktestRun(
+        run = BacktestRunFactory.build(
             name=name,
-            account_mode="BACKTEST",
-            status="CREATED",
             start_date=start_date,
             end_date=end_date,
-            initial_cash=effective_portfolio.initial_cash_cny,
-            benchmark_code=effective_portfolio.benchmark_code,
+            strategy_snapshot=self.settings.strategy,
+            opportunity_snapshot=self.settings.opportunity_config,
+            portfolio_snapshot=effective_portfolio.model_dump(mode="json"),
+            execution_snapshot=self.execution_config.model_dump(mode="json"),
+            accounting_snapshot=self.accounting_config.model_dump(mode="json"),
             algo_version=self.settings.algo_version,
-            source_strategy_config_hash=analysis_strategy_hash(self.settings.strategy),
             opportunity_calc_version=OPPORTUNITY_CALC_VERSION,
-            opportunity_config_hash=config_hash(self.settings.opportunity_config),
             portfolio_version=PORTFOLIO_VERSION,
-            portfolio_config_hash=config_hash(portfolio_snapshot),
             execution_version=EXECUTION_VERSION,
-            execution_config_hash=config_hash(execution_snapshot),
             accounting_version=ACCOUNTING_VERSION,
-            accounting_config_hash=config_hash(accounting_snapshot),
             backtest_engine_version=BACKTEST_ENGINE_VERSION,
-            config_snapshot={
-                "strategy": self.settings.strategy,
-                "opportunity": self.settings.opportunity_config,
-                "portfolio": portfolio_snapshot,
-                "execution": execution_snapshot,
-                "accounting": accounting_snapshot,
-            },
         )
         try:
             self.repository.create_run(run)

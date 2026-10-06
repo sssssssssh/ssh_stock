@@ -1248,3 +1248,14 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - D 日 AFTER_CLOSE 只为区间内下一真实开市日生成计划；区间最后一天记录 `NO_PLAN_OUTSIDE_RANGE`，不会产生区间外订单。
 - 新增受认证保护的 `execute`、`cancel`、`resume`、`progress`、`nav`、`positions`、`orders` 接口；结果查询按 run_id 隔离并分页，订单结果同时携带 Attempt 与 Fill 审计线索。
 - 当前输入指纹用于检测运行期间及恢复时的历史数据漂移，但不等价于完整行情版本快照。复杂 Performance、PAPER/LIVE、Broker 和 Agent Runtime 仍不在本里程碑范围。
+
+## Milestone 15.1 Strategy Experiment Foundation（2026-10-05）
+
+- 新增严格 typed `ExperimentConfig` 与固定 `experiment_v1 / GRID` 契约。M15.1 只允许搜索 Portfolio 的 6 个字段；未提供字段继承 Base Portfolio Config，未知 Strategy、Opportunity、Execution 或 Accounting 搜索字段直接拒绝。
+- Grid 会先做数值升序、Decimal canonicalization、重复值和上限校验，再按固定参数顺序展开。每个 Trial 持久化完整 6 参数、完整 Portfolio snapshot 及稳定 hash；非法组合使整个 Experiment fail closed，不跳过、不截断。
+- `0041_m15_1_experiment_foundation` 只新增 `portfolio_experiment` 与 `portfolio_experiment_trial`。Experiment/Trial 不复制执行状态；Trial 的权威状态来自绑定的 `portfolio_backtest_run` 和 `job_run`。
+- 创建 Experiment 只在一个事务写入定义与全部 PLANNED Trial，不创建 Run/Job。Start 先在一个事务内锁定并物化全部 Child Run，再按 Trial 顺序复用 M13 `BacktestApplicationService` 幂等派发。
+- 单次 Backtest 与 Experiment Child Run 共用 `BacktestRunFactory`，冻结相同的 Strategy、Opportunity、Portfolio、Execution、Accounting 配置与版本/哈希。Start 前 Runtime Source Identity 漂移会返回 `EXPERIMENT_SOURCE_IDENTITY_DRIFT`，且零 Run、零 Job。
+- 新增受认证保护的创建、启动、详情、Trial 分页/详情和取消接口：`/api/v1/portfolio/experiments`。Experiment 状态和进度从 Child Run 动态投影；取消先提交 Parent stop gate，再复用 M13 安全取消语义。
+- 本阶段不自动生成 M14 Performance/Risk/Trade/Period，不做排名、最佳策略、Pareto、Random/Bayesian 搜索、Walk-forward/OOS、前端实验工作台或 Experiment Parent Job。
+- 完整冻结、并发、恢复与取消边界见 `docs/M15_experiment_architecture.md`。

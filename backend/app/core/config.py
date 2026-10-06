@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.accounting_config import AccountingConfig
 from app.core.execution_config import ExecutionConfig
+from app.core.experiment_config import ExperimentConfig
 from app.core.performance_config import PerformanceConfig
 from app.core.performance_period_config import PerformancePeriodConfig
 from app.core.performance_risk_config import PerformanceRiskConfig
@@ -62,6 +63,7 @@ class Settings(BaseSettings):
     research_config: dict[str, Any] = Field(default_factory=dict)
     portfolio_config: PortfolioConfig | None = None
     execution_config: ExecutionConfig | None = None
+    experiment_config: ExperimentConfig | None = None
     accounting_config: AccountingConfig | None = None
     performance_config: PerformanceConfig | None = None
     performance_period_config: PerformancePeriodConfig | None = None
@@ -119,6 +121,11 @@ class Settings(BaseSettings):
                 "accounting", {}
             )
         )
+        experiment_config = ExperimentConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "experiment.yaml").get(
+                "experiment", {}
+            )
+        )
         performance_config = PerformanceConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "performance.yaml").get(
                 "performance", {}
@@ -150,6 +157,7 @@ class Settings(BaseSettings):
         settings.research_config = research_config
         settings.portfolio_config = portfolio_config
         settings.execution_config = execution_config
+        settings.experiment_config = experiment_config
         settings.accounting_config = accounting_config
         settings.performance_config = performance_config
         settings.performance_risk_config = performance_risk_config

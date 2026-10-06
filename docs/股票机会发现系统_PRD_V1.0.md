@@ -1311,3 +1311,14 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - 恢复审核必须验证冻结配置、算法/来源身份、输入指纹及账本证据；历史数据漂移、检查点与业务结果冲突、或无法证明安全时拒绝恢复并返回明确错误。
 - READY 空候选是合法空目标；INCOMPLETE/UNAVAILABLE 阻断运行。回测执行不拉取、不重算、不改写上游历史数据。
 - 提供 NAV、持仓、订单/尝试/成交的 run_id 隔离分页查询。复杂绩效归因、风险指标、PAPER/LIVE、券商和 Agent 不属于 M13.4。
+
+## Milestone 15.1 策略实验基础需求（2026-10-05）
+
+- 用户可以用一个固定日期区间、初始资金、Benchmark 与 Portfolio 参数 Grid 创建实验。允许调节的参数固定为候选最低分、Top N、最大持仓数、单仓上限、最低现金比例和每日最大新开仓数。
+- 省略的参数继承当前 Base Portfolio Config；系统必须显示并持久化每个 Trial 的完整有效参数，不能只记录请求 delta。重复、空、非 finite、越界或跨字段不一致的 Grid 整体拒绝。
+- Experiment Create 必须原子创建 Definition 和全部 Planned Trial，但不启动回测。Experiment Start 才原子绑定所有 Child Backtest Run，随后通过既有 M13 队列逐个派发。
+- 同一定义允许重复创建，但 definition hash、parameter-space hash、Trial parameter hash 与 Portfolio config hash 必须跨机器、请求键顺序和创建时间稳定。
+- 用户可以查询 Experiment 派生状态、完成比例和各状态计数，分页筛选 Trial，并在单 Trial 详情查看 Child Backtest progress。Trial 状态必须来自 Child Run，不维护第二份执行状态。
+- 重复和并发 Start 必须幂等。任何 Trial 物化失败都回滚整个 Phase A；Runtime Strategy/Opportunity Source Identity 漂移时不得创建任何 Run 或 Job。
+- 用户可以取消 Experiment。系统先保存全局停止门，再安全取消 active Child Run；已成功、失败或取消的事实保留，未物化和未派发 Trial 不再启动。
+- M15.1 不包含自动 M14 评估、排名/最优策略、Pareto、非 Grid 搜索、样本外验证、Walk-forward 或前端实验工作台。

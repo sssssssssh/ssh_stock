@@ -1,0 +1,5 @@
+experiment:
+  version: experiment_v1
+  search_method: GRID
+  max_trials: 128
+  max_values_per_parameter: 20
