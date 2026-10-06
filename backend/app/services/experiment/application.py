@@ -1,10 +1,11 @@
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
+from loguru import logger
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -36,6 +37,20 @@ from app.services.portfolio.run_factory import BacktestRunFactory
 _ACTIVE_JOB_STATUSES = {"QUEUED", "RUNNING"}
 _TERMINAL_TRIAL_STATES = {"SUCCESS", "FAILED", "CANCELLED"}
 _TRIAL_STATES = {"PLANNED", "CREATED", "RUNNING", *_TERMINAL_TRIAL_STATES}
+_EXPERIMENT_LOG_FIELDS = {
+    "experiment_id",
+    "trial_id",
+    "trial_no",
+    "run_id",
+    "job_id",
+    "trial_count",
+    "definition_hash",
+    "parameter_hash",
+    "operation",
+    "outcome",
+    "reason",
+    "mismatch_fields",
+}
 
 
 class ExperimentApplicationError(RuntimeError):
@@ -45,7 +60,14 @@ class ExperimentApplicationError(RuntimeError):
 
 
 class ExperimentApplicationService:
-    def __init__(self, db: Session, *, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        settings: Settings | None = None,
+        fault_hook: Callable[[str, PortfolioExperimentTrial | None], None]
+        | None = None,
+    ) -> None:
         self.db = db
         self.settings = settings or get_settings()
         required = (
@@ -61,6 +83,7 @@ class ExperimentApplicationService:
         self.execution_config = self.settings.execution_config
         self.accounting_config = self.settings.accounting_config
         self.repository = ExperimentRepository(db)
+        self.fault_hook = fault_hook
 
     def create(
         self,
@@ -216,9 +239,18 @@ class ExperimentApplicationService:
                 "EXPERIMENT_CONFIG_INVALID",
                 "experiment definition could not be persisted",
             ) from exc
+        _log_experiment_event(
+            "experiment_created",
+            experiment_id=experiment.id,
+            trial_count=experiment.trial_count,
+            definition_hash=experiment.definition_hash,
+            operation="create",
+            outcome="CREATED",
+        )
         return self.get(experiment_id)
 
     def start(self, experiment_id: uuid.UUID) -> dict[str, Any]:
+        materialized: list[dict[str, Any]] = []
         try:
             self._advisory_lock(experiment_id)
             experiment = self.repository.get_for_update(experiment_id)
@@ -245,6 +277,7 @@ class ExperimentApplicationService:
                         experiment, trial, portfolio_snapshot
                     )
                     continue
+                self._invoke_fault_hook("before_materialize_trial", trial)
                 run = BacktestRunFactory.build(
                     name=_trial_run_name(experiment, trial),
                     start_date=experiment.start_date,
@@ -269,9 +302,19 @@ class ExperimentApplicationService:
                 )
                 self.repository.add_run(run)
                 trial.run_id = run.id
+                materialized.append(
+                    {
+                        "experiment_id": experiment_id,
+                        "trial_id": trial.id,
+                        "trial_no": trial.trial_no,
+                        "run_id": run.id,
+                        "parameter_hash": trial.parameter_hash,
+                    }
+                )
             if experiment.started_at is None:
                 experiment.started_at = datetime.now(UTC)
             experiment.updated_at = datetime.now(UTC)
+            trial_ids = [trial.id for trial in trials]
             self.db.commit()
         except ExperimentApplicationError:
             self.db.rollback()
@@ -283,42 +326,138 @@ class ExperimentApplicationService:
                 "experiment child run materialization failed",
             ) from exc
 
-        records = self.repository.list_records(experiment_id)
-        backtests = BacktestApplicationService(self.db, settings=self.settings)
-        for record in records:
-            self.db.expire_all()
-            current = self.repository.get(experiment_id)
-            if current is None or current.cancel_requested:
+        for log_fields in materialized:
+            _log_experiment_event(
+                "experiment_materialize_trial",
+                **log_fields,
+                operation="materialize",
+                outcome="CREATED",
+            )
+        self._invoke_fault_hook("after_materialization_commit", None)
+        for trial_id in trial_ids:
+            outcome = self._dispatch_trial_if_allowed(experiment_id, trial_id)
+            if outcome == "CANCELLED_GATE":
                 break
-            if record.run is None or record.run.status in _TERMINAL_TRIAL_STATES:
-                continue
-            if record.job is not None and record.job.status in _ACTIVE_JOB_STATUSES:
-                continue
-            try:
-                backtests.execute(record.run.id)
-            except BacktestConflictError as exc:
-                self.db.rollback()
-                refreshed = self.repository.get_trial_record(
-                    experiment_id, record.trial.id
+        return self.get(experiment_id)
+
+    def _dispatch_trial_if_allowed(
+        self, experiment_id: uuid.UUID, trial_id: uuid.UUID
+    ) -> str:
+        """Serialize the parent stop gate and M13 job creation in one transaction."""
+        try:
+            self._invoke_fault_hook("before_dispatch_lock", None)
+            self._advisory_lock(experiment_id)
+            experiment = self.repository.get_for_update(experiment_id)
+            if experiment is None:
+                raise ExperimentApplicationError(
+                    "EXPERIMENT_NOT_FOUND", "portfolio experiment not found"
                 )
+            record = self.repository.get_trial_record(experiment_id, trial_id)
+            if record is None:
+                self._raise_identity_mismatch(
+                    experiment,
+                    "experiment trial disappeared before dispatch",
+                )
+            trial = record.trial
+            if experiment.cancel_requested:
+                log_fields = {
+                    "experiment_id": experiment_id,
+                    "trial_id": trial.id,
+                    "trial_no": trial.trial_no,
+                    "run_id": trial.run_id,
+                    "parameter_hash": trial.parameter_hash,
+                }
+                self.db.commit()
+                _log_experiment_event(
+                    "experiment_dispatch_skipped",
+                    **log_fields,
+                    operation="dispatch",
+                    outcome="CANCELLED_GATE",
+                    reason="parent_cancel_requested",
+                )
+                return "CANCELLED_GATE"
+            if record.run is None:
+                self._raise_identity_mismatch(
+                    experiment,
+                    f"trial {trial.trial_no} has no materialized child run",
+                    trial=trial,
+                )
+            if record.run.status in _TERMINAL_TRIAL_STATES:
+                return self._skip_dispatch(record, "TERMINAL", record.run.status)
+            if record.job is not None and record.job.status in _ACTIVE_JOB_STATUSES:
+                return self._skip_dispatch(record, "ACTIVE", record.job.status)
+            if record.run.status != "CREATED":
+                return self._skip_dispatch(
+                    record, "ACTIVE", f"run_status_{record.run.status.lower()}"
+                )
+
+            self._invoke_fault_hook("after_dispatch_gate", trial)
+            run, job = BacktestApplicationService(
+                self.db, settings=self.settings
+            ).execute(record.run.id)
+            _log_experiment_event(
+                "experiment_dispatch_trial",
+                experiment_id=experiment_id,
+                trial_id=trial.id,
+                trial_no=trial.trial_no,
+                run_id=run.id,
+                job_id=job.id,
+                parameter_hash=trial.parameter_hash,
+                operation="dispatch",
+                outcome="DISPATCHED",
+            )
+            return "DISPATCHED"
+        except ExperimentApplicationError:
+            self.db.rollback()
+            raise
+        except BacktestConflictError as exc:
+            self.db.rollback()
+            refreshed = self.repository.get_trial_record(experiment_id, trial_id)
+            if refreshed is not None and refreshed.run is not None:
                 if (
-                    refreshed is not None
-                    and refreshed.run is not None
-                    and refreshed.run.job_id == exc.job_id
+                    refreshed.run.job_id == exc.job_id
                     and refreshed.job is not None
                     and refreshed.job.status in _ACTIVE_JOB_STATUSES
                 ):
-                    continue
-                raise ExperimentApplicationError(
-                    "EXPERIMENT_DISPATCH_CONFLICT", str(exc)
-                ) from exc
-            except Exception as exc:
-                self.db.rollback()
-                raise ExperimentApplicationError(
-                    "EXPERIMENT_DISPATCH_CONFLICT",
-                    "experiment child run dispatch failed",
-                ) from exc
-        return self.get(experiment_id)
+                    return self._skip_dispatch(
+                        refreshed, "ACTIVE", "same_active_job_conflict"
+                    )
+                if refreshed.run.status in _TERMINAL_TRIAL_STATES:
+                    return self._skip_dispatch(
+                        refreshed, "TERMINAL", refreshed.run.status
+                    )
+            self.db.rollback()
+            raise ExperimentApplicationError(
+                "EXPERIMENT_DISPATCH_CONFLICT",
+                "experiment child run dispatch conflicted with another lifecycle operation",
+            ) from exc
+        except Exception as exc:
+            self.db.rollback()
+            raise ExperimentApplicationError(
+                "EXPERIMENT_DISPATCH_CONFLICT",
+                "experiment child run dispatch failed",
+            ) from exc
+
+    def _skip_dispatch(
+        self, record: ExperimentTrialRecord, outcome: str, reason: str
+    ) -> str:
+        log_fields = {
+            "experiment_id": record.trial.experiment_id,
+            "trial_id": record.trial.id,
+            "trial_no": record.trial.trial_no,
+            "run_id": record.trial.run_id,
+            "job_id": record.run.job_id if record.run is not None else None,
+            "parameter_hash": record.trial.parameter_hash,
+        }
+        self.db.commit()
+        _log_experiment_event(
+            "experiment_dispatch_skipped",
+            **log_fields,
+            operation="dispatch",
+            outcome=outcome,
+            reason=reason,
+        )
+        return outcome
 
     def get(self, experiment_id: uuid.UUID) -> dict[str, Any]:
         experiment = self.repository.get(experiment_id)
@@ -394,7 +533,14 @@ class ExperimentApplicationService:
         experiment.cancel_requested = True
         experiment.updated_at = datetime.now(UTC)
         self.db.commit()
+        _log_experiment_event(
+            "experiment_cancel_requested",
+            experiment_id=experiment_id,
+            operation="cancel",
+            outcome="GATE_COMMITTED",
+        )
 
+        self.db.expire_all()
         records = self.repository.list_records(experiment_id)
         backtests = BacktestApplicationService(self.db, settings=self.settings)
         for record in records:
@@ -409,11 +555,40 @@ class ExperimentApplicationService:
             ):
                 continue
             try:
-                backtests.cancel(record.run.id)
-            except (BacktestConflictError, LookupError):
+                run, job = backtests.cancel(record.run.id)
+                _log_experiment_event(
+                    "experiment_cancel_child",
+                    experiment_id=experiment_id,
+                    trial_id=record.trial.id,
+                    trial_no=record.trial.trial_no,
+                    run_id=run.id,
+                    job_id=job.id if job is not None else None,
+                    parameter_hash=record.trial.parameter_hash,
+                    operation="cancel",
+                    outcome="CANCEL_REQUESTED",
+                )
+            except (BacktestConflictError, LookupError) as exc:
                 self.db.rollback()
+                _log_experiment_event(
+                    "experiment_cancel_child",
+                    level="WARNING",
+                    experiment_id=experiment_id,
+                    trial_id=record.trial.id,
+                    trial_no=record.trial.trial_no,
+                    run_id=record.trial.run_id,
+                    parameter_hash=record.trial.parameter_hash,
+                    operation="cancel",
+                    outcome="CONFLICT",
+                    reason=type(exc).__name__,
+                )
                 continue
         return self.get(experiment_id)
+
+    def _invoke_fault_hook(
+        self, stage: str, trial: PortfolioExperimentTrial | None
+    ) -> None:
+        if self.fault_hook is not None:
+            self.fault_hook(stage, trial)
 
     def _advisory_lock(self, experiment_id: uuid.UUID) -> None:
         if self.db.bind is not None and self.db.bind.dialect.name == "postgresql":
@@ -447,9 +622,44 @@ class ExperimentApplicationService:
             if current[key] != frozen[key]
         ]
         if mismatches:
+            _log_experiment_event(
+                "experiment_source_identity_drift",
+                level="WARNING",
+                experiment_id=experiment.id,
+                operation="start",
+                outcome="REJECTED",
+                mismatch_fields=tuple(
+                    key for key in current if current[key] != frozen[key]
+                ),
+            )
             raise ExperimentApplicationError(
                 "EXPERIMENT_SOURCE_IDENTITY_DRIFT", "; ".join(mismatches)
             )
+
+    def _raise_identity_mismatch(
+        self,
+        experiment: PortfolioExperiment,
+        reason: str,
+        *,
+        trial: PortfolioExperimentTrial | None = None,
+        mismatch_fields: Sequence[str] = (),
+    ) -> None:
+        _log_experiment_event(
+            "experiment_identity_mismatch",
+            level="ERROR",
+            experiment_id=experiment.id,
+            trial_id=trial.id if trial is not None else None,
+            trial_no=trial.trial_no if trial is not None else None,
+            run_id=trial.run_id if trial is not None else None,
+            parameter_hash=trial.parameter_hash if trial is not None else None,
+            operation="validate",
+            outcome="REJECTED",
+            reason=reason,
+            mismatch_fields=tuple(mismatch_fields),
+        )
+        raise ExperimentApplicationError(
+            "EXPERIMENT_TRIAL_IDENTITY_MISMATCH", reason
+        )
 
     def _validate_base_snapshot(self, experiment: PortfolioExperiment) -> None:
         snapshot = experiment.base_config_snapshot
@@ -466,14 +676,12 @@ class ExperimentApplicationService:
                 "frozen base_config_snapshot is incomplete",
             )
         if config_hash(experiment.parameter_space) != experiment.parameter_space_hash:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
-                "frozen parameter space hash mismatch",
+            self._raise_identity_mismatch(
+                experiment, "frozen parameter space hash mismatch"
             )
         if config_hash(_stored_definition_payload(experiment)) != experiment.definition_hash:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
-                "frozen experiment definition hash mismatch",
+            self._raise_identity_mismatch(
+                experiment, "frozen experiment definition hash mismatch"
             )
         hashes = {
             "base_source_strategy_config_hash": analysis_strategy_hash(
@@ -490,9 +698,10 @@ class ExperimentApplicationService:
             if actual != getattr(experiment, field)
         ]
         if mismatches:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"frozen base snapshot hash mismatch: {mismatches}",
+                mismatch_fields=mismatches,
             )
 
     def _validate_trial(
@@ -501,19 +710,24 @@ class ExperimentApplicationService:
         trial: PortfolioExperimentTrial,
     ) -> dict[str, Any]:
         if set(trial.parameter_values) != set(EXPERIMENT_PARAMETER_ORDER):
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} does not contain the complete parameter set",
+                trial=trial,
             )
         if config_hash(trial.parameter_values) != trial.parameter_hash:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} parameter hash mismatch",
+                trial=trial,
+                mismatch_fields=("parameter_hash",),
             )
         if config_hash(trial.portfolio_config_snapshot) != trial.portfolio_config_hash:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} portfolio hash mismatch",
+                trial=trial,
+                mismatch_fields=("portfolio_config_hash",),
             )
         expected = deepcopy(experiment.base_config_snapshot["portfolio"])
         try:
@@ -534,9 +748,11 @@ class ExperimentApplicationService:
             ) from exc
         canonical = portfolio.model_dump(mode="json")
         if canonical != trial.portfolio_config_snapshot:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} snapshot does not match its parameters",
+                trial=trial,
+                mismatch_fields=("portfolio_config_snapshot",),
             )
         if portfolio.candidate.top_n < portfolio.construction.max_positions or (
             portfolio.construction.max_new_positions_per_day
@@ -557,9 +773,11 @@ class ExperimentApplicationService:
         assert trial.run_id is not None
         run = self.repository.get_run(trial.run_id)
         if run is None:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} references a missing child run",
+                trial=trial,
+                mismatch_fields=("run_id",),
             )
         expected_snapshot = {
             "strategy": experiment.base_config_snapshot["strategy"],
@@ -610,9 +828,11 @@ class ExperimentApplicationService:
             if getattr(run, field) != expected
         ]
         if mismatches:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_TRIAL_IDENTITY_MISMATCH",
+            self._raise_identity_mismatch(
+                experiment,
                 f"trial {trial.trial_no} child run identity mismatch: {mismatches}",
+                trial=trial,
+                mismatch_fields=mismatches,
             )
 
 
@@ -630,19 +850,22 @@ def _experiment_payload(
             active = True
     terminal_count = sum(counts[state.lower()] for state in _TERMINAL_TRIAL_STATES)
     success_count = counts["success"]
+    failed_count = counts["failed"]
+    cancelled_count = counts["cancelled"]
     if experiment.cancel_requested and not active:
         state = "CANCELLED"
     elif experiment.started_at is None:
         state = "CREATED"
-    elif terminal_count == experiment.trial_count:
-        if success_count == experiment.trial_count:
-            state = "SUCCESS"
-        elif success_count:
-            state = "COMPLETED_WITH_ERRORS"
-        else:
-            state = "FAILED"
-    else:
+    elif terminal_count < experiment.trial_count:
         state = "RUNNING"
+    elif success_count == experiment.trial_count:
+        state = "SUCCESS"
+    elif failed_count > 0 and success_count == 0:
+        state = "FAILED"
+    elif cancelled_count == experiment.trial_count:
+        state = "CANCELLED"
+    else:
+        state = "COMPLETED_WITH_ERRORS"
     return {
         "id": str(experiment.id),
         "name": experiment.name,
@@ -745,3 +968,23 @@ def _stored_definition_payload(experiment: PortfolioExperiment) -> dict[str, Any
         "backtest_engine_version": experiment.base_backtest_engine_version,
         "parameter_space_hash": experiment.parameter_space_hash,
     }
+
+
+def _safe_log_fields(fields: Mapping[str, Any]) -> dict[str, Any]:
+    safe: dict[str, Any] = {}
+    for key, value in fields.items():
+        if key not in _EXPERIMENT_LOG_FIELDS or value is None:
+            continue
+        if isinstance(value, uuid.UUID):
+            safe[key] = str(value)
+        elif key == "mismatch_fields":
+            safe[key] = tuple(str(item) for item in value)
+        elif isinstance(value, (str, int, float, bool)):
+            safe[key] = value
+    return safe
+
+
+def _log_experiment_event(
+    event: str, *, level: str = "INFO", **fields: Any
+) -> None:
+    logger.bind(event=event, **_safe_log_fields(fields)).log(level, event)

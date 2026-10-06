@@ -74,11 +74,20 @@ Parent and ordered Trial rows, validates the source gate and all stored hashes/s
 materializes every missing Child Run, binds every Trial, sets first `started_at`, and commits
 once. Any failure rolls back every new Run binding.
 
-Phase B walks Trials by `trial_no` and calls `BacktestApplicationService.execute()` only for
-eligible CREATED Runs. Active jobs and RUNNING/terminal Runs are skipped. An active-job
-conflict referring to the same Run is an idempotent success. Repeated Start therefore neither
-creates another Run nor another active job. Two PostgreSQL sessions serialize Phase A, while
-the M13 Run lock and unique job pointer serialize Phase B.
+Phase B walks Trials by `trial_no`. Every dispatch reacquires the Experiment advisory
+transaction lock, locks and freshly reads the Parent stop gate, freshly reads the Trial/Run/Job
+projection, and calls `BacktestApplicationService.execute()` only for an eligible CREATED Run
+before committing. The cancellation check and M13 job creation are therefore in one
+Experiment serialization window. Active jobs and RUNNING/terminal Runs are skipped. An
+active-job conflict referring to the same Run is an idempotent success. Repeated Start
+therefore creates neither another Run nor another active job.
+
+The global lifecycle lock order is Experiment advisory transaction lock →
+`portfolio_experiment` row → M13 Run/Job locks. Cancel commits the Parent stop gate and
+releases the first two locks before iterating children through M13 cancellation. It never
+holds the Experiment lock while acquiring child locks, so dispatch/cancel cannot form a
+reverse-order deadlock. If cancel wins, later dispatch sees the committed gate and creates no
+Job; if dispatch wins, cancel observes and cancels the new M13 generation.
 
 ## 9. Runtime source identity gate
 
@@ -92,10 +101,10 @@ returns `EXPERIMENT_SOURCE_IDENTITY_DRIFT` with zero new Runs and Jobs.
 
 Trial state is `PLANNED` without a Run, otherwise exactly the Child Run status. Experiment
 state and counts are dynamic projections: CREATED before Start, RUNNING while work remains,
-SUCCESS when all succeed, COMPLETED_WITH_ERRORS for mixed terminal results containing a
-success, FAILED for all-terminal results without success and with failure, and CANCELLED once
-the cancel gate is set and no active Child remains. Progress is terminal Trial count divided
-by planned count.
+SUCCESS when all succeed, FAILED when a terminal zero-success set contains a failure,
+CANCELLED when all Trials are manually cancelled, and COMPLETED_WITH_ERRORS for all other
+mixed terminal sets. A committed Parent cancel gate also projects CANCELLED as soon as no
+Child is active. Progress is terminal Trial count divided by planned count.
 
 Trial pages outer-join Run and current Job in one query and can filter by derived state; they
 do not query Checkpoints per row. Single Trial Detail may call the existing Backtest progress
@@ -112,3 +121,18 @@ Authenticated endpoints under `/api/v1/portfolio/experiments` create, start, rea
 Trials, and cancel. Schema/config errors return 422, missing resources return 404, and
 identity/state conflicts return 409 with stable `EXPERIMENT_*` codes. Persistence exception
 details are not exposed to clients.
+
+## 12. M15.1.1 lifecycle recovery and observability closeout
+
+Test-only fault hooks can stop materialization before any selected Trial, after the single
+Phase A commit, or inside a serialized dispatch window. They are inert by default and do not
+change the API or domain contract. PostgreSQL integration tests prove all-or-nothing Phase A,
+reuse of materialized Run IDs after a pre-dispatch crash, partial-dispatch retry without job
+duplication, both dispatch/cancel race orders, terminal child non-resume, manual M13 resume
+observation, and generation-aware child cancellation.
+
+Lifecycle logs are structured and allowlisted. Creation, materialization, dispatch/skip,
+cancel gate/child cancellation, source drift, and identity mismatch events include only
+scalar IDs, Trial number, safe hashes, operation, outcome, and mismatch field names. Frozen
+configuration snapshots, parameter-space bodies, provider tokens, cookies, and secrets are
+never serialized.

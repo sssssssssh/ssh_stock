@@ -410,5 +410,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Create 只在一个事务创建 Experiment 与全部 Trial，且零 Child Run、零 Job。Start Phase A 使用 advisory transaction lock、row lock 和单事务物化全部缺失 Child Run；Phase B 只调用现有 `BacktestApplicationService.execute()`。
 - 单次 Backtest 与 Child Run 必须共用同一未持久化 Run factory。Strategy/Opportunity runtime source identity 与 Experiment 冻结身份不一致时 Start 必须返回 `EXPERIMENT_SOURCE_IDENTITY_DRIFT`，并保持零物化。
 - 重复或并发 Start 不得重复 Child Run 或 active Backtest Job。取消先持久化 `cancel_requested`，再逐个调用既有安全取消；单个 Child 冲突不得回滚 Parent stop gate，PLANNED Trial 不再物化。
+- M15.1.1 固定生命周期锁序为 Experiment advisory transaction lock → Parent row → M13 Run/Job。每个 Child 派发必须在同一 Experiment 序列化窗口内重新读取取消门并调用 M13 `execute()`；取消提交 Parent gate 并释放 Experiment 锁后才取得 Child 锁，禁止反向锁序。
+- Start 只派发 CREATED Child；FAILED/CANCELLED Child 不得隐式 resume。Phase A 崩溃重试必须复用全部 Run 绑定，Phase B 部分崩溃重试不得重复 active Job，显式恢复仍只允许复用 M13 `resume()`。
 - Experiment/Trial 状态、计数和进度均为动态投影。Trial 列表不得为每行读取 Checkpoint；完整 Backtest progress 只在单 Trial Detail 中查询。
+- 全 CANCELLED 投影为 CANCELLED；SUCCESS+CANCELLED 投影为 COMPLETED_WITH_ERRORS；FAILED+CANCELLED 且零成功投影为 FAILED；Parent cancel gate 已提交且无 active Child 时优先投影 CANCELLED。
+- Experiment 生命周期日志只允许 ID、Trial number、安全 hash、operation/outcome/reason 和 mismatch field names；禁止记录完整 snapshot、parameter space、Token、Cookie 或其他秘密。
 - M15.1 不创建 Parent JobRun，不自动触发 M14 artifacts，不实现 objective/rank/best/Pareto、非 GRID 搜索、Walk-forward/OOS、批量 resume/retry 或前端 Workbench。

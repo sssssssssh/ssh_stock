@@ -33,7 +33,11 @@ class ExperimentRepository:
         return experiment
 
     def get(self, experiment_id: uuid.UUID) -> PortfolioExperiment | None:
-        return self.db.get(PortfolioExperiment, experiment_id)
+        return self.db.execute(
+            select(PortfolioExperiment)
+            .where(PortfolioExperiment.id == experiment_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
 
     def get_for_update(self, experiment_id: uuid.UUID) -> PortfolioExperiment | None:
         return self.db.execute(
@@ -68,6 +72,7 @@ class ExperimentRepository:
             .outerjoin(JobRun, JobRun.id == PortfolioBacktestRun.job_id)
             .where(PortfolioExperimentTrial.experiment_id == experiment_id)
             .order_by(PortfolioExperimentTrial.trial_no)
+            .execution_options(populate_existing=True)
         )
 
     def trial_page(
@@ -106,6 +111,7 @@ class ExperimentRepository:
             statement.order_by(PortfolioExperimentTrial.trial_no)
             .limit(limit)
             .offset(offset)
+            .execution_options(populate_existing=True)
         )
         return records, total
 
@@ -123,6 +129,7 @@ class ExperimentRepository:
                 PortfolioExperimentTrial.experiment_id == experiment_id,
                 PortfolioExperimentTrial.id == trial_id,
             )
+            .execution_options(populate_existing=True)
         )
         return rows[0] if rows else None
 
@@ -132,7 +139,11 @@ class ExperimentRepository:
         return run
 
     def get_run(self, run_id: uuid.UUID) -> PortfolioBacktestRun | None:
-        return self.db.get(PortfolioBacktestRun, run_id)
+        return self.db.execute(
+            select(PortfolioBacktestRun)
+            .where(PortfolioBacktestRun.id == run_id)
+            .execution_options(populate_existing=True)
+        ).scalar_one_or_none()
 
     def _records(self, statement: object) -> list[ExperimentTrialRecord]:
         return [

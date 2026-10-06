@@ -40,6 +40,7 @@ from app.services.experiment import (
     ExperimentApplicationService,
 )
 from app.services.job_worker import execute_claimed_job
+from app.services.portfolio.backtest_application import BacktestApplicationService
 from sqlalchemy.orm import Session
 
 
@@ -270,6 +271,70 @@ def test_two_trial_experiment_reaches_success_through_actual_worker_path(
                 ).scalars()
             )
             assert len(jobs) == 2
+            trials = list(
+                db.execute(
+                    sa.select(PortfolioExperimentTrial)
+                    .where(PortfolioExperimentTrial.experiment_id == experiment_id)
+                    .order_by(PortfolioExperimentTrial.trial_no)
+                ).scalars()
+            )
+            runs = [db.get(PortfolioBacktestRun, trial.run_id) for trial in trials]
+            assert [trial.parameter_values["candidate.min_score"] for trial in trials] == [
+                "65",
+                "70",
+            ]
+            assert all(run is not None for run in runs)
+            first_run, second_run = runs
+            assert first_run is not None and second_run is not None
+            assert first_run.id != second_run.id
+            assert first_run.portfolio_config_hash != second_run.portfolio_config_hash
+            assert (
+                first_run.source_strategy_config_hash
+                == second_run.source_strategy_config_hash
+            )
+            assert (
+                first_run.opportunity_config_hash
+                == second_run.opportunity_config_hash
+            )
+            assert first_run.execution_config_hash == second_run.execution_config_hash
+            assert first_run.accounting_config_hash == second_run.accounting_config_hash
+            assert first_run.portfolio_version == second_run.portfolio_version == "portfolio_v3"
+            assert (
+                first_run.backtest_engine_version
+                == second_run.backtest_engine_version
+                == "backtest_v7"
+            )
+            assert (
+                first_run.start_date,
+                first_run.end_date,
+                first_run.initial_cash,
+                first_run.benchmark_code,
+            ) == (
+                second_run.start_date,
+                second_run.end_date,
+                second_run.initial_cash,
+                second_run.benchmark_code,
+            )
+            assert {
+                key: value
+                for key, value in first_run.config_snapshot.items()
+                if key != "portfolio"
+            } == {
+                key: value
+                for key, value in second_run.config_snapshot.items()
+                if key != "portfolio"
+            }
+            first_portfolio = dict(first_run.config_snapshot["portfolio"])
+            second_portfolio = dict(second_run.config_snapshot["portfolio"])
+            assert first_portfolio.pop("candidate")["min_score"] == "65"
+            assert second_portfolio.pop("candidate")["min_score"] == "70"
+            first_candidate = dict(first_run.config_snapshot["portfolio"]["candidate"])
+            second_candidate = dict(second_run.config_snapshot["portfolio"]["candidate"])
+            first_candidate.pop("min_score")
+            second_candidate.pop("min_score")
+            assert first_candidate == second_candidate
+            assert first_portfolio == second_portfolio
+            original_job_ids = {job.id for job in jobs}
             for index, job in enumerate(jobs, start=1):
                 job.status = "RUNNING"
                 job.worker_id = f"m15.1-e2e-worker-{index}"
@@ -282,6 +347,94 @@ def test_two_trial_experiment_reaches_success_through_actual_worker_path(
             assert detail["success_count"] == 2
             assert detail["terminal_count"] == 2
             assert detail["progress_pct"] == 100.0
+            repeated = ExperimentApplicationService(db).start(experiment_id)
+            assert repeated["state"] == "SUCCESS"
+            repeated_jobs = list(
+                db.execute(
+                    sa.select(JobRun).where(
+                        JobRun.job_metadata["portfolio_run_id"].astext.in_(
+                            [str(run.id) for run in runs if run is not None]
+                        )
+                    )
+                ).scalars()
+            )
+            assert {job.id for job in repeated_jobs} == original_job_ids
+    finally:
+        if experiment_id is not None:
+            _cleanup_experiment(engine, experiment_id)
+        _cleanup_backtest_sources(engine, days, code)
+        engine.dispose()
+
+
+def test_m13_manual_resume_is_observed_dynamically_by_experiment(monkeypatch) -> None:
+    engine = sa.create_engine(get_settings().database_url)
+    days = (date(2091, 1, 3),)
+    code = "M151R1.SZ"
+    experiment_id: uuid.UUID | None = None
+    try:
+        monkeypatch.setattr(
+            job_worker_module,
+            "_run_heartbeat_loop",
+            lambda *args, **kwargs: None,
+        )
+        with Session(engine, expire_on_commit=False) as db:
+            _seed_backtest_sources(db, days, code)
+            created = ExperimentApplicationService(db).create(
+                name="m15.1.1-manual-resume",
+                start_date=days[0],
+                end_date=days[-1],
+                initial_cash=None,
+                benchmark_code=None,
+                grid={},
+            )
+            experiment_id = uuid.UUID(created["id"])
+            ExperimentApplicationService(db).start(experiment_id)
+            trial = db.execute(
+                sa.select(PortfolioExperimentTrial).where(
+                    PortfolioExperimentTrial.experiment_id == experiment_id
+                )
+            ).scalar_one()
+            assert trial.run_id is not None
+            run = db.get(PortfolioBacktestRun, trial.run_id)
+            assert run is not None and run.job_id is not None
+            failed_job = db.get(JobRun, run.job_id)
+            assert failed_job is not None
+            now = datetime.now(UTC)
+            run.status = "FAILED"
+            run.finished_at = now
+            failed_job.status = "FAILED"
+            failed_job.finished_at = now
+            failed_job.error_message = "injected recoverable failure"
+            db.commit()
+
+            resumed_run, resumed_job = BacktestApplicationService(db).resume(run.id)
+            assert resumed_run.id == run.id
+            assert resumed_job.id != failed_job.id
+            resumed_job.status = "RUNNING"
+            resumed_job.worker_id = "m15.1.1-resume-worker"
+            resumed_job.heartbeat_at = datetime.now(UTC)
+            db.commit()
+
+            execute_claimed_job(db, resumed_job.id)
+
+            detail = ExperimentApplicationService(db).get(experiment_id)
+            trial_detail = ExperimentApplicationService(db).trial(
+                experiment_id, trial.id
+            )
+            assert trial_detail["state"] == "SUCCESS"
+            assert detail["state"] == "SUCCESS"
+            assert detail["success_count"] == 1
+            assert detail["terminal_count"] == 1
+            assert detail["progress_pct"] == 100.0
+            generations = list(
+                db.execute(
+                    sa.select(JobRun).where(
+                        JobRun.job_metadata["portfolio_run_id"].astext
+                        == str(run.id)
+                    )
+                ).scalars()
+            )
+            assert len(generations) == 2
     finally:
         if experiment_id is not None:
             _cleanup_experiment(engine, experiment_id)

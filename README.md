@@ -1257,5 +1257,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 创建 Experiment 只在一个事务写入定义与全部 PLANNED Trial，不创建 Run/Job。Start 先在一个事务内锁定并物化全部 Child Run，再按 Trial 顺序复用 M13 `BacktestApplicationService` 幂等派发。
 - 单次 Backtest 与 Experiment Child Run 共用 `BacktestRunFactory`，冻结相同的 Strategy、Opportunity、Portfolio、Execution、Accounting 配置与版本/哈希。Start 前 Runtime Source Identity 漂移会返回 `EXPERIMENT_SOURCE_IDENTITY_DRIFT`，且零 Run、零 Job。
 - 新增受认证保护的创建、启动、详情、Trial 分页/详情和取消接口：`/api/v1/portfolio/experiments`。Experiment 状态和进度从 Child Run 动态投影；取消先提交 Parent stop gate，再复用 M13 安全取消语义。
+- M15.1.1 收口取消/派发 TOCTOU：每个 Trial 在 Experiment advisory transaction lock 与 Parent row lock 保护下重新读取停止门，并在同一事务窗口调用 M13 `execute()`。取消先提交 Parent gate、释放 Experiment 锁，再逐个调用 M13 generation-aware cancel；固定锁序消除反向等待。
+- Phase A 物化继续一次提交、失败全回滚；Phase A 后崩溃与部分派发崩溃均可原位重试，复用既有 Run/Job。FAILED/CANCELLED Child 不会被 Start 隐式恢复，手工恢复继续只走 M13 `resume()` 并由 Experiment 动态观察。
+- 状态投影补齐全 CANCELLED、SUCCESS+CANCELLED、FAILED+CANCELLED 等终态组合；生命周期结构化日志使用字段白名单，不记录完整配置、参数空间或凭据。
 - 本阶段不自动生成 M14 Performance/Risk/Trade/Period，不做排名、最佳策略、Pareto、Random/Bayesian 搜索、Walk-forward/OOS、前端实验工作台或 Experiment Parent Job。
 - 完整冻结、并发、恢复与取消边界见 `docs/M15_experiment_architecture.md`。
