@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -11,6 +12,7 @@ from app.core.performance_config import PERFORMANCE_VERSION
 from app.core.performance_period_config import PERIOD_VERSION
 from app.core.performance_risk_config import RISK_VERSION
 from app.core.performance_trade_config import TRADE_VERSION
+from app.domain.experiment.contracts import EXPERIMENT_PARAMETER_ORDER
 from app.domain.experiment_evaluation.contracts import (
     EvaluationMetricSnapshot,
     EvaluationTrialInput,
@@ -25,7 +27,10 @@ from app.models.performance_period import (
 from app.models.performance_risk import PortfolioPerformanceRiskReport
 from app.models.performance_trade import PortfolioPerformanceTradeReport
 from app.models.portfolio import PortfolioBacktestRun
-from app.services.experiment_evaluation.identity import stable_hash
+from app.services.experiment_evaluation.identity import (
+    experiment_parameter_hash,
+    stable_hash,
+)
 
 _TERMINAL = {"SUCCESS", "FAILED", "CANCELLED"}
 
@@ -111,14 +116,14 @@ class ExperimentEvaluationSourceProvider:
             try:
                 self.load(experiment_id)
             except ExperimentEvaluationSourceError as exc:
-                if exc.code == "EXPERIMENT_EVALUATION_ANALYTICS_INCOMPATIBLE":
-                    result["ready"] = False
-                    result["error_code"] = exc.code
-                    result["mismatch_fields"] = exc.details.get("mismatch_fields", [])
+                result["ready"] = False
+                result["error_code"] = exc.code
+                result.update(exc.details)
         return result
 
     def load(self, experiment_id: uuid.UUID) -> ExperimentEvaluationSourceSnapshot:
         experiment, pairs = self._experiment_trials(experiment_id)
+        self._validate_trial_parameter_identities(pairs)
         active = [
             trial.trial_no
             for trial, run in pairs
@@ -243,6 +248,35 @@ class ExperimentEvaluationSourceProvider:
                 "experiment trial count does not match its frozen definition",
             )
         return experiment, pairs
+
+    def _validate_trial_parameter_identities(
+        self,
+        pairs: list[
+            tuple[PortfolioExperimentTrial, PortfolioBacktestRun | None]
+        ],
+    ) -> None:
+        expected_parameters = set(EXPERIMENT_PARAMETER_ORDER)
+        for trial, _ in pairs:
+            values = trial.parameter_values
+            if not isinstance(values, Mapping) or set(values) != expected_parameters:
+                self._invalid_trial_parameter_identity(
+                    trial, "trial parameter set is incomplete"
+                )
+            if experiment_parameter_hash(values) != trial.parameter_hash:
+                self._invalid_trial_parameter_identity(
+                    trial, "trial parameter hash mismatch"
+                )
+
+    def _invalid_trial_parameter_identity(
+        self, trial: PortfolioExperimentTrial, reason: str
+    ) -> None:
+        raise ExperimentEvaluationSourceError(
+            "EXPERIMENT_EVALUATION_SOURCE_INVALID",
+            reason,
+            reason=reason,
+            trial_id=str(trial.id),
+            trial_no=trial.trial_no,
+        )
 
     def _missing_stage(self, run_id: uuid.UUID) -> str | None:
         performance = self._latest_performance(run_id)

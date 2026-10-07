@@ -19,6 +19,11 @@ All trials must be terminal. Every successful trial must have a complete, compar
 trials are retained as `EXCLUDED` rows. Missing analytics or incompatible bundles fail
 closed and do not trigger M14 calculation.
 
+Before reading any M14 bundle, the source gate revalidates that every Trial contains the
+complete fixed six-parameter set and that its canonical sorted-key JSON SHA-256 matches
+the persisted M15.1 `parameter_hash`. A missing parameter or hash mismatch returns
+`EXPERIMENT_EVALUATION_SOURCE_INVALID` and produces no evaluation rows.
+
 The calculate request accepts an optional typed policy. Metric directions are fixed by
 the catalog; arbitrary expressions and user-defined directions are rejected. The
 effective policy, static evaluation config, and frozen source snapshot have independent
@@ -34,6 +39,18 @@ policy or M14 generation creates a new immutable history entry.
 
 Trial pages support `status`, `feasible`, `shortlisted`, `pareto_front`, `limit`, and
 `offset`. Sensitivity is a marginal grid summary, not a causal or out-of-sample claim.
+
+The detail response preserves the original top-level identity fields and also exposes a
+structured `identity` object with `evaluation_id`, `experiment_id`,
+`evaluation_version`, `evaluation_config_hash`, `policy_hash`, and `source_hash`.
+
+## M15.2.1 integrity acceptance
+
+The closeout suite runs against PostgreSQL and covers the complete terminal-state and
+missing-stage matrices, all eight cross-Trial compatibility fields, immutable Policy and
+M14-generation identities, composite ownership and persistence constraints, and mixed
+SUCCESS/FAILED/CANCELLED exclusion semantics. `experiment_eval_v1`, migration 0042, and
+all selection formulas remain unchanged.
 
 ## Selection rules
 

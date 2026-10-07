@@ -1,6 +1,7 @@
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any
 
@@ -35,6 +36,11 @@ def stable_hash(value: Any) -> str:
         canonical_value(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def experiment_parameter_hash(parameter_values: Mapping[str, Any]) -> str:
+    """Reproduce the canonical M15.1 Trial parameter identity."""
+    return stable_hash(dict(parameter_values))
 
 
 def effective_policy(

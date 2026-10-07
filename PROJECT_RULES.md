@@ -426,3 +426,11 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Sensitivity 是六个固定 M15.1 参数的 marginal grid summary；统计使用 Decimal，primary objective 样本包含所有有值的 EVALUATED Trial，不受 feasibility 筛选。月度波动使用 MONTH rows 与 N-1 分母，不得描述为 OOS robustness。
 - 同 Experiment + Policy 只允许一个活跃 Evaluation Job。锁 key 必须稳定 hash 到 PostgreSQL signed bigint，禁止 Python `hash()`；Artifact 与 Job SUCCESS 原子提交，heartbeat recovery fresh recheck，旧 Worker 丢失 ownership 必须回滚未提交 Artifact。
 - API 与文档只能把 selection rank 1 称为 selected in-sample research candidate，不得称为 production best strategy、live recommendation 或自动部署候选。
+
+## Milestone 15.2.1 Evaluation Integrity Closeout 规则
+
+- `experiment_eval_v1`、0042 数据结构、Constraint、Pareto、Ranking、Sensitivity 与 Monthly robustness 口径继续冻结；本轮不新增 Migration 或 Evaluation Version。
+- M15.2 每次读取 Trial 时必须重新验证完整六参数 key set 及 M15.1 canonical JSON SHA-256 `parameter_hash`。任一异常返回 `EXPERIMENT_EVALUATION_SOURCE_INVALID`，且不得进入 Constraint、Pareto、Ranking、Sensitivity 或落库 Artifact。
+- Readiness 必须返回完整状态计数、缺失 M14 阶段和精确兼容性 mismatch fields。Missing Performance/Risk/Trade/Period 不得触发任何 M14 计算。
+- Evaluation detail 在保留既有顶层身份字段的同时，必须提供结构化 `identity`，包含 evaluation、experiment、version、config、policy 与 source identity。
+- PostgreSQL Acceptance 必须真实覆盖 composite FK、unique/check constraints、Policy/M14 generation identity、mixed terminal exclusion 与六参数 sensitivity 计数；仅检查 SQLAlchemy Metadata 不构成验收。

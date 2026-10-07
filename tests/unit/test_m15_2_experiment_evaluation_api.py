@@ -45,7 +45,23 @@ def test_evaluation_endpoints_forward_filters_and_return_contract(monkeypatch) -
                 experiment_id,
                 evaluation_id,
             )
-            return {"id": str(evaluation_id), "shortlist": []}
+            return {
+                "id": str(evaluation_id),
+                "experiment_id": str(experiment_id),
+                "evaluation_version": "experiment_eval_v1",
+                "evaluation_config_hash": "c" * 64,
+                "policy_hash": "p" * 64,
+                "source_hash": "s" * 64,
+                "identity": {
+                    "evaluation_id": str(evaluation_id),
+                    "experiment_id": str(experiment_id),
+                    "evaluation_version": "experiment_eval_v1",
+                    "evaluation_config_hash": "c" * 64,
+                    "policy_hash": "p" * 64,
+                    "source_hash": "s" * 64,
+                },
+                "shortlist": [],
+            }
 
         def trials(self, requested_experiment_id, requested_evaluation_id, **filters):
             assert (requested_experiment_id, requested_evaluation_id) == (
@@ -126,6 +142,14 @@ def test_evaluation_endpoints_forward_filters_and_return_contract(monkeypatch) -
     assert calculate.status_code == 202
     assert calculate.json()["data"]["evaluation_job_id"] == str(job_id)
     assert detail.status_code == 200
+    assert detail.json()["data"]["identity"] == {
+        "evaluation_id": str(evaluation_id),
+        "experiment_id": str(experiment_id),
+        "evaluation_version": "experiment_eval_v1",
+        "evaluation_config_hash": "c" * 64,
+        "policy_hash": "p" * 64,
+        "source_hash": "s" * 64,
+    }
     assert trials.status_code == 200 and trials.json()["meta"]["total"] == 0
     assert sensitivity.status_code == 200
     assert history.status_code == 200 and history.json()["meta"]["total"] == 1

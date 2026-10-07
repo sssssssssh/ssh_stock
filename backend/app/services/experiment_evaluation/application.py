@@ -561,6 +561,14 @@ def _trial_model(
 
 
 def _report_payload(report: PortfolioExperimentEvaluationReport) -> dict[str, Any]:
+    identity = {
+        "evaluation_id": str(report.id),
+        "experiment_id": str(report.experiment_id),
+        "evaluation_version": report.evaluation_version,
+        "evaluation_config_hash": report.evaluation_config_hash,
+        "policy_hash": report.policy_hash,
+        "source_hash": report.source_hash,
+    }
     return {
         "id": str(report.id),
         "experiment_id": str(report.experiment_id),
@@ -568,6 +576,7 @@ def _report_payload(report: PortfolioExperimentEvaluationReport) -> dict[str, An
         "evaluation_config_hash": report.evaluation_config_hash,
         "policy_hash": report.policy_hash,
         "source_hash": report.source_hash,
+        "identity": identity,
         "status": report.status,
         "counts": {
             "trial": report.trial_count,
