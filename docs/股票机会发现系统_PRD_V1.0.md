@@ -1322,3 +1322,15 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - 重复和并发 Start 必须幂等。任何 Trial 物化失败都回滚整个 Phase A；Runtime Strategy/Opportunity Source Identity 漂移时不得创建任何 Run 或 Job。
 - 用户可以取消 Experiment。系统先保存全局停止门，再安全取消 active Child Run；已成功、失败或取消的事实保留，未物化和未派发 Trial 不再启动。
 - M15.1 不包含自动 M14 评估、排名/最优策略、Pareto、非 Grid 搜索、样本外验证、Walk-forward 或前端实验工作台。
+
+## Milestone 15.3 Walk-forward / OOS Validation 产品需求（2026-10-08）
+
+- 用户可以创建 Rolling 或 Expanding Walk-forward Study，明确训练交易日数、测试交易日数、日期范围、初始资金、Benchmark、六参数搜索空间和 Evaluation Policy。系统只使用真实开市日并只生成完整窗口。
+- 创建 Study 时系统冻结全部研究输入与算法身份，展示稳定 definition hash、calendar hash 和窗口计划；后续修改部署配置不得改变已创建 Study 的含义。
+- 用户通过有界 `advance` 推进 Study。系统按窗口依次复用 M15.1 创建/启动训练 Experiment，等待其终态，再复用 M15.2 产生或读取精确 Evaluation Artifact。
+- 每个窗口只采用 rank 1 selected in-sample research candidate。若没有可行候选，系统明确记录原因并停止该窗口后续流程，不能偷偷选择 rank 2 或默认参数。
+- 系统为选中参数创建独立 OOS Backtest Run，测试日期必须与窗口完全一致，初始账户独立。运行完成后只接受精确匹配的 M14 四阶段结果；缺少结果时 readiness 必须说明缺口，而不能自动补算。
+- 所有可验证窗口准备完成后，用户可异步提交 Validation。重复提交在同一稳定 source identity 下必须幂等；历史 Artifact 永不覆盖，源证据变化时产生新的 identity。
+- Validation Detail 提供逐窗口训练/OOS lineage、逐日拼接收益/NAV/Benchmark/相对 NAV、总收益、年化收益、最大回撤、N-1 样本波动率、Sharpe、训练到 OOS 的退化度、告警及六参数稳定性。
+- 用户可取消 Study、查询动态状态/进度、窗口详情、Validation 历史和稳定性。取消只阻止新工作并复用下游安全取消语义，不删除已完成研究证据。
+- M15.3 输出是研究证据，不是生产最优策略、自动部署候选、实盘推荐或收益承诺。

@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -59,6 +60,14 @@ class ExperimentApplicationError(RuntimeError):
         super().__init__(message)
 
 
+@dataclass(frozen=True)
+class FrozenExperimentBase:
+    config_snapshot: dict[str, Any]
+    identities: dict[str, str]
+    initial_cash: Decimal
+    benchmark_code: str
+
+
 class ExperimentApplicationService:
     def __init__(
         self,
@@ -95,11 +104,27 @@ class ExperimentApplicationService:
         benchmark_code: str | None,
         grid: Mapping[str, Sequence[Any]],
     ) -> dict[str, Any]:
-        if end_date < start_date:
-            raise ExperimentApplicationError(
-                "EXPERIMENT_CONFIG_INVALID",
-                "end_date must be on or after start_date",
-            )
+        frozen = self.freeze_current_base(
+            initial_cash=initial_cash,
+            benchmark_code=benchmark_code,
+        )
+        experiment = self.create_from_frozen_base(
+            name=name,
+            start_date=start_date,
+            end_date=end_date,
+            grid=grid,
+            base_config_snapshot=frozen.config_snapshot,
+            base_identities=frozen.identities,
+            commit=True,
+        )
+        return self.get(experiment.id)
+
+    def freeze_current_base(
+        self,
+        *,
+        initial_cash: Decimal | None,
+        benchmark_code: str | None,
+    ) -> FrozenExperimentBase:
         try:
             effective_portfolio = PortfolioConfig.model_validate(
                 self.portfolio_config.model_copy(
@@ -125,18 +150,6 @@ class ExperimentApplicationService:
             raise ExperimentApplicationError(
                 "EXPERIMENT_CONFIG_INVALID", "benchmark_code must be nonempty"
             )
-        try:
-            expanded = expand_grid(
-                base_portfolio=effective_portfolio,
-                grid=grid,
-                max_trials=self.experiment_config.max_trials,
-                max_values_per_parameter=(
-                    self.experiment_config.max_values_per_parameter
-                ),
-            )
-        except ExperimentGridError as exc:
-            raise ExperimentApplicationError(exc.code, str(exc)) from exc
-
         portfolio_snapshot = effective_portfolio.model_dump(mode="json")
         execution_snapshot = self.execution_config.model_dump(mode="json")
         accounting_snapshot = self.accounting_config.model_dump(mode="json")
@@ -164,16 +177,97 @@ class ExperimentApplicationService:
             "base_accounting_config_hash": config_hash(accounting_snapshot),
             "base_backtest_engine_version": BACKTEST_ENGINE_VERSION,
         }
+        return FrozenExperimentBase(
+            config_snapshot=deepcopy(base_snapshot),
+            identities=identities,
+            initial_cash=effective_portfolio.initial_cash_cny,
+            benchmark_code=effective_portfolio.benchmark_code,
+        )
+
+    def create_from_frozen_base(
+        self,
+        *,
+        name: str | None,
+        start_date: date,
+        end_date: date,
+        grid: Mapping[str, Sequence[Any]],
+        base_config_snapshot: Mapping[str, Any],
+        base_identities: Mapping[str, str],
+        commit: bool = True,
+    ) -> PortfolioExperiment:
+        if end_date < start_date:
+            raise ExperimentApplicationError(
+                "EXPERIMENT_CONFIG_INVALID",
+                "end_date must be on or after start_date",
+            )
+        required_snapshot = {
+            "strategy",
+            "opportunity",
+            "portfolio",
+            "execution",
+            "accounting",
+        }
+        required_identities = {
+            "base_algo_version",
+            "base_source_strategy_config_hash",
+            "base_opportunity_calc_version",
+            "base_opportunity_config_hash",
+            "base_portfolio_version",
+            "base_portfolio_config_hash",
+            "base_execution_version",
+            "base_execution_config_hash",
+            "base_accounting_version",
+            "base_accounting_config_hash",
+            "base_backtest_engine_version",
+        }
+        snapshot = deepcopy(dict(base_config_snapshot))
+        identities = dict(base_identities)
+        if set(snapshot) != required_snapshot or set(identities) != required_identities:
+            raise ExperimentApplicationError(
+                "EXPERIMENT_CONFIG_INVALID", "frozen experiment base is incomplete"
+            )
+        try:
+            portfolio = PortfolioConfig.model_validate(snapshot["portfolio"])
+            expanded = expand_grid(
+                base_portfolio=portfolio,
+                grid=grid,
+                max_trials=self.experiment_config.max_trials,
+                max_values_per_parameter=(
+                    self.experiment_config.max_values_per_parameter
+                ),
+            )
+        except (ExperimentGridError, ValidationError) as exc:
+            code = getattr(exc, "code", "EXPERIMENT_CONFIG_INVALID")
+            raise ExperimentApplicationError(code, str(exc)) from exc
+        actual_hashes = {
+            "base_source_strategy_config_hash": analysis_strategy_hash(
+                snapshot["strategy"]
+            ),
+            "base_opportunity_config_hash": config_hash(snapshot["opportunity"]),
+            "base_portfolio_config_hash": config_hash(
+                portfolio.model_dump(mode="json")
+            ),
+            "base_execution_config_hash": config_hash(snapshot["execution"]),
+            "base_accounting_config_hash": config_hash(snapshot["accounting"]),
+        }
+        mismatches = [
+            field
+            for field, actual in actual_hashes.items()
+            if identities.get(field) != actual
+        ]
+        if mismatches:
+            raise ExperimentApplicationError(
+                "EXPERIMENT_CONFIG_INVALID",
+                f"frozen experiment base identity mismatch: {mismatches}",
+            )
         definition_hash = config_hash(
             {
                 "experiment_version": self.experiment_config.version,
                 "search_method": self.experiment_config.search_method,
                 "start_date": start_date.isoformat(),
                 "end_date": end_date.isoformat(),
-                "initial_cash": _canonical_decimal(
-                    effective_portfolio.initial_cash_cny
-                ),
-                "benchmark_code": effective_portfolio.benchmark_code,
+                "initial_cash": _canonical_decimal(portfolio.initial_cash_cny),
+                "benchmark_code": portfolio.benchmark_code,
                 "algo_version": identities["base_algo_version"],
                 "source_strategy_config_hash": identities[
                     "base_source_strategy_config_hash"
@@ -210,13 +304,13 @@ class ExperimentApplicationService:
             search_method=self.experiment_config.search_method,
             start_date=start_date,
             end_date=end_date,
-            initial_cash=effective_portfolio.initial_cash_cny,
-            benchmark_code=effective_portfolio.benchmark_code,
+            initial_cash=portfolio.initial_cash_cny,
+            benchmark_code=portfolio.benchmark_code,
             definition_hash=definition_hash,
             parameter_space_hash=expanded.parameter_space_hash,
             parameter_space=expanded.parameter_space,
             trial_count=len(expanded.trials),
-            base_config_snapshot=base_snapshot,
+            base_config_snapshot=snapshot,
             **identities,
         )
         trials = [
@@ -232,7 +326,8 @@ class ExperimentApplicationService:
         ]
         try:
             self.repository.create(experiment, trials)
-            self.db.commit()
+            if commit:
+                self.db.commit()
         except Exception as exc:
             self.db.rollback()
             raise ExperimentApplicationError(
@@ -247,7 +342,7 @@ class ExperimentApplicationService:
             operation="create",
             outcome="CREATED",
         )
-        return self.get(experiment_id)
+        return experiment
 
     def start(self, experiment_id: uuid.UUID) -> dict[str, Any]:
         materialized: list[dict[str, Any]] = []

@@ -14,6 +14,7 @@ from app.api.v1 import (
     stocks,
     system,
     themes,
+    walk_forward,
 )
 from app.services.auth.dependencies import require_authenticated_user
 
@@ -29,6 +30,9 @@ protected.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio
 protected.include_router(experiments.router, prefix="/portfolio", tags=["experiments"])
 protected.include_router(performance.router, prefix="/portfolio", tags=["performance"])
 protected.include_router(analytics.router, prefix="/portfolio", tags=["analytics"])
+protected.include_router(
+    walk_forward.router, prefix="/portfolio", tags=["walk-forward"]
+)
 protected.include_router(stocks.router, prefix="/stocks", tags=["stocks"])
 protected.include_router(research.router, prefix="/research", tags=["research"])
 protected.include_router(jobs.router, prefix="/jobs", tags=["jobs"])

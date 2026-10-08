@@ -16,6 +16,7 @@ from app.core.performance_risk_config import PerformanceRiskConfig
 from app.core.performance_trade_config import PerformanceTradeConfig
 from app.core.portfolio_config import PortfolioConfig
 from app.core.strategy_config import StrategyConfig
+from app.core.walk_forward_config import WalkForwardConfig
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 
@@ -66,6 +67,7 @@ class Settings(BaseSettings):
     execution_config: ExecutionConfig | None = None
     experiment_config: ExperimentConfig | None = None
     experiment_evaluation_config: ExperimentEvaluationConfig | None = None
+    walk_forward_config: WalkForwardConfig | None = None
     accounting_config: AccountingConfig | None = None
     performance_config: PerformanceConfig | None = None
     performance_period_config: PerformancePeriodConfig | None = None
@@ -133,6 +135,11 @@ class Settings(BaseSettings):
                 "evaluation", {}
             )
         )
+        walk_forward_config = WalkForwardConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "walk_forward.yaml").get(
+                "walk_forward", {}
+            )
+        )
         performance_config = PerformanceConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "performance.yaml").get(
                 "performance", {}
@@ -166,6 +173,7 @@ class Settings(BaseSettings):
         settings.execution_config = execution_config
         settings.experiment_config = experiment_config
         settings.experiment_evaluation_config = experiment_evaluation_config
+        settings.walk_forward_config = walk_forward_config
         settings.accounting_config = accounting_config
         settings.performance_config = performance_config
         settings.performance_risk_config = performance_risk_config

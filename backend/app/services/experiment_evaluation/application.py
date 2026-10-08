@@ -108,6 +108,32 @@ class ExperimentEvaluationApplicationService:
     def readiness(self, experiment_id: uuid.UUID) -> dict[str, Any]:
         return self.source_provider.readiness(experiment_id)
 
+    def normalize_policy(
+        self, policy_request: EvaluationPolicyConfig | None = None
+    ) -> tuple[dict[str, Any], str]:
+        """Canonicalize a policy for callers that must freeze it before execution."""
+        _, snapshot, policy_hash = self._policy(policy_request)
+        return snapshot, policy_hash
+
+    def resolve_current_artifact(
+        self,
+        experiment_id: uuid.UUID,
+        policy_request: EvaluationPolicyConfig | None = None,
+    ) -> PortfolioExperimentEvaluationReport | None:
+        """Resolve the exact current-source artifact without queueing or writing."""
+        _, _, policy_hash = self._policy(policy_request)
+        try:
+            source = self.source_provider.load(experiment_id)
+        except ExperimentEvaluationSourceError as exc:
+            raise _application_error(exc) from exc
+        return self.repository.find_by_identity(
+            experiment_id=experiment_id,
+            evaluation_version=EXPERIMENT_EVALUATION_VERSION,
+            evaluation_config_hash=evaluation_config_hash(self.config),
+            policy_hash=policy_hash,
+            source_hash=source.source_hash,
+        )
+
     def queue_calculation(
         self,
         experiment_id: uuid.UUID,

@@ -434,3 +434,15 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Readiness 必须返回完整状态计数、缺失 M14 阶段和精确兼容性 mismatch fields。Missing Performance/Risk/Trade/Period 不得触发任何 M14 计算。
 - Evaluation detail 在保留既有顶层身份字段的同时，必须提供结构化 `identity`，包含 evaluation、experiment、version、config、policy 与 source identity。
 - PostgreSQL Acceptance 必须真实覆盖 composite FK、unique/check constraints、Policy/M14 generation identity、mixed terminal exclusion 与六参数 sensitivity 计数；仅检查 SQLAlchemy Metadata 不构成验收。
+
+## Milestone 15.3 Walk-forward / OOS Validation 冻结规则
+
+- 当前唯一可写身份为 `walk_forward_v1`。窗口必须来自完整 TradeCalendar 开市日集合；Rolling/Expanding 的步长固定等于 test days，测试窗口不得重叠，尾部不足一个完整 test window 时直接丢弃。
+- Study 创建时必须冻结 M15.1 Base、完整六参数 Grid、M15.2 Policy、Strategy/Opportunity source identity、Portfolio/Execution/Accounting/Backtest identity 及对应 canonical hash。历史 Study 不受当前 YAML 修改影响，也不得升级重写。
+- 每个窗口只允许一个训练 Experiment。OOS 参数只能来自该窗口不可变 Evaluation Artifact 的 rank 1 selected in-sample research candidate；selected 为空时必须停在选择阶段，禁止回退次优 Trial。
+- OOS Run 必须通过标准 M13 `BacktestRunFactory` 创建，使用该窗口冻结参数和独立 initial cash；不得继承上一个窗口的账户、持仓、订单或 NAV。
+- Walk-forward 只编排和读取 M13/M14/M15.1/M15.2。不得隐式创建、重算或恢复 M14 Performance/Risk/Trade/Period；缺失、owner 不匹配、日期集合不匹配、配置或 generation identity 漂移都必须 fail closed。
+- Validation Source Gate 必须重新核对 Study definition hash、Window calendar hash、训练 Experiment、选中 Trial/Run、OOS Run 及完整 M14 Bundle。Validation Artifact 与 Window Validation 行只追加、不覆盖。
+- 所有收益、NAV、退化度和稳定性运算使用 Decimal。领域层禁止依赖 ORM、SQLAlchemy Session、FastAPI、JobRun、NumPy、Pandas 或 float。
+- Validation Job 的 Artifact 写入与 SUCCESS 必须同事务提交；worker/job ownership 丢失时回滚。heartbeat stale recovery 只标记失败，不自动创建 replacement 或重放验证。
+- API、日志和文档只能把结果描述为 walk-forward/OOS research evidence；不得称为 production best、自动部署建议或实盘保证。

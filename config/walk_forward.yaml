@@ -1,0 +1,8 @@
+walk_forward:
+  version: walk_forward_v1
+  exchange: SSE
+  minimum_windows: 2
+  max_windows: 36
+  max_actions_per_advance: 20
+  minimum_stitched_oos_observations: 2
+  short_oos_warning_trade_days: 120

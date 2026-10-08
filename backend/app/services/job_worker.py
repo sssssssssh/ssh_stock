@@ -74,6 +74,13 @@ from app.services.quality.history_quality import (
 )
 from app.services.recalculation import run_recalculation
 from app.services.service_heartbeat import start_service_heartbeat
+from app.services.walk_forward.application import (
+    WALK_FORWARD_VALIDATION_JOB_TYPE,
+    WalkForwardApplicationService,
+)
+from app.services.walk_forward.recovery import (
+    recover_stale_walk_forward_validation_jobs,
+)
 
 WORKER_JOB_TYPES = (
     "daily",
@@ -89,6 +96,7 @@ WORKER_JOB_TYPES = (
     PERFORMANCE_TRADE_JOB_TYPE,
     PERFORMANCE_PERIOD_JOB_TYPE,
     EXPERIMENT_EVALUATION_JOB_TYPE,
+    WALK_FORWARD_VALIDATION_JOB_TYPE,
 )
 
 
@@ -210,6 +218,8 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             PerformancePeriodApplicationService(db).run_job(job.id)
         elif job.job_type == EXPERIMENT_EVALUATION_JOB_TYPE:
             ExperimentEvaluationApplicationService(db).run_job(job.id)
+        elif job.job_type == WALK_FORWARD_VALIDATION_JOB_TYPE:
+            WalkForwardApplicationService(db).run_validation_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
     except Exception as exc:
@@ -242,6 +252,7 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                         PERFORMANCE_TRADE_JOB_TYPE,
                         PERFORMANCE_PERIOD_JOB_TYPE,
                         EXPERIMENT_EVALUATION_JOB_TYPE,
+                        WALK_FORWARD_VALIDATION_JOB_TYPE,
                     }
                     else None
                 ),
@@ -331,6 +342,16 @@ def run_worker() -> None:
                             ),
                         )
                     )
+                    recovered_walk_forward_validation = (
+                        recover_stale_walk_forward_validation_jobs(
+                            db,
+                            timeout_minutes=float(
+                                scheduler_setting(
+                                    "running_heartbeat_timeout_minutes", 15
+                                )
+                            ),
+                        )
+                    )
                     recovered_dirty = recover_stale_processing_ranges(
                         db,
                         stale_minutes=float(
@@ -344,6 +365,7 @@ def run_worker() -> None:
                         "recovered_performance_trade={} "
                         "recovered_performance_period={} "
                         "recovered_experiment_evaluation={} "
+                        "recovered_walk_forward_validation={} "
                         "recovered_dirty={}",
                         worker_id,
                         recovered_jobs,
@@ -354,6 +376,7 @@ def run_worker() -> None:
                         recovered_performance_trade,
                         recovered_performance_period,
                         recovered_experiment_evaluation,
+                        recovered_walk_forward_validation,
                         recovered_dirty,
                     )
                     last_recovery = now

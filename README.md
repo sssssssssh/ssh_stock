@@ -1278,3 +1278,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Evaluation detail 保留原有顶层字段，并新增结构化 `identity`，便于后续 M15.3/M16 稳定消费 evaluation、experiment、version、config、policy 与 source identity。
 - 新增真实 PostgreSQL Closeout 矩阵，覆盖 Trial 终态、四阶段缺失、八项跨 Trial 兼容性、Policy/M14 generation identity、数据库约束、mixed terminal exclusion 与 sensitivity 计数。
 - `experiment_eval_v1` 的公式与 0042 结构保持冻结；本轮没有新增 Migration，也没有引入 Walk-forward/OOS、M14 自动补算或生产参数回写。
+
+## Milestone 15.3 Walk-forward / OOS Validation（2026-10-08）
+
+- 新增固定 `walk_forward_v1` 契约。Rolling/Expanding 窗口只基于上交所真实开市日生成，步长固定等于测试期长度，丢弃尾部不完整窗口，并冻结交易日集合与日历哈希。
+- Study 冻结 M15.1 Base、六参数 Grid、M15.2 Evaluation Policy、Strategy/Opportunity 来源，以及 Portfolio/Execution/Accounting/Backtest 身份；部署配置漂移不会重写历史定义。
+- 每个窗口恰好创建一个训练 Experiment，只接受已完成 Evaluation 的 rank 1 in-sample research candidate；不存在候选时不回退其他 Trial，也不生成 OOS Run。
+- OOS 继续复用标准 M13 Backtest Run，窗口间不延续账户状态。系统只读取精确 owner、配置和日期集合匹配的 M14 Performance/Risk/Trade/Period Bundle，不自动计算或恢复 M14。
+- Validation Artifact 不可变，冻结训练、选择、OOS 与四阶段 M14 identity；结果包含逐日拼接收益/NAV/相对 NAV、年化收益、最大回撤、样本波动率、Sharpe、退化度和参数稳定性。
+- 新增 `0043_m15_3_walk_forward_validation` 五张表、Study/advance/cancel/readiness/validate/detail/history/stability API，以及 validation Job 的所有权 fencing 与 stale recovery。
+- 完整边界和数据流见 `docs/m15_3_walk_forward_validation.md`。

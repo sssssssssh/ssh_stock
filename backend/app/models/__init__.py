@@ -59,6 +59,13 @@ from app.models.portfolio import (
     PortfolioPositionDaily,
     PortfolioRebalancePlan,
 )
+from app.models.walk_forward import (
+    PortfolioWalkForwardParameterStability,
+    PortfolioWalkForwardStudy,
+    PortfolioWalkForwardValidationReport,
+    PortfolioWalkForwardWindow,
+    PortfolioWalkForwardWindowValidation,
+)
 
 __all__ = [
     "Base",
@@ -89,6 +96,11 @@ __all__ = [
     "PortfolioOrderAttempt",
     "PortfolioPositionDaily",
     "PortfolioRebalancePlan",
+    "PortfolioWalkForwardParameterStability",
+    "PortfolioWalkForwardStudy",
+    "PortfolioWalkForwardValidationReport",
+    "PortfolioWalkForwardWindow",
+    "PortfolioWalkForwardWindowValidation",
     "ProviderApiLog",
     "ServiceHeartbeat",
     "Sector",
