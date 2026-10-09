@@ -4,5 +4,9 @@ walk_forward:
   minimum_windows: 2
   max_windows: 36
   max_actions_per_advance: 20
-  minimum_stitched_oos_observations: 2
-  short_oos_warning_trade_days: 120
+  validation_policy:
+    version: walk_forward_validation_policy_v1
+    minimum_stitched_oos_observations: 2
+    short_oos_warning_trade_days: 120
+    frequent_parameter_switch_rate_threshold: 0.5
+    low_dominant_parameter_rate_threshold: 0.5

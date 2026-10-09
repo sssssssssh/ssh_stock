@@ -15,6 +15,7 @@ from app.services.walk_forward import (
     WalkForwardApplicationService,
     WalkForwardConflictError,
 )
+from app.services.walk_forward.orchestration import WindowState
 
 router = APIRouter()
 
@@ -55,25 +56,6 @@ class WalkForwardDefinitionRequest(StrictRequest):
     benchmark_code: str | None = Field(default=None, min_length=1, max_length=16)
     grid: WalkForwardGrid = Field(default_factory=WalkForwardGrid)
     train_evaluation_policy: EvaluationPolicyConfig | None = None
-
-
-WindowState = Literal[
-    "TRAIN_PLANNED",
-    "TRAIN_CREATED",
-    "TRAIN_RUNNING",
-    "TRAIN_TERMINAL",
-    "TRAIN_ANALYTICS_REQUIRED",
-    "TRAIN_EVALUATION_QUEUED",
-    "TRAIN_EVALUATION_RUNNING",
-    "TRAIN_NO_FEASIBLE_CANDIDATE",
-    "SELECTION_FROZEN",
-    "OOS_CREATED",
-    "OOS_RUNNING",
-    "OOS_FAILED",
-    "OOS_CANCELLED",
-    "OOS_ANALYTICS_REQUIRED",
-    "OOS_READY",
-]
 
 
 @router.post("/walk-forwards", status_code=status.HTTP_201_CREATED)

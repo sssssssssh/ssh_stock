@@ -1288,3 +1288,11 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Validation Artifact 不可变，冻结训练、选择、OOS 与四阶段 M14 identity；结果包含逐日拼接收益/NAV/相对 NAV、年化收益、最大回撤、样本波动率、Sharpe、退化度和参数稳定性。
 - 新增 `0043_m15_3_walk_forward_validation` 五张表、Study/advance/cancel/readiness/validate/detail/history/stability API，以及 validation Job 的所有权 fencing 与 stale recovery。
 - 完整边界和数据流见 `docs/m15_3_walk_forward_validation.md`。
+
+## Milestone 15.3.1 Walk-forward Integrity Closeout（2026-10-09）
+
+- 新增 `0044_m15_3_1_walk_forward_integrity`：Window Validation 保存自描述 Train/OOS lineage、精确 M14 owner 和冻结日期 hash，并由复合 FK 与 PostgreSQL append-only trigger 强制约束。
+- Source Gate 精确读取 selected Trial Evaluation 钉住的 Train M14 Bundle，逐日比较 Train PerformanceDaily 与冻结训练日期；不选择最新替代 Artifact。
+- Validation Policy 从运行时编排配置拆分为 `walk_forward_validation_policy_v1`。完整参数 hash 与六个参数均输出相邻切换统计，默认 frequent/low-dominant warning 阈值均为 `0.5`。
+- Study cancel 现在覆盖 Validation QUEUED/RUNNING job；终态事务按 Study → Validation identity → Job 加锁并将 Artifact 与 SUCCESS 原子提交。
+- 实际 API 根路径为 `/api/v1/portfolio/walk-forwards`，readiness 返回结构化 blocker，Validation window 子资源直接返回 `identity` lineage。

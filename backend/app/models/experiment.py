@@ -119,6 +119,11 @@ class PortfolioExperimentTrial(Base):
             "experiment_id",
             name=conv("uq_portfolio_experiment_trial_owner"),
         ),
+        UniqueConstraint(
+            "id",
+            "run_id",
+            name=conv("uq_portfolio_experiment_trial_run_owner"),
+        ),
         Index("idx_portfolio_experiment_trial_experiment", "experiment_id"),
     )
 

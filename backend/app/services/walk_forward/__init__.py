@@ -1,6 +1,7 @@
 from app.services.walk_forward.application import (
     WalkForwardApplicationError,
     WalkForwardApplicationService,
+    WalkForwardCancelledError,
     WalkForwardConflictError,
     WalkForwardOwnershipError,
 )
@@ -8,6 +9,7 @@ from app.services.walk_forward.application import (
 __all__ = [
     "WalkForwardApplicationError",
     "WalkForwardApplicationService",
+    "WalkForwardCancelledError",
     "WalkForwardConflictError",
     "WalkForwardOwnershipError",
 ]

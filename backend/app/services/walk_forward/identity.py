@@ -2,12 +2,26 @@ import hashlib
 import uuid
 from typing import Any
 
-from app.core.walk_forward_config import WalkForwardConfig
+from app.core.walk_forward_config import (
+    WalkForwardConfig,
+    WalkForwardValidationPolicyConfig,
+)
 from app.services.experiment_evaluation.identity import stable_hash
 
 
 def walk_forward_config_hash(config: WalkForwardConfig) -> str:
-    return stable_hash(config.model_dump(mode="python"))
+    """Compatibility name for the validation-policy identity stored by M15.3."""
+    return validation_policy_hash(config.validation_policy)
+
+
+def validation_policy_snapshot(
+    policy: WalkForwardValidationPolicyConfig,
+) -> dict[str, Any]:
+    return policy.model_dump(mode="json")
+
+
+def validation_policy_hash(policy: WalkForwardValidationPolicyConfig) -> str:
+    return stable_hash(validation_policy_snapshot(policy))
 
 
 def study_lock_key(study_id: uuid.UUID) -> int:

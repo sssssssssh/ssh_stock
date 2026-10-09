@@ -293,6 +293,17 @@ class PortfolioWalkForwardValidationReport(Base):
             "positive_oos_window_count <= window_count",
             name=conv("ck_walk_forward_validation_positive"),
         ),
+        CheckConstraint(
+            "validation_policy_hash = walk_forward_config_hash",
+            name=conv("ck_walk_forward_validation_policy_identity"),
+        ),
+        CheckConstraint(
+            "transition_count = GREATEST(window_count - 1, 0) AND "
+            "switch_count >= 0 AND switch_count <= transition_count AND "
+            "((transition_count = 0 AND switch_rate IS NULL) OR "
+            "(transition_count > 0 AND switch_rate >= 0 AND switch_rate <= 1))",
+            name=conv("ck_walk_forward_validation_switches"),
+        ),
         Index("idx_walk_forward_validation_history", "study_id", "calculated_at"),
     )
 
@@ -306,6 +317,10 @@ class PortfolioWalkForwardValidationReport(Base):
     )
     walk_forward_version: Mapped[str] = mapped_column(String(32), nullable=False)
     walk_forward_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    validation_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False
+    )
+    validation_policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="SUCCESS", server_default=text("'SUCCESS'")
@@ -357,6 +372,9 @@ class PortfolioWalkForwardValidationReport(Base):
     dominant_parameter_hash_rate: Mapped[Decimal] = mapped_column(
         Numeric(60, 18), nullable=False
     )
+    transition_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    switch_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    switch_rate: Mapped[Decimal | None] = mapped_column(Numeric(60, 18))
     warnings: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
     )
@@ -396,7 +414,136 @@ class PortfolioWalkForwardWindowValidation(Base):
             name=conv("fk_walk_forward_window_validation_window"),
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ("train_evaluation_id", "train_experiment_id"),
+            (
+                "portfolio_experiment_evaluation_report.id",
+                "portfolio_experiment_evaluation_report.experiment_id",
+            ),
+            name=conv("fk_walk_forward_window_result_train_evaluation"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("selected_trial_id", "train_experiment_id"),
+            (
+                "portfolio_experiment_trial.id",
+                "portfolio_experiment_trial.experiment_id",
+            ),
+            name=conv("fk_walk_forward_window_result_selected_trial"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("train_evaluation_id", "selected_trial_id"),
+            (
+                "portfolio_experiment_trial_evaluation.evaluation_id",
+                "portfolio_experiment_trial_evaluation.trial_id",
+            ),
+            name=conv("fk_walk_forward_window_result_trial_evaluation"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("selected_trial_id", "selected_train_run_id"),
+            ("portfolio_experiment_trial.id", "portfolio_experiment_trial.run_id"),
+            name=conv("fk_walk_forward_window_result_train_run"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("train_performance_id", "selected_train_run_id"),
+            ("portfolio_performance_report.id", "portfolio_performance_report.run_id"),
+            name=conv("fk_walk_forward_window_result_train_performance"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("train_risk_id", "train_performance_id", "selected_train_run_id"),
+            (
+                "portfolio_performance_risk_report.id",
+                "portfolio_performance_risk_report.performance_id",
+                "portfolio_performance_risk_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_train_risk"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("train_trade_id", "train_performance_id", "selected_train_run_id"),
+            (
+                "portfolio_performance_trade_report.id",
+                "portfolio_performance_trade_report.performance_id",
+                "portfolio_performance_trade_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_train_trade"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            (
+                "train_period_id",
+                "train_performance_id",
+                "train_risk_id",
+                "train_trade_id",
+                "selected_train_run_id",
+            ),
+            (
+                "portfolio_performance_period_report.id",
+                "portfolio_performance_period_report.performance_id",
+                "portfolio_performance_period_report.risk_id",
+                "portfolio_performance_period_report.trade_id",
+                "portfolio_performance_period_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_train_period"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("oos_performance_id", "oos_run_id"),
+            ("portfolio_performance_report.id", "portfolio_performance_report.run_id"),
+            name=conv("fk_walk_forward_window_result_oos_performance"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("oos_risk_id", "oos_performance_id", "oos_run_id"),
+            (
+                "portfolio_performance_risk_report.id",
+                "portfolio_performance_risk_report.performance_id",
+                "portfolio_performance_risk_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_oos_risk"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ("oos_trade_id", "oos_performance_id", "oos_run_id"),
+            (
+                "portfolio_performance_trade_report.id",
+                "portfolio_performance_trade_report.performance_id",
+                "portfolio_performance_trade_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_oos_trade"),
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            (
+                "oos_period_id",
+                "oos_performance_id",
+                "oos_risk_id",
+                "oos_trade_id",
+                "oos_run_id",
+            ),
+            (
+                "portfolio_performance_period_report.id",
+                "portfolio_performance_period_report.performance_id",
+                "portfolio_performance_period_report.risk_id",
+                "portfolio_performance_period_report.trade_id",
+                "portfolio_performance_period_report.run_id",
+            ),
+            name=conv("fk_walk_forward_window_result_oos_period"),
+            ondelete="RESTRICT",
+        ),
         CheckConstraint("window_no > 0", name=conv("ck_walk_forward_window_validation_no")),
+        CheckConstraint(
+            "jsonb_typeof(identity_snapshot) = 'object' AND "
+            "identity_snapshot->>'schema_version' = "
+            "'walk_forward_window_validation_identity_v1' AND "
+            "jsonb_typeof(identity_snapshot->'train') = 'object' AND "
+            "jsonb_typeof(identity_snapshot->'oos') = 'object'",
+            name=conv("ck_walk_forward_window_validation_identity_schema"),
+        ),
     )
 
     validation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -405,8 +552,16 @@ class PortfolioWalkForwardWindowValidation(Base):
     train_experiment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     train_evaluation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     selected_trial_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    selected_train_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    train_performance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    train_risk_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    train_trade_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    train_period_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     selected_parameter_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     selected_parameter_values: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    train_date_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    test_date_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    identity_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     oos_run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     oos_performance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     oos_risk_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -462,6 +617,14 @@ class PortfolioWalkForwardParameterStability(Base):
             "selected_rate > 0 AND selected_rate <= 1",
             name=conv("ck_walk_forward_parameter_stability_rate"),
         ),
+        CheckConstraint(
+            "transition_count >= 0 AND adjacent_value_switch_count >= 0 AND "
+            "adjacent_value_switch_count <= transition_count AND "
+            "((transition_count = 0 AND adjacent_value_switch_rate IS NULL) OR "
+            "(transition_count > 0 AND adjacent_value_switch_rate >= 0 AND "
+            "adjacent_value_switch_rate <= 1))",
+            name=conv("ck_walk_forward_parameter_stability_switches"),
+        ),
     )
 
     validation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -470,6 +633,11 @@ class PortfolioWalkForwardParameterStability(Base):
     parameter_value: Mapped[str] = mapped_column(String(64), nullable=False)
     selected_window_count: Mapped[int] = mapped_column(Integer, nullable=False)
     selected_rate: Mapped[Decimal] = mapped_column(Numeric(60, 18), nullable=False)
+    transition_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    adjacent_value_switch_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    adjacent_value_switch_rate: Mapped[Decimal | None] = mapped_column(
+        Numeric(60, 18)
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -22,6 +22,7 @@ from app.services.walk_forward.application import (
     WALK_FORWARD_VALIDATION_JOB_TYPE,
     WalkForwardApplicationError,
     WalkForwardApplicationService,
+    WalkForwardCancelledError,
     WalkForwardConflictError,
     WalkForwardOwnershipError,
 )
@@ -166,7 +167,9 @@ def _service(*, db=None, repository=None) -> WalkForwardApplicationService:
 def _report(study_id: uuid.UUID) -> PortfolioWalkForwardValidationReport:
     report = PortfolioWalkForwardValidationReport(
         id=uuid.uuid4(), study_id=study_id, walk_forward_version="walk_forward_v1",
-        walk_forward_config_hash="w" * 64, source_hash="s" * 64,
+        walk_forward_config_hash="w" * 64,
+        validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
+        validation_policy_hash="w" * 64, source_hash="s" * 64,
         status="SUCCESS", window_count=1, total_oos_trade_days=2,
         stitched_oos_final_nav=Decimal("1"), stitched_oos_cumulative_return=Decimal("0"),
         stitched_oos_annualized_return=Decimal("0"), stitched_oos_max_drawdown=Decimal("0"),
@@ -179,7 +182,8 @@ def _report(study_id: uuid.UUID) -> PortfolioWalkForwardValidationReport:
         median_return_degradation=Decimal("0"), mean_drawdown_worsening=Decimal("0"),
         median_drawdown_worsening=Decimal("0"), unique_selected_parameter_hash_count=1,
         dominant_parameter_hash="h" * 64, dominant_parameter_hash_count=1,
-        dominant_parameter_hash_rate=Decimal("1"), warnings=[], result_summary={},
+        dominant_parameter_hash_rate=Decimal("1"), transition_count=0,
+        switch_count=0, switch_rate=None, warnings=[], result_summary={},
     )
     report.calculated_at = datetime(2026, 10, 8, tzinfo=UTC)
     report.created_at = report.calculated_at
@@ -194,8 +198,13 @@ def test_application_read_pages_and_serializers() -> None:
     window_result = PortfolioWalkForwardWindowValidation(
         validation_id=report.id, study_id=study.id, window_no=1,
         train_experiment_id=uuid.uuid4(), train_evaluation_id=uuid.uuid4(),
-        selected_trial_id=uuid.uuid4(), selected_parameter_hash="h" * 64,
-        selected_parameter_values={}, oos_run_id=uuid.uuid4(),
+        selected_trial_id=uuid.uuid4(), selected_train_run_id=uuid.uuid4(),
+        train_performance_id=uuid.uuid4(), train_risk_id=uuid.uuid4(),
+        train_trade_id=uuid.uuid4(), train_period_id=uuid.uuid4(),
+        selected_parameter_hash="h" * 64, selected_parameter_values={},
+        train_date_hash="t" * 64, test_date_hash="o" * 64,
+        identity_snapshot={"schema_version": "walk_forward_window_validation_identity_v1"},
+        oos_run_id=uuid.uuid4(),
         oos_performance_id=uuid.uuid4(), oos_risk_id=uuid.uuid4(),
         oos_trade_id=uuid.uuid4(), oos_period_id=uuid.uuid4(),
         train_annualized_return=Decimal("0"), train_max_drawdown_abs=Decimal("0"),
@@ -210,6 +219,8 @@ def test_application_read_pages_and_serializers() -> None:
     stability = PortfolioWalkForwardParameterStability(
         validation_id=report.id, study_id=study.id, parameter_name="candidate.top_n",
         parameter_value="20", selected_window_count=1, selected_rate=Decimal("1"),
+        transition_count=0, adjacent_value_switch_count=0,
+        adjacent_value_switch_rate=None,
     )
     repository = SimpleNamespace(
         get=lambda requested: study if requested == study.id else None,
@@ -275,11 +286,14 @@ def test_validation_queue_conflict_cancel_and_success() -> None:
     study = _study()
     source = WalkForwardValidationSource(
         study=study, windows=(), source_hash="s" * 64,
-        walk_forward_config_hash="w" * 64, annualization_trade_days=252,
+        walk_forward_config_hash="w" * 64,
+        validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
+        validation_policy_hash="w" * 64, annualization_trade_days=252,
         risk_free_rate_annual=Decimal("0"),
     )
     active = SimpleNamespace(id=uuid.uuid4())
-    service = _service(db=_FakeDb(scalars=[active]))
+    repository = SimpleNamespace(get_for_update=lambda _study_id: study)
+    service = _service(db=_FakeDb(scalars=[active]), repository=repository)
     service._load_source = lambda _study_id: source
     with pytest.raises(WalkForwardConflictError) as conflict:
         service.queue_validation(study.id)
@@ -302,7 +316,9 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
     study = _study()
     source = WalkForwardValidationSource(
         study=study, windows=(), source_hash="s" * 64,
-        walk_forward_config_hash="w" * 64, annualization_trade_days=252,
+        walk_forward_config_hash="w" * 64,
+        validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
+        validation_policy_hash="w" * 64, annualization_trade_days=252,
         risk_free_rate_annual=Decimal("0"),
     )
     report = _report(study.id)
@@ -312,12 +328,19 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
             "study_id": str(study.id), "source_hash": source.source_hash,
             "walk_forward_version": "walk_forward_v1",
             "walk_forward_config_hash": source.walk_forward_config_hash,
-        }, finished_at=None, step=None, row_count=0,
+        }, finished_at=None, step=None, row_count=0, cancel_requested=False,
     )
     db = _FakeDb(scalars=[job, job])
-    service = _service(db=db)
+    repository = SimpleNamespace(
+        get_for_update=lambda _study_id: study,
+        find_validation=lambda **_kwargs: None,
+        add_validation=lambda *_args: None,
+    )
+    service = _service(db=db, repository=repository)
     service._load_source = lambda _study_id: source
-    service._calculate_uncommitted = lambda _source: (report, False)
+    service._build_validation_artifact = lambda _source: SimpleNamespace(
+        report=report, windows=[], stability=[]
+    )
     terminal_calls = []
     service.before_terminal_hook = lambda seen_job, seen_report: terminal_calls.append(
         (seen_job.id, seen_report.id)
@@ -350,6 +373,58 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
     with pytest.raises(WalkForwardOwnershipError):
         service.run_validation_job(running.id)
     assert fenced_db.rollbacks == 1
+
+
+def test_validation_terminal_stop_gate_cancels_without_persisting_artifact() -> None:
+    study = _study()
+    source = WalkForwardValidationSource(
+        study=study,
+        windows=(),
+        source_hash="s" * 64,
+        walk_forward_config_hash="w" * 64,
+        validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
+        validation_policy_hash="w" * 64,
+        annualization_trade_days=252,
+        risk_free_rate_annual=Decimal("0"),
+    )
+    report = _report(study.id)
+    job = SimpleNamespace(
+        id=uuid.uuid4(),
+        job_type=WALK_FORWARD_VALIDATION_JOB_TYPE,
+        status="RUNNING",
+        worker_id="worker-1",
+        job_metadata={
+            "study_id": str(study.id),
+            "source_hash": source.source_hash,
+            "walk_forward_version": "walk_forward_v1",
+            "walk_forward_config_hash": source.walk_forward_config_hash,
+        },
+        finished_at=None,
+        step=None,
+        row_count=0,
+        cancel_requested=False,
+    )
+    persisted = []
+    repository = SimpleNamespace(
+        get_for_update=lambda _study_id: study,
+        add_validation=lambda *_args: persisted.append(True),
+    )
+    db = _FakeDb(scalars=[job, job])
+    service = _service(db=db, repository=repository)
+    service._load_source = lambda _study_id: source
+    service._build_validation_artifact = lambda _source: SimpleNamespace(
+        report=report, windows=[], stability=[]
+    )
+    service.before_terminal_hook = lambda *_args: setattr(
+        study, "cancel_requested", True
+    )
+
+    with pytest.raises(WalkForwardCancelledError):
+        service.run_validation_job(job.id)
+    assert job.status == "CANCELLED"
+    assert job.job_metadata["error_code"] == "WALK_FORWARD_CANCELLED"
+    assert persisted == []
+    assert db.commits == 1
 
 
 def test_advance_queues_evaluation_freezes_selection_and_creates_oos(monkeypatch) -> None:
@@ -605,11 +680,19 @@ def test_source_readiness_preserves_fail_closed_diagnostics() -> None:
         "ready": False,
         "error_code": "WALK_FORWARD_SOURCE_CHANGED",
         "window_no": 3,
+        "details": {"window_no": 3},
+        "blockers": [
+            {"code": "WALK_FORWARD_SOURCE_CHANGED", "window_no": 3}
+        ],
     }
 
     with pytest.raises(WalkForwardSourceError) as invalid:
         provider._invalid("changed without a window")
-    assert invalid.value.details == {}
+    assert invalid.value.details == {
+        "scope": "SOURCE",
+        "missing_stage": "source_identity",
+        "action": "NO_AUTOMATIC_REPAIR",
+    }
 
     with pytest.raises(WalkForwardSourceError) as invalid_oos:
         provider._validate_oos(

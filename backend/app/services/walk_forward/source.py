@@ -46,6 +46,7 @@ class WalkForwardSourceError(RuntimeError):
 class ValidationWindowSource:
     window: PortfolioWalkForwardWindow
     metric_input: WindowMetricInput
+    identity_snapshot: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,8 @@ class WalkForwardValidationSource:
     windows: tuple[ValidationWindowSource, ...]
     source_hash: str
     walk_forward_config_hash: str
+    validation_policy_snapshot: dict[str, Any]
+    validation_policy_hash: str
     annualization_trade_days: int
     risk_free_rate_annual: Decimal
 
@@ -67,11 +70,17 @@ class WalkForwardValidationSourceProvider:
         try:
             source = self.load(study_id)
         except WalkForwardSourceError as exc:
+            blocker = {
+                "code": exc.code,
+                **exc.details,
+            }
             return {
                 "study_id": str(study_id),
                 "ready": False,
                 "error_code": exc.code,
                 **exc.details,
+                "details": dict(exc.details),
+                "blockers": [blocker],
             }
         return {
             "study_id": str(study_id),
@@ -79,6 +88,8 @@ class WalkForwardValidationSourceProvider:
             "window_count": len(source.windows),
             "source_hash": source.source_hash,
             "walk_forward_config_hash": source.walk_forward_config_hash,
+            "validation_policy_hash": source.validation_policy_hash,
+            "blockers": [],
         }
 
     def load(self, study_id: uuid.UUID) -> WalkForwardValidationSource:
@@ -126,12 +137,19 @@ class WalkForwardValidationSourceProvider:
                     "WALK_FORWARD_OOS_BUNDLE_MISMATCH",
                     "OOS M14 config identity differs across windows",
                     window_no=window.window_no,
+                    scope="OOS",
+                    missing_stage="source_identity",
+                    action="NO_AUTOMATIC_REPAIR",
                 )
-            sources.append(ValidationWindowSource(window, source))
+            sources.append(ValidationWindowSource(window, source, identity))
             identities.append(identity)
         if not sources:
             raise WalkForwardSourceError(
-                "WALK_FORWARD_VALIDATION_NOT_READY", "study has no windows"
+                "WALK_FORWARD_VALIDATION_NOT_READY",
+                "study has no windows",
+                scope="STUDY",
+                missing_stage="train_experiment",
+                action="ADVANCE_WALK_FORWARD",
             )
         source_hash = stable_hash(
             {
@@ -145,11 +163,15 @@ class WalkForwardValidationSourceProvider:
                 "windows": identities,
             }
         )
+        policy_snapshot = self.config.validation_policy.model_dump(mode="json")
+        policy_hash = walk_forward_config_hash(self.config)
         return WalkForwardValidationSource(
             study=study,
             windows=tuple(sources),
             source_hash=source_hash,
-            walk_forward_config_hash=walk_forward_config_hash(self.config),
+            walk_forward_config_hash=policy_hash,
+            validation_policy_snapshot=policy_snapshot,
+            validation_policy_hash=policy_hash,
             annualization_trade_days=annualization_trade_days,
             risk_free_rate_annual=risk_free_rate_annual,
         )
@@ -159,27 +181,42 @@ class WalkForwardValidationSourceProvider:
         study: PortfolioWalkForwardStudy,
         window: PortfolioWalkForwardWindow,
     ) -> tuple[WindowMetricInput, dict[str, Any], tuple[Any, ...]]:
-        required = (
-            window.train_experiment_id,
-            window.train_evaluation_id,
-            window.selected_trial_id,
-            window.selected_parameter_hash,
-            window.selected_parameter_values,
-            window.selected_portfolio_config_hash,
-            window.selected_portfolio_config_snapshot,
-            window.oos_run_id,
-            window.oos_performance_id,
-            window.oos_risk_id,
-            window.oos_trade_id,
-            window.oos_period_id,
-            window.oos_bound_at,
+        requirements = (
+            (window.train_experiment_id, "TRAIN", "train_experiment", None),
+            (window.train_evaluation_id, "TRAIN", "train_evaluation", None),
+            (window.selected_trial_id, "TRAIN", "selection", None),
+            (window.selected_parameter_hash, "TRAIN", "selection", None),
+            (window.selected_parameter_values, "TRAIN", "selection", None),
+            (window.selected_portfolio_config_hash, "TRAIN", "selection", None),
+            (window.selected_portfolio_config_snapshot, "TRAIN", "selection", None),
+            (window.oos_run_id, "OOS", "oos_run", None),
+            (window.oos_performance_id, "OOS", "performance", window.oos_run_id),
+            (window.oos_risk_id, "OOS", "risk", window.oos_run_id),
+            (window.oos_trade_id, "OOS", "trade", window.oos_run_id),
+            (window.oos_period_id, "OOS", "period", window.oos_run_id),
+            (window.oos_bound_at, "OOS", "period", window.oos_run_id),
         )
-        if any(value is None for value in required):
-            raise WalkForwardSourceError(
-                "WALK_FORWARD_VALIDATION_NOT_READY",
-                "all windows must have frozen selection and pinned OOS analytics",
-                window_no=window.window_no,
-            )
+        for value, scope, stage, run_id in requirements:
+            if value is None:
+                action = (
+                    "ADVANCE_WALK_FORWARD"
+                    if stage
+                    in {"train_experiment", "train_evaluation", "selection", "oos_run"}
+                    else f"CALCULATE_M14_{stage.upper()}_EXTERNALLY"
+                )
+                details: dict[str, Any] = {
+                    "window_no": window.window_no,
+                    "scope": scope,
+                    "missing_stage": stage,
+                    "action": action,
+                }
+                if run_id is not None:
+                    details["run_id"] = str(run_id)
+                raise WalkForwardSourceError(
+                    "WALK_FORWARD_VALIDATION_NOT_READY",
+                    "walk-forward validation source is incomplete",
+                    **details,
+                )
         expected_train_dates = tuple(
             date.fromisoformat(value) for value in window.train_trade_dates
         )
@@ -234,6 +271,45 @@ class WalkForwardValidationSourceProvider:
             self._invalid("a pinned walk-forward source row is missing", window.window_no)
         assert experiment and report and trial and selected_run and trial_evaluation
         assert oos_run and performance and risk and trade and period
+        train_artifact_ids = (
+            trial_evaluation.performance_id,
+            trial_evaluation.risk_id,
+            trial_evaluation.trade_id,
+            trial_evaluation.period_id,
+        )
+        if any(value is None for value in train_artifact_ids):
+            raise WalkForwardSourceError(
+                "WALK_FORWARD_VALIDATION_NOT_READY",
+                "selected train evaluation lacks a complete M14 bundle",
+                window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage=_first_missing_train_stage(trial_evaluation),
+                action="CALCULATE_M14_EXTERNALLY",
+            )
+        train_performance = self.db.get(
+            PortfolioPerformanceReport, trial_evaluation.performance_id
+        )
+        train_risk = self.db.get(
+            PortfolioPerformanceRiskReport, trial_evaluation.risk_id
+        )
+        train_trade = self.db.get(
+            PortfolioPerformanceTradeReport, trial_evaluation.trade_id
+        )
+        train_period = self.db.get(
+            PortfolioPerformancePeriodReport, trial_evaluation.period_id
+        )
+        if any(
+            artifact is None
+            for artifact in (train_performance, train_risk, train_trade, train_period)
+        ):
+            self._invalid(
+                "a selected train M14 artifact is missing",
+                window.window_no,
+                scope="TRAIN",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
+            )
+        assert train_performance and train_risk and train_trade and train_period
         self._validate_selection(
             study,
             window,
@@ -243,6 +319,24 @@ class WalkForwardValidationSourceProvider:
             selected_run,
             trial_evaluation,
         )
+        if (
+            train_performance.run_id != selected_run.id
+            or train_risk.run_id != selected_run.id
+            or train_trade.run_id != selected_run.id
+            or train_period.run_id != selected_run.id
+            or train_risk.performance_id != train_performance.id
+            or train_trade.performance_id != train_performance.id
+            or train_period.performance_id != train_performance.id
+            or train_period.risk_id != train_risk.id
+            or train_period.trade_id != train_trade.id
+        ):
+            raise WalkForwardSourceError(
+                "WALK_FORWARD_TRAIN_BUNDLE_MISMATCH",
+                "selected train M14 artifacts do not share the exact run owner",
+                window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage="source_identity",
+            )
         self._validate_oos(study, window, experiment, trial, oos_run)
         if (
             performance.run_id != oos_run.id
@@ -259,6 +353,34 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_OOS_BUNDLE_MISMATCH",
                 "pinned OOS artifacts do not share the exact run owner",
                 window_no=window.window_no,
+                scope="OOS",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
+            )
+        train_dates = tuple(
+            self.db.scalars(
+                select(PortfolioPerformanceDaily.trade_date)
+                .where(
+                    PortfolioPerformanceDaily.performance_id
+                    == train_performance.id
+                )
+                .order_by(PortfolioPerformanceDaily.trade_date)
+                .execution_options(populate_existing=True)
+            ).all()
+        )
+        if train_dates != expected_train_dates:
+            raise WalkForwardSourceError(
+                "WALK_FORWARD_TRAIN_DATE_SET_MISMATCH",
+                "train performance date set does not equal the frozen train date set",
+                window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage="date_set",
+                expected_count=len(expected_train_dates),
+                actual_count=len(train_dates),
+                first_mismatch=_first_date_mismatch(
+                    expected_train_dates, train_dates
+                ),
+                action="NO_AUTOMATIC_REPAIR",
             )
         strategy_rows = list(
             self.db.execute(
@@ -285,10 +407,23 @@ class WalkForwardValidationSourceProvider:
         strategy_dates = tuple(row[0] for row in strategy_rows)
         benchmark_dates = tuple(row[0] for row in benchmark_rows)
         if strategy_dates != expected_test_dates or benchmark_dates != expected_test_dates:
+            mismatched_dates = (
+                strategy_dates
+                if strategy_dates != expected_test_dates
+                else benchmark_dates
+            )
             raise WalkForwardSourceError(
                 "WALK_FORWARD_OOS_DATE_SET_MISMATCH",
                 "OOS daily date set does not equal the frozen test date set",
                 window_no=window.window_no,
+                scope="OOS",
+                missing_stage="date_set",
+                expected_count=len(expected_test_dates),
+                actual_count=len(mismatched_dates),
+                first_mismatch=_first_date_mismatch(
+                    expected_test_dates, mismatched_dates
+                ),
+                action="NO_AUTOMATIC_REPAIR",
             )
         annualization = performance.result_summary.get("annualization_trade_days")
         if not isinstance(annualization, int) or annualization <= 0:
@@ -296,6 +431,9 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_OOS_BUNDLE_MISMATCH",
                 "pinned performance artifact lacks annualization identity",
                 window_no=window.window_no,
+                scope="OOS",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
             )
         if any(
             value is None
@@ -344,33 +482,51 @@ class WalkForwardValidationSourceProvider:
             risk.risk_free_rate_annual,
         )
         identity = {
+            "schema_version": "walk_forward_window_validation_identity_v1",
             "window_no": window.window_no,
-            "train_dates": list(window.train_trade_dates),
-            "train_date_hash": window.train_date_hash,
-            "test_dates": list(window.test_trade_dates),
-            "test_date_hash": window.test_date_hash,
-            "train_experiment_id": str(experiment.id),
-            "train_experiment_definition_hash": experiment.definition_hash,
-            "train_evaluation_id": str(report.id),
-            "train_evaluation_policy_hash": report.policy_hash,
-            "train_evaluation_source_hash": report.source_hash,
-            "selected_trial_id": str(trial.id),
-            "selected_parameter_hash": trial.parameter_hash,
-            "selected_portfolio_config_hash": trial.portfolio_config_hash,
-            "oos_run": {
-                "id": str(oos_run.id),
-                "start_date": oos_run.start_date.isoformat(),
-                "end_date": oos_run.end_date.isoformat(),
-                "portfolio_config_hash": oos_run.portfolio_config_hash,
-                "source_strategy_config_hash": oos_run.source_strategy_config_hash,
-                "opportunity_config_hash": oos_run.opportunity_config_hash,
-                "execution_config_hash": oos_run.execution_config_hash,
-                "accounting_config_hash": oos_run.accounting_config_hash,
+            "train": {
+                "dates": {
+                    "hash": window.train_date_hash,
+                    "count": len(expected_train_dates),
+                },
+                "experiment": {
+                    "id": str(experiment.id),
+                    "definition_hash": experiment.definition_hash,
+                },
+                "evaluation": {
+                    "id": str(report.id),
+                    "policy_hash": report.policy_hash,
+                    "source_hash": report.source_hash,
+                },
+                "selection": {
+                    "trial_id": str(trial.id),
+                    "run_id": str(selected_run.id),
+                    "parameter_hash": trial.parameter_hash,
+                    "portfolio_config_hash": trial.portfolio_config_hash,
+                },
+                "m14": _bundle_identity(
+                    train_performance, train_risk, train_trade, train_period
+                ),
             },
-            "oos_performance": [str(performance.id), performance.source_hash],
-            "oos_risk": [str(risk.id), risk.risk_source_hash, risk.benchmark_source_hash],
-            "oos_trade": [str(trade.id), trade.trade_source_hash],
-            "oos_period": [str(period.id), period.period_source_hash],
+            "oos": {
+                "dates": {
+                    "hash": window.test_date_hash,
+                    "count": len(expected_test_dates),
+                },
+                "run": {
+                    "id": str(oos_run.id),
+                    "start_date": oos_run.start_date.isoformat(),
+                    "end_date": oos_run.end_date.isoformat(),
+                    "portfolio_config_hash": oos_run.portfolio_config_hash,
+                    "source_strategy_config_hash": (
+                        oos_run.source_strategy_config_hash
+                    ),
+                    "opportunity_config_hash": oos_run.opportunity_config_hash,
+                    "execution_config_hash": oos_run.execution_config_hash,
+                    "accounting_config_hash": oos_run.accounting_config_hash,
+                },
+                "m14": _bundle_identity(performance, risk, trade, period),
+            },
         }
         return metric, identity, compatibility
 
@@ -417,6 +573,7 @@ class WalkForwardValidationSourceProvider:
             or trial.experiment_id != experiment.id
             or evaluation.experiment_id != experiment.id
             or evaluation.trial_id != trial.id
+            or evaluation.run_id != selected_run.id
             or evaluation.status != "EVALUATED"
             or not evaluation.feasible
             or not evaluation.shortlisted
@@ -426,6 +583,9 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_SELECTION_IDENTITY_MISMATCH",
                 "selected train candidate does not match the frozen rank-1 evaluation",
                 window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
             )
         if (
             experiment_parameter_hash(trial.parameter_values) != trial.parameter_hash
@@ -440,6 +600,9 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_SELECTION_IDENTITY_MISMATCH",
                 "selected candidate snapshot or hash is invalid",
                 window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
             )
         expected_snapshot = {
             "strategy": experiment.base_config_snapshot["strategy"],
@@ -477,6 +640,9 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_SELECTION_IDENTITY_MISMATCH",
                 "selected train run does not match the frozen candidate identity",
                 window_no=window.window_no,
+                scope="TRAIN",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
             )
 
     def _validate_oos(
@@ -519,10 +685,22 @@ class WalkForwardValidationSourceProvider:
                 "WALK_FORWARD_OOS_IDENTITY_MISMATCH",
                 "OOS run does not match the frozen train selection and study base",
                 window_no=window.window_no,
+                scope="OOS",
+                missing_stage="source_identity",
+                action="NO_AUTOMATIC_REPAIR",
             )
 
-    def _invalid(self, message: str, window_no: int | None = None) -> None:
-        details = {"window_no": window_no} if window_no is not None else {}
+    def _invalid(
+        self,
+        message: str,
+        window_no: int | None = None,
+        **details: Any,
+    ) -> None:
+        if window_no is not None:
+            details["window_no"] = window_no
+        details.setdefault("scope", "SOURCE")
+        details.setdefault("missing_stage", "source_identity")
+        details.setdefault("action", "NO_AUTOMATIC_REPAIR")
         raise WalkForwardSourceError(
             "WALK_FORWARD_SOURCE_CHANGED", message, **details
         )
@@ -582,3 +760,74 @@ def _stored_definition_hash(
 
 def _canonical_decimal(value: Decimal) -> str:
     return "0" if value == 0 else format(value.normalize(), "f")
+
+
+def _first_missing_train_stage(
+    evaluation: PortfolioExperimentTrialEvaluation,
+) -> str:
+    for name, value in (
+        ("train_performance", evaluation.performance_id),
+        ("train_risk", evaluation.risk_id),
+        ("train_trade", evaluation.trade_id),
+        ("train_period", evaluation.period_id),
+    ):
+        if value is None:
+            return name
+    return "source_identity"
+
+
+def _first_date_mismatch(
+    expected: tuple[date, ...], actual: tuple[date, ...]
+) -> dict[str, str | int | None] | None:
+    for index, (expected_date, actual_date) in enumerate(
+        zip(expected, actual, strict=False)
+    ):
+        if expected_date != actual_date:
+            return {
+                "index": index,
+                "expected": expected_date.isoformat(),
+                "actual": actual_date.isoformat(),
+            }
+    if len(expected) == len(actual):
+        return None
+    index = min(len(expected), len(actual))
+    return {
+        "index": index,
+        "expected": expected[index].isoformat() if index < len(expected) else None,
+        "actual": actual[index].isoformat() if index < len(actual) else None,
+    }
+
+
+def _bundle_identity(
+    performance: PortfolioPerformanceReport,
+    risk: PortfolioPerformanceRiskReport,
+    trade: PortfolioPerformanceTradeReport,
+    period: PortfolioPerformancePeriodReport,
+) -> dict[str, Any]:
+    return {
+        "performance": {
+            "id": str(performance.id),
+            "version": performance.performance_version,
+            "config_hash": performance.performance_config_hash,
+            "source_hash": performance.source_hash,
+        },
+        "risk": {
+            "id": str(risk.id),
+            "version": risk.risk_version,
+            "config_hash": risk.risk_config_hash,
+            "source_hash": risk.risk_source_hash,
+            "benchmark_source_hash": risk.benchmark_source_hash,
+        },
+        "trade": {
+            "id": str(trade.id),
+            "version": trade.trade_version,
+            "config_hash": trade.trade_config_hash,
+            "source_hash": trade.trade_source_hash,
+        },
+        "period": {
+            "id": str(period.id),
+            "version": period.period_version,
+            "config_hash": period.period_config_hash,
+            "source_hash": period.period_source_hash,
+        },
+    }

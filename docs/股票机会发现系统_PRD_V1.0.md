@@ -1334,3 +1334,11 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - Validation Detail 提供逐窗口训练/OOS lineage、逐日拼接收益/NAV/Benchmark/相对 NAV、总收益、年化收益、最大回撤、N-1 样本波动率、Sharpe、训练到 OOS 的退化度、告警及六参数稳定性。
 - 用户可取消 Study、查询动态状态/进度、窗口详情、Validation 历史和稳定性。取消只阻止新工作并复用下游安全取消语义，不删除已完成研究证据。
 - M15.3 输出是研究证据，不是生产最优策略、自动部署候选、实盘推荐或收益承诺。
+
+### M15.3.1 完整性收口（2026-10-09）
+
+- 每个 Validation Window 必须提供可直接审计的 Train/OOS lineage；训练证据必须来自选中 Evaluation 已钉住的 M14 Bundle，并与冻结训练交易日集合逐日一致。
+- 用户可查看完整参数组合及逐参数的相邻窗口切换次数/比例和确定性质量 warning。Warning 不构成部署判断。
+- Study 取消是持久化 Stop Gate：尚未完成的 Validation Job 不得产生新 SUCCESS Artifact；既有 SUCCESS 历史证据保持不变。
+- Readiness 必须指出第一个阻断窗口、Train/OOS scope、缺失阶段和外部动作；identity 不匹配必须明确拒绝且不建议覆盖快照。
+- 所有接口位于 `/api/v1/portfolio/walk-forwards` 及其子资源。

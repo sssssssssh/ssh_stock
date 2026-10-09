@@ -231,6 +231,49 @@ def test_parameter_rates_sum_exactly_for_repeating_decimal_denominators() -> Non
         assert sum((row.selected_rate for row in selected), Decimal(0)) == 1
 
 
+def test_parameter_stability_tracks_adjacent_hash_and_canonical_value_switches() -> None:
+    first = _parameters("70", 20)
+    same_value = _parameters("70.0", 20)
+    changed = _parameters("70", 30)
+    result = calculate_parameter_stability(
+        (
+            ("a" * 64, first),
+            ("a" * 64, same_value),
+            ("b" * 64, changed),
+            ("a" * 64, first),
+        ),
+        frequent_switch_rate_threshold=Decimal("0.5"),
+        low_dominant_parameter_rate_threshold=Decimal("0.8"),
+    )
+    assert result.transition_count == 3
+    assert result.switch_count == 2
+    assert result.switch_rate == Decimal(2) / Decimal(3)
+    assert result.dominant_parameter_hash_count == 3
+    assert result.dominant_parameter_hash_rate == Decimal("0.75")
+    top_n = [
+        row for row in result.rows if row.parameter_name == "candidate.top_n"
+    ]
+    assert {row.adjacent_value_switch_count for row in top_n} == {2}
+    min_score = [
+        row for row in result.rows if row.parameter_name == "candidate.min_score"
+    ]
+    assert {row.adjacent_value_switch_count for row in min_score} == {0}
+    assert result.warnings == (
+        "FREQUENT_PARAMETER_SWITCHING",
+        "LOW_DOMINANT_PARAMETER_RATE",
+    )
+
+
+def test_single_window_switch_rates_are_null() -> None:
+    result = calculate_parameter_stability(
+        (("a" * 64, _parameters("70", 20)),)
+    )
+    assert result.transition_count == 0
+    assert result.switch_count == 0
+    assert result.switch_rate is None
+    assert all(row.adjacent_value_switch_rate is None for row in result.rows)
+
+
 def test_walk_forward_config_and_domain_dependency_boundaries() -> None:
     config = WalkForwardConfig.model_validate(
         {
@@ -239,8 +282,13 @@ def test_walk_forward_config_and_domain_dependency_boundaries() -> None:
             "minimum_windows": 2,
             "max_windows": 36,
             "max_actions_per_advance": 20,
-            "minimum_stitched_oos_observations": 2,
-            "short_oos_warning_trade_days": 120,
+            "validation_policy": {
+                "version": "walk_forward_validation_policy_v1",
+                "minimum_stitched_oos_observations": 2,
+                "short_oos_warning_trade_days": 120,
+                "frequent_parameter_switch_rate_threshold": "0.5",
+                "low_dominant_parameter_rate_threshold": "0.5",
+            },
         }
     )
     assert config.exchange == "SSE"

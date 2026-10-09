@@ -446,3 +446,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 所有收益、NAV、退化度和稳定性运算使用 Decimal。领域层禁止依赖 ORM、SQLAlchemy Session、FastAPI、JobRun、NumPy、Pandas 或 float。
 - Validation Job 的 Artifact 写入与 SUCCESS 必须同事务提交；worker/job ownership 丢失时回滚。heartbeat stale recovery 只标记失败，不自动创建 replacement 或重放验证。
 - API、日志和文档只能把结果描述为 walk-forward/OOS research evidence；不得称为 production best、自动部署建议或实盘保证。
+
+## Milestone 15.3.1 Walk-forward Integrity Closeout 规则
+
+- `walk_forward_validation_policy_v1` 只包含 stitched OOS 样本门槛、短样本提示和参数稳定性 warning 阈值；`max_actions_per_advance` 等运行参数不进入 Policy hash。Policy 改变只能生成新的 append-only Artifact。
+- Validation 必须读取 selected Trial Evaluation 钉住的精确 Train M14 Bundle，并要求 Train PerformanceDaily 日期集合与冻结 `train_trade_dates` 完全相等；禁止用当前最新 Artifact 替换。
+- Window Validation 保存结构化 `walk_forward_window_validation_identity_v1`、Train/OOS 日期 hash 和精确 owner UUID；0044 复合外键与 append-only trigger 是数据库强制门槛。
+- 稳定性必须同时保存完整参数 hash 的相邻切换和六个参数各自的 canonical value 相邻切换。Warning 仅描述研究证据质量。
+- Study stop gate 持久化后，QUEUED Validation Job 转为 CANCELLED，RUNNING Job 协作取消；终态锁序固定为 Study advisory/row → Validation identity advisory → Job row，取消或丢权不得落 SUCCESS Artifact。
+- Readiness 的缺失诊断必须包含 code/window/scope/stage/action；identity drift 使用 fail-closed source error 且不得建议自动补算。API 根路径固定为 `/api/v1/portfolio/walk-forwards`。

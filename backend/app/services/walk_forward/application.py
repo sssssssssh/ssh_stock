@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from math import prod
@@ -91,6 +92,18 @@ class WalkForwardConflictError(WalkForwardApplicationError):
 
 class WalkForwardOwnershipError(RuntimeError):
     code = "WALK_FORWARD_VALIDATION_OWNERSHIP_LOST"
+
+
+class WalkForwardCancelledError(WalkForwardApplicationError):
+    def __init__(self, message: str = "walk-forward validation was cancelled") -> None:
+        super().__init__("WALK_FORWARD_CANCELLED", message)
+
+
+@dataclass(frozen=True)
+class _ValidationArtifactDraft:
+    report: PortfolioWalkForwardValidationReport
+    windows: list[PortfolioWalkForwardWindowValidation]
+    stability: list[PortfolioWalkForwardParameterStability]
 
 
 class WalkForwardApplicationService:
@@ -320,6 +333,51 @@ class WalkForwardApplicationService:
             )
         study.cancel_requested = True
         study.updated_at = datetime.now(UTC)
+        validation_job_candidates = list(
+            self.db.execute(
+                select(JobRun.id, JobRun.job_metadata)
+                .where(
+                    JobRun.job_type == WALK_FORWARD_VALIDATION_JOB_TYPE,
+                    JobRun.status.in_(_ACTIVE_JOB_STATUSES),
+                    JobRun.job_metadata.contains({"study_id": str(study_id)}),
+                )
+                .order_by(JobRun.id)
+            ).all()
+        )
+        for source_hash in sorted(
+            {
+                str(dict(metadata or {}).get("source_hash"))
+                for _, metadata in validation_job_candidates
+                if dict(metadata or {}).get("source_hash")
+            }
+        ):
+            self._validation_lock(study_id, source_hash)
+        candidate_ids = [job_id for job_id, _ in validation_job_candidates]
+        validation_jobs = list(
+            self.db.scalars(
+                select(JobRun)
+                .where(
+                    JobRun.id.in_(candidate_ids),
+                    JobRun.status.in_(_ACTIVE_JOB_STATUSES),
+                )
+                .order_by(JobRun.id)
+                .with_for_update()
+            ).all()
+        )
+        now = datetime.now(UTC)
+        for job in validation_jobs:
+            metadata = dict(job.job_metadata or {})
+            if job.status == "QUEUED":
+                job.status = "CANCELLED"
+                job.finished_at = now
+                job.step = "cancelled by walk-forward study stop gate"
+                metadata["stage"] = "CANCELLED"
+            else:
+                job.cancel_requested = True
+                job.step = "walk-forward validation cancellation requested"
+                metadata["stage"] = "CANCELLATION_REQUESTED"
+            job.job_metadata = metadata
+            self.db.add(job)
         self.db.commit()
         cancelled: list[dict[str, str]] = []
         for window in self.repository.list_windows(study_id):
@@ -349,6 +407,10 @@ class WalkForwardApplicationService:
             "study_id": str(study_id),
             "cancel_requested": True,
             "cancelled_children": cancelled,
+            "validation_jobs": [
+                {"job_id": str(job.id), "status": job.status}
+                for job in validation_jobs
+            ],
         }
 
     def validation_readiness(self, study_id: uuid.UUID) -> dict[str, Any]:
@@ -356,11 +418,17 @@ class WalkForwardApplicationService:
         return self.source_provider.readiness(study_id)
 
     def queue_validation(self, study_id: uuid.UUID) -> JobRun:
-        source = self._load_source(study_id)
-        if source.study.cancel_requested:
+        self._study_lock(study_id)
+        study = self.repository.get_for_update(study_id)
+        if study is None:
+            raise WalkForwardApplicationError(
+                "WALK_FORWARD_NOT_FOUND", "walk-forward study not found"
+            )
+        if study.cancel_requested:
             raise WalkForwardApplicationError(
                 "WALK_FORWARD_CANCELLED", "cancelled study cannot queue validation"
             )
+        source = self._load_source(study_id)
         self._validation_lock(study_id, source.source_hash)
         active = self.db.scalar(
             select(JobRun)
@@ -394,6 +462,7 @@ class WalkForwardApplicationService:
                 "study_id": str(study_id),
                 "walk_forward_version": WALK_FORWARD_VERSION,
                 "walk_forward_config_hash": source.walk_forward_config_hash,
+                "validation_policy_hash": source.validation_policy_hash,
                 "source_hash": source.source_hash,
                 "stage": "QUEUED",
             },
@@ -437,9 +506,19 @@ class WalkForwardApplicationService:
                 "WALK_FORWARD_SOURCE_CHANGED",
                 "walk-forward source changed after validation was queued",
             )
-        report, reused = self._calculate_uncommitted(source)
+        draft = self._build_validation_artifact(source)
         if self.before_terminal_hook:
-            self.before_terminal_hook(job, report)
+            self.before_terminal_hook(job, draft.report)
+        worker_id = job.worker_id
+
+        # Terminal fence lock order: Study advisory/row -> validation identity
+        # advisory -> Job row.  The expensive calculation above holds no locks.
+        self._study_lock(study_id)
+        study = self.repository.get_for_update(study_id)
+        if study is None:
+            self.db.rollback()
+            raise WalkForwardOwnershipError("walk-forward study disappeared")
+        self._validation_lock(study_id, queued_source_hash)
         terminal = self.db.scalar(
             select(JobRun)
             .where(JobRun.id == job_id)
@@ -449,13 +528,48 @@ class WalkForwardApplicationService:
         if (
             terminal is None
             or terminal.status != "RUNNING"
-            or terminal.worker_id != job.worker_id
+            or terminal.worker_id != worker_id
             or dict(terminal.job_metadata or {}).get("source_hash")
             != queued_source_hash
         ):
             self.db.rollback()
             raise WalkForwardOwnershipError(
                 "walk-forward validation worker no longer owns terminal update"
+            )
+        if study.cancel_requested or terminal.cancel_requested:
+            terminal.status = "CANCELLED"
+            terminal.finished_at = datetime.now(UTC)
+            terminal.step = "cancelled before walk-forward validation terminal commit"
+            terminal.job_metadata = {
+                **dict(terminal.job_metadata or {}),
+                "stage": "CANCELLED",
+                "error_code": "WALK_FORWARD_CANCELLED",
+            }
+            self.db.add(terminal)
+            self.db.commit()
+            raise WalkForwardCancelledError()
+        fenced_source = self._load_source(study_id)
+        if (
+            fenced_source.source_hash != queued_source_hash
+            or fenced_source.walk_forward_config_hash
+            != source.walk_forward_config_hash
+        ):
+            self.db.rollback()
+            raise WalkForwardApplicationError(
+                "WALK_FORWARD_SOURCE_CHANGED",
+                "walk-forward source changed before terminal commit",
+            )
+        existing = self.repository.find_validation(
+            study_id=study_id,
+            walk_forward_version=WALK_FORWARD_VERSION,
+            walk_forward_config_hash=source.walk_forward_config_hash,
+            source_hash=queued_source_hash,
+        )
+        reused = existing is not None
+        report = existing or draft.report
+        if existing is None:
+            self.repository.add_validation(
+                draft.report, draft.windows, draft.stability
             )
         terminal.status = "SUCCESS"
         terminal.finished_at = datetime.now(UTC)
@@ -507,7 +621,10 @@ class WalkForwardApplicationService:
         rows, total = self.repository.window_validation_page(
             validation_id, limit=limit, offset=offset
         )
-        return [_model_payload(row, {"created_at"}) for row in rows], total
+        payloads = [_model_payload(row, {"created_at"}) for row in rows]
+        for payload in payloads:
+            payload["identity"] = payload["identity_snapshot"]
+        return payloads, total
 
     def validation_stability(
         self, study_id: uuid.UUID, validation_id: uuid.UUID
@@ -753,6 +870,10 @@ class WalkForwardApplicationService:
     def _calculate_uncommitted(
         self, source: WalkForwardValidationSource
     ) -> tuple[PortfolioWalkForwardValidationReport, bool]:
+        if source.study.cancel_requested:
+            raise WalkForwardCancelledError(
+                "cancelled study cannot calculate a new validation artifact"
+            )
         self._validation_lock(source.study.id, source.source_hash)
         existing = self.repository.find_validation(
             study_id=source.study.id,
@@ -762,13 +883,26 @@ class WalkForwardApplicationService:
         )
         if existing is not None:
             return existing, True
+        draft = self._build_validation_artifact(source)
+        self.repository.add_validation(
+            draft.report, draft.windows, draft.stability
+        )
+        return draft.report, False
+
+    def _build_validation_artifact(
+        self, source: WalkForwardValidationSource
+    ) -> _ValidationArtifactDraft:
         metric_inputs = tuple(item.metric_input for item in source.windows)
         metrics = calculate_validation_metrics(
             metric_inputs,
             annualization_trade_days=source.annualization_trade_days,
             risk_free_rate_annual=source.risk_free_rate_annual,
-            minimum_observations=self.config.minimum_stitched_oos_observations,
-            short_sample_warning_trade_days=self.config.short_oos_warning_trade_days,
+            minimum_observations=(
+                self.config.validation_policy.minimum_stitched_oos_observations
+            ),
+            short_sample_warning_trade_days=(
+                self.config.validation_policy.short_oos_warning_trade_days
+            ),
         )
         stability = calculate_parameter_stability(
             tuple(
@@ -777,7 +911,13 @@ class WalkForwardApplicationService:
                     item.metric_input.selected_parameter_values,
                 )
                 for item in source.windows
-            )
+            ),
+            frequent_switch_rate_threshold=(
+                self.config.validation_policy.frequent_parameter_switch_rate_threshold
+            ),
+            low_dominant_parameter_rate_threshold=(
+                self.config.validation_policy.low_dominant_parameter_rate_threshold
+            ),
         )
         report_id = uuid.uuid4()
         report = PortfolioWalkForwardValidationReport(
@@ -785,6 +925,8 @@ class WalkForwardApplicationService:
             study_id=source.study.id,
             walk_forward_version=WALK_FORWARD_VERSION,
             walk_forward_config_hash=source.walk_forward_config_hash,
+            validation_policy_snapshot=source.validation_policy_snapshot,
+            validation_policy_hash=source.validation_policy_hash,
             source_hash=source.source_hash,
             status="SUCCESS",
             window_count=metrics.window_count,
@@ -818,7 +960,10 @@ class WalkForwardApplicationService:
             dominant_parameter_hash=stability.dominant_parameter_hash,
             dominant_parameter_hash_count=stability.dominant_parameter_hash_count,
             dominant_parameter_hash_rate=stability.dominant_parameter_hash_rate,
-            warnings=list(metrics.warnings),
+            transition_count=stability.transition_count,
+            switch_count=stability.switch_count,
+            switch_rate=stability.switch_rate,
+            warnings=list(dict.fromkeys((*metrics.warnings, *stability.warnings))),
             result_summary={
                 "semantics": (
                     "time-separated out-of-sample validation evidence for research use"
@@ -838,28 +983,59 @@ class WalkForwardApplicationService:
                 ],
             },
         )
-        source_by_no = {
-            item.window.window_no: item.window for item in source.windows
-        }
+        source_by_no = {item.window.window_no: item for item in source.windows}
         window_rows = [
             PortfolioWalkForwardWindowValidation(
                 validation_id=report_id,
                 study_id=source.study.id,
                 window_no=row.window_no,
-                train_experiment_id=source_by_no[row.window_no].train_experiment_id,
-                train_evaluation_id=source_by_no[row.window_no].train_evaluation_id,
-                selected_trial_id=source_by_no[row.window_no].selected_trial_id,
+                train_experiment_id=(
+                    source_by_no[row.window_no].window.train_experiment_id
+                ),
+                train_evaluation_id=(
+                    source_by_no[row.window_no].window.train_evaluation_id
+                ),
+                selected_trial_id=(
+                    source_by_no[row.window_no].window.selected_trial_id
+                ),
+                selected_train_run_id=uuid.UUID(
+                    source_by_no[row.window_no].identity_snapshot["train"]
+                    ["selection"]["run_id"]
+                ),
+                train_performance_id=uuid.UUID(
+                    source_by_no[row.window_no].identity_snapshot["train"]
+                    ["m14"]["performance"]["id"]
+                ),
+                train_risk_id=uuid.UUID(
+                    source_by_no[row.window_no].identity_snapshot["train"]
+                    ["m14"]["risk"]["id"]
+                ),
+                train_trade_id=uuid.UUID(
+                    source_by_no[row.window_no].identity_snapshot["train"]
+                    ["m14"]["trade"]["id"]
+                ),
+                train_period_id=uuid.UUID(
+                    source_by_no[row.window_no].identity_snapshot["train"]
+                    ["m14"]["period"]["id"]
+                ),
                 selected_parameter_hash=(
-                    source_by_no[row.window_no].selected_parameter_hash
+                    source_by_no[row.window_no].window.selected_parameter_hash
                 ),
                 selected_parameter_values=(
-                    source_by_no[row.window_no].selected_parameter_values
+                    source_by_no[row.window_no].window.selected_parameter_values
                 ),
-                oos_run_id=source_by_no[row.window_no].oos_run_id,
-                oos_performance_id=source_by_no[row.window_no].oos_performance_id,
-                oos_risk_id=source_by_no[row.window_no].oos_risk_id,
-                oos_trade_id=source_by_no[row.window_no].oos_trade_id,
-                oos_period_id=source_by_no[row.window_no].oos_period_id,
+                train_date_hash=(
+                    source_by_no[row.window_no].window.train_date_hash
+                ),
+                test_date_hash=source_by_no[row.window_no].window.test_date_hash,
+                identity_snapshot=source_by_no[row.window_no].identity_snapshot,
+                oos_run_id=source_by_no[row.window_no].window.oos_run_id,
+                oos_performance_id=(
+                    source_by_no[row.window_no].window.oos_performance_id
+                ),
+                oos_risk_id=source_by_no[row.window_no].window.oos_risk_id,
+                oos_trade_id=source_by_no[row.window_no].window.oos_trade_id,
+                oos_period_id=source_by_no[row.window_no].window.oos_period_id,
                 **{
                     name: getattr(row, name)
                     for name in (
@@ -892,11 +1068,13 @@ class WalkForwardApplicationService:
                 parameter_value=row.parameter_value,
                 selected_window_count=row.selected_window_count,
                 selected_rate=row.selected_rate,
+                transition_count=row.transition_count,
+                adjacent_value_switch_count=row.adjacent_value_switch_count,
+                adjacent_value_switch_rate=row.adjacent_value_switch_rate,
             )
             for row in stability.rows
         ]
-        self.repository.add_validation(report, window_rows, stability_rows)
-        return report, False
+        return _ValidationArtifactDraft(report, window_rows, stability_rows)
 
     def _window_payloads(
         self, study: PortfolioWalkForwardStudy
@@ -1014,10 +1192,15 @@ class WalkForwardApplicationService:
                 for item in readiness.get("missing_analytics", []):
                     required.append(
                         {
+                            "code": "WALK_FORWARD_VALIDATION_NOT_READY",
                             "window_no": payload["window_no"],
                             "scope": "TRAIN",
                             "run_id": item["run_id"],
                             "missing_stage": item["missing_stage"],
+                            "action": (
+                                "CALCULATE_M14_"
+                                f"{str(item['missing_stage']).upper()}_EXTERNALLY"
+                            ),
                         }
                     )
             elif payload["state"] == "OOS_ANALYTICS_REQUIRED":
@@ -1026,10 +1209,12 @@ class WalkForwardApplicationService:
                 if stage:
                     required.append(
                         {
+                            "code": "WALK_FORWARD_VALIDATION_NOT_READY",
                             "window_no": payload["window_no"],
                             "scope": "OOS",
                             "run_id": str(run_id),
                             "missing_stage": stage,
+                            "action": f"CALCULATE_M14_{stage.upper()}_EXTERNALLY",
                         }
                     )
         return required
@@ -1348,6 +1533,7 @@ def _validation_payload(
         "study_id": str(report.study_id),
         "walk_forward_version": report.walk_forward_version,
         "walk_forward_config_hash": report.walk_forward_config_hash,
+        "validation_policy_hash": report.validation_policy_hash,
         "source_hash": report.source_hash,
     }
     return payload

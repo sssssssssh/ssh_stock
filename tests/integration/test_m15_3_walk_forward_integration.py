@@ -6,9 +6,13 @@ import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
-from app.models.experiment_evaluation import PortfolioExperimentEvaluationReport
+from app.models.experiment_evaluation import (
+    PortfolioExperimentEvaluationReport,
+    PortfolioExperimentTrialEvaluation,
+)
 from app.models.job import JobRun
 from app.models.market_data import TradeCalendar
+from app.models.performance import PortfolioPerformanceDaily
 from app.models.portfolio import PortfolioBacktestRun
 from app.models.walk_forward import (
     PortfolioWalkForwardParameterStability,
@@ -24,7 +28,7 @@ from app.services.walk_forward import (
     WalkForwardApplicationService,
 )
 from m14_4_support import seed_analytics_case
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -325,6 +329,43 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
             readiness = service.validation_readiness(study_id)
             assert readiness["ready"] is True
             assert readiness["window_count"] == 2
+
+            first_evaluation = db.scalar(
+                sa.select(PortfolioExperimentTrialEvaluation).where(
+                    PortfolioExperimentTrialEvaluation.evaluation_id
+                    == windows[0].train_evaluation_id,
+                    PortfolioExperimentTrialEvaluation.trial_id
+                    == windows[0].selected_trial_id,
+                )
+            )
+            assert first_evaluation is not None
+            assert first_evaluation.performance_id is not None
+            train_daily = db.scalar(
+                sa.select(PortfolioPerformanceDaily)
+                .where(
+                    PortfolioPerformanceDaily.performance_id
+                    == first_evaluation.performance_id
+                )
+                .order_by(PortfolioPerformanceDaily.trade_date)
+                .offset(1)
+                .limit(1)
+            )
+            assert train_daily is not None
+            nested = db.begin_nested()
+            db.delete(train_daily)
+            db.flush()
+            drifted_readiness = service.validation_readiness(study_id)
+            assert drifted_readiness["ready"] is False
+            assert (
+                drifted_readiness["error_code"]
+                == "WALK_FORWARD_TRAIN_DATE_SET_MISMATCH"
+            )
+            assert drifted_readiness["window_no"] == windows[0].window_no
+            assert drifted_readiness["scope"] == "TRAIN"
+            assert drifted_readiness["missing_stage"] == "date_set"
+            nested.rollback()
+            db.expire_all()
+
             job = service.queue_validation(study_id)
             job.status = "RUNNING"
             job.worker_id = "m15.3-test-worker"
@@ -333,6 +374,10 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
             assert reused is False
             assert report.window_count == 2
             assert report.total_oos_trade_days == 14
+            assert report.validation_policy_hash == report.walk_forward_config_hash
+            assert report.transition_count == 1
+            assert report.switch_count == 0
+            assert report.switch_rate == Decimal("0")
             assert report.result_summary["semantics"] == (
                 "time-separated out-of-sample validation evidence for research use"
             )
@@ -349,6 +394,25 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
                     PortfolioWalkForwardWindowValidation
                 )
             ) == 2
+            validation_windows = list(
+                db.scalars(
+                    sa.select(PortfolioWalkForwardWindowValidation)
+                    .where(
+                        PortfolioWalkForwardWindowValidation.validation_id
+                        == report.id
+                    )
+                    .order_by(PortfolioWalkForwardWindowValidation.window_no)
+                )
+            )
+            assert len(validation_windows) == 2
+            assert validation_windows[0].identity_snapshot["schema_version"] == (
+                "walk_forward_window_validation_identity_v1"
+            )
+            assert validation_windows[0].train_date_hash == windows[0].train_date_hash
+            assert validation_windows[0].test_date_hash == windows[0].test_date_hash
+            assert validation_windows[0].selected_train_run_id == (
+                first_evaluation.run_id
+            )
             assert db.scalar(
                 sa.select(sa.func.count()).select_from(
                     PortfolioWalkForwardParameterStability
@@ -473,5 +537,55 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
             rejected(
                 clone_insert(PortfolioWalkForwardParameterStability, stability_row)
             )
+
+            for statement in (
+                sa.update(PortfolioWalkForwardValidationReport)
+                .where(PortfolioWalkForwardValidationReport.id == report.id)
+                .values(switch_count=1),
+                sa.update(PortfolioWalkForwardWindowValidation)
+                .where(
+                    PortfolioWalkForwardWindowValidation.validation_id == report.id,
+                    PortfolioWalkForwardWindowValidation.window_no == 1,
+                )
+                .values(selected_parameter_hash="z" * 64),
+                sa.delete(PortfolioWalkForwardParameterStability).where(
+                    PortfolioWalkForwardParameterStability.validation_id == report.id
+                ),
+            ):
+                with pytest.raises(DBAPIError):
+                    with db.begin_nested():
+                        db.execute(statement)
+                        db.flush()
+
+            cross_owner_report_id = uuid.uuid4()
+            with pytest.raises(IntegrityError):
+                with db.begin_nested():
+                    db.execute(
+                        clone_insert(
+                            PortfolioWalkForwardValidationReport,
+                            report,
+                            id=cross_owner_report_id,
+                            source_hash="z" * 64,
+                        )
+                    )
+                    db.execute(
+                        clone_insert(
+                            PortfolioWalkForwardWindowValidation,
+                            validation_windows[0],
+                            validation_id=cross_owner_report_id,
+                            selected_train_run_id=(
+                                validation_windows[1].selected_train_run_id
+                            ),
+                        )
+                    )
+                    db.flush()
+
+            db.expire(report)
+            round_tripped = db.get(PortfolioWalkForwardValidationReport, report.id)
+            assert round_tripped is not None
+            assert abs(
+                round_tripped.stitched_oos_annualized_return
+                - report.stitched_oos_annualized_return
+            ) <= Decimal("1e-18")
         transaction.rollback()
     engine.dispose()

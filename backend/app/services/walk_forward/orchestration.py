@@ -1,14 +1,53 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from app.models.experiment import PortfolioExperiment
 from app.models.job import JobRun
 from app.models.portfolio import PortfolioBacktestRun
 from app.models.walk_forward import PortfolioWalkForwardWindow
 
+WINDOW_STATES = (
+    "TRAIN_PLANNED",
+    "TRAIN_CREATED",
+    "TRAIN_RUNNING",
+    "TRAIN_TERMINAL",
+    "TRAIN_ANALYTICS_REQUIRED",
+    "TRAIN_EVALUATION_QUEUED",
+    "TRAIN_EVALUATION_RUNNING",
+    "TRAIN_FAILED",
+    "TRAIN_NO_FEASIBLE_CANDIDATE",
+    "SELECTION_FROZEN",
+    "OOS_CREATED",
+    "OOS_RUNNING",
+    "OOS_FAILED",
+    "OOS_CANCELLED",
+    "OOS_ANALYTICS_REQUIRED",
+    "OOS_READY",
+)
+
+WindowState = Literal[
+    "TRAIN_PLANNED",
+    "TRAIN_CREATED",
+    "TRAIN_RUNNING",
+    "TRAIN_TERMINAL",
+    "TRAIN_ANALYTICS_REQUIRED",
+    "TRAIN_EVALUATION_QUEUED",
+    "TRAIN_EVALUATION_RUNNING",
+    "TRAIN_FAILED",
+    "TRAIN_NO_FEASIBLE_CANDIDATE",
+    "SELECTION_FROZEN",
+    "OOS_CREATED",
+    "OOS_RUNNING",
+    "OOS_FAILED",
+    "OOS_CANCELLED",
+    "OOS_ANALYTICS_REQUIRED",
+    "OOS_READY",
+]
+
 
 @dataclass(frozen=True)
 class WindowProjection:
-    state: str
+    state: WindowState
     blocked: bool = False
     error_code: str | None = None
 

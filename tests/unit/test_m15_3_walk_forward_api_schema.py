@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import get_args
 
 import app.api.v1.walk_forward as walk_forward_api
 import pytest
@@ -21,6 +22,7 @@ from app.services.walk_forward import (
     WalkForwardConflictError,
 )
 from app.services.walk_forward.application import WALK_FORWARD_VALIDATION_JOB_TYPE
+from app.services.walk_forward.orchestration import WINDOW_STATES, WindowState
 from app.services.walk_forward.recovery import (
     WALK_FORWARD_VALIDATION_HEARTBEAT_TIMEOUT_CODE,
     recover_stale_walk_forward_validation_jobs,
@@ -213,6 +215,18 @@ def test_walk_forward_schema_freezes_unique_and_composite_owners() -> None:
     }
     assert ("validation_id", "study_id") in validation_fks
     assert ("study_id", "window_no") in validation_fks
+    assert ("selected_trial_id", "selected_train_run_id") in validation_fks
+    assert (
+        "train_period_id",
+        "train_performance_id",
+        "train_risk_id",
+        "train_trade_id",
+        "selected_train_run_id",
+    ) in validation_fks
+
+
+def test_window_state_api_contract_has_a_single_complete_source() -> None:
+    assert tuple(get_args(WindowState)) == WINDOW_STATES
 
 
 def test_migration_0043_downgrade_fails_closed(monkeypatch) -> None:
@@ -235,6 +249,26 @@ def test_migration_0043_downgrade_fails_closed(monkeypatch) -> None:
         module.downgrade()
 
 
+def test_migration_0044_downgrade_fails_closed(monkeypatch) -> None:
+    path = (
+        Path(__file__).parents[2]
+        / "migrations/versions/20261009_0044_m15_3_1_walk_forward_integrity.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0044", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class Connection:
+        @staticmethod
+        def scalar(_statement):
+            return 1
+
+    monkeypatch.setattr(module.op, "get_bind", lambda: Connection())
+    with pytest.raises(RuntimeError, match="cannot downgrade M15.3.1"):
+        module.downgrade()
+
+
 class _Rows:
     def __init__(self, rows):
         self.rows = rows
@@ -250,7 +284,9 @@ class _RecoverySession:
         self.committed = False
 
     def execute(self, _statement):
-        return _Rows([(self.job.id, self.job.worker_id)])
+        return _Rows(
+            [(self.job.id, self.job.worker_id, self.job.job_metadata)]
+        )
 
     def scalar(self, _statement):
         return self.job
@@ -271,6 +307,7 @@ def test_walk_forward_validation_recovery_rechecks_lease_and_heartbeat() -> None
         worker_id="worker-1",
         heartbeat_at=now - timedelta(minutes=20),
         job_metadata={"source_hash": "s" * 64},
+        cancel_requested=False,
         finished_at=None,
         step=None,
         error_message=None,
