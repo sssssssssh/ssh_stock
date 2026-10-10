@@ -787,7 +787,7 @@ app:
 
 1. 安装 Python 3.12、Docker Desktop、Git、Node.js 22 LTS。
 2. 进入项目根目录。
-3. 阅读 `PROJECT_RULES.md`、`docs/` 下两份 Markdown 文档和本 README。
+3. 阅读根目录 `AGENTS.md`，再按其中规定的权威顺序阅读 `docs/` 下两份 Markdown 文档、`PROJECT_RULES.md` 和本 README。
 4. 复制 `.env.example` 为 `.env`，填入数据库连接和 `TUSHARE_TOKEN`。
 5. 执行 `python -m pip install -r requirements-dev.txt`。
 6. 确认外部 PostgreSQL 可访问；容器部署还需填写可从容器访问的 `DOCKER_DATABASE_URL`。
