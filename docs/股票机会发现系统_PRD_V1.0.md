@@ -1347,3 +1347,11 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 本阶段面向后续研究助手提供可审计、可复现的读取能力，而不是聊天产品或自动交易能力。系统固定提供数据覆盖、市场快照、行业榜、题材榜、机会列表、回测摘要、绩效摘要和 Walk-forward 摘要八个工具。所有结果包含来源身份、Evidence、Warnings 和 Readiness；无数据、未就绪、来源降级和版本错配必须明确区分。
 
 本阶段不接真实 LLM，不提供买卖建议，不自动调参、下单、补算或修复数据，不读取真实持仓。网页现有单管理员登录是唯一授权边界。研究结果只表示历史或样本外证据，不得描述为收益保证或实盘建议。
+
+### M16.1.1 Agent Reliability Closeout（2026-10-10）
+
+- 已发布的三个 API、统一 envelope 和八个工具名保持兼容。目录中的 `max_records` 只表示顶层 `records` 上限；`data.coverage` 的 `dataset_coverage` 独立限制为最多 32 个数据集，Evidence、Warnings 和最终 64 KiB 序列化结果分别受限，超限时明确失败而不伪装成完整统计。
+- `timeout_seconds` 是工具端到端软预算，只能在同步 handler 返回后观测并拒绝超时结果，不表示 Python 计算被抢占中止。单条 SQL 继续由 PostgreSQL `statement_timeout` 硬限制；两者使用不同错误码，部署层仍需提供 HTTP 超时。
+- 新产生的 Evidence 使用 `evidence_version=v2`，区分业务定位符 `source_record_id` 与内容版本 `evidence_id`，并附带可选 `calc_run_id` 和确定性 `content_hash`。相同事实序列化稳定，来源身份或返回事实变化会形成不同 Evidence ID；历史字段继续保留。
+- `performance.summary` 只接受无歧义的 Performance 身份，并用 M14 公共只读 Bundle 校验核对 Run、Performance、Risk、Trade 及存在时的 Period owner、状态、日期和来源身份。Period 在只读概览中仍可缺失，但必须返回降级 warning，不能描述为完整四件套。
+- 默认 Registry 仍显式发布原八个只读工具，但不再用数量硬编码验证安全性；名称、版本、层级、只读属性和正向资源预算均须通过校验，客户端仍不能指定导入路径、SQL 或任意 handler。

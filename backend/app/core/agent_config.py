@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AgentConfig(BaseModel):
@@ -9,6 +9,24 @@ class AgentConfig(BaseModel):
     registry_version: str = "m16.1-v1"
     mode: Literal["tools_only"] = "tools_only"
     llm_enabled: Literal[False] = False
-    max_output_bytes: int = Field(default=65_536, ge=1024, le=65_536)
-    default_timeout_seconds: int = Field(default=5, ge=1, le=30)
-    statement_timeout_ms: int = Field(default=5000, ge=100, le=30_000)
+    max_output_bytes: int = Field(default=65_536, gt=0, le=65_536)
+    max_coverage_datasets: int = Field(default=32, gt=0, le=128)
+    max_evidence_refs: int = Field(default=64, gt=0, le=256)
+    max_warnings: int = Field(default=128, gt=0, le=512)
+    default_timeout_seconds: int = Field(default=5, gt=0, le=30)
+    max_tool_timeout_seconds: int = Field(default=30, gt=0, le=300)
+    statement_timeout_ms: int = Field(default=5000, gt=0, le=30_000)
+
+    @model_validator(mode="after")
+    def validate_resource_budgets(self) -> "AgentConfig":
+        if self.default_timeout_seconds > self.max_tool_timeout_seconds:
+            raise ValueError("default tool timeout must not exceed the global timeout cap")
+        if self.statement_timeout_ms > self.default_timeout_seconds * 1000:
+            raise ValueError(
+                "database statement timeout must not exceed the default tool budget"
+            )
+        if self.max_evidence_refs < self.max_coverage_datasets:
+            raise ValueError(
+                "evidence limit must cover one reference per coverage dataset"
+            )
+        return self

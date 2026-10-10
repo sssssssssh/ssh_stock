@@ -10,11 +10,11 @@ no roles, access means authenticated single-tenant administrator access.
 PostgreSQL `READ ONLY` transaction, a local statement timeout, and unconditional
 rollback. No Agent endpoint creates `job_run`, starts calculations, or commits data.
 
-## Fixed registry
+## Explicit read-only registry
 
-| Tool | Input | Hard limit | Empty/not-ready behavior |
+| Tool | Input | Resource limit | Empty/not-ready behavior |
 | --- | --- | --- | --- |
-| `data.coverage` | `start_date`, `end_date` | 366 calendar days | `DATA_INCOMPLETE` |
+| `data.coverage` | `start_date`, `end_date` | 366 calendar days; 32 nested datasets | `DATA_INCOMPLETE` |
 | `market.snapshot` | optional `trade_date` | 1 record | HTTP 503 `NOT_READY` |
 | `sector.top` | optional `trade_date`, `limit` | 20 | `EMPTY_RESULT` |
 | `theme.top` | optional `trade_date`, `limit` | 20 | `SOURCE_DEGRADED` / `EMPTY_RESULT` |
@@ -23,9 +23,14 @@ rollback. No Agent endpoint creates `job_run`, starts calculations, or commits d
 | `performance.summary` | exactly one of `run_id`, `report_id` | 1 | `NOT_FOUND` / `NOT_READY` |
 | `walk_forward.summary` | exact `study_id`, `validation_id` | 1 | `NOT_FOUND` / `NOT_READY` |
 
-All schemas reject unknown fields. The registry is explicit; reflection, dynamic import,
+`max_records` in the catalog applies only to the top-level `records` array. Evidence,
+warnings and declared nested lists have separate positive limits; the final serialized
+payload is limited to 64 KiB. All schemas reject unknown fields. The registry is explicit;
+reflection, dynamic import,
 arbitrary SQL, arbitrary URL, Python expression, filesystem path and shell inputs are
-not accepted. The full serialized result is limited to 64 KiB.
+not accepted. The default builder returns exactly the published eight tools, while the
+registry validator itself checks unique legal names, versions, allowed layers, read-only
+handlers and positive budgets instead of treating a hard-coded count as a safety boundary.
 
 ## API examples
 
@@ -58,8 +63,23 @@ POST /api/v1/agent/tools/execute
 ```
 
 `GET /api/v1/agent/tools` returns the eight JSON schemas. `GET /api/v1/agent/status`
-returns `agent_mode=tools_only`, registry version, tool count, read-only mode and LLM
-disabled state.
+returns `agent_mode=tools_only`, registry version, the actual registry length, read-only
+mode, LLM-disabled state, and the hard per-SQL statement timeout metadata.
+
+## Resource and timeout semantics
+
+`ToolSpec.timeout_seconds` is a monotonic end-to-end soft budget. A synchronous handler
+that returns after that budget is rejected with `TOOL_TIMEOUT`, but the check does not
+claim to preempt Python or recover resources already consumed. No timeout worker thread is
+created. PostgreSQL independently enforces a transaction-local hard timeout for each SQL
+statement and SQLSTATE `57014` maps to `SQL_STATEMENT_TIMEOUT`. Reverse proxy/application
+server HTTP timeouts remain the outer hard boundary.
+
+The application checks top-level records, Evidence references, warnings and named nested
+lists before serialization. A structural count violation is `RESOURCE_LIMIT_EXCEEDED`;
+only the final canonical JSON byte limit uses `OUTPUT_LIMIT_EXCEEDED`. Coverage queries
+first fetch at most 33 distinct dataset names, fail closed above 32, and only then build
+the aggregate, so no truncation can be mistaken for a complete statistic.
 
 ### Deterministic fixture examples
 
@@ -91,13 +111,23 @@ Values above are fixtures, not claims about production data.
 - Same-day Opportunity records expose no forward-return fields.
 - M14 and Walk-forward evidence uses stored report UUIDs and stored config/source hashes,
   never runtime YAML reconstructed as historical identity.
-- `evidence_id` is SHA-256 over canonical source identity, entity, date and report ID.
+- New Evidence uses `evidence_version=v2`. `source_record_id` remains a business locator;
+  `evidence_id` is SHA-256 over canonical source identity, optional real `calc_run_id`,
+  quality limitations and a deterministic `content_hash` of the complete returned fact.
+  Request IDs and current time are excluded.
 
-`EvidenceRef` fields are: `evidence_id`, `layer`, `source_type`, `entity_id`, optional
+`EvidenceRef` keeps all V1 fields and compatibly adds `evidence_version`, `calc_run_id` and
+`content_hash`. Its fields are: `evidence_id`, `layer`, `source_type`, `entity_id`, optional
 `trade_date`, `source_record_id`, `calc_version`, `algo_version`, `config_hash`, `source_hash`,
 `report_id`, `observed_at`, `quality_status`, and `limitations`. Decimal and float-derived
 precision values serialize as decimal strings. Missing metrics remain `null` and add a
 warning where the missing value changes interpretation.
+
+`performance.summary` first selects one unambiguous Performance report and then applies
+the shared read-only M14 exact-bundle validator. Performance, Risk and Trade are required;
+Period remains optional for this overview contract. Missing Period adds
+`DATA_UNAVAILABLE:period_report`; an existing Period must match the same owner, status,
+date scope and source identity.
 
 ## Errors
 
@@ -110,12 +140,16 @@ warning where the missing value changes interpretation.
 | `NOT_READY` | 503 | Required persisted result is not ready |
 | `SOURCE_IDENTITY_MISMATCH` | 409 | Requested date/report exists under incompatible identity |
 | `DATA_INCOMPLETE` | 200 status | Coverage result is available but incomplete |
-| `OUTPUT_LIMIT_EXCEEDED` | 422 | Record count or 64 KiB response limit exceeded |
+| `RESOURCE_LIMIT_EXCEEDED` | 422 | Record, Evidence, warning or nested-list count exceeded |
+| `OUTPUT_LIMIT_EXCEEDED` | 422 | Final serialized response exceeds 64 KiB |
+| `TOOL_TIMEOUT` | 504 | Handler returned after its soft end-to-end budget |
+| `SQL_STATEMENT_TIMEOUT` | 504 | PostgreSQL canceled one SQL statement at its hard timeout |
 | `INTERNAL_ERROR` | 500 | Unexpected handler failure; details are not exposed |
 
 Audit logs contain only request ID, hashed user identity, tool/version, duration, status,
-record count and evidence count. Tokens, cookies, request input, prompts and result bodies
-are not logged.
+safe error code, record count and evidence count. Success, validation failure, AgentError,
+database timeout and unknown exceptions all emit one audit event. Tokens, cookies, request
+input, SQL/DSN, prompts and result bodies are not logged.
 
 ## M16.2 TODO
 

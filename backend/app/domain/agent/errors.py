@@ -19,3 +19,19 @@ def not_ready(message: str, *, code: str = "NOT_READY") -> AgentError:
 
 def identity_mismatch(message: str) -> AgentError:
     return AgentError("SOURCE_IDENTITY_MISMATCH", message, status_code=409)
+
+
+def resource_limit_exceeded(message: str) -> AgentError:
+    return AgentError("RESOURCE_LIMIT_EXCEEDED", message, status_code=422)
+
+
+def tool_timeout(message: str = "tool exceeded its soft execution budget") -> AgentError:
+    return AgentError("TOOL_TIMEOUT", message, status_code=504)
+
+
+def statement_timeout() -> AgentError:
+    return AgentError(
+        "SQL_STATEMENT_TIMEOUT",
+        "database statement exceeded the configured timeout",
+        status_code=504,
+    )

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from app.api.v1 import agent as agent_api
 from app.api.v1.agent import require_agent_user
 from app.core.agent_db import get_agent_db
+from app.domain.agent.errors import AgentError
 from app.main import app
 from app.services.auth.dependencies import require_authenticated_user
 from fastapi.testclient import TestClient
@@ -30,6 +31,8 @@ def test_agent_status_and_catalog_are_authenticated_and_fixed() -> None:
             "tool_count": 8,
             "llm_enabled": False,
             "read_only": True,
+            "statement_timeout_ms": 5000,
+            "statement_timeout_semantics": "hard_per_sql_statement",
         }
         catalog = client.get("/api/v1/agent/tools")
         assert catalog.status_code == 200
@@ -92,6 +95,49 @@ def test_agent_execute_rejects_unknown_outer_fields_and_unknown_tool() -> None:
         )
         assert unknown.status_code == 422
         assert unknown.json()["detail"]["code"] == "INVALID_TOOL"
+        oversized = client.post(
+            "/api/v1/agent/tools/execute",
+            json={"tool_name": "market.snapshot", "input": {"value": "x" * 20_000}},
+        )
+        assert oversized.status_code == 422
+        assert oversized.json()["detail"]["code"] == "INVALID_ARGUMENT"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_agent_execute_exposes_safe_timeout_code(monkeypatch) -> None:
+    def fail(*args, **kwargs):
+        raise AgentError("TOOL_TIMEOUT", "tool exceeded its soft execution budget", status_code=504)
+
+    monkeypatch.setattr(agent_api.AgentApplicationService, "execute", fail)
+    client = _client()
+    try:
+        response = client.post(
+            "/api/v1/agent/tools/execute",
+            json={"tool_name": "market.snapshot", "input": {}},
+        )
+        assert response.status_code == 504
+        assert response.json()["detail"] == {
+            "code": "TOOL_TIMEOUT",
+            "message": "tool exceeded its soft execution budget",
+        }
+        monkeypatch.setattr(
+            agent_api.AgentApplicationService,
+            "execute",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                AgentError(
+                    "OUTPUT_LIMIT_EXCEEDED",
+                    "tool result exceeds 65536 bytes",
+                    status_code=422,
+                )
+            ),
+        )
+        oversized = client.post(
+            "/api/v1/agent/tools/execute",
+            json={"tool_name": "market.snapshot", "input": {}},
+        )
+        assert oversized.status_code == 422
+        assert oversized.json()["detail"]["code"] == "OUTPUT_LIMIT_EXCEEDED"
     finally:
         app.dependency_overrides.clear()
 

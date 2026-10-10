@@ -9,6 +9,8 @@ from app.models.performance_period import PortfolioPerformancePeriodReport
 from app.models.performance_risk import PortfolioPerformanceRiskReport
 from app.models.performance_trade import PortfolioPerformanceTradeReport
 from app.models.portfolio import PortfolioBacktestRun
+from app.services.performance.period_identity import period_identity_hash
+from app.services.performance.risk_identity import risk_source_hash
 
 
 class AnalyticsBundleError(RuntimeError):
@@ -284,3 +286,139 @@ class AnalyticsArtifactBundleResolver:
                 "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
                 "performance, risk and trade artifacts do not share one owner",
             )
+
+
+def validate_exact_analytics_bundle(
+    bundle: AnalyticsArtifactBundle,
+    *,
+    require_period: bool = False,
+) -> None:
+    """Validate an already selected persisted bundle without choosing a latest artifact."""
+    run = bundle.run
+    performance = bundle.performance
+    risk = bundle.risk
+    trade = bundle.trade
+    period = bundle.period
+    if run.status != "SUCCESS" or run.account_mode != "BACKTEST":
+        raise AnalyticsBundleError(
+            "ANALYTICS_BASE_NOT_FOUND", "successful backtest run not found"
+        )
+    AnalyticsArtifactBundleResolver._validate_owner(run.id, performance, risk, trade)
+    for name, report in (
+        ("performance", performance),
+        ("risk", risk),
+        ("trade", trade),
+    ):
+        if report.status != "SUCCESS":
+            raise AnalyticsBundleError(
+                "ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE",
+                f"{name} artifact is not successful",
+            )
+    if any(
+        not isinstance(value, str) or not value.strip()
+        for value in (
+            performance.performance_version,
+            risk.risk_version,
+            trade.trade_version,
+        )
+    ) or any(
+        not isinstance(value, str) or len(value) != 64
+        for value in (
+            performance.performance_config_hash,
+            performance.source_hash,
+            risk.risk_config_hash,
+            risk.benchmark_source_hash,
+            risk.risk_source_hash,
+            trade.trade_config_hash,
+            trade.trade_source_hash,
+        )
+    ):
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "analytics artifact identity is incomplete",
+        )
+    if any(
+        (report.start_date, report.end_date, report.trade_days)
+        != (performance.start_date, performance.end_date, performance.trade_days)
+        for report in (risk, trade)
+    ):
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "analytics artifacts do not share one date identity",
+        )
+    expected_risk_source_hash = risk_source_hash(
+        performance_id=performance.id,
+        performance_version=performance.performance_version,
+        performance_config_hash=performance.performance_config_hash,
+        performance_source_hash=performance.source_hash,
+        risk_version=risk.risk_version,
+        risk_config_hash=risk.risk_config_hash,
+        benchmark_code=risk.benchmark_code,
+        benchmark_hash=risk.benchmark_source_hash,
+    )
+    if risk.risk_source_hash != expected_risk_source_hash:
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "risk artifact source identity does not match performance",
+        )
+    if period is None:
+        if require_period:
+            raise AnalyticsBundleError(
+                "ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE", "period artifact is missing"
+            )
+        return
+    if period.status != "SUCCESS":
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE",
+            "period artifact is not successful",
+        )
+    if (
+        period.run_id != run.id
+        or period.performance_id != performance.id
+        or period.risk_id != risk.id
+        or period.trade_id != trade.id
+        or (period.start_date, period.end_date, period.trade_days)
+        != (performance.start_date, performance.end_date, performance.trade_days)
+    ):
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "period artifact does not belong to the selected bundle",
+        )
+    if (
+        not isinstance(period.period_version, str)
+        or not period.period_version.strip()
+        or any(
+            not isinstance(value, str) or len(value) != 64
+            for value in (
+                period.period_config_hash,
+                period.period_source_hash,
+            )
+        )
+    ):
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "period artifact identity is incomplete",
+        )
+    expected_period_source_hash = period_identity_hash(
+        run_id=run.id,
+        performance_id=performance.id,
+        performance_version=performance.performance_version,
+        performance_config_hash=performance.performance_config_hash,
+        performance_source_hash=performance.source_hash,
+        risk_id=risk.id,
+        risk_version=risk.risk_version,
+        risk_config_hash=risk.risk_config_hash,
+        risk_source_hash=risk.risk_source_hash,
+        benchmark_source_hash=risk.benchmark_source_hash,
+        trade_id=trade.id,
+        trade_version=trade.trade_version,
+        trade_config_hash=trade.trade_config_hash,
+        trade_source_hash=trade.trade_source_hash,
+        period_version=period.period_version,
+        period_config_hash=period.period_config_hash,
+    )
+    if period.period_source_hash != expected_period_source_hash:
+        raise AnalyticsBundleError(
+            "ANALYTICS_ARTIFACT_BUNDLE_MISMATCH",
+            "period artifact source identity does not match the selected bundle",
+        )

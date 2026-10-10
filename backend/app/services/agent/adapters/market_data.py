@@ -15,7 +15,7 @@ from app.domain.agent.contracts import (
     SectorTopInput,
     ThemeTopInput,
 )
-from app.domain.agent.errors import identity_mismatch, not_ready
+from app.domain.agent.errors import identity_mismatch, not_ready, resource_limit_exceeded
 from app.models.market_data import (
     DataQualityDaily,
     MarketDaily,
@@ -50,6 +50,7 @@ class MarketDataAgentAdapter:
         self.opportunity_hash = config_hash(settings.opportunity_config)
 
     def data_coverage(self, request: DataCoverageInput) -> AgentToolResult:
+        max_datasets = self.settings.agent_config.max_coverage_datasets
         open_dates = list(
             self.db.scalars(
                 select(TradeCalendar.cal_date)
@@ -61,12 +62,29 @@ class MarketDataAgentAdapter:
                 .order_by(TradeCalendar.cal_date)
             ).all()
         )
+        dataset_names = list(
+            self.db.scalars(
+                select(DataQualityDaily.dataset)
+                .where(
+                    DataQualityDaily.trade_date >= request.start_date,
+                    DataQualityDaily.trade_date <= request.end_date,
+                )
+                .distinct()
+                .order_by(DataQualityDaily.dataset)
+                .limit(max_datasets + 1)
+            ).all()
+        )
+        if len(dataset_names) > max_datasets:
+            raise resource_limit_exceeded(
+                f"data coverage exceeds the configured {max_datasets} dataset limit"
+            )
         rows = list(
             self.db.scalars(
                 select(DataQualityDaily)
                 .where(
                     DataQualityDaily.trade_date >= request.start_date,
                     DataQualityDaily.trade_date <= request.end_date,
+                    DataQualityDaily.dataset.in_(dataset_names),
                 )
                 .order_by(DataQualityDaily.dataset, DataQualityDaily.trade_date)
             ).all()
@@ -92,7 +110,7 @@ class MarketDataAgentAdapter:
             overall = _worse_quality(overall, quality)
             coverage = actual / expected if expected else None
             records.append(
-                {
+                record := {
                     "dataset": dataset,
                     "quality_status": quality,
                     "expected_rows": expected,
@@ -116,6 +134,18 @@ class MarketDataAgentAdapter:
                     entity_id=dataset,
                     date_value=dataset_rows[-1].trade_date,
                     source_record_id=f"{request.start_date}:{request.end_date}",
+                    content={
+                        "summary": record,
+                        "daily": [
+                            {
+                                "trade_date": row.trade_date,
+                                "status": row.status,
+                                "expected_rows": row.expected_rows,
+                                "actual_rows": row.actual_rows,
+                            }
+                            for row in dataset_rows
+                        ],
+                    },
                     observed_at=dataset_rows[-1].checked_at,
                     quality_status=quality,
                 )
@@ -282,6 +312,7 @@ class MarketDataAgentAdapter:
                     source_record_id=f"{target}:{factor.theme_code}",
                     calc_version=factor.calc_version,
                     config_hash=factor.config_hash,
+                    content=records[-1],
                     observed_at=factor.calculated_at,
                     quality_status="WARNING" if row_warnings else "PASS",
                     limitations=[
@@ -355,6 +386,7 @@ class MarketDataAgentAdapter:
                     calc_version=row.calc_version,
                     algo_version=row.algo_version,
                     config_hash=row.config_hash,
+                    content=record,
                     observed_at=row.calculated_at,
                     quality_status="WARNING" if row_warnings else "PASS",
                     limitations=[
@@ -425,11 +457,12 @@ class MarketDataAgentAdapter:
                     source_record_id=f"{target}:{entity_id}",
                     calc_version=calc_version,
                     config_hash=config_hash,
+                    content=record,
                     observed_at=observed_at,
                     quality_status="WARNING" if warnings else "PASS",
                     limitations=warnings or [],
                 )
-                for entity_id in entity_ids
+                for entity_id, record in zip(entity_ids, records, strict=True)
             ],
             warnings=warnings or [],
             readiness=Readiness(ready=True, code="READY"),

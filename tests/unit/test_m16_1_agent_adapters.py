@@ -22,6 +22,8 @@ from app.models.portfolio import PortfolioBacktestRun
 from app.models.walk_forward import PortfolioWalkForwardStudy
 from app.services.agent.adapters.market_data import MarketDataAgentAdapter
 from app.services.agent.adapters.research import ResearchAgentAdapter
+from app.services.performance.period_identity import period_identity_hash
+from app.services.performance.risk_identity import risk_source_hash
 
 
 class _Rows:
@@ -81,7 +83,7 @@ def test_l1_and_l2_empty_or_not_ready_semantics() -> None:
     target = date(2026, 1, 2)
 
     coverage = MarketDataAgentAdapter(
-        _FakeDb(scalars_values=[[], []], scalar_values=[None]), get_settings()
+        _FakeDb(scalars_values=[[], [], []], scalar_values=[None]), get_settings()
     ).data_coverage(DataCoverageInput(start_date=target, end_date=target))
     assert coverage.status == "DATA_INCOMPLETE"
     assert coverage.readiness.ready is False
@@ -103,6 +105,25 @@ def test_l1_and_l2_empty_or_not_ready_semantics() -> None:
         assert result.status == "EMPTY_RESULT"
         assert result.readiness.ready is True
         assert not db.commit_called
+
+
+@pytest.mark.parametrize("dataset_count", [33, 100])
+def test_data_coverage_rejects_more_than_the_nested_dataset_limit(
+    dataset_count: int,
+) -> None:
+    target = date(2026, 1, 2)
+    db = _FakeDb(
+        scalars_values=[
+            [target],
+            [f"dataset_{index:02d}" for index in range(dataset_count)],
+        ]
+    )
+    with pytest.raises(AgentError) as caught:
+        MarketDataAgentAdapter(db, get_settings()).data_coverage(
+            DataCoverageInput(start_date=target, end_date=target)
+        )
+    assert caught.value.code == "RESOURCE_LIMIT_EXCEEDED"
+    assert not db.commit_called
 
 
 def test_l3_missing_or_unready_sources_are_explicit() -> None:
@@ -158,6 +179,8 @@ def test_theme_top_exposes_persisted_pit_snapshot_and_degradation() -> None:
     assert result.records[0]["quality_warnings"] == ["SOURCE_DEGRADED"]
     assert result.evidence[0].trade_date == date(2026, 1, 2)
     assert "member_snapshot_date=2025-12-31" in result.evidence[0].limitations
+    assert result.evidence[0].evidence_version == "v2"
+    assert result.evidence[0].content_hash
     assert not db.commit_called
 
 
@@ -172,13 +195,18 @@ def test_l1_and_l2_handlers_return_bounded_dto_results_without_writes() -> None:
         trade_date=target,
         checked_at=checked_at,
     )
-    coverage_db = _FakeDb(scalars_values=[[target], [quality]], scalar_values=[target])
+    coverage_db = _FakeDb(
+        scalars_values=[[target], ["stock_daily"], [quality]],
+        scalar_values=[target],
+    )
     coverage = MarketDataAgentAdapter(coverage_db, get_settings()).data_coverage(
         DataCoverageInput(start_date=target, end_date=target)
     )
     assert coverage.status == "READY"
     assert coverage.records[0]["quality_status"] == "PASS"
     assert coverage.records[0]["dataset_coverage"][0]["coverage_rate"] == 1
+    assert coverage.evidence[0].evidence_version == "v2"
+    assert coverage.evidence[0].content_hash
 
     market_row = SimpleNamespace(
         regime="RISK_ON",
@@ -202,6 +230,7 @@ def test_l1_and_l2_handlers_return_bounded_dto_results_without_writes() -> None:
     assert market.status == "READY"
     assert market.records[0]["regime"] == "RISK_ON"
     assert market.evidence[0].entity_id == "market"
+    assert market.evidence[0].content_hash
 
     sector_factor = SimpleNamespace(
         sector_id=1,
@@ -223,6 +252,7 @@ def test_l1_and_l2_handlers_return_bounded_dto_results_without_writes() -> None:
     sector_result = sector_adapter.sector_top(SectorTopInput(limit=1))
     assert sector_result.records[0]["sector_name"] == "行业"
     assert len(sector_result.evidence) == 1
+    assert sector_result.evidence[0].content_hash
 
     opportunity = SimpleNamespace(
         ts_code="000001.SZ",
@@ -247,6 +277,7 @@ def test_l1_and_l2_handlers_return_bounded_dto_results_without_writes() -> None:
     )
     assert opportunity_result.records[0]["ts_code"] == "000001.SZ"
     assert "ret5" not in opportunity_result.records[0]
+    assert opportunity_result.evidence[0].content_hash
     assert all(not db.commit_called for db in (coverage_db, market_db, sector_db, opportunity_db))
 
 
@@ -291,6 +322,8 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
         BacktestSummaryInput(run_id=run_id)
     )
     assert backtest.records[0]["latest_nav"] == Decimal("1.05")
+    assert backtest.evidence[0].calc_run_id == str(run_id)
+    assert backtest.evidence[0].content_hash
 
     performance = SimpleNamespace(
         id=performance_id,
@@ -309,14 +342,28 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
         warnings=[],
         calculated_at=observed,
     )
+    risk_hash = risk_source_hash(
+        performance_id=performance_id,
+        performance_version="performance_v1",
+        performance_config_hash="f" * 64,
+        performance_source_hash="1" * 64,
+        risk_version="risk_v1",
+        risk_config_hash="2" * 64,
+        benchmark_code="000300.SH",
+        benchmark_hash="8" * 64,
+    )
     risk = SimpleNamespace(
         id=risk_id,
         run_id=run_id,
         performance_id=performance_id,
         risk_version="risk_v1",
         risk_config_hash="2" * 64,
-        risk_source_hash="3" * 64,
+        benchmark_source_hash="8" * 64,
+        risk_source_hash=risk_hash,
         status="SUCCESS",
+        start_date=date(2026, 1, 2),
+        end_date=target,
+        trade_days=20,
         benchmark_code="000300.SH",
         benchmark_cumulative_return=Decimal("0.02"),
         excess_cumulative_return=Decimal("0.03"),
@@ -334,6 +381,9 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
         trade_config_hash="4" * 64,
         trade_source_hash="5" * 64,
         status="SUCCESS",
+        start_date=date(2026, 1, 2),
+        end_date=target,
+        trade_days=20,
         total_turnover=Decimal("2.0"),
         total_execution_cost=Decimal("500"),
         closed_episode_count=8,
@@ -343,6 +393,24 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
         warnings=[],
         calculated_at=observed,
     )
+    period_hash = period_identity_hash(
+        run_id=run_id,
+        performance_id=performance_id,
+        performance_version="performance_v1",
+        performance_config_hash="f" * 64,
+        performance_source_hash="1" * 64,
+        risk_id=risk_id,
+        risk_version="risk_v1",
+        risk_config_hash="2" * 64,
+        risk_source_hash=risk_hash,
+        benchmark_source_hash="8" * 64,
+        trade_id=trade_id,
+        trade_version="trade_v1",
+        trade_config_hash="4" * 64,
+        trade_source_hash="5" * 64,
+        period_version="period_v1",
+        period_config_hash="6" * 64,
+    )
     period = SimpleNamespace(
         id=period_id,
         run_id=run_id,
@@ -351,7 +419,11 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
         trade_id=trade_id,
         period_version="period_v1",
         period_config_hash="6" * 64,
-        period_source_hash="7" * 64,
+        period_source_hash=period_hash,
+        status="SUCCESS",
+        start_date=date(2026, 1, 2),
+        end_date=target,
+        trade_days=20,
         month_count=1,
         year_count=1,
         warnings=[],
@@ -367,6 +439,72 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
     assert performance_result.identity["performance_id"] == performance_id
     assert performance_result.identity["period_id"] == period_id
     assert len(performance_result.evidence) == 4
+    assert all(item.evidence_version == "v2" for item in performance_result.evidence)
+    assert all(item.calc_run_id == str(run_id) for item in performance_result.evidence)
+    assert all(item.content_hash for item in performance_result.evidence)
+
+    missing_period_db = _FakeDb(
+        scalars_values=[[risk], [trade], []],
+        get_values={PortfolioPerformanceReport: performance, PortfolioBacktestRun: run},
+    )
+    missing_period = ResearchAgentAdapter(missing_period_db).performance_summary(
+        PerformanceSummaryInput(report_id=performance_id)
+    )
+    assert missing_period.status == "READY"
+    assert "DATA_UNAVAILABLE:period_report" in missing_period.warnings
+
+    risk.run_id = UUID("99999999-9999-9999-9999-999999999999")
+    cross_run_db = _FakeDb(
+        scalars_values=[[risk], [trade], [period]],
+        get_values={PortfolioPerformanceReport: performance, PortfolioBacktestRun: run},
+    )
+    with pytest.raises(AgentError) as cross_run:
+        ResearchAgentAdapter(cross_run_db).performance_summary(
+            PerformanceSummaryInput(report_id=performance_id)
+        )
+    assert cross_run.value.code == "SOURCE_IDENTITY_MISMATCH"
+    risk.run_id = run_id
+
+    risk.status = "FAILED"
+    failed_risk_db = _FakeDb(
+        scalars_values=[[risk]],
+        get_values={PortfolioPerformanceReport: performance, PortfolioBacktestRun: run},
+    )
+    with pytest.raises(AgentError) as failed_risk:
+        ResearchAgentAdapter(failed_risk_db).performance_summary(
+            PerformanceSummaryInput(report_id=performance_id)
+        )
+    assert failed_risk.value.code == "NOT_READY"
+    risk.status = "SUCCESS"
+
+    duplicate_period_db = _FakeDb(
+        scalars_values=[[risk], [trade], [period, period]],
+        get_values={PortfolioPerformanceReport: performance, PortfolioBacktestRun: run},
+    )
+    with pytest.raises(AgentError) as duplicate_period:
+        ResearchAgentAdapter(duplicate_period_db).performance_summary(
+            PerformanceSummaryInput(report_id=performance_id)
+        )
+    assert duplicate_period.value.code == "SOURCE_IDENTITY_MISMATCH"
+
+    period.status = "FAILED"
+    failed_period_db = _FakeDb(
+        scalars_values=[[risk], [trade], [period]],
+        get_values={PortfolioPerformanceReport: performance, PortfolioBacktestRun: run},
+    )
+    with pytest.raises(AgentError) as failed_period:
+        ResearchAgentAdapter(failed_period_db).performance_summary(
+            PerformanceSummaryInput(report_id=performance_id)
+        )
+    assert failed_period.value.code == "NOT_READY"
+    period.status = "SUCCESS"
+
+    duplicate_performance_db = _FakeDb(scalars_values=[[performance, performance]])
+    with pytest.raises(AgentError) as duplicate_performance:
+        ResearchAgentAdapter(duplicate_performance_db).performance_summary(
+            PerformanceSummaryInput(run_id=run_id)
+        )
+    assert duplicate_performance.value.code == "INVALID_ARGUMENT"
 
     study = SimpleNamespace(
         id=study_id,
@@ -411,4 +549,6 @@ def test_l3_handlers_use_exact_persisted_report_identity() -> None:
     assert walk.identity["validation_id"] == validation_id
     assert walk.records[0]["oos_sample"]["total_oos_trade_days"] == 60
     assert walk.records[0]["result_stage"] == "OOS"
+    assert walk.evidence[0].evidence_version == "v2"
+    assert walk.evidence[0].content_hash
     assert all(not db.commit_called for db in (backtest_db, performance_db, walk_db))

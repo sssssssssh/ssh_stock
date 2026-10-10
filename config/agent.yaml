@@ -3,5 +3,9 @@ agent:
   mode: tools_only
   llm_enabled: false
   max_output_bytes: 65536
+  max_coverage_datasets: 32
+  max_evidence_refs: 64
+  max_warnings: 128
   default_timeout_seconds: 5
+  max_tool_timeout_seconds: 30
   statement_timeout_ms: 5000

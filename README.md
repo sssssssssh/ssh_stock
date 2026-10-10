@@ -1313,3 +1313,11 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 配置位于 `config/agent.yaml`。默认输出上限 64 KiB，SQL statement timeout 为 5 秒；生产部署无需新增环境变量。
 - `performance.summary` 在同一 Run 存在多个 Performance Report 时必须提供明确 `report_id`，禁止模糊选择 latest。
 - 详细依赖清单和安全边界见 `docs/m16_1_contract_inventory.md` 与 `docs/M16_agent_architecture.md`。
+
+### M16.1.1 可靠性收口（2026-10-10）
+
+- 工具目录的 `timeout_seconds` 表示同步调用的端到端软预算；超时结果以 `TOOL_TIMEOUT` 拒绝，但不会强制杀死 Python handler。单条 SQL 的 5 秒限制由 PostgreSQL `statement_timeout` 执行，超时返回安全的 `SQL_STATEMENT_TIMEOUT`；生产反向代理仍应配置 HTTP 超时。
+- `max_records` 只表示顶层记录数。`data.coverage` 最多聚合 32 个数据集，Evidence 和 Warnings 有独立数量上限，最终结果继续限制为 64 KiB。结构上限与字节上限分别返回 `RESOURCE_LIMIT_EXCEEDED` 和 `OUTPUT_LIMIT_EXCEEDED`。
+- 新 Evidence 响应兼容追加 `evidence_version=v2`、`calc_run_id` 和 `content_hash`；`evidence_id` 现在绑定确定性结果内容，历史字段未删除，也没有新增数据库迁移。
+- `performance.summary` 使用公共 M14 只读 Bundle 校验，拒绝跨 Run、跨报告族、失败状态或来源身份不一致。Period 缺失时概览仍可返回，但会明确标记 `DATA_UNAVAILABLE:period_report`，不会冒充完整四件套。
+- 默认仍只提供原有八个工具，三个 API 路径和鉴权方式不变；`/status` 与 `/tools` 的 `tool_count` 均来自实际 Registry。

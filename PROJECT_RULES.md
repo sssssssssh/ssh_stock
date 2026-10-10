@@ -467,7 +467,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 ## Milestone 16.1 Read-only Agent 规则
 
 - Agent 当前固定为 `tools_only` 且 `llm_enabled=false`；不得接真实 LLM、保存对话、执行自动研究编排、写策略参数或触发任何数据/回测/研究计算。
-- Registry 必须显式固定为八个 V1 工具。禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
+- 默认 Registry 必须显式发布既有八个 V1 工具，目录数量从实际 Registry 计算；Registry 允许后续显式增加合法只读 Spec，但禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
 - Agent 只可经 DTO 读取 L1/L2/L3 已持久化结果，禁止把 ORM、Session 或 Provider 对象返回给调用方；所有输入模型必须 `extra=forbid`。
 - 市场、行业、题材、机会必须使用当前身份过滤；历史题材必须使用已持久化 PIT snapshot identity，禁止用当前成员覆盖历史。
 - M14/M15 报告证据必须使用已存 UUID、version、config hash、source hash；同一 Run 多报告时不得暗取 latest。
@@ -475,3 +475,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Agent 数据库会话必须只读、设置查询超时并 rollback；任何 Agent 调用不得新增 JobRun 或改变业务表行/hash。
 - 缺失值不得按 0 解释；使用 `null` 与 `DATA_UNAVAILABLE`/readiness。单次输出不得超过 64 KiB，条数服从各工具硬上限。
 - 日志只允许 request ID、用户哈希、tool/version、耗时、状态、记录数和证据数；禁止记录 Cookie、Token、完整输入、Prompt 或结果正文。
+
+## Milestone 16.1.1 Agent Reliability Closeout 规则
+
+- 工具 `timeout_seconds` 是同步 handler 返回后的端到端软预算与观测指标，不是抢占式中止；单 SQL 硬超时由 PostgreSQL `statement_timeout` 提供，部署层 HTTP 超时仍不可省略。不得用超时线程遗留 Session。
+- `max_records` 只约束顶层 `records`。Coverage dataset、Evidence、Warnings 和最终序列化字节必须分别有显式上限；结构数量超限使用 `RESOURCE_LIMIT_EXCEEDED`，64 KiB 字节超限使用 `OUTPUT_LIMIT_EXCEEDED`，禁止静默截断后仍声称统计完整。
+- 新证据固定为 `evidence_version=v2`，`source_record_id` 只负责业务定位，`evidence_id` 必须绑定源身份、真实运行/报告身份、质量限制和确定性内容哈希。请求 ID、当前时间不得进入 Evidence ID；历史 Evidence 不回写。
+- `performance.summary` 不得选择 latest 解决歧义。必须用公共只读 M14 Bundle validator 核对 owner、状态、日期和版本/配置/来源身份；Period 在概览中可缺失但必须 warning，存在时必须通过同 Bundle 校验。
+- Registry 安全性由显式 Spec allowlist、唯一合法名称、合法版本/layer、只读属性及正向预算保证，不得再以“数量必须等于 8”替代约束。默认构建仍必须精确返回已发布的八个工具。
+- 所有成功、输入校验失败、业务错误、SQL 超时和未知异常都必须记录结构化耗时审计及安全错误码；日志不得包含完整输入、SQL、DSN、Cookie、Token 或结果正文。

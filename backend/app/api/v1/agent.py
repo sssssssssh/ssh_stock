@@ -60,24 +60,39 @@ def tools(
         MarketDataAgentAdapter(db, settings),
         OpportunityAgentAdapter(db, settings),
         ResearchAgentAdapter(db),
-        timeout_seconds=settings.agent_config.default_timeout_seconds,
+        config=settings.agent_config,
     )
     return envelope(
         registry.catalog(),
-        {"registry_version": settings.agent_config.registry_version, "tool_count": 8},
+        {
+            "registry_version": settings.agent_config.registry_version,
+            "tool_count": len(registry),
+        },
     )
 
 
 @router.get("/status")
-def status(user: Any = Depends(require_agent_user)) -> dict[str, Any]:
-    config = get_settings().agent_config
+def status(
+    user: Any = Depends(require_agent_user),
+    db: Session = Depends(get_agent_db),
+) -> dict[str, Any]:
+    settings = get_settings()
+    config = settings.agent_config
+    registry = build_registry(
+        MarketDataAgentAdapter(db, settings),
+        OpportunityAgentAdapter(db, settings),
+        ResearchAgentAdapter(db),
+        config=config,
+    )
     return envelope(
         {
             "agent_mode": config.mode,
             "registry_version": config.registry_version,
-            "tool_count": 8,
+            "tool_count": len(registry),
             "llm_enabled": config.llm_enabled,
             "read_only": True,
+            "statement_timeout_ms": config.statement_timeout_ms,
+            "statement_timeout_semantics": "hard_per_sql_statement",
         }
     )
 

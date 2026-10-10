@@ -21,6 +21,11 @@ from app.models.walk_forward import (
     PortfolioWalkForwardValidationReport,
 )
 from app.services.agent.evidence import evidence_ref
+from app.services.performance.analytics_bundle import (
+    AnalyticsArtifactBundle,
+    AnalyticsBundleError,
+    validate_exact_analytics_bundle,
+)
 
 
 class ResearchAgentAdapter:
@@ -69,6 +74,8 @@ class ResearchAgentAdapter:
                     source_record_id=str(run.id),
                     algo_version=run.algo_version,
                     config_hash=run.portfolio_config_hash,
+                    calc_run_id=str(run.id),
+                    content=record,
                     observed_at=run.finished_at,
                     quality_status="PASS",
                     limitations=warnings,
@@ -95,8 +102,6 @@ class ResearchAgentAdapter:
             PortfolioPerformanceTradeReport.performance_id == performance.id,
             "trade",
         )
-        if risk.run_id != run.id or trade.run_id != run.id:
-            raise identity_mismatch("analytics reports do not share the same run identity")
         periods = list(
             self.db.scalars(
                 select(PortfolioPerformancePeriodReport)
@@ -111,6 +116,15 @@ class ResearchAgentAdapter:
         if len(periods) > 1:
             raise identity_mismatch("multiple period reports match the analytics bundle")
         period = periods[0] if periods else None
+        try:
+            validate_exact_analytics_bundle(
+                AnalyticsArtifactBundle(run, performance, risk, trade, period),
+                require_period=False,
+            )
+        except AnalyticsBundleError as exc:
+            if exc.code == "ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE":
+                raise not_ready(f"ANALYTICS_NOT_READY: {exc}") from exc
+            raise identity_mismatch("analytics bundle identity is inconsistent") from exc
         warnings = list(performance.warnings or [])
         warnings.extend(risk.warnings or [])
         warnings.extend(trade.warnings or [])
@@ -199,6 +213,12 @@ class ResearchAgentAdapter:
                     config_hash=config_hash,
                     source_hash=source_hash,
                     report_id=str(report.id),
+                    calc_run_id=str(run.id),
+                    content={
+                        "artifact_type": report.__class__.__name__,
+                        "bundle_identity": identity,
+                        "summary": record,
+                    },
                     observed_at=report.calculated_at,
                     quality_status="WARNING" if warnings else "PASS",
                     limitations=sorted(set(warnings)),
@@ -286,6 +306,7 @@ class ResearchAgentAdapter:
                     config_hash=report.validation_policy_hash,
                     source_hash=report.source_hash,
                     report_id=str(report.id),
+                    content={"identity": identity, "summary": record},
                     observed_at=report.calculated_at,
                     quality_status="WARNING" if warnings else "PASS",
                     limitations=[

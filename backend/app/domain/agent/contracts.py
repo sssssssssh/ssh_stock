@@ -78,6 +78,7 @@ class WalkForwardSummaryInput(AgentDTO):
 
 class EvidenceRef(AgentDTO):
     evidence_id: str
+    evidence_version: Literal["v1", "v2"] = "v2"
     layer: Literal["DATA", "FACTOR_TREND", "STRATEGY_VALIDATION"]
     source_type: Literal["dataset", "derived_record", "report"]
     entity_id: str
@@ -88,6 +89,8 @@ class EvidenceRef(AgentDTO):
     config_hash: str | None = None
     source_hash: str | None = None
     report_id: str | None = None
+    calc_run_id: str | None = None
+    content_hash: str | None = None
     observed_at: datetime | None = None
     quality_status: Literal["PASS", "WARNING", "ERROR", "UNKNOWN"] = "UNKNOWN"
     limitations: list[str] = Field(default_factory=list)
@@ -101,7 +104,7 @@ class Readiness(AgentDTO):
 
 class AgentToolResult(AgentDTO):
     tool_name: str
-    tool_version: Literal["1.0"] = "1.0"
+    tool_version: str = Field(default="1.0", pattern=r"^[1-9]\d*\.\d+$")
     status: str
     as_of_date: Date | None = None
     identity: dict[str, Any] = Field(default_factory=dict)

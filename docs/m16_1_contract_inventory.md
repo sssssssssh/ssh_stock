@@ -65,6 +65,24 @@ are not dependencies of any M16.1 handler.
 - The existing authentication model has no role column. This deployment is therefore
   documented as single-tenant authenticated administrator access, not multi-tenant RBAC.
 
+## M16.1.1 reliability closeout
+
+- Registry safety is expressed by explicit specs, unique legal names, valid versions and
+  layers, `read_only=true`, strict Pydantic inputs and positive resource budgets. The
+  default allowlist remains the same eight tools, while catalog/status counts come from
+  the registry instance.
+- Tool time is measured with a monotonic clock. The tool budget is an honest post-handler
+  soft limit; PostgreSQL `statement_timeout` is the hard per-statement limit, and external
+  HTTP timeout remains the outer process boundary.
+- Top-level records, nested coverage datasets (32), Evidence, warnings and final bytes are
+  bounded separately. Structural overflow fails closed and is never silently truncated.
+- Evidence v2 hashes normalized complete result facts plus persisted source/run/report
+  identity. It does not rewrite historical rows and requires no migration.
+- `performance.summary` shares the M14 exact-bundle validator after unambiguous Performance
+  selection. Performance/Risk/Trade are required; optional Period is explicitly degraded
+  when absent and strictly validated when present. No latest artifact is selected to
+  resolve ambiguity.
+
 ## Non-goals and unresolved items
 
 - Real LLM integration, prompt storage, conversations, autonomous orchestration and
