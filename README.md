@@ -1321,3 +1321,28 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新 Evidence 响应兼容追加 `evidence_version=v2`、`calc_run_id` 和 `content_hash`；`evidence_id` 现在绑定确定性结果内容，历史字段未删除，也没有新增数据库迁移。
 - `performance.summary` 使用公共 M14 只读 Bundle 校验，拒绝跨 Run、跨报告族、失败状态或来源身份不一致。Period 缺失时概览仍可返回，但会明确标记 `DATA_UNAVAILABLE:period_report`，不会冒充完整四件套。
 - 默认仍只提供原有八个工具，三个 API 路径和鉴权方式不变；`/status` 与 `/tools` 的 `tool_count` 均来自实际 Registry。
+
+## Milestone 16.2 可选证据化研究对话（2026-10-11）
+
+- 新增 OpenAI-compatible Chat Completions Provider 与可替换协议；测试使用无需公网和密钥的
+  `FakeLLMProvider`。默认 `config/agent.yaml` 仍为 `mode: tools_only`、`llm_enabled: false`，
+  因此升级后原有 `/agent/status`、`/agent/tools`、`/agent/tools/execute` 可在没有模型 Key 时继续运行。
+- 启用 Chat 时把 `mode` 改为 `llm_chat`、`llm_enabled` 改为 `true`，并仅在部署环境中设置
+  `OPENAI_API_KEY`（或 `api_key_env` 指定的变量名）。不得把真实 Key 写入 YAML、`.env.example`
+  或 Git；可通过重新关闭 `llm_enabled` 立即停止模型访问而保留历史。
+- 模型只能看到 M16.1 Registry 中 enabled 且只读的八个工具。每次工具执行使用独立 PostgreSQL
+  `READ ONLY` 事务；模型网络等待与聊天写事务分离。工具轮数、单轮/总调用数、Provider 请求、
+  总 Deadline、上下文、问题、答案和输出 token 都有配置硬上限。
+- 最终回答必须是结构化 JSON，引用只接受本轮真实工具返回的 Evidence ID。服务端分配 `E1...`
+  marker，拒绝伪造引用和 `quality_status=ERROR` 证据，并传播日期、身份、readiness 与样本内/OOS
+  警告。没有可信证据时返回 `INSUFFICIENT_EVIDENCE`。
+- 新增受现有 Session Cookie 保护的会话 API：`POST/GET /api/v1/agent/chats`、
+  `GET/DELETE /api/v1/agent/chats/{chat_id}`、
+  `POST /api/v1/agent/chats/{chat_id}/messages`。DELETE 仅软归档；跨用户 UUID 统一返回 404。
+- Alembic `0046_m16_2_agent_chat` 新增会话、消息、轮次和精简工具审计四张表。
+  `(session_id, request_id)` 保证幂等，部分唯一索引阻止同一会话出现两个 RUNNING turn。
+  `0047_m16_2_constraint_names` 以幂等、无数据改写方式兼容修正预发布 0046 草稿的 CHECK
+  约束名称；最终 0046 的全新安装会直接 no-op。0046 在存在任何聊天历史时拒绝 downgrade，
+  避免静默丢失对话和审计数据。
+- 当前不提供流式输出、前端聊天页、外部网页搜索、自动创建任务、策略修改、交易或 Broker 接入。
+  完整架构、安全边界与运维回滚见 `docs/M16_agent_architecture.md`。

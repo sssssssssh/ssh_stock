@@ -1355,3 +1355,18 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - 新产生的 Evidence 使用 `evidence_version=v2`，区分业务定位符 `source_record_id` 与内容版本 `evidence_id`，并附带可选 `calc_run_id` 和确定性 `content_hash`。相同事实序列化稳定，来源身份或返回事实变化会形成不同 Evidence ID；历史字段继续保留。
 - `performance.summary` 只接受无歧义的 Performance 身份，并用 M14 公共只读 Bundle 校验核对 Run、Performance、Risk、Trade 及存在时的 Period owner、状态、日期和来源身份。Period 在只读概览中仍可缺失，但必须返回降级 warning，不能描述为完整四件套。
 - 默认 Registry 仍显式发布原八个只读工具，但不再用数量硬编码验证安全性；名称、版本、层级、只读属性和正向资源预算均须通过校验，客户端仍不能指定导入路径、SQL 或任意 handler。
+
+## Milestone 16.2：证据化研究对话（2026-10-11）
+
+- 用户登录后可创建、查看、继续和归档本人研究会话，通过自然语言询问现有数据覆盖、市场、行业、
+  题材、机会、回测、绩效与 Walk-forward/OOS 结果。跨用户会话不可见。
+- 对话功能默认关闭且不影响原八个只读工具。启用后，模型只能选择这八个工具，不能执行任意 SQL、
+  网络访问、代码、文件、任务、回测、策略修改、下单或调仓。
+- 每个答复展示结论、真实 Evidence ID 引用、证据日期、关键警告、工具摘要、消耗统计和 trace ID。
+  没有可验证证据时必须返回 `INSUFFICIENT_EVIDENCE` 或追问精确 ID，不能补造行情、收益率或 UUID。
+- 系统必须区分当前/历史日期、训练期/OOS、回测/实时事实及不同来源身份。错误质量、空结果、
+  readiness 未就绪或版本冲突不能被描述为“策略已经验证有效”，历史收益不得外推为未来承诺。
+- 同一会话同一时刻只处理一轮；同 request ID 幂等。上下文只取本人当前会话最近的有界消息，
+  裁剪必须提示。Provider/工具/总时限和调用次数超限以安全错误结束，不留下 RUNNING 僵尸状态。
+- 会话历史与精简工具审计可查询，但不保存模型密钥或原始大型工具结果。DELETE 是软归档，
+  不删除上游 Evidence 或业务表。当前版本是同步 API，不要求流式 UI。

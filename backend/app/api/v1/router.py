@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     agent,
+    agent_chat,
     analytics,
     auth,
     dashboard,
@@ -22,6 +23,7 @@ from app.services.auth.dependencies import require_authenticated_user
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
+api_router.include_router(agent_chat.router, prefix="/agent", tags=["agent-chat"])
 protected = APIRouter(dependencies=[Depends(require_authenticated_user)])
 protected.include_router(system.router, prefix="/system", tags=["system"])
 protected.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

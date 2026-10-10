@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 16.1；后续 M13-M15 与 M16.1 的冻结规则见本文后续章节：
+当前已完成 Milestone 0 到 Milestone 16.2；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -67,7 +67,9 @@
 - Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率、行业历史成分有效期、NULL upsert 保护、dirty range 向后重算、计算版本追踪
 - pytest
 
-当前阶段 M16.1 只提供确定性只读工具；真实 LLM Runtime、对话与模型编排留待 M16.2。本轮不继续修改生产策略权重、阈值或 S0-S6 定义。
+当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime。
+启用后模型也只能编排既有八工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
+修改生产策略权重、阈值或 S0-S6 定义。
 
 ## 架构规则
 
@@ -466,7 +468,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 0045 升级必须先做冲突预检并保持事务原子性。存在独立 policy/config hash 的当前 Artifact 时必须拒绝降级，禁止通过修改 append-only 历史数据强行回退。
 ## Milestone 16.1 Read-only Agent 规则
 
-- Agent 当前固定为 `tools_only` 且 `llm_enabled=false`；不得接真实 LLM、保存对话、执行自动研究编排、写策略参数或触发任何数据/回测/研究计算。
+- M16.1 的三个接口固定为确定性只读工具语义，并在默认配置
+  `tools_only + llm_enabled=false` 下不依赖真实 LLM。M16.2 的可选 Chat 不得改变这些接口，
+  也不得写策略参数或触发任何数据、回测和研究计算。
 - 默认 Registry 必须显式发布既有八个 V1 工具，目录数量从实际 Registry 计算；Registry 允许后续显式增加合法只读 Spec，但禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
 - Agent 只可经 DTO 读取 L1/L2/L3 已持久化结果，禁止把 ORM、Session 或 Provider 对象返回给调用方；所有输入模型必须 `extra=forbid`。
 - 市场、行业、题材、机会必须使用当前身份过滤；历史题材必须使用已持久化 PIT snapshot identity，禁止用当前成员覆盖历史。
@@ -484,3 +488,26 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - `performance.summary` 不得选择 latest 解决歧义。必须用公共只读 M14 Bundle validator 核对 owner、状态、日期和版本/配置/来源身份；Period 在概览中可缺失但必须 warning，存在时必须通过同 Bundle 校验。
 - Registry 安全性由显式 Spec allowlist、唯一合法名称、合法版本/layer、只读属性及正向预算保证，不得再以“数量必须等于 8”替代约束。默认构建仍必须精确返回已发布的八个工具。
 - 所有成功、输入校验失败、业务错误、SQL 超时和未知异常都必须记录结构化耗时审计及安全错误码；日志不得包含完整输入、SQL、DSN、Cookie、Token 或结果正文。
+
+## Milestone 16.2 Evidence-backed Chat 规则
+
+- Chat Runtime 默认关闭；无模型 Key 时应用和 M16.1 工具接口必须正常启动。启用时只从
+  `api_key_env` 指定的环境变量读取密钥，YAML、日志、数据库和响应均不得保存或回显密钥。
+- 模型只允许调用 Registry 中 enabled 且 `read_only=true` 的工具。Schema 必须来自严格
+  Pydantic 输入模型；未知/禁用工具、无效参数、重复 call ID 和越权请求一律 fail closed。
+- 每次实际工具调用必须使用单独的 Agent `READ ONLY` Session 并 rollback；聊天写事务必须短，
+  不得跨 Provider 网络等待，也不得与工具 Session 共用。
+- 编排必须限制 Provider 请求超时、全流程单调时钟 Deadline、工具轮数、单轮/总调用数、上下文、
+  用户输入、答案字符数和输出 token。同轮相同请求只执行一次，但每个 call ID 都要得到响应与审计。
+- 最终模型输出必须是结构化草稿。正式引用只能来自当前轮真实工具输出中的 Evidence ID，且
+  `quality_status=ERROR` 不得引用；marker 由服务端分配，证据不足返回
+  `INSUFFICIENT_EVIDENCE`。日期、身份、readiness 与历史/OOS 口径冲突必须产生 warning。
+- 会话必须按 `owner_user_id` 隔离，跨用户访问统一不可见。同一会话最多一个 RUNNING turn；
+  `(session_id, request_id)` 是幂等键。只保存消息、状态、usage、参数哈希、Evidence ID 和安全错误码，
+  不保存原始大型工具结果。
+- Provider 错误只返回安全本地错误码；禁止输出远端响应体、完整 URL、堆栈、数据库 DSN、Cookie、
+  用户完整标识或工具正文。审计必须保留 trace/request、耗时、调用状态、错误码和 token usage。
+- `0046_m16_2_agent_chat` 存在历史时拒绝 downgrade；`0047_m16_2_constraint_names` 只能幂等
+  规范约束名称，不得改写数据。配置关闭是首选运行时回滚；任何导出、删除历史和 schema 降级
+  都是需要单独批准的破坏性运维操作。
+- M16.2 不包含流式输出、租户 RBAC、自动保留策略、外部网页检索、自主 Job、策略修改、交易或 Broker。

@@ -124,6 +124,13 @@ class AgentToolRegistry:
     def catalog(self) -> list[dict[str, Any]]:
         return [self._specs[name].catalog_entry() for name in sorted(self._specs)]
 
+    def enabled_specs(self) -> tuple[ToolSpec, ...]:
+        return tuple(
+            self._specs[name]
+            for name in sorted(self._specs)
+            if self._specs[name].enabled
+        )
+
     def __len__(self) -> int:
         return len(self._specs)
 

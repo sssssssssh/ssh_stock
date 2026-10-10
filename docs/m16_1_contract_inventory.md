@@ -83,11 +83,16 @@ are not dependencies of any M16.1 handler.
   when absent and strictly validated when present. No latest artifact is selected to
   resolve ambiguity.
 
-## Non-goals and unresolved items
+## M16.2 relationship and remaining non-goals
 
-- Real LLM integration, prompt storage, conversations, autonomous orchestration and
-  citations rendered by a model are M16.2 or later.
+- M16.2 now provides an optional OpenAI-compatible chat runtime, bounded conversation
+  history, controlled orchestration and server-validated Evidence citations. It consumes
+  this exact registry and serialized tool contract; it does not change M16.1 tool reads.
+- Chat is disabled by default. It neither stores prompts/tool payloads as new market facts
+  nor exposes model-generated values as Evidence.
 - Tenant/role authorization requires a separate identity model and migration.
+- Streaming, autonomous jobs, external web retrieval, arbitrary tools and retention
+  automation remain deferred.
 - Source-wide immutable Raw snapshots do not exist; evidence references the persisted
   quality record or derived/report identity currently available.
 - M16.1 does not repair missing data and reports `DATA_UNAVAILABLE`, `DATA_INCOMPLETE`,

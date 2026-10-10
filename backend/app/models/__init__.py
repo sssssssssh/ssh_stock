@@ -1,3 +1,9 @@
+from app.models.agent_chat import (
+    AgentChatMessage,
+    AgentChatSession,
+    AgentChatToolCall,
+    AgentChatTurn,
+)
 from app.models.auth import AppUser, AuthSession
 from app.models.base import Base
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
@@ -71,6 +77,10 @@ __all__ = [
     "Base",
     "AppUser",
     "AuthSession",
+    "AgentChatMessage",
+    "AgentChatSession",
+    "AgentChatToolCall",
+    "AgentChatTurn",
     "IndexDaily",
     "JobRun",
     "MarketDaily",

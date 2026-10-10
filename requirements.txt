@@ -1,6 +1,7 @@
 alembic>=1.14.0
 apscheduler>=3.10.4
 fastapi>=0.115.0
+httpx>=0.28.0
 loguru>=0.7.2
 numpy>=2.0.0
 pandas>=2.2.0

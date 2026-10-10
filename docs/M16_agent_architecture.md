@@ -1,4 +1,4 @@
-# M16.1 Read-only Research Agent Architecture
+# M16 Read-only Research Agent Architecture
 
 ## Runtime boundary
 
@@ -151,9 +151,69 @@ safe error code, record count and evidence count. Success, validation failure, A
 database timeout and unknown exceptions all emit one audit event. Tokens, cookies, request
 input, SQL/DSN, prompts and result bodies are not logged.
 
-## M16.2 TODO
+## M16.2 evidence-backed chat runtime
 
-Future work may put an LLM in front of this registry only. It must consume the catalog and
-serialized result contract, not ORM/session/provider objects. Prompt policy, model vendor,
-conversation retention, citation rendering, tenant RBAC and model-specific safety review
-remain explicitly deferred.
+M16.2 adds an optional synchronous chat layer in front of the unchanged M16.1 registry.
+It is disabled by default (`mode=tools_only`, `llm_enabled=false`), so service startup and
+the three original Agent endpoints never require a model key. Enabling it requires
+`mode=llm_chat`, `llm_enabled=true`, an OpenAI-compatible model configuration and a key in
+the environment variable named by `api_key_env`; the key is never stored in YAML, chat
+rows, tool audit rows or logs.
+
+The provider boundary accepts typed `ChatMessage`, `LLMTool`, `ToolCall`, `LLMResponse`
+and usage DTOs. The production adapter calls Chat Completions, while tests use the
+deterministic `FakeLLMProvider`. Authentication, rate limiting, timeout, unsupported tool
+calling and invalid response failures map to safe local error codes without exposing the
+remote URL, response body or credential.
+
+### Controlled orchestration
+
+The model sees JSON Schema only for enabled, read-only registry entries. Calls remain
+serial and preserve model order. Unknown/disabled tools, invalid arguments and duplicate
+call IDs fail closed. Identical calls in one round execute once, but every model call ID
+receives a Tool Role response and an audit row; reused failures remain failures.
+
+Hard bounds cover provider timeout, overall monotonic deadline, tool rounds, per-round and
+total tool calls, context messages, user/answer length and model output tokens. No network
+wait holds a database transaction. Every actual tool execution opens a new Agent
+`READ ONLY` transaction and always rolls it back; chat state and audit metadata use the
+normal write session in separate short commits.
+
+Tool results are untrusted data. The system prompt forbids treating user/database text as
+instructions, inventing facts, promising returns or claiming trades. Final model output
+must be structured JSON. `EvidenceCompiler` accepts citations only when the ID exists in
+the current turn's real tool output and the evidence quality is not `ERROR`; it assigns
+display markers server-side and propagates readiness, quality, mixed-date and identity
+warnings. Missing valid evidence produces `INSUFFICIENT_EVIDENCE`, not model-filled data.
+
+### Persistence and API
+
+Migration `0046_m16_2_agent_chat` adds owner-scoped session, message, turn and compact
+tool-call audit tables. It stores no raw tool payload. A partial unique index allows only
+one `RUNNING` turn per session; `(session_id, request_id)` is the idempotency key. A
+completed retry returns the persisted answer, while running or failed duplicates return a
+conflict. Context is limited to the most recent configured messages and reports
+`CONTEXT_TRUNCATED` when older history is omitted.
+
+Authenticated endpoints are:
+
+- `POST /api/v1/agent/chats`
+- `GET /api/v1/agent/chats`
+- `GET /api/v1/agent/chats/{chat_id}`
+- `POST /api/v1/agent/chats/{chat_id}/messages`
+- `DELETE /api/v1/agent/chats/{chat_id}` (soft archive)
+
+Cross-owner reads return 404. Chat is synchronous in M16.2; streaming, tenant RBAC,
+retention automation, arbitrary tools, autonomous jobs, web retrieval, strategy mutation
+and broker actions remain out of scope.
+
+### Operations and rollback
+
+The safe rollout is: keep Chat disabled, run `alembic upgrade head`, verify the original
+status/catalog/execute endpoints, configure the key in the deployment environment, then
+enable `llm_chat`. Disabling Chat is an immediate configuration rollback and preserves
+history. Migration downgrade is intentionally refused while any chat history exists;
+export and explicitly remove that history under an approved destructive procedure before
+rolling the schema back. `0047_m16_2_constraint_names` is an idempotent, data-preserving
+closeout for environments that applied a pre-release 0046 draft with duplicated CHECK
+constraint prefixes; it is a no-op after the final canonical 0046.
