@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 11.3：
+当前已完成 Milestone 0 到 Milestone 16.1；后续 M13-M15 与 M16.1 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -67,7 +67,7 @@
 - Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率、行业历史成分有效期、NULL upsert 保护、dirty range 向后重算、计算版本追踪
 - pytest
 
-当前阶段剩余重点是使用真实长历史样本做策略参数校准；本轮不继续修改生产策略权重、阈值或 S0-S6 定义。
+当前阶段 M16.1 只提供确定性只读工具；真实 LLM Runtime、对话与模型编排留待 M16.2。本轮不继续修改生产策略权重、阈值或 S0-S6 定义。
 
 ## 架构规则
 
@@ -464,3 +464,14 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Validation Job 从 QUEUED 到终态必须冻结并核对 Policy version/snapshot/hash 与 source hash。仅运行配置变化允许继续；Policy 变化必须以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 拒绝。
 - Readiness 必须只读遍历全部窗口，稳定返回所有可安全识别的 blocker；Study 优先，其后按 window、TRAIN→OOS、固定 stage 排序。不可恢复的血缘或日期错误只能提示 `NO_AUTOMATIC_REPAIR`。
 - 0045 升级必须先做冲突预检并保持事务原子性。存在独立 policy/config hash 的当前 Artifact 时必须拒绝降级，禁止通过修改 append-only 历史数据强行回退。
+## Milestone 16.1 Read-only Agent 规则
+
+- Agent 当前固定为 `tools_only` 且 `llm_enabled=false`；不得接真实 LLM、保存对话、执行自动研究编排、写策略参数或触发任何数据/回测/研究计算。
+- Registry 必须显式固定为八个 V1 工具。禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
+- Agent 只可经 DTO 读取 L1/L2/L3 已持久化结果，禁止把 ORM、Session 或 Provider 对象返回给调用方；所有输入模型必须 `extra=forbid`。
+- 市场、行业、题材、机会必须使用当前身份过滤；历史题材必须使用已持久化 PIT snapshot identity，禁止用当前成员覆盖历史。
+- M14/M15 报告证据必须使用已存 UUID、version、config hash、source hash；同一 Run 多报告时不得暗取 latest。
+- Agent API 复用现有认证。当前系统没有角色/租户模型，只能表述为单租户管理员访问，不得宣称多租户 RBAC。
+- Agent 数据库会话必须只读、设置查询超时并 rollback；任何 Agent 调用不得新增 JobRun 或改变业务表行/hash。
+- 缺失值不得按 0 解释；使用 `null` 与 `DATA_UNAVAILABLE`/readiness。单次输出不得超过 64 KiB，条数服从各工具硬上限。
+- 日志只允许 request ID、用户哈希、tool/version、耗时、状态、记录数和证据数；禁止记录 Cookie、Token、完整输入、Prompt 或结果正文。

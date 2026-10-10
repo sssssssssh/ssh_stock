@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 11.3。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、管理员 Session 鉴权、Vue/Nginx/Compose 部署、运行状态、任务安全取消和历史题材成员 PIT。
+当前实现范围：Milestone 0 到 Milestone 16.1。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及只读研究 Agent 工具层。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -1304,3 +1304,12 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Validation Job 冻结 Policy snapshot/hash 和 Source hash；排队后仅非验证配置发生变化时仍可继续，Policy 漂移以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 明确失败。
 - Readiness 现在一次返回所有窗口中可识别的 Train/OOS 缺失项，并保持稳定顺序；血缘和日期集合损坏继续 fail closed，不自动触发回测、M14 或修复写入。
 - PostgreSQL 17 升级、冲突预检、备份、人工处置和受限降级步骤见 `docs/m15_3_walk_forward_validation.md` 的 `0045 Upgrade Runbook`。
+## Milestone 16.1 只读研究 Agent 工具层（2026-10-10）
+
+- 当前仅启用 `tools_only`，`llm_enabled=false`，不需要填写任何模型 API Key，也不连接云端模型。
+- 受认证 API 为 `GET /api/v1/agent/status`、`GET /api/v1/agent/tools` 和 `POST /api/v1/agent/tools/execute`；继续使用网页现有登录 Cookie。
+- 固定工具只有 `data.coverage`、`market.snapshot`、`sector.top`、`theme.top`、`opportunity.list`、`backtest.summary`、`performance.summary`、`walk_forward.summary` 八个。
+- Agent 只读已持久化数据，使用独立 PostgreSQL READ ONLY 事务并统一 rollback；不会拉取数据、补算、创建任务、运行回测或修改报告。
+- 配置位于 `config/agent.yaml`。默认输出上限 64 KiB，SQL statement timeout 为 5 秒；生产部署无需新增环境变量。
+- `performance.summary` 在同一 Run 存在多个 Performance Report 时必须提供明确 `report_id`，禁止模糊选择 latest。
+- 详细依赖清单和安全边界见 `docs/m16_1_contract_inventory.md` 与 `docs/M16_agent_architecture.md`。

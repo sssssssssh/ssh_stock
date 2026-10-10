@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.accounting_config import AccountingConfig
+from app.core.agent_config import AgentConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.experiment_config import ExperimentConfig
 from app.core.experiment_evaluation_config import ExperimentEvaluationConfig
@@ -74,6 +75,7 @@ class Settings(BaseSettings):
     performance_risk_config: PerformanceRiskConfig | None = None
     performance_trade_config: PerformanceTradeConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
+    agent_config: AgentConfig | None = None
 
     @model_validator(mode="after")
     def validate_runtime_security(self) -> "Settings":
@@ -108,6 +110,9 @@ class Settings(BaseSettings):
     def build(cls) -> "Settings":
         settings = cls()
         app_config = load_yaml_config(ROOT_DIR / "config" / "app.yaml")
+        agent_config = AgentConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "agent.yaml").get("agent", {})
+        )
         strategy_raw = load_yaml_config(ROOT_DIR / "config" / "strategy.yaml")
         strategy = StrategyConfig.model_validate(strategy_raw).model_dump(mode="python")
         opportunity_config = load_yaml_config(ROOT_DIR / "config" / "opportunity.yaml")
@@ -166,6 +171,7 @@ class Settings(BaseSettings):
             settings.algo_version = app_section.get("algo_version", settings.algo_version)
             settings.app_timezone = app_section.get("timezone", settings.app_timezone)
         settings.app_config = app_config
+        settings.agent_config = agent_config
         settings.strategy = strategy
         settings.opportunity_config = opportunity_config
         settings.research_config = research_config

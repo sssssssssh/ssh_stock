@@ -53,3 +53,10 @@ live order submission, direct database access or a public backtest `/run` endpoi
 
 These contracts let a later Agent layer reason over stable application services while keeping
 authorization, identity, simulation and execution permissions separable.
+## M16.1 implemented read boundary
+
+M16.1 now exposes the controlled subset described in
+`docs/M16_agent_architecture.md`: eight explicit, authenticated, read-only tools over
+persisted L1/L2/L3 results. These contracts do not expose service mutation methods,
+ORM objects, SQLAlchemy sessions, providers, arbitrary queries or runtime YAML as
+historical report identity. Real LLM orchestration remains deferred to M16.2.

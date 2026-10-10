@@ -1,0 +1,7 @@
+agent:
+  registry_version: m16.1-v1
+  mode: tools_only
+  llm_enabled: false
+  max_output_bytes: 65536
+  default_timeout_seconds: 5
+  statement_timeout_ms: 5000

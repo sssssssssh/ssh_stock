@@ -1342,3 +1342,8 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - Study 取消是持久化 Stop Gate：尚未完成的 Validation Job 不得产生新 SUCCESS Artifact；既有 SUCCESS 历史证据保持不变。
 - Readiness 必须指出第一个阻断窗口、Train/OOS scope、缺失阶段和外部动作；identity 不匹配必须明确拒绝且不建议覆盖快照。
 - 所有接口位于 `/api/v1/portfolio/walk-forwards` 及其子资源。
+## Milestone 16.1：只读研究 Agent 工具层
+
+本阶段面向后续研究助手提供可审计、可复现的读取能力，而不是聊天产品或自动交易能力。系统固定提供数据覆盖、市场快照、行业榜、题材榜、机会列表、回测摘要、绩效摘要和 Walk-forward 摘要八个工具。所有结果包含来源身份、Evidence、Warnings 和 Readiness；无数据、未就绪、来源降级和版本错配必须明确区分。
+
+本阶段不接真实 LLM，不提供买卖建议，不自动调参、下单、补算或修复数据，不读取真实持仓。网页现有单管理员登录是唯一授权边界。研究结果只表示历史或样本外证据，不得描述为收益保证或实盘建议。
