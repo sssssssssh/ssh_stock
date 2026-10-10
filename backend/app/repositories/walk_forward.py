@@ -75,7 +75,8 @@ class WalkForwardRepository:
         *,
         study_id: uuid.UUID,
         walk_forward_version: str,
-        walk_forward_config_hash: str,
+        policy_identity_version: str,
+        validation_policy_hash: str,
         source_hash: str,
     ) -> PortfolioWalkForwardValidationReport | None:
         return self.db.scalar(
@@ -84,8 +85,10 @@ class WalkForwardRepository:
                 PortfolioWalkForwardValidationReport.study_id == study_id,
                 PortfolioWalkForwardValidationReport.walk_forward_version
                 == walk_forward_version,
-                PortfolioWalkForwardValidationReport.walk_forward_config_hash
-                == walk_forward_config_hash,
+                PortfolioWalkForwardValidationReport.policy_identity_version
+                == policy_identity_version,
+                PortfolioWalkForwardValidationReport.validation_policy_hash
+                == validation_policy_hash,
                 PortfolioWalkForwardValidationReport.source_hash == source_hash,
             )
             .execution_options(populate_existing=True)

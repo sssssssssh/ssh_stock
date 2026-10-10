@@ -14,7 +14,10 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.experiment_evaluation_config import EvaluationPolicyConfig
 from app.core.portfolio_config import PortfolioConfig
-from app.core.walk_forward_config import WALK_FORWARD_VERSION
+from app.core.walk_forward_config import (
+    WALK_FORWARD_POLICY_IDENTITY_VERSION,
+    WALK_FORWARD_VERSION,
+)
 from app.domain.experiment import ExperimentGridError, expand_grid
 from app.domain.walk_forward import (
     calculate_parameter_stability,
@@ -344,14 +347,16 @@ class WalkForwardApplicationService:
                 .order_by(JobRun.id)
             ).all()
         )
-        for source_hash in sorted(
+        for policy_identity_version, policy_hash, source_hash in sorted(
             {
-                str(dict(metadata or {}).get("source_hash"))
+                _job_validation_identity(dict(metadata or {}))
                 for _, metadata in validation_job_candidates
                 if dict(metadata or {}).get("source_hash")
             }
         ):
-            self._validation_lock(study_id, source_hash)
+            self._validation_lock(
+                study_id, policy_identity_version, policy_hash, source_hash
+            )
         candidate_ids = [job_id for job_id, _ in validation_job_candidates]
         validation_jobs = list(
             self.db.scalars(
@@ -429,7 +434,10 @@ class WalkForwardApplicationService:
                 "WALK_FORWARD_CANCELLED", "cancelled study cannot queue validation"
             )
         source = self._load_source(study_id)
-        self._validation_lock(study_id, source.source_hash)
+        self._validation_lock(
+            study_id, source.policy_identity_version, source.validation_policy_hash,
+            source.source_hash,
+        )
         active = self.db.scalar(
             select(JobRun)
             .where(
@@ -438,6 +446,8 @@ class WalkForwardApplicationService:
                 JobRun.job_metadata.contains(
                     {
                         "study_id": str(study_id),
+                        "policy_identity_version": source.policy_identity_version,
+                        "validation_policy_hash": source.validation_policy_hash,
                         "source_hash": source.source_hash,
                     }
                 ),
@@ -462,6 +472,8 @@ class WalkForwardApplicationService:
                 "study_id": str(study_id),
                 "walk_forward_version": WALK_FORWARD_VERSION,
                 "walk_forward_config_hash": source.walk_forward_config_hash,
+                "policy_identity_version": source.policy_identity_version,
+                "validation_policy_snapshot": source.validation_policy_snapshot,
                 "validation_policy_hash": source.validation_policy_hash,
                 "source_hash": source.source_hash,
                 "stage": "QUEUED",
@@ -493,20 +505,28 @@ class WalkForwardApplicationService:
         try:
             study_id = uuid.UUID(str(metadata["study_id"]))
             queued_source_hash = str(metadata["source_hash"])
+            queued_config_hash = str(metadata["walk_forward_config_hash"])
         except (KeyError, TypeError, ValueError) as exc:
             raise WalkForwardOwnershipError("validation job identity is invalid") from exc
         source = self._load_source(study_id)
-        if (
-            metadata.get("walk_forward_version") != WALK_FORWARD_VERSION
-            or metadata.get("walk_forward_config_hash")
-            != source.walk_forward_config_hash
-            or queued_source_hash != source.source_hash
-        ):
+        if metadata.get("walk_forward_version") != WALK_FORWARD_VERSION:
+            raise WalkForwardApplicationError(
+                "WALK_FORWARD_SOURCE_CHANGED",
+                "walk-forward version changed after validation was queued",
+            )
+        if not _queued_policy_matches(metadata, source):
+            raise WalkForwardApplicationError(
+                "WALK_FORWARD_VALIDATION_POLICY_CHANGED",
+                "walk-forward validation policy changed after validation was queued",
+            )
+        if queued_source_hash != source.source_hash:
             raise WalkForwardApplicationError(
                 "WALK_FORWARD_SOURCE_CHANGED",
                 "walk-forward source changed after validation was queued",
             )
-        draft = self._build_validation_artifact(source)
+        draft = self._build_validation_artifact(
+            source, audit_config_hash=queued_config_hash
+        )
         if self.before_terminal_hook:
             self.before_terminal_hook(job, draft.report)
         worker_id = job.worker_id
@@ -518,7 +538,12 @@ class WalkForwardApplicationService:
         if study is None:
             self.db.rollback()
             raise WalkForwardOwnershipError("walk-forward study disappeared")
-        self._validation_lock(study_id, queued_source_hash)
+        self._validation_lock(
+            study_id,
+            source.policy_identity_version,
+            source.validation_policy_hash,
+            queued_source_hash,
+        )
         terminal = self.db.scalar(
             select(JobRun)
             .where(JobRun.id == job_id)
@@ -549,11 +574,13 @@ class WalkForwardApplicationService:
             self.db.commit()
             raise WalkForwardCancelledError()
         fenced_source = self._load_source(study_id)
-        if (
-            fenced_source.source_hash != queued_source_hash
-            or fenced_source.walk_forward_config_hash
-            != source.walk_forward_config_hash
-        ):
+        if not _queued_policy_matches(metadata, fenced_source):
+            self.db.rollback()
+            raise WalkForwardApplicationError(
+                "WALK_FORWARD_VALIDATION_POLICY_CHANGED",
+                "walk-forward validation policy changed before terminal commit",
+            )
+        if fenced_source.source_hash != queued_source_hash:
             self.db.rollback()
             raise WalkForwardApplicationError(
                 "WALK_FORWARD_SOURCE_CHANGED",
@@ -562,7 +589,8 @@ class WalkForwardApplicationService:
         existing = self.repository.find_validation(
             study_id=study_id,
             walk_forward_version=WALK_FORWARD_VERSION,
-            walk_forward_config_hash=source.walk_forward_config_hash,
+            policy_identity_version=source.policy_identity_version,
+            validation_policy_hash=source.validation_policy_hash,
             source_hash=queued_source_hash,
         )
         reused = existing is not None
@@ -874,11 +902,17 @@ class WalkForwardApplicationService:
             raise WalkForwardCancelledError(
                 "cancelled study cannot calculate a new validation artifact"
             )
-        self._validation_lock(source.study.id, source.source_hash)
+        self._validation_lock(
+            source.study.id,
+            source.policy_identity_version,
+            source.validation_policy_hash,
+            source.source_hash,
+        )
         existing = self.repository.find_validation(
             study_id=source.study.id,
             walk_forward_version=WALK_FORWARD_VERSION,
-            walk_forward_config_hash=source.walk_forward_config_hash,
+            policy_identity_version=source.policy_identity_version,
+            validation_policy_hash=source.validation_policy_hash,
             source_hash=source.source_hash,
         )
         if existing is not None:
@@ -890,7 +924,10 @@ class WalkForwardApplicationService:
         return draft.report, False
 
     def _build_validation_artifact(
-        self, source: WalkForwardValidationSource
+        self,
+        source: WalkForwardValidationSource,
+        *,
+        audit_config_hash: str | None = None,
     ) -> _ValidationArtifactDraft:
         metric_inputs = tuple(item.metric_input for item in source.windows)
         metrics = calculate_validation_metrics(
@@ -924,7 +961,8 @@ class WalkForwardApplicationService:
             id=report_id,
             study_id=source.study.id,
             walk_forward_version=WALK_FORWARD_VERSION,
-            walk_forward_config_hash=source.walk_forward_config_hash,
+            walk_forward_config_hash=audit_config_hash or source.walk_forward_config_hash,
+            policy_identity_version=source.policy_identity_version,
             validation_policy_snapshot=source.validation_policy_snapshot,
             validation_policy_hash=source.validation_policy_hash,
             source_hash=source.source_hash,
@@ -1452,12 +1490,23 @@ class WalkForwardApplicationService:
                 select(func.pg_advisory_xact_lock(study_lock_key(study_id)))
             ).scalar_one()
 
-    def _validation_lock(self, study_id: uuid.UUID, source_hash: str) -> None:
+    def _validation_lock(
+        self,
+        study_id: uuid.UUID,
+        policy_identity_version: str,
+        validation_policy_hash: str,
+        source_hash: str,
+    ) -> None:
         if self.db.get_bind().dialect.name == "postgresql":
             self.db.execute(
                 select(
                     func.pg_advisory_xact_lock(
-                        validation_lock_key(study_id, source_hash)
+                        validation_lock_key(
+                            study_id,
+                            policy_identity_version,
+                            validation_policy_hash,
+                            source_hash,
+                        )
                     )
                 )
             ).scalar_one()
@@ -1533,10 +1582,37 @@ def _validation_payload(
         "study_id": str(report.study_id),
         "walk_forward_version": report.walk_forward_version,
         "walk_forward_config_hash": report.walk_forward_config_hash,
+        "policy_identity_version": report.policy_identity_version,
         "validation_policy_hash": report.validation_policy_hash,
         "source_hash": report.source_hash,
     }
     return payload
+
+
+def _queued_policy_matches(
+    metadata: Mapping[str, Any], source: WalkForwardValidationSource
+) -> bool:
+    return (
+        metadata.get("policy_identity_version")
+        == source.policy_identity_version
+        == WALK_FORWARD_POLICY_IDENTITY_VERSION
+        and metadata.get("validation_policy_hash")
+        == source.validation_policy_hash
+        and metadata.get("validation_policy_snapshot")
+        == source.validation_policy_snapshot
+    )
+
+
+def _job_validation_identity(metadata: Mapping[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(metadata.get("policy_identity_version") or "legacy_v0"),
+        str(
+            metadata.get("validation_policy_hash")
+            or metadata.get("walk_forward_config_hash")
+            or ""
+        ),
+        str(metadata.get("source_hash") or ""),
+    )
 
 
 def _model_payload(model: Any, excluded: set[str]) -> dict[str, Any]:

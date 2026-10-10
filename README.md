@@ -1296,3 +1296,11 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Validation Policy 从运行时编排配置拆分为 `walk_forward_validation_policy_v1`。完整参数 hash 与六个参数均输出相邻切换统计，默认 frequent/low-dominant warning 阈值均为 `0.5`。
 - Study cancel 现在覆盖 Validation QUEUED/RUNNING job；终态事务按 Study → Validation identity → Job 加锁并将 Artifact 与 SUCCESS 原子提交。
 - 实际 API 根路径为 `/api/v1/portfolio/walk-forwards`，readiness 返回结构化 blocker，Validation window 子资源直接返回 `identity` lineage。
+
+## Milestone 15.3.2 Validation Identity Closeout（2026-10-10）
+
+- 新增 `0045_m15_3_2_validation_identity`，将完整 Walk-forward 编排配置哈希与 Validation Policy 哈希彻底分离。结果按 Study、版本、Policy identity、Policy hash 和 Source hash 去重；修改 `max_actions_per_advance` 不会重复生成报告，修改验证策略会生成独立报告。
+- 0045 前的报告保留为只读 `legacy_v0`，不会伪装成当前 `policy_v1`，也不会与当前 Artifact 合并。`walk_forward_config_hash` 继续作为提交时运行配置的审计元数据。
+- Validation Job 冻结 Policy snapshot/hash 和 Source hash；排队后仅非验证配置发生变化时仍可继续，Policy 漂移以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 明确失败。
+- Readiness 现在一次返回所有窗口中可识别的 Train/OOS 缺失项，并保持稳定顺序；血缘和日期集合损坏继续 fail closed，不自动触发回测、M14 或修复写入。
+- PostgreSQL 17 升级、冲突预检、备份、人工处置和受限降级步骤见 `docs/m15_3_walk_forward_validation.md` 的 `0045 Upgrade Runbook`。

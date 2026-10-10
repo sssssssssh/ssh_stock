@@ -171,6 +171,12 @@ def calculate_walk_forward_validation(
             "job_id": str(job.id),
             "job_status": job.status,
             "walk_forward_version": job.job_metadata["walk_forward_version"],
+            "policy_identity_version": job.job_metadata[
+                "policy_identity_version"
+            ],
+            "validation_policy_hash": job.job_metadata[
+                "validation_policy_hash"
+            ],
             "source_hash": job.job_metadata["source_hash"],
         },
         {"accepted": True},

@@ -455,3 +455,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 稳定性必须同时保存完整参数 hash 的相邻切换和六个参数各自的 canonical value 相邻切换。Warning 仅描述研究证据质量。
 - Study stop gate 持久化后，QUEUED Validation Job 转为 CANCELLED，RUNNING Job 协作取消；终态锁序固定为 Study advisory/row → Validation identity advisory → Job row，取消或丢权不得落 SUCCESS Artifact。
 - Readiness 的缺失诊断必须包含 code/window/scope/stage/action；identity drift 使用 fail-closed source error 且不得建议自动补算。API 根路径固定为 `/api/v1/portfolio/walk-forwards`。
+
+## Milestone 15.3.2 Validation Identity 与历史升级规则
+
+- Validation Policy 必须从完整 Walk-forward 运行配置中独立生成 canonical snapshot 和 SHA-256。`walk_forward_config_hash` 只作为编排配置审计元数据；Validation 结果去重不得受 `max_actions_per_advance` 等非计算设置影响。
+- 当前结果身份固定为 `(study_id, walk_forward_version, policy_identity_version, validation_policy_hash, source_hash)`。相同 source+policy 必须复用同一 Artifact；Policy 改变必须形成新 Artifact。
+- 0045 前的 Validation Artifact 必须标记为 `legacy_v0` 并保持只读，禁止重写为 `policy_v1` 或与当前结果合并。新写入身份为 `policy_v1`。
+- Validation Job 从 QUEUED 到终态必须冻结并核对 Policy version/snapshot/hash 与 source hash。仅运行配置变化允许继续；Policy 变化必须以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 拒绝。
+- Readiness 必须只读遍历全部窗口，稳定返回所有可安全识别的 blocker；Study 优先，其后按 window、TRAIN→OOS、固定 stage 排序。不可恢复的血缘或日期错误只能提示 `NO_AUTOMATIC_REPAIR`。
+- 0045 升级必须先做冲突预检并保持事务原子性。存在独立 policy/config hash 的当前 Artifact 时必须拒绝降级，禁止通过修改 append-only 历史数据强行回退。

@@ -5,6 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 WALK_FORWARD_VERSION = "walk_forward_v1"
 WALK_FORWARD_VALIDATION_POLICY_VERSION = "walk_forward_validation_policy_v1"
+WALK_FORWARD_POLICY_IDENTITY_VERSION = "policy_v1"
+WALK_FORWARD_LEGACY_POLICY_IDENTITY_VERSION = "legacy_v0"
 
 
 class WalkForwardValidationPolicyConfig(BaseModel):

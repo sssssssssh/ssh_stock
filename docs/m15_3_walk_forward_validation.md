@@ -46,6 +46,8 @@ Before a validation job calculates anything, it reconstructs and verifies the co
 
 Missing or incompatible evidence fails closed. Readiness reports the precise missing or mismatched stage and never launches M14 work.
 
+Readiness traverses every frozen window without starting backtests, analytics, or repair work. It returns all safely identifiable blockers in deterministic Study, window, Train/OOS, and stage order. The first blocker is also projected through the legacy `error_code` and `details` fields. Missing resources point to the required external action; lineage and date-set mismatches always use `NO_AUTOMATIC_REPAIR`.
+
 ## Metrics and Stability
 
 Non-overlapping OOS daily returns are stitched in window/date order. Decimal compounding produces daily strategy NAV, benchmark NAV, and relative NAV. Aggregate output includes total return, annualized return, maximum drawdown, N-1 sample volatility, Sharpe, and per-window train-to-OOS degradation.
@@ -66,10 +68,31 @@ Migration `0043_m15_3_walk_forward_validation` adds:
 
 Migration `0044_m15_3_1_walk_forward_integrity` adds immutable structured lineage, train bundle owner FKs, train/test date hashes, switch metrics, policy identity, and PostgreSQL append-only triggers. Existing 0043 artifacts are backfilled only when their complete owner/date chain validates; downgrade refuses to discard the new lineage while Validation artifacts exist.
 
+Migration `0045_m15_3_2_validation_identity` separates runtime configuration audit identity from Validation Policy identity. Every pre-0045 report is retained as `legacy_v0`; it is never rewritten to look like a current policy hash. New reports use `policy_v1`, and their result identity is `(study_id, walk_forward_version, policy_identity_version, validation_policy_hash, source_hash)`. `walk_forward_config_hash` remains immutable audit metadata but does not participate in result reuse.
+
 The Validation Policy (`walk_forward_validation_policy_v1`) includes only metric sample limits and stability-warning thresholds. Runtime orchestration settings such as `max_actions_per_advance` are excluded from its hash. Changing policy creates another append-only Validation artifact and never rewrites history.
 
-A stable PostgreSQL advisory transaction lock prevents duplicate active validation work. The terminal lock order is Study advisory/row, Validation identity advisory, then Job row. The immutable Artifact and Job SUCCESS are committed atomically. Study cancellation cancels queued jobs and cooperatively stops running jobs at the terminal fence; a lost lease or stop gate rolls back the Artifact. Stale recovery rechecks the heartbeat and maps cancelled work to CANCELLED rather than creating a replacement.
+A stable PostgreSQL advisory transaction lock prevents duplicate active validation work. The terminal lock order is Study advisory/row, Validation identity advisory, then Job row. Queue metadata freezes the policy identity, policy snapshot, policy hash, source hash, and full runtime config audit hash. A non-validation runtime setting change does not invalidate queued work; a policy change fails with `WALK_FORWARD_VALIDATION_POLICY_CHANGED`. The immutable Artifact and Job SUCCESS are committed atomically. Study cancellation cancels queued jobs and cooperatively stops running jobs at the terminal fence; a lost lease or stop gate rolls back the Artifact. Stale recovery rechecks the heartbeat and maps cancelled work to CANCELLED rather than creating a replacement.
+
+## 0045 Upgrade Runbook
+
+1. Stop backend workers and schedulers, then back up PostgreSQL with `pg_dump --format=custom --file=ssh_stock_before_0045.dump "$DATABASE_URL"` (use the equivalent secret-safe connection arguments in production).
+2. Confirm the current revision with `python -m alembic current`. It must be `0044_m15_3_1_walk_forward_integrity` or an earlier supported revision.
+3. Run the identity collision precheck below. It must return no rows:
+
+```sql
+SELECT study_id, walk_forward_version, validation_policy_hash, source_hash, count(*)
+FROM portfolio_walk_forward_validation_report
+GROUP BY study_id, walk_forward_version, validation_policy_hash, source_hash
+HAVING count(*) > 1;
+```
+
+4. Run `python -m alembic upgrade head`, then verify `python -m alembic current` reports `0045_m15_3_2_validation_identity`.
+
+The migration is transactional. A conflict aborts the whole revision and leaves 0044 intact; do not delete or merge immutable reports automatically. Export the conflicting rows and their child window/stability records, identify the deployment that bypassed 0044 constraints, and resolve the incident through an audited data-recovery procedure before retrying.
+
+Downgrade is allowed only when every report still satisfies the 0044 identity (`validation_policy_hash = walk_forward_config_hash`) and the old unique key would not collide. Once a current `policy_v1` report uses separate hashes, downgrade is intentionally refused. Restore the pre-upgrade backup into a separate database if rollback is operationally required; do not mutate current append-only artifacts to force a downgrade.
 
 ## API
 
-Authenticated endpoints under `/api/v1/portfolio/walk-forwards` cover Study creation/detail, bounded advance, cancellation, validation readiness/submission/detail/history, Validation window lineage, and parameter stability. Readiness failures contain `error_code`, `window_no`, `scope`, `missing_stage`, `details`, and deterministic `blockers`; identity mismatches never recommend replacement calculation. Errors use explicit 404, 409, or 422 mappings and do not expose configuration snapshots or credentials in logs.
+Authenticated endpoints under `/api/v1/portfolio/walk-forwards` cover Study creation/detail, bounded advance, cancellation, validation readiness/submission/detail/history, Validation window lineage, and parameter stability. Readiness failures contain `error_code`, `window_no`, `scope`, `missing_stage`, `details`, and deterministic `blockers`; successful readiness also exposes the source, runtime config audit, and Validation Policy identities. Identity mismatches never recommend replacement calculation. Errors use explicit 404, 409, or 422 mappings and do not expose configuration snapshots or credentials in logs.

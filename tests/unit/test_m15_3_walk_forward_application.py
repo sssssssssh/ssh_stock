@@ -1,9 +1,11 @@
 import uuid
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
 import app.services.walk_forward.application as application_module
+import app.services.walk_forward.source as source_module
 import pytest
 from app.core.config import get_settings
 from app.domain.walk_forward.windows import WindowPlanError
@@ -160,7 +162,7 @@ def _service(*, db=None, repository=None) -> WalkForwardApplicationService:
     service.source_provider = SimpleNamespace()
     service.before_terminal_hook = None
     service._study_lock = lambda _study_id: None
-    service._validation_lock = lambda _study_id, _source_hash: None
+    service._validation_lock = lambda *_args: None
     return service
 
 
@@ -168,6 +170,7 @@ def _report(study_id: uuid.UUID) -> PortfolioWalkForwardValidationReport:
     report = PortfolioWalkForwardValidationReport(
         id=uuid.uuid4(), study_id=study_id, walk_forward_version="walk_forward_v1",
         walk_forward_config_hash="w" * 64,
+        policy_identity_version="policy_v1",
         validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
         validation_policy_hash="w" * 64, source_hash="s" * 64,
         status="SUCCESS", window_count=1, total_oos_trade_days=2,
@@ -287,6 +290,7 @@ def test_validation_queue_conflict_cancel_and_success() -> None:
     source = WalkForwardValidationSource(
         study=study, windows=(), source_hash="s" * 64,
         walk_forward_config_hash="w" * 64,
+        policy_identity_version="policy_v1",
         validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
         validation_policy_hash="w" * 64, annualization_trade_days=252,
         risk_free_rate_annual=Decimal("0"),
@@ -317,6 +321,7 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
     source = WalkForwardValidationSource(
         study=study, windows=(), source_hash="s" * 64,
         walk_forward_config_hash="w" * 64,
+        policy_identity_version="policy_v1",
         validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
         validation_policy_hash="w" * 64, annualization_trade_days=252,
         risk_free_rate_annual=Decimal("0"),
@@ -328,6 +333,9 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
             "study_id": str(study.id), "source_hash": source.source_hash,
             "walk_forward_version": "walk_forward_v1",
             "walk_forward_config_hash": source.walk_forward_config_hash,
+            "policy_identity_version": source.policy_identity_version,
+            "validation_policy_snapshot": source.validation_policy_snapshot,
+            "validation_policy_hash": source.validation_policy_hash,
         }, finished_at=None, step=None, row_count=0, cancel_requested=False,
     )
     db = _FakeDb(scalars=[job, job])
@@ -338,7 +346,7 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
     )
     service = _service(db=db, repository=repository)
     service._load_source = lambda _study_id: source
-    service._build_validation_artifact = lambda _source: SimpleNamespace(
+    service._build_validation_artifact = lambda _source, **_kwargs: SimpleNamespace(
         report=report, windows=[], stability=[]
     )
     terminal_calls = []
@@ -375,6 +383,75 @@ def test_validation_job_ownership_source_fence_and_terminal_success() -> None:
     assert fenced_db.rollbacks == 1
 
 
+def test_validation_job_allows_runtime_config_change_but_rejects_policy_change() -> None:
+    study = _study()
+    queued = WalkForwardValidationSource(
+        study=study,
+        windows=(),
+        source_hash="s" * 64,
+        walk_forward_config_hash="q" * 64,
+        policy_identity_version="policy_v1",
+        validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
+        validation_policy_hash="p" * 64,
+        annualization_trade_days=252,
+        risk_free_rate_annual=Decimal("0"),
+    )
+    current = replace(queued, walk_forward_config_hash="c" * 64)
+    job = SimpleNamespace(
+        id=uuid.uuid4(),
+        job_type=WALK_FORWARD_VALIDATION_JOB_TYPE,
+        status="RUNNING",
+        worker_id="worker-1",
+        job_metadata={
+            "study_id": str(study.id),
+            "walk_forward_version": "walk_forward_v1",
+            "walk_forward_config_hash": queued.walk_forward_config_hash,
+            "policy_identity_version": queued.policy_identity_version,
+            "validation_policy_snapshot": queued.validation_policy_snapshot,
+            "validation_policy_hash": queued.validation_policy_hash,
+            "source_hash": queued.source_hash,
+        },
+        finished_at=None,
+        step=None,
+        row_count=0,
+        cancel_requested=False,
+    )
+    report = _report(study.id)
+    captured: list[str | None] = []
+    service = _service(
+        db=_FakeDb(scalars=[job, job]),
+        repository=SimpleNamespace(
+            get_for_update=lambda _study_id: study,
+            find_validation=lambda **_kwargs: None,
+            add_validation=lambda *_args: None,
+        ),
+    )
+    service._load_source = lambda _study_id: current
+
+    def build(_source, *, audit_config_hash=None):
+        captured.append(audit_config_hash)
+        return SimpleNamespace(report=report, windows=[], stability=[])
+
+    service._build_validation_artifact = build
+    assert service.run_validation_job(job.id)[0] is report
+    assert captured == [queued.walk_forward_config_hash]
+
+    changed_policy = replace(
+        current,
+        validation_policy_snapshot={
+            "version": "walk_forward_validation_policy_v1",
+            "short_oos_warning_trade_days": 99,
+        },
+        validation_policy_hash="x" * 64,
+    )
+    running = SimpleNamespace(**{**job.__dict__, "status": "RUNNING"})
+    service.db = _FakeDb(scalars=[running])
+    service._load_source = lambda _study_id: changed_policy
+    with pytest.raises(WalkForwardApplicationError) as policy_changed:
+        service.run_validation_job(running.id)
+    assert policy_changed.value.code == "WALK_FORWARD_VALIDATION_POLICY_CHANGED"
+
+
 def test_validation_terminal_stop_gate_cancels_without_persisting_artifact() -> None:
     study = _study()
     source = WalkForwardValidationSource(
@@ -382,6 +459,7 @@ def test_validation_terminal_stop_gate_cancels_without_persisting_artifact() -> 
         windows=(),
         source_hash="s" * 64,
         walk_forward_config_hash="w" * 64,
+        policy_identity_version="policy_v1",
         validation_policy_snapshot={"version": "walk_forward_validation_policy_v1"},
         validation_policy_hash="w" * 64,
         annualization_trade_days=252,
@@ -398,6 +476,9 @@ def test_validation_terminal_stop_gate_cancels_without_persisting_artifact() -> 
             "source_hash": source.source_hash,
             "walk_forward_version": "walk_forward_v1",
             "walk_forward_config_hash": source.walk_forward_config_hash,
+            "policy_identity_version": source.policy_identity_version,
+            "validation_policy_snapshot": source.validation_policy_snapshot,
+            "validation_policy_hash": source.validation_policy_hash,
         },
         finished_at=None,
         step=None,
@@ -412,7 +493,7 @@ def test_validation_terminal_stop_gate_cancels_without_persisting_artifact() -> 
     db = _FakeDb(scalars=[job, job])
     service = _service(db=db, repository=repository)
     service._load_source = lambda _study_id: source
-    service._build_validation_artifact = lambda _source: SimpleNamespace(
+    service._build_validation_artifact = lambda _source, **_kwargs: SimpleNamespace(
         report=report, windows=[], stability=[]
     )
     service.before_terminal_hook = lambda *_args: setattr(
@@ -669,20 +750,37 @@ def test_source_readiness_preserves_fail_closed_diagnostics() -> None:
     provider = WalkForwardValidationSourceProvider(_FakeDb(), config)
     study_id = uuid.uuid4()
 
-    def fail(_study_id):
-        raise WalkForwardSourceError(
-            "WALK_FORWARD_SOURCE_CHANGED", "changed", window_no=3
-        )
-
-    provider.load = fail
+    provider.collect_readiness_blockers = lambda _study_id: [
+        {
+            "code": "WALK_FORWARD_SOURCE_CHANGED",
+            "window_no": 3,
+            "scope": "SOURCE",
+            "missing_stage": "source_identity",
+            "action": "NO_AUTOMATIC_REPAIR",
+        }
+    ]
     assert provider.readiness(study_id) == {
         "study_id": str(study_id),
         "ready": False,
         "error_code": "WALK_FORWARD_SOURCE_CHANGED",
         "window_no": 3,
-        "details": {"window_no": 3},
+        "scope": "SOURCE",
+        "missing_stage": "source_identity",
+        "action": "NO_AUTOMATIC_REPAIR",
+        "details": {
+            "window_no": 3,
+            "scope": "SOURCE",
+            "missing_stage": "source_identity",
+            "action": "NO_AUTOMATIC_REPAIR",
+        },
         "blockers": [
-            {"code": "WALK_FORWARD_SOURCE_CHANGED", "window_no": 3}
+            {
+                "code": "WALK_FORWARD_SOURCE_CHANGED",
+                "window_no": 3,
+                "scope": "SOURCE",
+                "missing_stage": "source_identity",
+                "action": "NO_AUTOMATIC_REPAIR",
+            }
         ],
     }
 
@@ -710,6 +808,115 @@ def test_source_readiness_preserves_fail_closed_diagnostics() -> None:
             SimpleNamespace(status="FAILED"),
         )
     assert invalid_oos.value.code == "WALK_FORWARD_OOS_IDENTITY_MISMATCH"
+
+
+def test_readiness_collects_all_window_blockers_in_stable_order(monkeypatch) -> None:
+    config = get_settings().walk_forward_config
+    assert config is not None
+    study = _study()
+    study.window_count = 2
+    first = _window(study.id)
+    second = _window(study.id)
+    second.window_no = 2
+    db = _FakeDb(scalars=[study, study], scalar_rows=[first, second])
+    provider = WalkForwardValidationSourceProvider(db, config)
+    monkeypatch.setattr(
+        source_module, "_stored_definition_hash", lambda *_args: study.definition_hash
+    )
+
+    first_result = provider.readiness(study.id)
+    second_result = provider.readiness(study.id)
+
+    assert first_result == second_result
+    assert first_result["ready"] is False
+    assert len(first_result["blockers"]) == 16
+    assert [
+        (row["window_no"], row["scope"], row["missing_stage"])
+        for row in first_result["blockers"]
+    ] == [
+        (window_no, scope, stage)
+        for window_no in (1, 2)
+        for scope, stage in (
+            ("TRAIN", "train_experiment"),
+            ("TRAIN", "train_evaluation"),
+            ("TRAIN", "selection"),
+            ("OOS", "oos_run"),
+            ("OOS", "performance"),
+            ("OOS", "risk"),
+            ("OOS", "trade"),
+            ("OOS", "period"),
+        )
+    ]
+    assert db.commits == 0 and db.added == []
+
+
+def test_readiness_collects_all_missing_train_analytics_with_run_identity(
+    monkeypatch,
+) -> None:
+    config = get_settings().walk_forward_config
+    assert config is not None
+    study = _study()
+    window = _window(study.id)
+    window.train_experiment_id = uuid.uuid4()
+    window.train_evaluation_id = uuid.uuid4()
+    window.selected_trial_id = uuid.uuid4()
+    window.selected_parameter_hash = "h" * 64
+    window.selected_parameter_values = {"candidate.top_n": 20}
+    window.selected_portfolio_config_hash = "p" * 64
+    window.selected_portfolio_config_snapshot = {"version": "portfolio_v3"}
+    window.oos_run_id = uuid.uuid4()
+    window.oos_performance_id = uuid.uuid4()
+    window.oos_risk_id = uuid.uuid4()
+    window.oos_trade_id = uuid.uuid4()
+    window.oos_period_id = uuid.uuid4()
+    window.oos_bound_at = datetime.now(UTC)
+    run_id = uuid.uuid4()
+    trial = SimpleNamespace(run_id=run_id)
+    trial_evaluation = SimpleNamespace(
+        performance_id=None,
+        risk_id=None,
+        trade_id=None,
+        period_id=None,
+    )
+    db = _FakeDb(
+        scalars=[study, trial_evaluation],
+        scalar_rows=[window],
+        objects={(PortfolioExperimentTrial, window.selected_trial_id): trial},
+    )
+    provider = WalkForwardValidationSourceProvider(db, config)
+    monkeypatch.setattr(
+        source_module, "_stored_definition_hash", lambda *_args: study.definition_hash
+    )
+
+    blockers = provider.collect_readiness_blockers(study.id)
+
+    assert [row["missing_stage"] for row in blockers] == [
+        "performance",
+        "risk",
+        "trade",
+        "period",
+    ]
+    assert all(row["scope"] == "TRAIN" for row in blockers)
+    assert all(row["run_id"] == str(run_id) for row in blockers)
+    assert db.commits == 0 and db.added == []
+
+
+def test_readiness_reports_missing_study_without_side_effects() -> None:
+    config = get_settings().walk_forward_config
+    assert config is not None
+    db = _FakeDb()
+    provider = WalkForwardValidationSourceProvider(db, config)
+
+    assert provider.collect_readiness_blockers(uuid.uuid4()) == [
+        {
+            "code": "WALK_FORWARD_NOT_FOUND",
+            "window_no": None,
+            "scope": "STUDY",
+            "missing_stage": "study",
+            "action": "CREATE_WALK_FORWARD",
+        }
+    ]
+    assert db.commits == 0 and db.added == []
 
 
 def test_application_configuration_policy_and_lookup_guards() -> None:

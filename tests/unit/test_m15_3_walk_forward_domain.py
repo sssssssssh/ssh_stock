@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from app.core.config import get_settings
 from app.core.walk_forward_config import WalkForwardConfig
 from app.domain.performance.metrics import annualized_return
 from app.domain.performance.statistics import sample_stddev
@@ -11,6 +12,40 @@ from app.domain.walk_forward.contracts import DailyReturnPoint, WindowMetricInpu
 from app.domain.walk_forward.metrics import calculate_validation_metrics
 from app.domain.walk_forward.stability import calculate_parameter_stability
 from app.domain.walk_forward.windows import WindowPlanError, plan_windows
+from app.services.walk_forward.identity import (
+    validation_policy_hash,
+    walk_forward_config_hash,
+)
+
+
+def test_validation_policy_identity_excludes_orchestration_configuration() -> None:
+    config = get_settings().walk_forward_config
+    assert config is not None
+    changed_runtime = config.model_copy(
+        update={"max_actions_per_advance": config.max_actions_per_advance + 1}
+    )
+    changed_policy = config.model_copy(
+        update={
+            "validation_policy": config.validation_policy.model_copy(
+                update={
+                    "short_oos_warning_trade_days": (
+                        config.validation_policy.short_oos_warning_trade_days + 1
+                    )
+                }
+            )
+        }
+    )
+    equivalent_decimal_policy = config.validation_policy.model_copy(
+        update={
+            "frequent_parameter_switch_rate_threshold": Decimal("0.5000")
+        }
+    )
+
+    original_policy_hash = validation_policy_hash(config.validation_policy)
+    assert validation_policy_hash(changed_runtime.validation_policy) == original_policy_hash
+    assert validation_policy_hash(equivalent_decimal_policy) == original_policy_hash
+    assert validation_policy_hash(changed_policy.validation_policy) != original_policy_hash
+    assert walk_forward_config_hash(changed_runtime) != walk_forward_config_hash(config)
 
 
 def _dates(count: int) -> tuple[date, ...]:

@@ -6,18 +6,20 @@ from app.core.walk_forward_config import (
     WalkForwardConfig,
     WalkForwardValidationPolicyConfig,
 )
-from app.services.experiment_evaluation.identity import stable_hash
+from app.services.experiment_evaluation.identity import canonical_value, stable_hash
 
 
 def walk_forward_config_hash(config: WalkForwardConfig) -> str:
-    """Compatibility name for the validation-policy identity stored by M15.3."""
-    return validation_policy_hash(config.validation_policy)
+    """Return the complete runtime configuration identity for audit metadata."""
+    return stable_hash(config.model_dump(mode="python"))
 
 
 def validation_policy_snapshot(
     policy: WalkForwardValidationPolicyConfig,
 ) -> dict[str, Any]:
-    return policy.model_dump(mode="json")
+    snapshot = canonical_value(policy.model_dump(mode="python"))
+    assert isinstance(snapshot, dict)
+    return snapshot
 
 
 def validation_policy_hash(policy: WalkForwardValidationPolicyConfig) -> str:
@@ -28,8 +30,16 @@ def study_lock_key(study_id: uuid.UUID) -> int:
     return _lock_key(f"portfolio_walk_forward:{study_id}")
 
 
-def validation_lock_key(study_id: uuid.UUID, source_hash: str) -> int:
-    return _lock_key(f"portfolio_walk_forward_validation:{study_id}:{source_hash}")
+def validation_lock_key(
+    study_id: uuid.UUID,
+    policy_identity_version: str,
+    policy_hash: str,
+    source_hash: str,
+) -> int:
+    return _lock_key(
+        "portfolio_walk_forward_validation:"
+        f"{study_id}:{policy_identity_version}:{policy_hash}:{source_hash}"
+    )
 
 
 def definition_hash(payload: dict[str, Any]) -> str:

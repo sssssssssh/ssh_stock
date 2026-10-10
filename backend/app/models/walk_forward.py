@@ -276,7 +276,8 @@ class PortfolioWalkForwardValidationReport(Base):
         UniqueConstraint(
             "study_id",
             "walk_forward_version",
-            "walk_forward_config_hash",
+            "policy_identity_version",
+            "validation_policy_hash",
             "source_hash",
             name=conv("uq_walk_forward_validation_identity"),
         ),
@@ -294,7 +295,11 @@ class PortfolioWalkForwardValidationReport(Base):
             name=conv("ck_walk_forward_validation_positive"),
         ),
         CheckConstraint(
-            "validation_policy_hash = walk_forward_config_hash",
+            "(policy_identity_version = 'legacy_v0' AND "
+            "validation_policy_hash = walk_forward_config_hash) OR "
+            "(policy_identity_version = 'policy_v1' AND "
+            "validation_policy_snapshot->>'version' = "
+            "'walk_forward_validation_policy_v1')",
             name=conv("ck_walk_forward_validation_policy_identity"),
         ),
         CheckConstraint(
@@ -317,6 +322,9 @@ class PortfolioWalkForwardValidationReport(Base):
     )
     walk_forward_version: Mapped[str] = mapped_column(String(32), nullable=False)
     walk_forward_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_identity_version: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="policy_v1", server_default=text("'policy_v1'")
+    )
     validation_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False
     )

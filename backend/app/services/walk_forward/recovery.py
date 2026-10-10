@@ -53,12 +53,26 @@ def recover_stale_walk_forward_validation_jobs(
                 .execution_options(populate_existing=True)
                 .with_for_update()
             )
-            source_hash = str(dict(metadata or {}).get("source_hash") or "")
+            identity = dict(metadata or {})
+            source_hash = str(identity.get("source_hash") or "")
+            policy_identity_version = str(
+                identity.get("policy_identity_version") or "legacy_v0"
+            )
+            policy_hash = str(
+                identity.get("validation_policy_hash")
+                or identity.get("walk_forward_config_hash")
+                or ""
+            )
             if source_hash and db.get_bind().dialect.name == "postgresql":
                 db.execute(
                     select(
                         func.pg_advisory_xact_lock(
-                            validation_lock_key(study_id, source_hash)
+                            validation_lock_key(
+                                study_id,
+                                policy_identity_version,
+                                policy_hash,
+                                source_hash,
+                            )
                         )
                     )
                 ).scalar_one()

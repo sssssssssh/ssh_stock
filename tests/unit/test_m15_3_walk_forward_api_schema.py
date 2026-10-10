@@ -77,6 +77,8 @@ def test_walk_forward_create_and_validation_queue_api_contract(monkeypatch) -> N
                 status="QUEUED",
                 job_metadata={
                     "walk_forward_version": "walk_forward_v1",
+                    "policy_identity_version": "policy_v1",
+                    "validation_policy_hash": "p" * 64,
                     "source_hash": "s" * 64,
                 },
             )
@@ -104,9 +106,57 @@ def test_walk_forward_create_and_validation_queue_api_contract(monkeypatch) -> N
         "job_id": str(job_id),
         "job_status": "QUEUED",
         "walk_forward_version": "walk_forward_v1",
+        "policy_identity_version": "policy_v1",
+        "validation_policy_hash": "p" * 64,
         "source_hash": "s" * 64,
     }
     assert rejected.status_code == 422
+
+
+def test_walk_forward_readiness_api_preserves_all_blockers(monkeypatch) -> None:
+    study_id = uuid.uuid4()
+    blockers = [
+        {
+            "code": "WALK_FORWARD_VALIDATION_NOT_READY",
+            "window_no": 1,
+            "scope": "TRAIN",
+            "missing_stage": "performance",
+            "action": "CALCULATE_M14_PERFORMANCE_EXTERNALLY",
+        },
+        {
+            "code": "WALK_FORWARD_VALIDATION_NOT_READY",
+            "window_no": 2,
+            "scope": "OOS",
+            "missing_stage": "risk",
+            "action": "CALCULATE_M14_RISK_EXTERNALLY",
+        },
+    ]
+
+    class FakeService:
+        def __init__(self, _db):
+            pass
+
+        def validation_readiness(self, requested_study_id):
+            assert requested_study_id == study_id
+            return {
+                "study_id": str(study_id),
+                "ready": False,
+                "error_code": blockers[0]["code"],
+                "details": {
+                    key: value for key, value in blockers[0].items() if key != "code"
+                },
+                "blockers": blockers,
+            }
+
+    monkeypatch.setattr(walk_forward_api, "WalkForwardApplicationService", FakeService)
+    try:
+        response = _client().get(
+            f"/api/v1/portfolio/walk-forwards/{study_id}/validation/readiness"
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["data"]["blockers"] == blockers
 
 
 @pytest.mark.parametrize(
@@ -205,7 +255,8 @@ def test_walk_forward_schema_freezes_unique_and_composite_owners() -> None:
     assert (
         "study_id",
         "walk_forward_version",
-        "walk_forward_config_hash",
+        "policy_identity_version",
+        "validation_policy_hash",
         "source_hash",
     ) in report_uniques
     validation_fks = {

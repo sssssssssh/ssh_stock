@@ -1,4 +1,5 @@
 import uuid
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -7,7 +8,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.walk_forward_config import WalkForwardConfig
+from app.core.walk_forward_config import (
+    WALK_FORWARD_POLICY_IDENTITY_VERSION,
+    WalkForwardConfig,
+)
 from app.domain.walk_forward.contracts import DailyReturnPoint, WindowMetricInput
 from app.domain.walk_forward.windows import date_set_hash
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
@@ -32,7 +36,11 @@ from app.services.experiment_evaluation.identity import (
     experiment_parameter_hash,
     stable_hash,
 )
-from app.services.walk_forward.identity import walk_forward_config_hash
+from app.services.walk_forward.identity import (
+    validation_policy_hash,
+    validation_policy_snapshot,
+    walk_forward_config_hash,
+)
 
 
 class WalkForwardSourceError(RuntimeError):
@@ -55,6 +63,7 @@ class WalkForwardValidationSource:
     windows: tuple[ValidationWindowSource, ...]
     source_hash: str
     walk_forward_config_hash: str
+    policy_identity_version: str
     validation_policy_snapshot: dict[str, Any]
     validation_policy_hash: str
     annualization_trade_days: int
@@ -67,30 +76,184 @@ class WalkForwardValidationSourceProvider:
         self.config = config
 
     def readiness(self, study_id: uuid.UUID) -> dict[str, Any]:
-        try:
-            source = self.load(study_id)
-        except WalkForwardSourceError as exc:
-            blocker = {
-                "code": exc.code,
-                **exc.details,
-            }
+        blockers = self.collect_readiness_blockers(study_id)
+        if blockers:
+            first = blockers[0]
+            details = {key: value for key, value in first.items() if key != "code"}
             return {
                 "study_id": str(study_id),
                 "ready": False,
-                "error_code": exc.code,
-                **exc.details,
-                "details": dict(exc.details),
-                "blockers": [blocker],
+                "error_code": first["code"],
+                **details,
+                "details": details,
+                "blockers": blockers,
             }
+        no_autoflush = getattr(self.db, "no_autoflush", nullcontext())
+        with no_autoflush:
+            source = self.load(study_id)
         return {
             "study_id": str(study_id),
             "ready": True,
             "window_count": len(source.windows),
             "source_hash": source.source_hash,
             "walk_forward_config_hash": source.walk_forward_config_hash,
+            "policy_identity_version": source.policy_identity_version,
+            "validation_policy_snapshot": source.validation_policy_snapshot,
             "validation_policy_hash": source.validation_policy_hash,
             "blockers": [],
         }
+
+    def collect_readiness_blockers(
+        self, study_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
+        no_autoflush = getattr(self.db, "no_autoflush", nullcontext())
+        with no_autoflush:
+            return self._collect_readiness_blockers(study_id)
+
+    def _collect_readiness_blockers(
+        self, study_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
+        study = self.db.scalar(
+            select(PortfolioWalkForwardStudy)
+            .where(PortfolioWalkForwardStudy.id == study_id)
+            .execution_options(populate_existing=True)
+        )
+        if study is None:
+            return [
+                {
+                    "code": "WALK_FORWARD_NOT_FOUND",
+                    "window_no": None,
+                    "scope": "STUDY",
+                    "missing_stage": "study",
+                    "action": "CREATE_WALK_FORWARD",
+                }
+            ]
+        windows = list(
+            self.db.scalars(
+                select(PortfolioWalkForwardWindow)
+                .where(PortfolioWalkForwardWindow.study_id == study_id)
+                .order_by(PortfolioWalkForwardWindow.window_no)
+                .execution_options(populate_existing=True)
+            ).all()
+        )
+        blockers: list[dict[str, Any]] = []
+        if len(windows) != study.window_count:
+            blockers.append(
+                _source_blocker("stored window count does not match the frozen study")
+            )
+        elif _stored_definition_hash(study, windows) != study.definition_hash:
+            blockers.append(_source_blocker("stored study definition identity changed"))
+        if not windows:
+            blockers.append(
+                {
+                    "code": "WALK_FORWARD_VALIDATION_NOT_READY",
+                    "window_no": None,
+                    "scope": "STUDY",
+                    "missing_stage": "train_experiment",
+                    "action": "ADVANCE_WALK_FORWARD",
+                }
+            )
+            return _sort_blockers(blockers)
+
+        for window in windows:
+            missing = self._missing_window_requirements(window)
+            if not missing:
+                missing = self._missing_train_analytics(window)
+            blockers.extend(missing)
+            if missing:
+                continue
+            try:
+                self._window_source(study, window)
+            except WalkForwardSourceError as exc:
+                blockers.append(_blocker_from_error(exc, window.window_no))
+
+        if not blockers:
+            try:
+                self.load(study_id)
+            except WalkForwardSourceError as exc:
+                blockers.append(_blocker_from_error(exc))
+        return _sort_blockers(blockers)
+
+    @staticmethod
+    def _missing_window_requirements(
+        window: PortfolioWalkForwardWindow,
+    ) -> list[dict[str, Any]]:
+        requirements = (
+            (window.train_experiment_id, "TRAIN", "train_experiment", None),
+            (window.train_evaluation_id, "TRAIN", "train_evaluation", None),
+            (window.selected_trial_id, "TRAIN", "selection", None),
+            (window.selected_parameter_hash, "TRAIN", "selection", None),
+            (window.selected_parameter_values, "TRAIN", "selection", None),
+            (window.selected_portfolio_config_hash, "TRAIN", "selection", None),
+            (window.selected_portfolio_config_snapshot, "TRAIN", "selection", None),
+            (window.oos_run_id, "OOS", "oos_run", None),
+            (window.oos_performance_id, "OOS", "performance", window.oos_run_id),
+            (window.oos_risk_id, "OOS", "risk", window.oos_run_id),
+            (window.oos_trade_id, "OOS", "trade", window.oos_run_id),
+            (window.oos_period_id, "OOS", "period", window.oos_run_id),
+            (window.oos_bound_at, "OOS", "period", window.oos_run_id),
+        )
+        blockers: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for value, scope, stage, run_id in requirements:
+            if value is not None or (scope, stage) in seen:
+                continue
+            seen.add((scope, stage))
+            action = (
+                "ADVANCE_WALK_FORWARD"
+                if stage in {"train_experiment", "train_evaluation", "selection", "oos_run"}
+                else f"CALCULATE_M14_{stage.upper()}_EXTERNALLY"
+            )
+            blocker: dict[str, Any] = {
+                "code": "WALK_FORWARD_VALIDATION_NOT_READY",
+                "window_no": window.window_no,
+                "scope": scope,
+                "missing_stage": stage,
+                "action": action,
+            }
+            if run_id is not None:
+                blocker["run_id"] = str(run_id)
+            blockers.append(blocker)
+        return blockers
+
+    def _missing_train_analytics(
+        self, window: PortfolioWalkForwardWindow
+    ) -> list[dict[str, Any]]:
+        trial_evaluation = self.db.scalar(
+            select(PortfolioExperimentTrialEvaluation)
+            .where(
+                PortfolioExperimentTrialEvaluation.evaluation_id
+                == window.train_evaluation_id,
+                PortfolioExperimentTrialEvaluation.trial_id
+                == window.selected_trial_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if trial_evaluation is None:
+            return []
+        trial = self.db.get(PortfolioExperimentTrial, window.selected_trial_id)
+        run_id = getattr(trial, "run_id", None)
+        requirements = (
+            (trial_evaluation.performance_id, "performance"),
+            (trial_evaluation.risk_id, "risk"),
+            (trial_evaluation.trade_id, "trade"),
+            (trial_evaluation.period_id, "period"),
+        )
+        blockers: list[dict[str, Any]] = []
+        for value, stage in requirements:
+            if value is not None:
+                continue
+            blocker: dict[str, Any] = {
+                "code": "WALK_FORWARD_VALIDATION_NOT_READY",
+                "window_no": window.window_no,
+                "scope": "TRAIN",
+                "missing_stage": stage,
+                "action": f"CALCULATE_M14_{stage.upper()}_EXTERNALLY",
+            }
+            if run_id is not None:
+                blocker["run_id"] = str(run_id)
+            blockers.append(blocker)
+        return blockers
 
     def load(self, study_id: uuid.UUID) -> WalkForwardValidationSource:
         study = self.db.scalar(
@@ -163,13 +326,14 @@ class WalkForwardValidationSourceProvider:
                 "windows": identities,
             }
         )
-        policy_snapshot = self.config.validation_policy.model_dump(mode="json")
-        policy_hash = walk_forward_config_hash(self.config)
+        policy_snapshot = validation_policy_snapshot(self.config.validation_policy)
+        policy_hash = validation_policy_hash(self.config.validation_policy)
         return WalkForwardValidationSource(
             study=study,
             windows=tuple(sources),
             source_hash=source_hash,
-            walk_forward_config_hash=policy_hash,
+            walk_forward_config_hash=walk_forward_config_hash(self.config),
+            policy_identity_version=WALK_FORWARD_POLICY_IDENTITY_VERSION,
             validation_policy_snapshot=policy_snapshot,
             validation_policy_hash=policy_hash,
             annualization_trade_days=annualization_trade_days,
@@ -704,6 +868,58 @@ class WalkForwardValidationSourceProvider:
         raise WalkForwardSourceError(
             "WALK_FORWARD_SOURCE_CHANGED", message, **details
         )
+
+
+_SCOPE_ORDER = {"STUDY": 0, "SOURCE": 0, "TRAIN": 1, "OOS": 2}
+_STAGE_ORDER = {
+    "study": 0,
+    "source_identity": 1,
+    "train_experiment": 10,
+    "train_evaluation": 20,
+    "selection": 30,
+    "oos_run": 40,
+    "performance": 50,
+    "risk": 60,
+    "trade": 70,
+    "period": 80,
+    "date_set": 90,
+}
+
+
+def _source_blocker(message: str) -> dict[str, Any]:
+    return {
+        "code": "WALK_FORWARD_SOURCE_CHANGED",
+        "window_no": None,
+        "scope": "STUDY",
+        "missing_stage": "source_identity",
+        "action": "NO_AUTOMATIC_REPAIR",
+        "reason": message,
+    }
+
+
+def _blocker_from_error(
+    error: WalkForwardSourceError, window_no: int | None = None
+) -> dict[str, Any]:
+    blocker = {"code": error.code, **error.details}
+    blocker.setdefault("window_no", window_no)
+    blocker.setdefault("scope", "STUDY" if window_no is None else "SOURCE")
+    blocker.setdefault("missing_stage", "source_identity")
+    blocker.setdefault("action", "NO_AUTOMATIC_REPAIR")
+    return blocker
+
+
+def _sort_blockers(blockers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def key(blocker: dict[str, Any]) -> tuple[int, int, int, int, str]:
+        window_no = blocker.get("window_no")
+        return (
+            0 if window_no is None else 1,
+            int(window_no or 0),
+            _SCOPE_ORDER.get(str(blocker.get("scope")), 99),
+            _STAGE_ORDER.get(str(blocker.get("missing_stage")), 99),
+            str(blocker.get("code", "")),
+        )
+
+    return sorted(blockers, key=key)
 
 
 def _stored_definition_hash(

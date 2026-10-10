@@ -374,7 +374,8 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
             assert reused is False
             assert report.window_count == 2
             assert report.total_oos_trade_days == 14
-            assert report.validation_policy_hash == report.walk_forward_config_hash
+            assert report.policy_identity_version == "policy_v1"
+            assert report.validation_policy_hash != report.walk_forward_config_hash
             assert report.transition_count == 1
             assert report.switch_count == 0
             assert report.switch_rate == Decimal("0")
