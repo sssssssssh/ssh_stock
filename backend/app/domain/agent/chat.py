@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ChatDTO(BaseModel):
@@ -21,6 +21,54 @@ class ChatCitation(ChatDTO):
     report_id: str | None = None
     calc_run_id: str | None = None
     content_hash: str | None = None
+
+
+ClaimType = Literal["FACT", "INFERENCE", "COMPARISON"]
+ComparisonType = Literal[
+    "SAME_DATE_RANKING",
+    "ENTITY_OVER_TIME",
+    "INDEPENDENT_BACKTESTS",
+    "TRAIN_VS_OOS",
+]
+SampleRole = Literal["TRAIN", "OOS", "LIVE", "UNKNOWN"]
+
+
+class StructuredFact(ChatDTO):
+    path: str = Field(
+        min_length=1,
+        max_length=160,
+        pattern=r"^records\.\d+(?:\.(?:[A-Za-z_][A-Za-z0-9_]*|\d+))+$",
+    )
+    value: str | int | float
+    unit: str = Field(min_length=1, max_length=32)
+    trade_date: date
+    entity: str = Field(min_length=1, max_length=160)
+    sample_role: SampleRole = "UNKNOWN"
+
+    @field_validator("value")
+    @classmethod
+    def reject_boolean_value(cls, value: Any) -> Any:
+        if isinstance(value, bool):
+            raise ValueError("structured fact value must not be boolean")
+        return value
+
+
+class StructuredClaim(ChatDTO):
+    claim_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    claim_type: ClaimType
+    text: str = Field(min_length=1, max_length=2000)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=16)
+    structured_facts: list[StructuredFact] = Field(default_factory=list, max_length=24)
+    quality_status: Literal["PASS", "WARNING", "UNKNOWN"] = "UNKNOWN"
+    comparison_type: ComparisonType | None = None
+
+    @model_validator(mode="after")
+    def validate_claim_shape(self) -> StructuredClaim:
+        if self.claim_type == "COMPARISON" and self.comparison_type is None:
+            raise ValueError("comparison claim requires comparison_type")
+        if self.claim_type != "COMPARISON" and self.comparison_type is not None:
+            raise ValueError("comparison_type is only valid for comparison claims")
+        return self
 
 
 class ChatToolCallSummary(ChatDTO):
@@ -51,6 +99,7 @@ class ChatAnswer(ChatDTO):
     message_id: uuid.UUID
     status: Literal["COMPLETED", "INSUFFICIENT_EVIDENCE"]
     answer: str
+    claims: list[StructuredClaim] = Field(default_factory=list)
     citations: list[ChatCitation] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     tool_calls: list[ChatToolCallSummary] = Field(default_factory=list)
@@ -78,6 +127,7 @@ class ChatMessageView(ChatDTO):
 
 class StructuredAnswerDraft(ChatDTO):
     answer: str = Field(min_length=1)
-    evidence_ids: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
+    evidence_ids: list[str] = Field(default_factory=list, max_length=64)
+    claims: list[StructuredClaim] | None = Field(default=None, max_length=32)
+    warnings: list[str] = Field(default_factory=list, max_length=128)
     needs_clarification: bool = False

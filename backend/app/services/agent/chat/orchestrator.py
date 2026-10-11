@@ -10,6 +10,7 @@ from typing import Any
 from app.core.agent_llm_config import AgentLLMConfig
 from app.domain.agent.chat import ChatToolCallSummary, ChatUsage
 from app.domain.agent.chat_errors import (
+    AgentChatError,
     budget_exceeded,
     invalid_llm_tool_call,
     total_deadline_exceeded,
@@ -59,7 +60,7 @@ class ToolOrchestrator:
         provider: LLMProvider,
         registry: AgentToolRegistry,
         config: AgentLLMConfig,
-        execute_tool: Callable[[str, dict[str, Any], str], dict[str, Any]],
+        execute_tool: Callable[[str, dict[str, Any], str, float], dict[str, Any]],
         audit_tool_call: Callable[[ToolCallAudit], None] | None = None,
         monotonic: Callable[[], float] | None = None,
     ) -> None:
@@ -71,9 +72,15 @@ class ToolOrchestrator:
         self.monotonic = monotonic or time.monotonic
         self.last_usage = ChatUsage()
 
-    def run(self, *, messages: list[ChatMessage], request_id: str) -> OrchestrationResult:
+    def run(
+        self,
+        *,
+        messages: list[ChatMessage],
+        request_id: str,
+        deadline: float | None = None,
+    ) -> OrchestrationResult:
         started = self.monotonic()
-        deadline = started + self.config.max_total_deadline_seconds
+        deadline = deadline or (started + self.config.max_total_deadline_seconds)
         provider_messages = list(messages)
         tools = [
             LLMTool(
@@ -106,16 +113,19 @@ class ToolOrchestrator:
                 response.usage.prompt_tokens,
                 response.usage.completion_tokens,
             )
-            if self.monotonic() > deadline:
+            if self.monotonic() >= deadline:
                 raise total_deadline_exceeded()
             if response.final_text is not None:
-                return OrchestrationResult(
+                result = OrchestrationResult(
                     final_text=response.final_text,
                     tool_results=results,
                     tool_calls=summaries,
                     usage=usage,
                     warnings=_unique(warnings),
                 )
+                if self.monotonic() >= deadline:
+                    raise total_deadline_exceeded()
+                return result
 
             calls = response.tool_calls
             tool_rounds += 1
@@ -134,9 +144,16 @@ class ToolOrchestrator:
             provider_messages.append(ChatMessage(role="assistant", tool_calls=calls))
             round_cache: dict[str, ToolResultContext] = {}
             for call in calls:
+                remaining = deadline - self.monotonic()
+                if remaining <= 0:
+                    raise total_deadline_exceeded()
+                context, summary = self._execute_call(
+                    call,
+                    round_cache=round_cache,
+                    remaining_seconds=remaining,
+                )
                 if self.monotonic() >= deadline:
                     raise total_deadline_exceeded()
-                context, summary = self._execute_call(call, round_cache=round_cache)
                 results.append(context)
                 summaries.append(summary)
                 provider_messages.append(
@@ -152,12 +169,15 @@ class ToolOrchestrator:
                     )
                 )
                 warnings.extend(_tool_warnings(context))
+                if self.monotonic() >= deadline:
+                    raise total_deadline_exceeded()
 
     def _execute_call(
         self,
         call: ToolCall,
         *,
         round_cache: dict[str, ToolResultContext],
+        remaining_seconds: float,
     ) -> tuple[ToolResultContext, ChatToolCallSummary]:
         try:
             spec = self.registry.get(call.name)
@@ -190,14 +210,26 @@ class ToolOrchestrator:
             return context, _summary(audit)
 
         started = self.monotonic()
+        fatal_error: AgentChatError | None = None
         try:
-            payload = self.execute_tool(call.name, call.arguments, call.id)
+            payload = self.execute_tool(
+                call.name,
+                call.arguments,
+                call.id,
+                remaining_seconds,
+            )
             status = "READY"
             error_code = None
         except AgentError as exc:
             payload = {"error": {"code": exc.code, "message": str(exc)}}
             status = "ERROR"
             error_code = exc.code
+            if exc.code in {"TOOL_TIMEOUT", "STATEMENT_TIMEOUT"}:
+                fatal_error = AgentChatError(
+                    exc.code,
+                    str(exc),
+                    status_code=exc.status_code,
+                )
         duration_ms = max(0, round((self.monotonic() - started) * 1000))
         context = ToolResultContext(call.id, call.name, payload)
         audit = ToolCallAudit(
@@ -211,6 +243,8 @@ class ToolOrchestrator:
         )
         self.audit_tool_call(audit)
         round_cache[args_hash] = context
+        if fatal_error is not None:
+            raise fatal_error
         return context, _summary(audit)
 
 

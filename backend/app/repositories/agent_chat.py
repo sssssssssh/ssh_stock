@@ -175,6 +175,7 @@ class AgentChatRepository:
         chat_id: uuid.UUID,
         user_message_id: uuid.UUID,
         request_id: str,
+        request_content_hash: str,
         model: str,
         trace_id: uuid.UUID,
     ) -> AgentChatTurn:
@@ -182,6 +183,7 @@ class AgentChatRepository:
             session_id=chat_id,
             user_message_id=user_message_id,
             request_id=request_id,
+            request_content_hash=request_content_hash,
             status="RUNNING",
             model=model,
             trace_id=trace_id,
@@ -263,4 +265,9 @@ class AgentChatRepository:
         turn.usage_json = usage
         turn.finished_at = datetime.now(UTC)
         self.db.add(turn)
+        if turn.assistant_message_id is not None:
+            message = self.db.get(AgentChatMessage, turn.assistant_message_id)
+            if message is not None:
+                message.status = "FAILED"
+                self.db.add(message)
         self.db.flush()

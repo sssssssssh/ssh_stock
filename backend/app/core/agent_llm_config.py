@@ -28,6 +28,9 @@ class AgentLLMConfig(BaseModel):
     max_user_message_chars: int = Field(default=4000, ge=1, le=8000)
     max_answer_chars: int = Field(default=8000, ge=1, le=16_000)
     max_total_deadline_seconds: int = Field(default=45, ge=1, le=120)
+    max_claims: int = Field(default=16, ge=1, le=32)
+    max_evidence_ids_per_claim: int = Field(default=8, ge=1, le=16)
+    max_structured_facts_per_claim: int = Field(default=12, ge=1, le=24)
 
     @model_validator(mode="after")
     def validate_budgets(self) -> "AgentLLMConfig":

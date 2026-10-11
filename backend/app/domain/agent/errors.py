@@ -31,7 +31,7 @@ def tool_timeout(message: str = "tool exceeded its soft execution budget") -> Ag
 
 def statement_timeout() -> AgentError:
     return AgentError(
-        "SQL_STATEMENT_TIMEOUT",
+        "STATEMENT_TIMEOUT",
         "database statement exceeded the configured timeout",
         status_code=504,
     )

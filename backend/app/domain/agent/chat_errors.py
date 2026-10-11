@@ -29,9 +29,17 @@ def budget_exceeded(message: str) -> AgentChatError:
 
 def total_deadline_exceeded() -> AgentChatError:
     return AgentChatError(
-        "AGENT_DEADLINE_EXCEEDED",
+        "TOTAL_DEADLINE_EXCEEDED",
         "Agent chat exceeded its total deadline",
         status_code=504,
+    )
+
+
+def idempotency_conflict() -> AgentChatError:
+    return AgentChatError(
+        "IDEMPOTENCY_CONFLICT",
+        "request_id is already bound to different request content",
+        status_code=409,
     )
 
 

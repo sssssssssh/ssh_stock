@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 16.2；后续 M13-M16 的冻结规则见本文后续章节：
+当前已完成 Milestone 0 到 Milestone 16.2.1；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -67,7 +67,8 @@
 - Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率、行业历史成分有效期、NULL upsert 保护、dirty range 向后重算、计算版本追踪
 - pytest
 
-当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime。
+当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime，
+M16.2.1 完成端到端时间预算、Claim 证据强绑定、请求内容幂等和比较策略收口。
 启用后模型也只能编排既有八工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
 修改生产策略权重、阈值或 S0-S6 定义。
 
@@ -511,3 +512,29 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
   规范约束名称，不得改写数据。配置关闭是首选运行时回滚；任何导出、删除历史和 schema 降级
   都是需要单独批准的破坏性运维操作。
 - M16.2 不包含流式输出、租户 RBAC、自动保留策略、外部网页检索、自主 Job、策略修改、交易或 Broker。
+
+## Milestone 16.2.1 Reliability & Evidence Integrity 规则
+
+- 单轮总预算从进入 `AgentChatApplication` 即开始，覆盖上下文、Provider、多轮工具、缓存、审计、
+  Evidence 编译及终态持久化。每次工具调用收到剩余秒数，工具软预算和 PostgreSQL
+  `statement_timeout` 均不得超过剩余预算；统一错误码为 `TOTAL_DEADLINE_EXCEEDED`、
+  `TOOL_TIMEOUT`、`STATEMENT_TIMEOUT`。同步 Python handler 仍只能在返回后拒绝超时结果，
+  不得声称具备抢占式硬取消能力；SQL 超时由 PostgreSQL 硬取消。
+- 模型草稿可兼容缺省 `claims` 字段，但任何可验证事实必须使用结构化 Claim。FACT/COMPARISON
+  必须把 Evidence ID、受控 `records` 路径、值、单位、交易日和实体绑定到同一轮真实工具记录；
+  Decimal 按确定性规则比较，百分数只允许显式的小数到百分比换算。错误值、实体、日期、单位、
+  路径或 Evidence 一律拒绝，服务端只用验证后的事实重建对外文本，不能复用模型中的未验证数字。
+- INFERENCE 必须绑定证据并标记 WARNING；无 Claims 的旧草稿和不完整定量 Claim 降级为
+  `INSUFFICIENT_EVIDENCE`。单轮最多 16 Claims，每 Claim 最多 8 个 Evidence ID、12 个结构化事实；
+  这些限制与原有 token、字符、字节、轮数及调用数限制同时生效。
+- 比较许可由后端 `EvidenceComparisonPolicy` 决定。同日排名要求相同日期和完整计算身份；同实体跨日
+  允许但必须逐事实列日期并提示上下文；独立回测要求可审计的 run/config/calc/source 身份；
+  TRAIN 与 OOS 不得混称。不可比返回 `COMPARISON_INCOMPATIBLE`，需要解释时添加
+  `COMPARISON_REQUIRES_CONTEXT:*`，Provider 无权放宽规则。
+- 新 Turn 将规范化内容、chat ID、owner ID 和契约版本生成无盐 SHA-256
+  `request_content_hash`。规范化固定为 Unicode NFKC、统一 LF、移除行尾空白且不移除语义行；
+  同 request ID 仅在 hash 相同且 COMPLETED 时重放，不同 hash 或旧 NULL hash 返回
+  `IDEMPOTENCY_CONFLICT`。RUNNING/FAILED 继续使用受控冲突，不新增消息、工具调用或账单。
+- `0048_m16_2_1_request_hash` 只新增可空 hash 与格式约束，历史行保持 NULL；
+  `0049_m16_2_1_hash_name` 仅幂等规范预发布环境的约束名称。回滚不得删除消息或证据；配置关闭仍是
+  首选运行时回滚。八个 M16.1 工具、Session Cookie 鉴权、owner 隔离和只读数据库边界保持不变。

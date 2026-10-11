@@ -358,9 +358,9 @@ def test_application_maps_statement_timeout_without_exposing_database_details(
             request_id="sql-timeout",
             user=SimpleNamespace(username="admin"),
         )
-    assert caught.value.code == "SQL_STATEMENT_TIMEOUT"
+    assert caught.value.code == "STATEMENT_TIMEOUT"
     assert "secret" not in str(caught.value)
-    assert audit[0]["error_code"] == "SQL_STATEMENT_TIMEOUT"
+    assert audit[0]["error_code"] == "STATEMENT_TIMEOUT"
 
 
 def test_application_separates_record_evidence_nested_and_byte_limits() -> None:

@@ -1316,7 +1316,7 @@ docker compose logs --tail=200 backend worker scheduler frontend
 
 ### M16.1.1 可靠性收口（2026-10-10）
 
-- 工具目录的 `timeout_seconds` 表示同步调用的端到端软预算；超时结果以 `TOOL_TIMEOUT` 拒绝，但不会强制杀死 Python handler。单条 SQL 的 5 秒限制由 PostgreSQL `statement_timeout` 执行，超时返回安全的 `SQL_STATEMENT_TIMEOUT`；生产反向代理仍应配置 HTTP 超时。
+- 工具目录的 `timeout_seconds` 表示同步调用的端到端软预算；超时结果以 `TOOL_TIMEOUT` 拒绝，但不会强制杀死 Python handler。单条 SQL 的 5 秒限制由 PostgreSQL `statement_timeout` 执行，超时返回安全的 `STATEMENT_TIMEOUT`；生产反向代理仍应配置 HTTP 超时。
 - `max_records` 只表示顶层记录数。`data.coverage` 最多聚合 32 个数据集，Evidence 和 Warnings 有独立数量上限，最终结果继续限制为 64 KiB。结构上限与字节上限分别返回 `RESOURCE_LIMIT_EXCEEDED` 和 `OUTPUT_LIMIT_EXCEEDED`。
 - 新 Evidence 响应兼容追加 `evidence_version=v2`、`calc_run_id` 和 `content_hash`；`evidence_id` 现在绑定确定性结果内容，历史字段未删除，也没有新增数据库迁移。
 - `performance.summary` 使用公共 M14 只读 Bundle 校验，拒绝跨 Run、跨报告族、失败状态或来源身份不一致。Period 缺失时概览仍可返回，但会明确标记 `DATA_UNAVAILABLE:period_report`，不会冒充完整四件套。
@@ -1346,3 +1346,21 @@ docker compose logs --tail=200 backend worker scheduler frontend
   避免静默丢失对话和审计数据。
 - 当前不提供流式输出、前端聊天页、外部网页搜索、自动创建任务、策略修改、交易或 Broker 接入。
   完整架构、安全边界与运维回滚见 `docs/M16_agent_architecture.md`。
+
+### M16.2.1 对话可靠性与证据完整性（2026-10-11）
+
+- 单轮总 Deadline 现在覆盖上下文读取、模型重试、多轮工具、缓存、审计、Evidence 编译和最终写库。
+  工具得到实时剩余预算，实际软超时取剩余预算与工具上限的最小值；PostgreSQL
+  `statement_timeout` 也不会超过该预算。超时分别返回 `TOTAL_DEADLINE_EXCEEDED`、
+  `TOOL_TIMEOUT` 或 `STATEMENT_TIMEOUT`，失败轮次会落为 FAILED，不保留 RUNNING。
+- 最终 JSON 新增可选 `claims`。定量 FACT/COMPARISON 必须逐项给出 Evidence ID、受控记录路径、
+  值、单位、日期和实体；服务端直接核对同轮真实工具记录并重建安全答复。错误收益率、排名、实体、
+  日期、单位、路径或伪造引用会降级为 `INSUFFICIENT_EVIDENCE`，不会原样展示模型数字。
+- 同日排名、同实体跨日、独立回测、TRAIN/OOS 四类比较由后端确定性策略约束。合法跨日会明确每条
+  事实日期并提示上下文；身份不足、计算口径冲突或把训练集冒充 OOS 的比较会被拒绝。
+- 新 Turn 把规范化问题内容与 chat/owner/契约版本绑定为 SHA-256。相同 request ID 仅在内容 hash
+  相同且已完成时幂等重放；复用 request ID 发送不同问题或命中旧 NULL hash 会返回 HTTP 409
+  `IDEMPOTENCY_CONFLICT`。
+- 升级执行 `python -m alembic upgrade head`，对应迁移为 `0048_m16_2_1_request_hash` 与
+  `0049_m16_2_1_hash_name`。历史会话不回填、不改写，旧记录保持可读；不要在含用户历史的数据库上
+  自行降级。详细边界、验证和已知同步取消限制见 `docs/M16_2_1_reliability_closeout.md`。

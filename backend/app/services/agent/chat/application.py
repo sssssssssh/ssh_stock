@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -19,7 +21,9 @@ from app.domain.agent.chat_errors import (
     AgentChatError,
     chat_conflict,
     chat_not_found,
+    idempotency_conflict,
     llm_disabled,
+    total_deadline_exceeded,
 )
 from app.domain.agent.policy import user_audit_hash
 from app.models.agent_chat import AgentChatSession, AgentChatTurn
@@ -31,6 +35,7 @@ from app.services.agent.application import AgentApplicationService
 from app.services.agent.chat.evidence_compiler import EvidenceCompiler
 from app.services.agent.chat.orchestrator import ToolCallAudit, ToolOrchestrator
 from app.services.agent.chat.prompt import SYSTEM_PROMPT
+from app.services.agent.chat.request_identity import request_content_hash
 from app.services.agent.llm.contracts import ChatMessage, LLMProvider
 from app.services.agent.llm.factory import build_llm_provider
 from app.services.agent.registry import AgentToolRegistry, build_registry
@@ -43,6 +48,7 @@ class AgentChatApplication:
         settings: Settings,
         *,
         provider: LLMProvider | None = None,
+        monotonic: Callable[[], float] | None = None,
     ) -> None:
         if settings.agent_config is None:
             raise RuntimeError("agent config is not loaded")
@@ -51,6 +57,7 @@ class AgentChatApplication:
         self.config = settings.agent_config
         self.repo = AgentChatRepository(db)
         self._provider = provider
+        self._monotonic = monotonic or time.monotonic
 
     def create_chat(self, *, user: Any, title: str | None) -> ChatSessionSummary:
         owner_id = _user_id(user)
@@ -119,6 +126,7 @@ class AgentChatApplication:
                 "INVALID_ARGUMENT", "invalid user message length", status_code=422
             )
         owner_id = _user_id(user)
+        deadline = self._monotonic() + self.config.llm.max_total_deadline_seconds
         turn, existing = self._start_turn(
             owner_id=owner_id,
             chat_id=chat_id,
@@ -131,6 +139,7 @@ class AgentChatApplication:
         context_warning: list[str] = []
         orchestrator: ToolOrchestrator | None = None
         try:
+            self._ensure_deadline(deadline)
             messages, truncated = self.repo.recent_messages(
                 chat_id=chat_id, limit=self.config.llm.max_context_messages
             )
@@ -145,6 +154,7 @@ class AgentChatApplication:
             if truncated:
                 context_warning.append("CONTEXT_TRUNCATED")
             self.db.rollback()
+            self._ensure_deadline(deadline)
 
             provider = self._provider or build_llm_provider(self.settings)
             registry = self._schema_registry()
@@ -152,26 +162,38 @@ class AgentChatApplication:
                 provider=provider,
                 registry=registry,
                 config=self.config.llm,
-                execute_tool=lambda name, args, call_id: self._execute_tool(
+                execute_tool=lambda name, args, call_id, remaining: self._execute_tool(
                     user=user,
                     request_id=request_id,
                     tool_call_id=call_id,
                     tool_name=name,
                     arguments=args,
+                    remaining_seconds=remaining,
                 ),
                 audit_tool_call=lambda audit: self._persist_tool_call(turn.id, audit),
+                monotonic=self._monotonic,
             )
             orchestration = orchestrator.run(
                 messages=provider_messages,
                 request_id=request_id,
+                deadline=deadline,
             )
+            self._ensure_deadline(deadline)
             compiled = EvidenceCompiler(
-                max_answer_chars=self.config.llm.max_answer_chars
+                max_answer_chars=self.config.llm.max_answer_chars,
+                max_claims=self.config.llm.max_claims,
+                max_evidence_ids_per_claim=(
+                    self.config.llm.max_evidence_ids_per_claim
+                ),
+                max_structured_facts_per_claim=(
+                    self.config.llm.max_structured_facts_per_claim
+                ),
             ).compile(
                 final_text=orchestration.final_text,
                 tool_results=orchestration.tool_results,
                 inherited_warnings=context_warning + orchestration.warnings,
             )
+            self._ensure_deadline(deadline)
             answer = self._complete_turn(
                 chat_id=chat_id,
                 turn_id=turn.id,
@@ -182,6 +204,7 @@ class AgentChatApplication:
                     if compiled.insufficient_evidence
                     else "COMPLETED"
                 ),
+                claims=[item.model_dump(mode="json") for item in compiled.claims],
                 citations=[item.model_dump(mode="json") for item in compiled.citations],
                 warnings=compiled.warnings,
                 tool_calls=[
@@ -189,6 +212,7 @@ class AgentChatApplication:
                 ],
                 usage=orchestration.usage.model_dump(mode="json"),
             )
+            self._ensure_deadline(deadline)
         except AgentChatError as exc:
             usage = (
                 orchestrator.last_usage.model_dump(mode="json")
@@ -221,6 +245,11 @@ class AgentChatApplication:
         content: str,
         request_id: str,
     ) -> tuple[Any, ChatAnswer | None]:
+        content_hash = request_content_hash(
+            content=content,
+            chat_id=chat_id,
+            owner_id=owner_id,
+        )
         try:
             chat = self.repo.get_owned_session(
                 chat_id=chat_id,
@@ -237,6 +266,9 @@ class AgentChatApplication:
                 chat_id=chat_id, request_id=request_id
             )
             if existing is not None:
+                if existing.request_content_hash != content_hash:
+                    self.db.rollback()
+                    raise idempotency_conflict()
                 if existing.status == "COMPLETED":
                     result = self._answer_from_turn(existing)
                     self.db.rollback()
@@ -259,6 +291,7 @@ class AgentChatApplication:
                 chat_id=chat_id,
                 user_message_id=user_message.id,
                 request_id=request_id,
+                request_content_hash=content_hash,
                 model=self.config.llm.model,
                 trace_id=uuid.uuid4(),
             )
@@ -287,13 +320,20 @@ class AgentChatApplication:
         tool_call_id: str,
         tool_name: str,
         arguments: dict[str, Any],
+        remaining_seconds: float,
     ) -> dict[str, Any]:
-        with agent_db_session(self.settings) as db:
+        if remaining_seconds < 0.001:
+            raise total_deadline_exceeded()
+        with agent_db_session(
+            self.settings,
+            remaining_seconds=remaining_seconds,
+        ) as db:
             return AgentApplicationService(db, self.settings).execute(
                 tool_name=tool_name,
                 raw_input=arguments,
                 request_id=f"{request_id}:{tool_call_id}",
                 user=user,
+                remaining_seconds=remaining_seconds,
             )
 
     def _persist_tool_call(self, turn_id: uuid.UUID, audit: ToolCallAudit) -> None:
@@ -318,6 +358,7 @@ class AgentChatApplication:
         trace_id: uuid.UUID,
         answer: str,
         status: str,
+        claims: list[dict[str, Any]],
         citations: list[dict[str, Any]],
         warnings: list[str],
         tool_calls: list[dict[str, Any]],
@@ -325,6 +366,7 @@ class AgentChatApplication:
     ) -> ChatAnswer:
         metadata = {
             "status": status,
+            "claims": claims,
             "citations": citations,
             "warnings": warnings,
             "tool_calls": tool_calls,
@@ -357,6 +399,7 @@ class AgentChatApplication:
             message_id=assistant.id,
             status=status,
             answer=answer,
+            claims=claims,
             citations=citations,
             warnings=warnings,
             tool_calls=tool_calls,
@@ -386,12 +429,17 @@ class AgentChatApplication:
             message_id=message.id,
             status=metadata.get("status", "COMPLETED"),
             answer=message.content,
+            claims=metadata.get("claims", []),
             citations=metadata.get("citations", []),
             warnings=metadata.get("warnings", []),
             tool_calls=metadata.get("tool_calls", []),
             usage=metadata.get("usage", {}),
             trace_id=metadata.get("trace_id", str(turn.trace_id)),
         )
+
+    def _ensure_deadline(self, deadline: float) -> None:
+        if self._monotonic() >= deadline:
+            raise total_deadline_exceeded()
 
     @staticmethod
     def _audit_turn(

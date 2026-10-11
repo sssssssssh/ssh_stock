@@ -75,11 +75,34 @@ def _payload() -> dict[str, Any]:
 
 
 def _final(*evidence_ids: str, clarification: bool = False) -> LLMResponse:
+    claims = (
+        [
+            {
+                "claim_id": "fact-1",
+                "claim_type": "FACT",
+                "text": "测试值为 1。",
+                "evidence_ids": list(evidence_ids),
+                "structured_facts": [
+                    {
+                        "path": "records.0.value",
+                        "value": 1,
+                        "unit": "decimal",
+                        "trade_date": "2026-10-10",
+                        "entity": "fixture",
+                    }
+                ],
+                "quality_status": "UNKNOWN",
+            }
+        ]
+        if evidence_ids
+        else []
+    )
     return LLMResponse(
         final_text=json.dumps(
             {
                 "answer": "这是经过工具验证的研究说明。",
                 "evidence_ids": list(evidence_ids),
+                "claims": claims,
                 "warnings": [],
                 "needs_clarification": clarification,
             },
@@ -91,7 +114,7 @@ def _final(*evidence_ids: str, clarification: bool = False) -> LLMResponse:
 
 def _orchestrator(
     responses: list[LLMResponse | Exception],
-    execute: Callable[[str, dict[str, Any], str], dict[str, Any]],
+    execute: Callable[[str, dict[str, Any], str, float], dict[str, Any]],
     *,
     config: AgentLLMConfig | None = None,
     audits: list[Any] | None = None,
@@ -126,11 +149,14 @@ def test_orchestrator_calls_only_registry_tool_and_compiles_real_evidence() -> N
         ),
         _final("evidence-1"),
     ]
-    executed: list[tuple[str, dict[str, Any], str]] = []
+    executed: list[tuple[str, dict[str, Any], str, float]] = []
     audits: list[Any] = []
     orchestrator, provider = _orchestrator(
         responses,
-        lambda name, args, call_id: executed.append((name, args, call_id)) or _payload(),
+        lambda name, args, call_id, remaining: executed.append(
+            (name, args, call_id, remaining)
+        )
+        or _payload(),
         audits=audits,
     )
     result = orchestrator.run(
@@ -143,7 +169,10 @@ def test_orchestrator_calls_only_registry_tool_and_compiles_real_evidence() -> N
         inherited_warnings=result.warnings,
     )
 
-    assert executed == [("test.read", {"value": 2}, "call-1")]
+    assert [(name, args, call_id) for name, args, call_id, _ in executed] == [
+        ("test.read", {"value": 2}, "call-1")
+    ]
+    assert 0 < executed[0][3] <= 45
     assert [tool.name for tool in provider.calls[0]["tools"]] == ["test.read"]
     assert provider.calls[1]["messages"][-1].role == "tool"
     assert compiled.citations[0].evidence_id == "evidence-1"
@@ -171,7 +200,9 @@ def test_same_round_duplicate_request_is_executed_once_but_audited_twice() -> No
     executions = 0
     audits: list[Any] = []
 
-    def execute(name: str, args: dict[str, Any], call_id: str) -> dict[str, Any]:
+    def execute(
+        name: str, args: dict[str, Any], call_id: str, remaining: float
+    ) -> dict[str, Any]:
         nonlocal executions
         executions += 1
         return _payload()
@@ -201,7 +232,9 @@ def test_same_round_duplicate_tool_error_remains_an_error_in_reused_audit() -> N
     audits: list[Any] = []
     executions = 0
 
-    def execute(name: str, args: dict[str, Any], call_id: str) -> dict[str, Any]:
+    def execute(
+        name: str, args: dict[str, Any], call_id: str, remaining: float
+    ) -> dict[str, Any]:
         nonlocal executions
         executions += 1
         raise AgentError("DATA_UNAVAILABLE", "data unavailable", status_code=503)
@@ -238,7 +271,7 @@ def test_unknown_and_duplicate_tool_calls_fail_closed(
 ) -> None:
     orchestrator, _ = _orchestrator(
         [LLMResponse(tool_calls=calls)],
-        lambda name, args, call_id: pytest.fail("tool must not execute"),
+        lambda name, args, call_id, remaining: pytest.fail("tool must not execute"),
     )
     with pytest.raises(AgentChatError) as caught:
         orchestrator.run(
@@ -284,7 +317,7 @@ def test_total_deadline_stops_after_provider_response() -> None:
             request_id="deadline",
         )
 
-    assert caught.value.code == "AGENT_DEADLINE_EXCEEDED"
+    assert caught.value.code == "TOTAL_DEADLINE_EXCEEDED"
     assert provider.calls[0]["timeout"] == 20.0
 
 
@@ -297,7 +330,7 @@ def test_forged_or_error_quality_evidence_is_not_cited() -> None:
     )
     assert forged.insufficient_evidence is True
     assert forged.citations == []
-    assert "UNVERIFIED_CITATION" in forged.warnings
+    assert "CLAIM_REJECTED:fact-1:UNKNOWN_EVIDENCE_ID" in forged.warnings
 
     payload = _payload()
     payload["evidence"][0]["quality_status"] = "ERROR"
@@ -307,7 +340,7 @@ def test_forged_or_error_quality_evidence_is_not_cited() -> None:
         inherited_warnings=[],
     )
     assert rejected.insufficient_evidence is True
-    assert "EVIDENCE_QUALITY_ERROR" in rejected.warnings
+    assert "CLAIM_REJECTED:fact-1:EVIDENCE_QUALITY_ERROR" in rejected.warnings
 
 
 def test_clarification_without_evidence_is_preserved_but_marked_insufficient() -> None:

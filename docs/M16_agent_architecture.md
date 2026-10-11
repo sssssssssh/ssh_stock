@@ -72,7 +72,7 @@ mode, LLM-disabled state, and the hard per-SQL statement timeout metadata.
 that returns after that budget is rejected with `TOOL_TIMEOUT`, but the check does not
 claim to preempt Python or recover resources already consumed. No timeout worker thread is
 created. PostgreSQL independently enforces a transaction-local hard timeout for each SQL
-statement and SQLSTATE `57014` maps to `SQL_STATEMENT_TIMEOUT`. Reverse proxy/application
+statement and SQLSTATE `57014` maps to `STATEMENT_TIMEOUT`. Reverse proxy/application
 server HTTP timeouts remain the outer hard boundary.
 
 The application checks top-level records, Evidence references, warnings and named nested
@@ -143,7 +143,7 @@ date scope and source identity.
 | `RESOURCE_LIMIT_EXCEEDED` | 422 | Record, Evidence, warning or nested-list count exceeded |
 | `OUTPUT_LIMIT_EXCEEDED` | 422 | Final serialized response exceeds 64 KiB |
 | `TOOL_TIMEOUT` | 504 | Handler returned after its soft end-to-end budget |
-| `SQL_STATEMENT_TIMEOUT` | 504 | PostgreSQL canceled one SQL statement at its hard timeout |
+| `STATEMENT_TIMEOUT` | 504 | PostgreSQL canceled one SQL statement at its hard timeout |
 | `INTERNAL_ERROR` | 500 | Unexpected handler failure; details are not exposed |
 
 Audit logs contain only request ID, hashed user identity, tool/version, duration, status,
@@ -217,3 +217,38 @@ export and explicitly remove that history under an approved destructive procedur
 rolling the schema back. `0047_m16_2_constraint_names` is an idempotent, data-preserving
 closeout for environments that applied a pre-release 0046 draft with duplicated CHECK
 constraint prefixes; it is a no-op after the final canonical 0046.
+
+## M16.2.1 reliability and evidence integrity
+
+The total monotonic deadline starts before turn creation and covers context loading,
+provider retries, every tool/cache/audit path, evidence compilation and terminal writes.
+The orchestrator passes the current remaining seconds into each tool. The effective soft
+tool timeout is the minimum of remaining time and `ToolSpec.timeout_seconds`; PostgreSQL
+`SET LOCAL statement_timeout` is also capped by remaining time and uses a positive integer
+millisecond value. Python handlers are synchronous and cannot be preempted safely; an
+over-budget result is rejected after return. PostgreSQL remains the hard SQL cancellation
+boundary. Safe timeout codes are `TOTAL_DEADLINE_EXCEEDED`, `TOOL_TIMEOUT` and
+`STATEMENT_TIMEOUT`, and terminal failure persistence prevents orphaned RUNNING turns.
+
+Provider output may include bounded structured claims. FACT and COMPARISON claims bind
+each Evidence ID to an allowlisted `records.<index>...` path plus value, unit, trade date
+and entity from the same real tool result. Exact Decimal comparison is used, with only an
+explicit decimal-to-percent conversion. The compiler rejects mismatched values, entities,
+dates, units, paths and IDs, then rebuilds user-visible claim text from verified facts.
+INFERENCE claims require evidence and are marked WARNING. Legacy drafts without claims
+fail closed for factual answers; clarification-only drafts remain possible.
+
+`EvidenceComparisonPolicy` makes comparison compatibility a backend decision. Same-date
+ranking requires matching dates and calculation identity; one entity over time is allowed
+with explicit dates and a context warning; independent backtests require auditable
+run/config/calc/source identity; TRAIN must never be represented as OOS. Incompatible
+claims are rejected, while legal comparisons needing interpretation receive
+`COMPARISON_REQUIRES_CONTEXT:*` warnings.
+
+New turns persist `request_content_hash`, the SHA-256 of canonical JSON containing NFKC
+and line-ending-normalized content, chat ID, owner ID and contract version. A completed
+request replays only when its hash matches. Different content under the same request ID,
+or a historical NULL hash, returns HTTP 409 `IDEMPOTENCY_CONFLICT`; RUNNING and FAILED
+duplicates retain controlled conflict behavior. `0048_m16_2_1_request_hash` adds the
+nullable historical-compatible column and format check. `0049_m16_2_1_hash_name` only
+normalizes a pre-release duplicated constraint name and does not rewrite data.

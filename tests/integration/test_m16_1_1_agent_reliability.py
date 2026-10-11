@@ -98,7 +98,7 @@ def test_postgresql_statement_timeout_maps_to_safe_agent_error() -> None:
                 request_id="postgres-timeout",
                 user=SimpleNamespace(username="test-admin"),
             )
-        assert caught.value.code == "SQL_STATEMENT_TIMEOUT"
+        assert caught.value.code == "STATEMENT_TIMEOUT"
         assert caught.value.status_code == 504
         assert "pg_sleep" not in str(caught.value)
     finally:

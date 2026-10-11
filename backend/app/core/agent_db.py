@@ -9,12 +9,19 @@ from app.core.db import SessionLocal
 
 
 @contextmanager
-def agent_db_session(settings: Settings | None = None) -> Iterator[Session]:
+def agent_db_session(
+    settings: Settings | None = None,
+    *,
+    remaining_seconds: float | None = None,
+) -> Iterator[Session]:
     """Open one isolated READ ONLY transaction for exactly one Agent tool call."""
     db = SessionLocal()
     try:
         if db.get_bind().dialect.name == "postgresql":
-            timeout = (settings or get_settings()).agent_config.statement_timeout_ms
+            timeout = _effective_statement_timeout_ms(
+                (settings or get_settings()).agent_config.statement_timeout_ms,
+                remaining_seconds,
+            )
             db.execute(text("SET TRANSACTION READ ONLY"))
             db.execute(
                 text("SELECT set_config('statement_timeout', :value, true)"),
@@ -24,6 +31,18 @@ def agent_db_session(settings: Settings | None = None) -> Iterator[Session]:
     finally:
         db.rollback()
         db.close()
+
+
+def _effective_statement_timeout_ms(
+    configured_ms: int,
+    remaining_seconds: float | None,
+) -> int:
+    if remaining_seconds is None:
+        return configured_ms
+    remaining_ms = int(remaining_seconds * 1000)
+    if remaining_ms <= 0:
+        raise ValueError("remaining tool budget is below one millisecond")
+    return min(configured_ms, remaining_ms)
 
 
 def get_agent_db() -> Generator[Session, None, None]:

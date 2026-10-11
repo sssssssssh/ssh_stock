@@ -73,6 +73,7 @@ def _clarification_response() -> LLMResponse:
             {
                 "answer": "请提供需要分析的回测 run_id。",
                 "evidence_ids": [],
+                "claims": [],
                 "warnings": [],
                 "needs_clarification": True,
             },
@@ -139,10 +140,18 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
             repeated = service.send_message(
                 user=owner,
                 chat_id=chat.chat_id,
-                content="不同文本也不得创建重复消息",
+                content="这个回测怎么样？",
                 request_id="idempotent-request",
             )
             assert repeated == first
+            with pytest.raises(AgentChatError) as reused:
+                service.send_message(
+                    user=owner,
+                    chat_id=chat.chat_id,
+                    content="不同文本不得复用历史答案",
+                    request_id="idempotent-request",
+                )
+            assert reused.value.code == "IDEMPOTENCY_CONFLICT"
             assert first.status == "INSUFFICIENT_EVIDENCE"
             assert db.scalar(
                 sa.select(sa.func.count())
@@ -154,6 +163,38 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
                 .select_from(AgentChatMessage)
                 .where(AgentChatMessage.session_id == chat.chat_id)
             ) == 2
+            completed_turn = db.scalar(
+                sa.select(AgentChatTurn).where(
+                    AgentChatTurn.session_id == chat.chat_id,
+                    AgentChatTurn.request_id == "idempotent-request",
+                )
+            )
+            assert completed_turn is not None
+            assert completed_turn.request_content_hash is not None
+            completed_turn.request_content_hash = None
+            db.commit()
+            with pytest.raises(AgentChatError) as legacy_replay:
+                service.send_message(
+                    user=owner,
+                    chat_id=chat.chat_id,
+                    content="这个回测怎么样？",
+                    request_id="idempotent-request",
+                )
+            assert legacy_replay.value.code == "IDEMPOTENCY_CONFLICT"
+
+            other_service = AgentChatApplication(
+                db,
+                settings,
+                provider=_clarification_provider(),
+            )
+            other_chat = other_service.create_chat(user=other, title="隔离会话")
+            other_answer = other_service.send_message(
+                user=other,
+                chat_id=other_chat.chat_id,
+                content="这个回测怎么样？",
+                request_id="idempotent-request",
+            )
+            assert other_answer.status == "INSUFFICIENT_EVIDENCE"
 
             with pytest.raises(AgentChatError) as hidden:
                 service.get_chat(
@@ -163,7 +204,13 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
                     offset=0,
                 )
             assert hidden.value.code == "CHAT_NOT_FOUND"
-            assert service.list_chats(user=other, limit=20, offset=0)[1] == 0
+            other_chats, other_total = service.list_chats(
+                user=other,
+                limit=20,
+                offset=0,
+            )
+            assert other_total == 1
+            assert [item.chat_id for item in other_chats] == [other_chat.chat_id]
 
             running, _ = service._start_turn(
                 owner_id=owner.id,
@@ -181,8 +228,8 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
                     competing.send_message(
                         user=SimpleNamespace(id=owner.id),
                         chat_id=chat.chat_id,
-                        content="并发问题",
-                        request_id="concurrent-request",
+                        content="正在处理",
+                        request_id="running-request",
                     )
                 assert conflict.value.code == "CHAT_CONFLICT"
             service._fail_turn(running.id, "TEST_CLEANUP", {})
@@ -287,17 +334,90 @@ class CoverageProvider:
             )
         payload = json.loads(messages[-1].content)
         evidence_id = payload["evidence"][0]["evidence_id"]
+        dataset = payload["evidence"][0]["entity_id"]
+        coverage = payload["records"][0]["dataset_coverage"][0]["coverage_rate"]
         return LLMResponse(
             final_text=json.dumps(
                 {
                     "answer": "该日期的数据覆盖证据存在，但需结合质量警告解读。",
                     "evidence_ids": [evidence_id],
+                    "claims": [
+                        {
+                            "claim_id": "coverage-fact",
+                            "claim_type": "FACT",
+                            "text": "该数据集覆盖率已有可验证记录。",
+                            "evidence_ids": [evidence_id],
+                            "structured_facts": [
+                                {
+                                    "path": "records.0.dataset_coverage.0.coverage_rate",
+                                    "value": coverage,
+                                    "unit": "decimal",
+                                    "trade_date": self.target_date.isoformat(),
+                                    "entity": dataset,
+                                }
+                            ],
+                            "quality_status": "UNKNOWN",
+                        }
+                    ],
                     "warnings": ["不构成收益承诺"],
                     "needs_clarification": False,
                 },
                 ensure_ascii=False,
             )
         )
+
+
+class DeadlineProvider:
+    def __init__(self, clock: list[float]) -> None:
+        self.clock = clock
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        tools: list[LLMTool],
+        *,
+        timeout: float,
+        request_id: str,
+    ) -> LLMResponse:
+        self.clock[0] += 46
+        return _clarification_response()
+
+
+def test_total_deadline_failure_does_not_leave_running_turn() -> None:
+    settings = _enabled_settings()
+    clock = [0.0]
+    with SessionLocal() as db:
+        owner = _user(db, suffix="deadline")
+        owner_id = owner.id
+        try:
+            service = AgentChatApplication(
+                db,
+                settings,
+                provider=DeadlineProvider(clock),
+                monotonic=lambda: clock[0],
+            )
+            chat = service.create_chat(user=owner, title="Deadline")
+            with pytest.raises(AgentChatError) as caught:
+                service.send_message(
+                    user=owner,
+                    chat_id=chat.chat_id,
+                    content="触发总时限",
+                    request_id="deadline-request",
+                )
+            assert caught.value.code == "TOTAL_DEADLINE_EXCEEDED"
+            turn = db.scalar(
+                sa.select(AgentChatTurn).where(
+                    AgentChatTurn.session_id == chat.chat_id,
+                    AgentChatTurn.request_id == "deadline-request",
+                )
+            )
+            assert turn is not None
+            assert turn.status == "FAILED"
+            assert turn.error_code == "TOTAL_DEADLINE_EXCEEDED"
+            assert service.repo.running_turn(chat_id=chat.chat_id) is None
+        finally:
+            db.close()
+            _cleanup_users(owner_id)
 
 
 def test_chat_tool_call_uses_read_only_session_and_persists_only_chat_audit() -> None:

@@ -119,6 +119,11 @@ class AgentChatTurn(Base):
             "status IN ('RUNNING', 'COMPLETED', 'FAILED')",
             name=conv("ck_agent_chat_turn_status"),
         ),
+        CheckConstraint(
+            "request_content_hash IS NULL OR "
+            "request_content_hash ~ '^[0-9a-f]{64}$'",
+            name=conv("ck_agent_chat_turn_request_content_hash"),
+        ),
         UniqueConstraint(
             "session_id", "request_id", name=conv("uq_agent_chat_turn_request")
         ),
@@ -156,6 +161,7 @@ class AgentChatTurn(Base):
         ForeignKey("agent_chat_message.id", ondelete="RESTRICT"),
     )
     request_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_content_hash: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="RUNNING", server_default="RUNNING"
     )

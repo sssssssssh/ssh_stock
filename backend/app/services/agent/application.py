@@ -4,6 +4,7 @@ from typing import Any
 
 from loguru import logger
 from pydantic import ValidationError
+from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -52,6 +53,7 @@ class AgentApplicationService:
         raw_input: dict[str, Any],
         request_id: str,
         user: Any,
+        remaining_seconds: float | None = None,
     ) -> dict[str, Any]:
         started = self._monotonic()
         spec: ToolSpec | None = None
@@ -65,15 +67,21 @@ class AgentApplicationService:
             except ValidationError as exc:
                 raise invalid_argument(_validation_message(exc)) from exc
 
+            effective_timeout = self._effective_timeout_seconds(
+                spec,
+                remaining_seconds=remaining_seconds,
+            )
+            self._apply_statement_timeout(effective_timeout)
+
             result = spec.handler(request)
-            self._check_soft_timeout(spec, started)
+            self._check_soft_timeout(effective_timeout, started)
             self._validate_result_contract(spec, result)
             self._validate_resource_limits(spec, result)
             payload = serialized_result(
                 result,
                 max_output_bytes=self.config.max_output_bytes,
             )
-            self._check_soft_timeout(spec, started)
+            self._check_soft_timeout(effective_timeout, started)
         except DBAPIError as exc:
             error = statement_timeout() if _is_statement_timeout(exc) else AgentError(
                 "INTERNAL_ERROR", "agent tool execution failed", status_code=500
@@ -103,9 +111,38 @@ class AgentApplicationService:
         )
         return payload
 
-    def _check_soft_timeout(self, spec: ToolSpec, started: float) -> None:
-        if self._duration_ms(started) > spec.timeout_seconds * 1000:
+    def _check_soft_timeout(self, timeout_seconds: float, started: float) -> None:
+        if self._duration_ms(started) > timeout_seconds * 1000:
             raise tool_timeout()
+
+    @staticmethod
+    def _effective_timeout_seconds(
+        spec: ToolSpec,
+        *,
+        remaining_seconds: float | None,
+    ) -> float:
+        if remaining_seconds is None:
+            return float(spec.timeout_seconds)
+        if remaining_seconds <= 0:
+            raise tool_timeout("tool has no remaining execution budget")
+        return min(float(spec.timeout_seconds), remaining_seconds)
+
+    def _apply_statement_timeout(self, effective_timeout_seconds: float) -> None:
+        get_bind = getattr(self.db, "get_bind", None)
+        if get_bind is None:
+            return
+        if get_bind().dialect.name != "postgresql":
+            return
+        effective_ms = min(
+            self.config.statement_timeout_ms,
+            int(effective_timeout_seconds * 1000),
+        )
+        if effective_ms <= 0:
+            raise tool_timeout("tool has less than one millisecond remaining")
+        self.db.execute(
+            text("SELECT set_config('statement_timeout', :value, true)"),
+            {"value": f"{effective_ms}ms"},
+        )
 
     @staticmethod
     def _validate_result_contract(spec: ToolSpec, result: AgentToolResult) -> None:
