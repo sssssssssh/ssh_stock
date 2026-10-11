@@ -18,7 +18,7 @@ from app.models.agent_chat import (
     AgentChatTurn,
 )
 from app.models.auth import AppUser, AuthSession
-from app.models.market_data import DataQualityDaily
+from app.models.market_data import DataQualityDaily, Sector, SectorFactorDaily
 from app.services.agent.chat.application import AgentChatApplication
 from app.services.agent.llm.contracts import (
     ChatMessage,
@@ -29,6 +29,7 @@ from app.services.agent.llm.contracts import (
     ToolCall,
 )
 from app.services.agent.llm.fake import FakeLLMProvider
+from app.services.analysis_identity import SECTOR_CALC_VERSION, analysis_strategy_hash
 from app.services.auth.dependencies import SESSION_COOKIE
 from app.services.auth.service import session_token_hash
 from fastapi.testclient import TestClient
@@ -383,6 +384,87 @@ class DeadlineProvider:
         return _clarification_response()
 
 
+class StructuredResearchProvider:
+    def __init__(self, target_date: date) -> None:
+        self.target_date = target_date
+        self.calls = 0
+
+    def complete(
+        self,
+        messages: list[ChatMessage],
+        tools: list[LLMTool],
+        *,
+        timeout: float,
+        request_id: str,
+    ) -> LLMResponse:
+        self.calls += 1
+        if self.calls == 1:
+            return LLMResponse(
+                tool_calls=[
+                    ToolCall(
+                        id="sector-compare-call",
+                        name="sector.top",
+                        arguments={
+                            "trade_date": self.target_date.isoformat(),
+                            "limit": 2,
+                        },
+                    )
+                ]
+            )
+        payload = json.loads(messages[-1].content)
+        evidence_ids = [item["evidence_id"] for item in payload["evidence"]]
+        records = payload["records"]
+        facts = [
+            {
+                "path": f"records.{index}.heat_score",
+                "value": record["heat_score"],
+                "unit": "score",
+                "trade_date": self.target_date.isoformat(),
+                "entity": str(record["sector_id"]),
+            }
+            for index, record in enumerate(records)
+        ]
+        return LLMResponse(
+            final_text=json.dumps(
+                {
+                    "answer": "模型原文声称第一名必然上涨 99%。",
+                    "evidence_ids": evidence_ids,
+                    "claims": [
+                        {
+                            "claim_id": "sector-comparison",
+                            "claim_type": "COMPARISON",
+                            "comparison_type": "SAME_DATE_RANKING",
+                            "text": "模型原始比较文本不应直出。",
+                            "evidence_ids": evidence_ids,
+                            "structured_facts": facts,
+                            "quality_status": "UNKNOWN",
+                        },
+                        {
+                            "claim_id": "sector-inference",
+                            "claim_type": "INFERENCE",
+                            "text": "两个行业存在确定因果，预计上涨 99%。",
+                            "evidence_ids": evidence_ids,
+                            "structured_facts": [],
+                            "quality_status": "UNKNOWN",
+                            "inference": {
+                                "hypothesis": "POSSIBLE_ASSOCIATION",
+                                "supporting_claim_ids": ["sector-comparison"],
+                                "uncertainties": ["CAUSALITY_NOT_ESTABLISHED"],
+                                "limitations": [
+                                    "HISTORICAL_EVIDENCE_ONLY",
+                                    "NOT_A_TRADING_RECOMMENDATION",
+                                ],
+                            },
+                        },
+                    ],
+                    "warnings": [],
+                    "needs_clarification": False,
+                },
+                ensure_ascii=False,
+            )
+        )
+
+
 def test_total_deadline_failure_does_not_leave_running_turn() -> None:
     settings = _enabled_settings()
     clock = [0.0]
@@ -475,6 +557,104 @@ def test_chat_tool_call_uses_read_only_session_and_persists_only_chat_audit() ->
             ) == before
         finally:
             db.execute(sa.delete(DataQualityDaily).where(DataQualityDaily.id == quality_id))
+            db.commit()
+            db.close()
+            _cleanup_users(owner_id)
+
+
+def test_comparison_and_bounded_inference_are_compiled_and_persisted() -> None:
+    settings = _enabled_settings()
+    target_date = date(2098, 12, 29)
+    suffix = uuid.uuid4().hex[:10]
+    with SessionLocal() as db:
+        owner = _user(db, suffix="structured")
+        owner_id = owner.id
+        sectors = [
+            Sector(
+                source="TEST",
+                source_code=f"M1622-{suffix}-{index}",
+                name=f"M16.2.2 行业 {index}",
+                is_active=True,
+            )
+            for index in (1, 2)
+        ]
+        db.add_all(sectors)
+        db.flush()
+        strategy_hash = analysis_strategy_hash(settings.strategy)
+        factors = [
+            SectorFactorDaily(
+                trade_date=target_date,
+                sector_id=sector.sector_id,
+                member_count=10,
+                eligible_member_count=10,
+                heat_score=score,
+                heat_momentum1=1.0,
+                heat_momentum3=2.0,
+                heat_rank=index,
+                rank_change=0,
+                lifecycle="TREND",
+                calc_version=SECTOR_CALC_VERSION,
+                config_hash=strategy_hash,
+                calculated_at=datetime.now(UTC),
+            )
+            for index, (sector, score) in enumerate(
+                zip(sectors, (88.0, 76.0), strict=True),
+                start=1,
+            )
+        ]
+        db.add_all(factors)
+        db.commit()
+        sector_ids = [item.sector_id for item in sectors]
+        try:
+            service = AgentChatApplication(
+                db,
+                settings,
+                provider=StructuredResearchProvider(target_date),
+            )
+            chat = service.create_chat(user=owner, title="结构化研究")
+            result = service.send_message(
+                user=owner,
+                chat_id=chat.chat_id,
+                content="对比两个行业并给出有边界的解释。",
+                request_id="m16-2-2-structured",
+            )
+            assert result.status == "COMPLETED"
+            assert [item.claim_type for item in result.claims] == [
+                "COMPARISON",
+                "INFERENCE",
+            ]
+            comparison, inference = result.claims
+            assert comparison.comparison_state == "COMPARABLE"
+            assert comparison.policy_version == "m16.2.2-comparison-v1"
+            assert len(comparison.verified_fact_refs) == 2
+            assert inference.policy_version == "m16.2.2-inference-v1"
+            assert inference.verified_fact_refs == comparison.verified_fact_refs
+            assert "可能" in inference.text
+            assert "99" not in result.answer
+            assert len(result.citations) == 2
+            assert all(item.observed_at is not None for item in result.citations)
+
+            persisted = db.scalar(
+                sa.select(AgentChatMessage).where(
+                    AgentChatMessage.session_id == chat.chat_id,
+                    AgentChatMessage.role == "ASSISTANT",
+                )
+            )
+            assert persisted is not None
+            stored_claims = persisted.metadata_json["claims"]
+            assert stored_claims[0]["comparison_state"] == "COMPARABLE"
+            assert stored_claims[1]["verified_fact_refs"] == (
+                stored_claims[0]["verified_fact_refs"]
+            )
+            assert persisted.metadata_json["citations"][0]["observed_at"]
+        finally:
+            db.execute(
+                sa.delete(SectorFactorDaily).where(
+                    SectorFactorDaily.sector_id.in_(sector_ids),
+                    SectorFactorDaily.trade_date == target_date,
+                )
+            )
+            db.execute(sa.delete(Sector).where(Sector.sector_id.in_(sector_ids)))
             db.commit()
             db.close()
             _cleanup_users(owner_id)

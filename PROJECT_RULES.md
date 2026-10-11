@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 16.2.1；后续 M13-M16 的冻结规则见本文后续章节：
+当前已完成 Milestone 0 到 Milestone 16.2.2；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -68,7 +68,8 @@
 - pytest
 
 当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime，
-M16.2.1 完成端到端时间预算、Claim 证据强绑定、请求内容幂等和比较策略收口。
+M16.2.1 完成端到端时间预算、Claim 证据强绑定、请求内容幂等和基础比较策略；
+M16.2.2 进一步收口 TRAIN/OOS 持久化同源、独立回测三态可比性与有界定性推断。
 启用后模型也只能编排既有八工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
 修改生产策略权重、阈值或 S0-S6 定义。
 
@@ -538,3 +539,20 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - `0048_m16_2_1_request_hash` 只新增可空 hash 与格式约束，历史行保持 NULL；
   `0049_m16_2_1_hash_name` 仅幂等规范预发布环境的约束名称。回滚不得删除消息或证据；配置关闭仍是
   首选运行时回滚。八个 M16.1 工具、Session Cookie 鉴权、owner 隔离和只读数据库边界保持不变。
+
+## Milestone 16.2.2 Research Integrity 规则
+
+- TRAIN/OOS 比较只能依据已持久化的 Study → Window → Train Experiment → Selected Trial
+  → Train Run 与同一 Window Validation 的 OOS Run 强关联。模型自报的 Study、Window、Run
+  或 sample role 均不是可信归属；Study 级 `walk_forward.summary` 不得冒充单窗 OOS。
+- 独立回测比较必须解析完整 M14 Performance/Risk/Trade/Period bundle 及 Run 快照，由服务端
+  输出 `COMPARABLE` / `CONTEXT_REQUIRED` / `INCOMPATIBLE`。未知身份、不完整 bundle 或关键
+  统计口径冲突不得默认可比。
+- 日期/样本、benchmark、初始资金、执行与会计快照差异必须显式给出原因码；频率、
+  币种、关键版本或超额收益所依赖的 benchmark 冲突必须拒绝定量优劣结论。
+- 新式 INFERENCE 必须引用已验证的非推断 Claim，且只能使用后端枚举的 hypothesis、
+  uncertainties 和 limitations。用户可见文本由服务端模板生成，不得带入模型新增的
+  数字、日期、排名或确定因果。被拒绝的比较/推断不得覆盖同轮已验证事实。
+- `lineage_decision`、`comparison_state`、`reason_codes`、`verified_fact_refs`、策略版本与
+  Evidence v2 身份保存在既有 assistant message JSON 元数据。本阶段不新增迁移；历史会话和
+  旧 INFERENCE 固定安全声明保持可读。

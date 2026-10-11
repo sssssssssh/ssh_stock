@@ -1387,3 +1387,16 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
   重放，以防把旧答案错误绑定到新问题。
 - 本阶段不新增前端、工具、自动回测、策略写入、交易、外部检索或长期记忆；原八个只读工具及登录
   鉴权方式保持兼容。
+
+## Milestone 16.2.2：研究证据同源与可信推断（2026-10-11）
+
+- TRAIN/OOS 同源声称必须由持久化 Study、Window、Experiment、Selected Trial、Train Run、
+  Validation 和 OOS Run 关系校验，不采信模型自报关系。链路不完整只能分开展示事实，
+  关系冲突则拒绝比较。
+- 独立回测对比必须显式产生 `COMPARABLE`、`CONTEXT_REQUIRED` 或 `INCOMPATIBLE`。
+  不同日期、样本、benchmark、成本、滑点、初始资金或执行/会计假设必须告知用户；
+  身份缺失、bundle 不完整或关键统计口径冲突时不得声称策略优劣。
+- 定性推断必须引用已校验 FACT/COMPARISON Claim，并显式呈现限定措辞、不确定性与限制。
+  推断不得新增未验证的收益率、价格、日期、排名或确定因果。
+- 同一轮部分比较或推断被拒绝时，仍保留已验证事实并明示拒绝原因。原八个只读工具、
+  API envelope、鉴权、幂等、Deadline 和历史会话保持兼容。

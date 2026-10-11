@@ -32,7 +32,12 @@ from app.services.agent.adapters.market_data import MarketDataAgentAdapter
 from app.services.agent.adapters.opportunities import OpportunityAgentAdapter
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.application import AgentApplicationService
+from app.services.agent.chat.comparison_contract import (
+    BacktestComparisonContractResolver,
+)
+from app.services.agent.chat.comparison_policy import EvidenceComparisonPolicy
 from app.services.agent.chat.evidence_compiler import EvidenceCompiler
+from app.services.agent.chat.lineage import ExperimentLineageResolver
 from app.services.agent.chat.orchestrator import ToolCallAudit, ToolOrchestrator
 from app.services.agent.chat.prompt import SYSTEM_PROMPT
 from app.services.agent.chat.request_identity import request_content_hash
@@ -179,20 +184,31 @@ class AgentChatApplication:
                 deadline=deadline,
             )
             self._ensure_deadline(deadline)
-            compiled = EvidenceCompiler(
-                max_answer_chars=self.config.llm.max_answer_chars,
-                max_claims=self.config.llm.max_claims,
-                max_evidence_ids_per_claim=(
-                    self.config.llm.max_evidence_ids_per_claim
-                ),
-                max_structured_facts_per_claim=(
-                    self.config.llm.max_structured_facts_per_claim
-                ),
-            ).compile(
-                final_text=orchestration.final_text,
-                tool_results=orchestration.tool_results,
-                inherited_warnings=context_warning + orchestration.warnings,
-            )
+            remaining = deadline - self._monotonic()
+            if remaining <= 0:
+                raise total_deadline_exceeded()
+            with agent_db_session(
+                self.settings,
+                remaining_seconds=remaining,
+            ) as evidence_db:
+                compiled = EvidenceCompiler(
+                    max_answer_chars=self.config.llm.max_answer_chars,
+                    max_claims=self.config.llm.max_claims,
+                    max_evidence_ids_per_claim=(
+                        self.config.llm.max_evidence_ids_per_claim
+                    ),
+                    max_structured_facts_per_claim=(
+                        self.config.llm.max_structured_facts_per_claim
+                    ),
+                    comparison_policy=EvidenceComparisonPolicy(
+                        lineage_resolver=ExperimentLineageResolver(evidence_db),
+                        contract_resolver=BacktestComparisonContractResolver(evidence_db),
+                    ),
+                ).compile(
+                    final_text=orchestration.final_text,
+                    tool_results=orchestration.tool_results,
+                    inherited_warnings=context_warning + orchestration.warnings,
+                )
             self._ensure_deadline(deadline)
             answer = self._complete_turn(
                 chat_id=chat_id,

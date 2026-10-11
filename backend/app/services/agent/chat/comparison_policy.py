@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.domain.agent.chat import StructuredClaim
+from app.domain.agent.chat import LineageDecision, StructuredClaim
+from app.services.agent.chat.comparison_contract import (
+    BacktestComparisonContractResolver,
+)
+from app.services.agent.chat.lineage import ExperimentLineageResolver
+
+COMPARISON_POLICY_VERSION = "m16.2.2-comparison-v1"
 
 
 class ComparisonPolicyError(ValueError):
@@ -22,102 +28,132 @@ class ComparisonFactContext:
     identity: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ComparisonEvidenceContext:
+    tool_name: str
+    evidence: dict[str, Any]
+    identity: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ComparisonPolicyDecision:
+    state: str
+    reason_codes: tuple[str, ...] = ()
+    lineage_decision: LineageDecision | None = None
+    policy_version: str = COMPARISON_POLICY_VERSION
+
+
 class EvidenceComparisonPolicy:
     """Deterministic compatibility gate; provider prose cannot override it."""
+
+    def __init__(
+        self,
+        *,
+        lineage_resolver: ExperimentLineageResolver | None = None,
+        contract_resolver: BacktestComparisonContractResolver | None = None,
+    ) -> None:
+        self.lineage_resolver = lineage_resolver
+        self.contract_resolver = contract_resolver
 
     def evaluate(
         self,
         claim: StructuredClaim,
         facts: list[ComparisonFactContext],
-    ) -> list[str]:
+        evidence: list[ComparisonEvidenceContext],
+    ) -> ComparisonPolicyDecision:
         if claim.claim_type != "COMPARISON":
-            return []
+            return ComparisonPolicyDecision("COMPARABLE")
         if len(facts) < 2:
-            raise ComparisonPolicyError("comparison requires at least two verified facts")
-        method = getattr(self, f"_validate_{claim.comparison_type.lower()}")
-        return method(facts)
+            return _incompatible("COMPARISON_REQUIRES_TWO_FACTS")
+        try:
+            method = getattr(self, f"_validate_{claim.comparison_type.lower()}")
+            return method(facts, evidence)
+        except ComparisonPolicyError as exc:
+            return _incompatible(str(exc))
 
     @staticmethod
     def _validate_same_date_ranking(
         facts: list[ComparisonFactContext],
-    ) -> list[str]:
+        evidence: list[ComparisonEvidenceContext],
+    ) -> ComparisonPolicyDecision:
+        del evidence
         if len({fact.trade_date for fact in facts}) != 1:
-            raise ComparisonPolicyError("same-date ranking mixes trade dates")
+            raise ComparisonPolicyError("SAME_DATE_RANKING_DATE_MISMATCH")
         if len({fact.entity for fact in facts}) < 2:
-            raise ComparisonPolicyError("same-date ranking requires distinct entities")
+            raise ComparisonPolicyError("SAME_DATE_RANKING_DISTINCT_ENTITY_REQUIRED")
         if len({fact.tool_name for fact in facts}) != 1:
-            raise ComparisonPolicyError("same-date ranking mixes tool contracts")
+            raise ComparisonPolicyError("SAME_DATE_RANKING_TOOL_MISMATCH")
         _require_same_units_and_leaf_path(facts)
         _require_same_identity(facts, include_source_hash=True)
-        return []
+        return ComparisonPolicyDecision("COMPARABLE")
 
     @staticmethod
     def _validate_entity_over_time(
         facts: list[ComparisonFactContext],
-    ) -> list[str]:
+        evidence: list[ComparisonEvidenceContext],
+    ) -> ComparisonPolicyDecision:
+        del evidence
         if len({fact.entity for fact in facts}) != 1:
-            raise ComparisonPolicyError("time-series comparison mixes entities")
+            raise ComparisonPolicyError("ENTITY_OVER_TIME_ENTITY_MISMATCH")
         if len({fact.trade_date for fact in facts}) < 2:
-            raise ComparisonPolicyError("time-series comparison requires distinct dates")
+            raise ComparisonPolicyError("ENTITY_OVER_TIME_DISTINCT_DATE_REQUIRED")
         if len({fact.tool_name for fact in facts}) != 1:
-            raise ComparisonPolicyError("time-series comparison mixes tool contracts")
+            raise ComparisonPolicyError("ENTITY_OVER_TIME_TOOL_MISMATCH")
         _require_same_units_and_leaf_path(facts)
         _require_same_identity(facts, include_source_hash=False)
-        return ["COMPARISON_REQUIRES_CONTEXT:ENTITY_OVER_TIME"]
+        return ComparisonPolicyDecision(
+            "CONTEXT_REQUIRED",
+            ("ENTITY_OVER_TIME",),
+        )
 
-    @staticmethod
     def _validate_independent_backtests(
+        self,
         facts: list[ComparisonFactContext],
-    ) -> list[str]:
-        allowed = {"backtest.summary", "performance.summary"}
-        if any(fact.tool_name not in allowed for fact in facts):
-            raise ComparisonPolicyError(
-                "independent backtest comparison uses non-backtest evidence"
-            )
+        evidence: list[ComparisonEvidenceContext],
+    ) -> ComparisonPolicyDecision:
+        del evidence
         if len({fact.entity for fact in facts}) < 2:
-            raise ComparisonPolicyError("independent backtest comparison requires distinct runs")
+            raise ComparisonPolicyError("INDEPENDENT_BACKTEST_DISTINCT_RUN_REQUIRED")
         _require_same_units_and_leaf_path(facts)
-        for fact in facts:
-            evidence = fact.evidence
-            if not evidence.get("calc_run_id") or not evidence.get("config_hash"):
-                raise ComparisonPolicyError("backtest evidence lacks run or configuration identity")
-        _require_analytics_contract(facts)
-        return ["COMPARISON_REQUIRES_CONTEXT:INDEPENDENT_BACKTESTS"]
+        if self.contract_resolver is None:
+            return _incompatible("COMPARISON_CONTRACT_RESOLVER_UNAVAILABLE")
+        decision = self.contract_resolver.resolve(facts)
+        return ComparisonPolicyDecision(
+            decision.state,
+            decision.reason_codes,
+            policy_version=decision.policy_version,
+        )
 
-    @staticmethod
     def _validate_train_vs_oos(
+        self,
         facts: list[ComparisonFactContext],
-    ) -> list[str]:
+        evidence: list[ComparisonEvidenceContext],
+    ) -> ComparisonPolicyDecision:
         roles = {fact.sample_role for fact in facts}
         if roles != {"TRAIN", "OOS"}:
-            raise ComparisonPolicyError(
-                "TRAIN/OOS comparison requires explicit TRAIN and OOS facts"
+            raise ComparisonPolicyError("TRAIN_AND_OOS_ROLES_REQUIRED")
+        _require_same_units_and_leaf_path(facts)
+        if self.lineage_resolver is None:
+            return _incompatible("LINEAGE_RESOLVER_UNAVAILABLE")
+        lineage = self.lineage_resolver.resolve_train_oos(facts, evidence)
+        if lineage.status != "VERIFIED":
+            return ComparisonPolicyDecision(
+                "INCOMPATIBLE",
+                tuple(lineage.reason_codes),
+                lineage_decision=lineage,
             )
-        oos = [fact for fact in facts if fact.sample_role == "OOS"]
-        train = [fact for fact in facts if fact.sample_role == "TRAIN"]
-        if any(fact.tool_name != "walk_forward.summary" for fact in oos):
-            raise ComparisonPolicyError("OOS fact is not backed by walk-forward evidence")
-        if any(
-            fact.tool_name not in {"backtest.summary", "performance.summary"}
-            for fact in train
-        ):
-            raise ComparisonPolicyError("TRAIN fact is not backed by backtest evidence")
-        if len({fact.unit for fact in facts}) != 1:
-            raise ComparisonPolicyError("TRAIN/OOS comparison mixes units")
-        for fact in oos:
-            if not fact.evidence.get("report_id") or not fact.evidence.get("source_hash"):
-                raise ComparisonPolicyError("OOS evidence lacks report source identity")
-        for fact in train:
-            if not fact.evidence.get("calc_run_id"):
-                raise ComparisonPolicyError("TRAIN evidence lacks run identity")
-        return ["COMPARISON_REQUIRES_CONTEXT:TRAIN_VS_OOS"]
+        return ComparisonPolicyDecision(
+            "CONTEXT_REQUIRED",
+            ("TRAIN_OOS_DISTINCT_SAMPLE_WINDOWS",),
+            lineage_decision=lineage,
+        )
 
 
 def _require_same_units_and_leaf_path(facts: list[ComparisonFactContext]) -> None:
     if len({fact.unit for fact in facts}) != 1:
-        raise ComparisonPolicyError("comparison mixes units")
+        raise ComparisonPolicyError("METRIC_UNIT_MISMATCH")
     if len({fact.path.split(".")[-1] for fact in facts}) != 1:
-        raise ComparisonPolicyError("comparison mixes metric fields")
+        raise ComparisonPolicyError("METRIC_FIELD_MISMATCH")
 
 
 def _require_same_identity(
@@ -138,7 +174,7 @@ def _require_same_identity(
     if len(signatures) != 1 or any(
         signature[index] is None for index in range(len(required_keys))
     ):
-        raise ComparisonPolicyError("comparison calculation identity is missing or inconsistent")
+        raise ComparisonPolicyError("CALCULATION_IDENTITY_MISMATCH")
     if include_source_hash:
         source_hashes = {
             fact.evidence.get("source_hash") or fact.identity.get("source_hash")
@@ -146,29 +182,8 @@ def _require_same_identity(
         }
         source_hashes.discard(None)
         if len(source_hashes) > 1:
-            raise ComparisonPolicyError("same-date ranking mixes source identities")
+            raise ComparisonPolicyError("SOURCE_IDENTITY_MISMATCH")
 
 
-def _require_analytics_contract(facts: list[ComparisonFactContext]) -> None:
-    versions = set()
-    configs = set()
-    for fact in facts:
-        identity = fact.identity
-        if fact.tool_name == "performance.summary":
-            versions.add(identity.get("performance_version"))
-            configs.add(identity.get("performance_config_hash"))
-        else:
-            source = identity.get("source_identity") or identity
-            versions.add(
-                tuple(
-                    source.get(key)
-                    for key in (
-                        "portfolio_version",
-                        "execution_version",
-                        "accounting_version",
-                    )
-                )
-            )
-            configs.add(source.get("portfolio_config_hash"))
-    if None in versions or None in configs or len(versions) != 1 or len(configs) != 1:
-        raise ComparisonPolicyError("backtest statistical or accounting contract is incompatible")
+def _incompatible(reason_code: str) -> ComparisonPolicyDecision:
+    return ComparisonPolicyDecision("INCOMPATIBLE", (reason_code,))

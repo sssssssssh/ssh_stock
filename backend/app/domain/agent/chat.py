@@ -20,7 +20,12 @@ class ChatCitation(ChatDTO):
     as_of_date: date | None = None
     report_id: str | None = None
     calc_run_id: str | None = None
+    calc_version: str | None = None
+    algo_version: str | None = None
+    config_hash: str | None = None
+    source_hash: str | None = None
     content_hash: str | None = None
+    observed_at: datetime | None = None
 
 
 ClaimType = Literal["FACT", "INFERENCE", "COMPARISON"]
@@ -31,6 +36,44 @@ ComparisonType = Literal[
     "TRAIN_VS_OOS",
 ]
 SampleRole = Literal["TRAIN", "OOS", "LIVE", "UNKNOWN"]
+ComparisonState = Literal["COMPARABLE", "CONTEXT_REQUIRED", "INCOMPATIBLE"]
+LineageStatus = Literal["VERIFIED", "UNVERIFIABLE", "MISMATCH"]
+InferenceHypothesis = Literal[
+    "POSSIBLE_ASSOCIATION",
+    "POSSIBLE_REGIME_SENSITIVITY",
+    "POSSIBLE_COST_SENSITIVITY",
+    "POSSIBLE_STABILITY_CONCERN",
+]
+InferenceUncertainty = Literal[
+    "CAUSALITY_NOT_ESTABLISHED",
+    "SAMPLE_SCOPE_LIMITED",
+    "MARKET_REGIME_MAY_DIFFER",
+    "UNOBSERVED_FACTORS_REMAIN",
+]
+InferenceLimitation = Literal[
+    "HISTORICAL_EVIDENCE_ONLY",
+    "NOT_A_RETURN_GUARANTEE",
+    "NOT_A_TRADING_RECOMMENDATION",
+    "COMPARISON_CONTEXT_REQUIRED",
+]
+
+
+class LineageDecision(ChatDTO):
+    status: LineageStatus
+    study_id: str | None = None
+    window_no: int | None = Field(default=None, ge=1)
+    train_run_id: str | None = None
+    oos_run_id: str | None = None
+    validation_id: str | None = None
+    reason_codes: list[str] = Field(default_factory=list, max_length=16)
+    policy_version: str = "m16.2.2-lineage-v1"
+
+
+class StructuredInference(ChatDTO):
+    hypothesis: InferenceHypothesis
+    supporting_claim_ids: list[str] = Field(min_length=1, max_length=8)
+    uncertainties: list[InferenceUncertainty] = Field(min_length=1, max_length=8)
+    limitations: list[InferenceLimitation] = Field(min_length=1, max_length=8)
 
 
 class StructuredFact(ChatDTO):
@@ -61,6 +104,12 @@ class StructuredClaim(ChatDTO):
     structured_facts: list[StructuredFact] = Field(default_factory=list, max_length=24)
     quality_status: Literal["PASS", "WARNING", "UNKNOWN"] = "UNKNOWN"
     comparison_type: ComparisonType | None = None
+    inference: StructuredInference | None = None
+    lineage_decision: LineageDecision | None = None
+    comparison_state: ComparisonState | None = None
+    reason_codes: list[str] = Field(default_factory=list, max_length=24)
+    verified_fact_refs: list[str] = Field(default_factory=list, max_length=24)
+    policy_version: str | None = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def validate_claim_shape(self) -> StructuredClaim:
@@ -68,6 +117,8 @@ class StructuredClaim(ChatDTO):
             raise ValueError("comparison claim requires comparison_type")
         if self.claim_type != "COMPARISON" and self.comparison_type is not None:
             raise ValueError("comparison_type is only valid for comparison claims")
+        if self.claim_type != "INFERENCE" and self.inference is not None:
+            raise ValueError("inference payload is only valid for inference claims")
         return self
 
 

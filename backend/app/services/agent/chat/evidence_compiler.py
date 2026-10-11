@@ -17,9 +17,13 @@ from app.domain.agent.chat import (
 )
 from app.domain.agent.chat_errors import AgentChatError
 from app.services.agent.chat.comparison_policy import (
+    ComparisonEvidenceContext,
     ComparisonFactContext,
-    ComparisonPolicyError,
     EvidenceComparisonPolicy,
+)
+from app.services.agent.chat.inference_policy import (
+    InferencePolicy,
+    InferencePolicyError,
 )
 from app.services.agent.chat.orchestrator import ToolResultContext
 
@@ -161,12 +165,14 @@ class EvidenceCompiler:
         max_evidence_ids_per_claim: int = 8,
         max_structured_facts_per_claim: int = 12,
         comparison_policy: EvidenceComparisonPolicy | None = None,
+        inference_policy: InferencePolicy | None = None,
     ) -> None:
         self.max_answer_chars = max_answer_chars
         self.max_claims = max_claims
         self.max_evidence_ids_per_claim = max_evidence_ids_per_claim
         self.max_structured_facts_per_claim = max_structured_facts_per_claim
         self.comparison_policy = comparison_policy or EvidenceComparisonPolicy()
+        self.inference_policy = inference_policy or InferencePolicy()
 
     def compile(
         self,
@@ -196,44 +202,95 @@ class EvidenceCompiler:
                 status_code=502,
             )
 
-        verified: list[StructuredClaim] = []
-        bound_evidence_ids: list[str] = []
+        accepted_by_id: dict[str, StructuredClaim] = {}
+        rejected_by_id: dict[str, StructuredClaim] = {}
         rejected = False
         seen_claim_ids: set[str] = set()
+        unique_claims: list[StructuredClaim] = []
         for claim in draft.claims:
             if claim.claim_id in seen_claim_ids:
                 warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:DUPLICATE_CLAIM_ID")
                 rejected = True
                 continue
             seen_claim_ids.add(claim.claim_id)
+            unique_claims.append(claim)
+        for claim in (item for item in unique_claims if item.claim_type != "INFERENCE"):
             try:
-                checked, policy_warnings = self._validate_claim(claim, evidence)
+                checked, policy_warnings, accepted = self._validate_claim(
+                    claim,
+                    evidence,
+                    accepted_by_id,
+                )
             except _ClaimValidationError as exc:
                 warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:{exc.code}")
                 rejected = True
                 continue
-            verified.append(checked)
-            bound_evidence_ids.extend(checked.evidence_ids)
             warnings.extend(policy_warnings)
+            if accepted:
+                accepted_by_id[checked.claim_id] = checked
+            else:
+                rejected_by_id[checked.claim_id] = checked
+                warnings.append(
+                    f"CLAIM_REJECTED:{claim.claim_id}:COMPARISON_INCOMPATIBLE"
+                )
+                warnings.extend(
+                    f"CLAIM_REJECTED_REASON:{claim.claim_id}:{code}"
+                    for code in checked.reason_codes
+                )
+                rejected = True
+        for claim in (item for item in unique_claims if item.claim_type == "INFERENCE"):
+            try:
+                checked, policy_warnings, accepted = self._validate_claim(
+                    claim,
+                    evidence,
+                    accepted_by_id,
+                )
+            except _ClaimValidationError as exc:
+                warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:{exc.code}")
+                rejected = True
+                continue
+            warnings.extend(policy_warnings)
+            if accepted:
+                accepted_by_id[checked.claim_id] = checked
+            else:
+                rejected_by_id[checked.claim_id] = checked
+                rejected = True
+
+        accepted = [
+            accepted_by_id[claim.claim_id]
+            for claim in unique_claims
+            if claim.claim_id in accepted_by_id
+        ]
+        rejected_claims = [
+            rejected_by_id[claim.claim_id]
+            for claim in unique_claims
+            if claim.claim_id in rejected_by_id
+        ]
+        bound_evidence_ids = [
+            evidence_id for claim in accepted for evidence_id in claim.evidence_ids
+        ]
 
         unbound = set(draft.evidence_ids) - set(bound_evidence_ids)
         if unbound:
             warnings.append("UNBOUND_TOP_LEVEL_CITATION")
 
-        if rejected or (draft.claims and not verified):
-            return self._insufficient(draft.answer, warnings, False)
-        if not verified:
+        if not accepted:
             return self._insufficient(
                 draft.answer,
                 warnings,
                 draft.needs_clarification,
+                claims=rejected_claims,
             )
 
         citations = _citations(bound_evidence_ids, evidence)
         marker_by_evidence = {item.evidence_id: item.marker for item in citations}
         answer = _answer_with_claim_markers(
-            "以下结论已通过只读工具证据逐项校验。",
-            verified,
+            (
+                "以下仅保留通过只读工具证据校验的结论；其余比较或推断已被拒绝。"
+                if rejected
+                else "以下结论已通过只读工具证据逐项校验。"
+            ),
+            accepted,
             marker_by_evidence,
         )
         if len(answer) > self.max_answer_chars:
@@ -244,17 +301,18 @@ class EvidenceCompiler:
             )
         return CompiledEvidenceAnswer(
             answer=answer,
-            claims=verified,
+            claims=[*accepted, *rejected_claims],
             citations=citations,
             warnings=list(dict.fromkeys(warnings)),
-            insufficient_evidence=False,
+            insufficient_evidence=rejected,
         )
 
     def _validate_claim(
         self,
         claim: StructuredClaim,
         evidence: dict[str, _EvidenceBinding],
-    ) -> tuple[StructuredClaim, list[str]]:
+        verified_claims: dict[str, StructuredClaim],
+    ) -> tuple[StructuredClaim, list[str], bool]:
         if not claim.evidence_ids:
             raise _ClaimValidationError("MISSING_EVIDENCE")
         if len(claim.evidence_ids) > self.max_evidence_ids_per_claim:
@@ -275,23 +333,80 @@ class EvidenceCompiler:
         fact_contexts = [
             self._validate_fact(fact, bindings) for fact in claim.structured_facts
         ]
-        try:
-            policy_warnings = self.comparison_policy.evaluate(claim, fact_contexts)
-        except ComparisonPolicyError as exc:
-            raise _ClaimValidationError("COMPARISON_INCOMPATIBLE") from exc
+        verified_refs = [
+            f"{context.evidence['evidence_id']}:{fact.path}"
+            for fact, context in zip(
+                claim.structured_facts,
+                fact_contexts,
+                strict=True,
+            )
+        ]
+        if claim.claim_type == "INFERENCE":
+            try:
+                inference = self.inference_policy.evaluate(claim, verified_claims)
+            except InferencePolicyError as exc:
+                raise _ClaimValidationError(exc.code) from exc
+            return claim.model_copy(
+                update={
+                    "quality_status": "WARNING",
+                    "text": inference.text,
+                    "inference": inference.inference,
+                    "reason_codes": list(inference.reason_codes),
+                    "verified_fact_refs": list(inference.verified_fact_refs),
+                    "policy_version": inference.policy_version,
+                    "comparison_state": None,
+                    "lineage_decision": None,
+                }
+            ), [], True
+
+        evidence_contexts = [
+            ComparisonEvidenceContext(
+                tool_name=binding.context.tool_name,
+                evidence=binding.ref,
+                identity=(
+                    binding.context.payload.get("identity")
+                    if isinstance(binding.context.payload.get("identity"), dict)
+                    else {}
+                ),
+            )
+            for binding in bindings
+        ]
+        decision = self.comparison_policy.evaluate(
+            claim,
+            fact_contexts,
+            evidence_contexts,
+        )
+        policy_warnings = [
+            f"COMPARISON_REQUIRES_CONTEXT:{code}"
+            for code in decision.reason_codes
+            if decision.state == "CONTEXT_REQUIRED"
+        ]
 
         quality = (
             "WARNING"
-            if claim.claim_type == "INFERENCE"
+            if decision.state == "CONTEXT_REQUIRED"
             or any(binding.ref.get("quality_status") != "PASS" for binding in bindings)
             else "PASS"
         )
-        return claim.model_copy(
+        accepted = decision.state != "INCOMPATIBLE"
+        checked = claim.model_copy(
             update={
-                "quality_status": quality,
-                "text": _verified_claim_text(claim),
+                "quality_status": quality if accepted else "WARNING",
+                "text": (
+                    _verified_claim_text(claim)
+                    if accepted
+                    else "该比较因证据同源关系或统计口径不兼容而被拒绝。"
+                ),
+                "comparison_state": (
+                    decision.state if claim.claim_type == "COMPARISON" else None
+                ),
+                "lineage_decision": decision.lineage_decision,
+                "reason_codes": list(decision.reason_codes),
+                "verified_fact_refs": verified_refs,
+                "policy_version": decision.policy_version,
             }
-        ), policy_warnings
+        )
+        return checked, policy_warnings, accepted
 
     @staticmethod
     def _validate_fact(
@@ -322,6 +437,7 @@ class EvidenceCompiler:
         draft_answer: str,
         warnings: list[str],
         preserve_answer: bool,
+        claims: list[StructuredClaim] | None = None,
     ) -> CompiledEvidenceAnswer:
         warnings.append("INSUFFICIENT_EVIDENCE")
         answer = (
@@ -337,7 +453,7 @@ class EvidenceCompiler:
             )
         return CompiledEvidenceAnswer(
             answer=answer,
-            claims=[],
+            claims=claims or [],
             citations=[],
             warnings=list(dict.fromkeys(warnings)),
             insufficient_evidence=True,
@@ -401,6 +517,17 @@ def _validate_fact_binding(
     if str(evidence_date) != fact.trade_date.isoformat():
         raise _ClaimValidationError("TRADE_DATE_MISMATCH")
     actual = _resolve_path(binding.context.payload, fact.path)
+    identity = binding.context.payload.get("identity")
+    identity = identity if isinstance(identity, dict) else {}
+    if tool_name == "performance.summary":
+        section = fact.path.split(".")[2]
+        expected_report_id = identity.get(f"{section}_id")
+        if section not in {"performance", "risk", "trade", "period"}:
+            raise _ClaimValidationError("EVIDENCE_RECORD_MISMATCH")
+        if expected_report_id is not None and str(binding.ref.get("report_id")) != str(
+            expected_report_id
+        ):
+            raise _ClaimValidationError("EVIDENCE_RECORD_MISMATCH")
     if tool_name == "data.coverage":
         parts = fact.path.split(".")
         if len(parts) >= 5 and parts[2] == "dataset_coverage":
@@ -412,7 +539,6 @@ def _validate_fact_binding(
             if str(dataset) != fact.entity:
                 raise _ClaimValidationError("ENTITY_MISMATCH")
     _compare_value(actual, fact.value, fact.unit, fact.path)
-    identity = binding.context.payload.get("identity")
     return ComparisonFactContext(
         tool_name=tool_name,
         entity=fact.entity,
@@ -421,7 +547,7 @@ def _validate_fact_binding(
         unit=fact.unit,
         sample_role=fact.sample_role,
         evidence=binding.ref,
-        identity=identity if isinstance(identity, dict) else {},
+        identity=identity,
     )
 
 
@@ -505,7 +631,12 @@ def _citations(
                 ),
                 report_id=ref.get("report_id"),
                 calc_run_id=ref.get("calc_run_id"),
+                calc_version=ref.get("calc_version"),
+                algo_version=ref.get("algo_version"),
+                config_hash=ref.get("config_hash"),
+                source_hash=ref.get("source_hash"),
                 content_hash=ref.get("content_hash"),
+                observed_at=ref.get("observed_at"),
             )
         )
     return citations

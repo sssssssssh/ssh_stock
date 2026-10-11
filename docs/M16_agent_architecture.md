@@ -252,3 +252,32 @@ or a historical NULL hash, returns HTTP 409 `IDEMPOTENCY_CONFLICT`; RUNNING and 
 duplicates retain controlled conflict behavior. `0048_m16_2_1_request_hash` adds the
 nullable historical-compatible column and format check. `0049_m16_2_1_hash_name` only
 normalizes a pre-release duplicated constraint name and does not rewrite data.
+
+## M16.2.2 research lineage, comparison contracts and bounded inference
+
+TRAIN/OOS claims are resolved from persisted M15 ownership rather than model-supplied IDs.
+`ExperimentLineageResolver` verifies the Validation Report owner, exact Study/Window,
+selected rank-one Trial and Train Run, exact Train/OOS M14 Performance owners, and frozen
+trade-date sets. A Study-level `walk_forward.summary` remains aggregate evidence and cannot
+stand in for a window-level OOS Performance fact. The decision is `VERIFIED`,
+`UNVERIFIABLE`, or `MISMATCH` with stable reason codes and public artifact IDs only.
+
+Independent backtests require complete, exact Performance/Risk/Trade/Period bundles.
+`BacktestComparisonContractResolver` reconstructs trade dates and reads benchmark,
+initial cash, portfolio/execution/accounting/backtest versions and snapshots from persisted
+artifacts. It returns `COMPARABLE`, `CONTEXT_REQUIRED`, or `INCOMPATIBLE`; unknown or
+incomplete identity fails closed. Context-required claims may present verified facts and
+the explicit differences but cannot make an unconditional winner claim.
+
+New structured INFERENCE claims reference already verified FACT/COMPARISON claim IDs and
+use enum-only hypotheses, uncertainties and limitations. `InferencePolicy` renders the
+user-visible text from server templates, so provider prose cannot add numbers, dates,
+rankings or deterministic causality. Decisions, reason codes, verified field references,
+policy versions, expanded Evidence v2 identity and observation timestamps are stored in
+the existing assistant-message JSON metadata. No migration is required; legacy claims and
+the fixed legacy inference statement remain readable.
+
+Evidence compilation opens a separate bounded `agent_db_session` transaction, preserving
+PostgreSQL READ ONLY and statement-timeout enforcement without extending the chat write
+transaction. Detailed contracts and verification evidence are recorded in
+`docs/M16_2_2_comparison_closeout.md`.

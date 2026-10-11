@@ -1364,3 +1364,17 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 升级执行 `python -m alembic upgrade head`，对应迁移为 `0048_m16_2_1_request_hash` 与
   `0049_m16_2_1_hash_name`。历史会话不回填、不改写，旧记录保持可读；不要在含用户历史的数据库上
   自行降级。详细边界、验证和已知同步取消限制见 `docs/M16_2_1_reliability_closeout.md`。
+
+### M16.2.2 研究同源、可比性与有界推断（2026-10-11）
+
+- TRAIN/OOS 对照现在通过 M15 已持久化强关联核验 Study、Window、Selected Trial、
+  Train Run 和 OOS Run；历史链路不完整时返回 `UNVERIFIABLE`，归属冲突时返回
+  `MISMATCH`。Study 级 OOS 汇总不能作为单窗 OOS 事实。
+- 独立回测比较使用完整 M14 bundle 和 Run 快照生成三态决策。`COMPARABLE` 才允许
+  无条件定量比较；`CONTEXT_REQUIRED` 只能并列事实并列出口径差异；
+  `INCOMPATIBLE` 拒绝定量优劣结论。
+- 有界 INFERENCE 只接受枚举假设、已验证支持 Claim、不确定性和限制。对外文本由
+  服务端模板生成，不使用模型原文中未验证的数字、日期、排名或确定因果。
+- 决策、原因码、已验证字段引用、策略版本和 Evidence v2 身份继续保存在原有
+  消息 JSON 元数据，所以本阶段无新 Alembic 迁移。详见
+  `docs/M16_2_2_comparison_closeout.md`。

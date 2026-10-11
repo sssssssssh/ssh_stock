@@ -134,6 +134,11 @@ class ResearchAgentAdapter:
             warnings.extend(period.warnings or [])
         identity = {
             "run_id": run.id,
+            "run_identity": _run_identity(run),
+            "run_start_date": run.start_date,
+            "run_end_date": run.end_date,
+            "initial_cash": run.initial_cash,
+            "benchmark_code": getattr(run, "benchmark_code", risk.benchmark_code),
             "performance_id": performance.id,
             "risk_id": risk.id,
             "trade_id": trade.id,
@@ -148,6 +153,7 @@ class ResearchAgentAdapter:
             "trade_config_hash": trade.trade_config_hash,
             "trade_source_hash": trade.trade_source_hash,
             "period_version": period.period_version if period else None,
+            "period_config_hash": period.period_config_hash if period else None,
             "period_source_hash": period.period_source_hash if period else None,
         }
         record = {
