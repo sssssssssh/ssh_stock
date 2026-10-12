@@ -115,10 +115,12 @@ node scripts/verify_m16_3_1_workbench.mjs
 已验证新增 Turn 路由在未登录时通过 Vite 代理返回 `401 UNAUTHORIZED`。
 正常部署仍使用 README 原有端口配置，根据需要停止旧服务后重启新代码。
 
-基线 CI 已核实：SHA `65a9b597a2aaf8f16aef8ea855e87fa5ca8ec32f`，
-[GitHub Actions run 38195530156](https://github.com/sssssssssh/ssh_stock/actions/runs/38195530156)，结论 success。
-本轮工作区尚未创建提交或推送，因此没有本轮 SHA 对应的 Actions 运行。
-这条基线记录不能替代本轮 CI；当前 DoD 的远端 CI 项保持待验收。
+本轮实现提交 `b9f66b29d56922ba1a956f00bc1fb4d819dbf31f` 的
+[CI #69](https://github.com/sssssssssh/ssh_stock/actions/runs/38219497949)
+在前端滚动位置测试失败。原因是 `scrollTo({ behavior: "smooth" })` 会在用户已经向上滚动后延迟覆盖其位置。
+修复提交 `471781a5490cfa55fd23a42bd5d843c807409bbb` 改为即时滚动，并增加延迟后仍保留阅读位置的断言；
+[CI #70](https://github.com/sssssssssh/ssh_stock/actions/runs/38222565677) 结论 success。
+桌面/手机浏览器验收已重跑，截图在证据抽屉完全展开后生成，并检查移动端操作按钮未被裁切。
 
 ## Checklist
 
@@ -128,7 +130,7 @@ node scripts/verify_m16_3_1_workbench.mjs
 | T02 最新页和全部历史 | 本地通过：0/1/199/200/201/1001、keyset、旧 offset、去重、前插位置、新增回复、索引 |
 | T03 精准证据定位 | 本地通过：结构化 Window/Run/实体/日期；旧证据、不存在目标与日期不一致明确降级 |
 | T04 状态恢复 | 本地通过：401/409/超时/禁用/离线；刷新、切换、归档限制、有限轮询、三态和失败展示 |
-| T05 测试和交付 | 本地通过：完整验证、复现脚本、截图与文档；本轮远端 CI 待提交后验收 |
+| T05 测试和交付 | 通过：本地完整验证、复现脚本、截图与文档；修复提交的远端 CI #70 success |
 
 ## 问题与回滚
 
