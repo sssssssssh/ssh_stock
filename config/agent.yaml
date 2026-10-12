@@ -9,6 +9,13 @@ agent:
   default_timeout_seconds: 5
   max_tool_timeout_seconds: 30
   statement_timeout_ms: 5000
+  archive:
+    enabled: false
+    max_payload_bytes: 65536
+    max_turn_bytes: 655360
+    max_tool_calls: 8
+    max_bindings: 64
+    verify_timeout_seconds: 5
   reports:
     max_snapshot_bytes: 262144
     max_claims: 50

@@ -80,6 +80,9 @@ from app.models.walk_forward import (
 __all__ = [
     "Base",
     "AppUser",
+    "AgentToolResultArchive",
+    "AgentEvidenceArchiveBinding",
+    "AgentTurnArchiveManifest",
     "AuthSession",
     "AgentChatMessage",
     "AgentChatSession",
@@ -144,3 +147,8 @@ __all__ = [
     "ThemeMoneyflowDaily",
     "StockOpportunityDaily",
 ]
+from app.models.agent_archive import (
+    AgentEvidenceArchiveBinding,
+    AgentToolResultArchive,
+    AgentTurnArchiveManifest,
+)

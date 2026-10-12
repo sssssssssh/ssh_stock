@@ -1414,6 +1414,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新报告可展示从冻结事实验证出的同日柱状图，原始数值与单位同时保留在表格。混合单位、来源绑定不明、非法值和点数超限退回表格；没有完整日序列时显示 `SERIES_NOT_AVAILABLE`。
 - 不需要 `0051`，迁移 HEAD 仍为 `0050_m16_4_reports`。更新后端与前端并重启，回滚仅回退应用代码并保留数据。部署前备份；完整验收、兼容边界和截图见 [M16.4.1 验收记录](docs/M16_4_1_report_comparison_integrity_closeout.md)。
 
+### M16.5 分阶段开发
+
+M16.5-A 已加入 Evidence Archive 的捕获契约与 `0051_m16_5_evidence_archive` 三张存储表。
+`config/agent.yaml` 的 `agent.archive.enabled` 默认 false；该阶段尚未接入聊天完成事务或报告 UI，
+不能把已有 Claim 快照描述为完整证据归档。迁移不回填历史；有归档数据时拒绝降级。
+后续 B–F 的验证与交付进度见 [M16.5 验收记录](docs/M16_5_evidence_archive_closeout.md)。
+
 ### 智能研究 LLM 连接配置
 
 复制 `.env.example` 中的 LLM 配置项到本机 `.env`，按实际服务填写；真实 Token 只写入本机

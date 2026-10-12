@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.core.agent_archive_config import AgentArchiveConfig
 from app.core.agent_llm_config import AgentLLMConfig
 from app.core.agent_report_config import AgentReportConfig
 
@@ -14,6 +15,7 @@ class AgentConfig(BaseModel):
     llm_enabled: bool = False
     llm: AgentLLMConfig = Field(default_factory=AgentLLMConfig)
     reports: AgentReportConfig = Field(default_factory=AgentReportConfig)
+    archive: AgentArchiveConfig = Field(default_factory=AgentArchiveConfig)
     max_output_bytes: int = Field(default=65_536, gt=0, le=65_536)
     max_coverage_datasets: int = Field(default=32, gt=0, le=128)
     max_evidence_refs: int = Field(default=64, gt=0, le=256)
@@ -32,11 +34,7 @@ class AgentConfig(BaseModel):
         if self.default_timeout_seconds > self.max_tool_timeout_seconds:
             raise ValueError("default tool timeout must not exceed the global timeout cap")
         if self.statement_timeout_ms > self.default_timeout_seconds * 1000:
-            raise ValueError(
-                "database statement timeout must not exceed the default tool budget"
-            )
+            raise ValueError("database statement timeout must not exceed the default tool budget")
         if self.max_evidence_refs < self.max_coverage_datasets:
-            raise ValueError(
-                "evidence limit must cover one reference per coverage dataset"
-            )
+            raise ValueError("evidence limit must cover one reference per coverage dataset")
         return self

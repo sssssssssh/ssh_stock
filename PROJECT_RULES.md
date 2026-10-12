@@ -37,6 +37,9 @@
 
 当前实现推进至 Milestone 16.4.1；后续 M13-M16 的冻结规则见本文后续章节：
 
+M16.5 正在按 A–F 分阶段交付。A 建立默认关闭的证据归档契约及 0051 存储；
+只有聊天原子写入、离线复核与报告绑定全部通过验收后，才可声明冻结事实可重验。
+
 - 工程骨架
 - 数据库与迁移
 - Provider 抽象
@@ -596,3 +599,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 详情、导出、比较、归档与幂等复用必须重算原 canonical Hash，并核对元数据、Claims/Citations/SourceContract、左右报告与比较结果绑定。失败只读拒绝，使用安全 HTTP 409；列表允许轻量查询。
 - 新快照在 JSON 内绑定 `source_contract_hash`，无需 Schema 迁移；旧快照无该摘要时只做可证明的结构一致性核验，不能宣称旧契约被 snapshot hash 覆盖。历史比较不改写，API 提供独立 `display_result/display_safety`，旧政策差值只保存在冻结审计结果中、不得作为新政策验证结果展示。
 - 柱状图必须包含冻结的完整指标、同日、同角色、实体类别与统一单位，并能逐点绑定 Claim/Citation。缺口退回表格；`CLAIM_SNAPSHOT_ONLY` 不绘制完整历史曲线。`0050` 与现有历史数据保持不变，部署/验证见 `docs/M16_4_1_report_comparison_integrity_closeout.md`。
+
+## Milestone 16.5 Evidence Archive 规则（分阶段实施）
+
+- 归档仅取启用后当次工具受控响应和 Evidence 生成时的真实内容投影。M16.4 历史消息/报告不回填、不改 Hash；不从当前业务表补历史洞。现有九工具契约及只读边界保持不变。
+- 0051 三张归档表以 owner/chat/turn/audit 复合外键和 UPDATE 不可变 Trigger 保护；父对象删除受 RESTRICT 阻止。存在归档时拒绝 downgrade，不添加隐式 TTL 或普通删除 API。
+- Evidence v2 原 canonical/content/identity 算法保持原样；内部投影不进入模型或公开工具响应。完整性、冻结事实复核、M14/M15 口径复核和算法重跑必须分别标识，SHA 只证明一致性，不提供防数据库管理员篡改保证。

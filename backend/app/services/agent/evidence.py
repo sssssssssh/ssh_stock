@@ -46,7 +46,7 @@ def evidence_ref(
         "quality_status": quality_status,
         "limitations": normalized_limitations,
     }
-    return EvidenceRef(
+    ref = EvidenceRef(
         evidence_id=canonical_content_hash(identity),
         evidence_version="v2",
         layer=layer,
@@ -65,6 +65,8 @@ def evidence_ref(
         quality_status=quality_status,
         limitations=normalized_limitations,
     )
+    ref._archive_projection = _canonical_value(content if content is not None else {})
+    return ref
 
 
 def canonical_content_hash(value: Any) -> str:

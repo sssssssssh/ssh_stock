@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 
 class AgentDTO(BaseModel):
@@ -85,6 +85,8 @@ class WalkForwardWindowLineageInput(AgentDTO):
 
 
 class EvidenceRef(AgentDTO):
+    # Server-only capture material. Never serialized into the tool/LLM/API response.
+    _archive_projection: Any = PrivateAttr(default=None)
     evidence_id: str
     evidence_version: Literal["v1", "v2"] = "v2"
     layer: Literal["DATA", "FACTOR_TREND", "STRATEGY_VALIDATION"]

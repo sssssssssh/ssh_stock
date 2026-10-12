@@ -30,11 +30,10 @@ class AgentChatSession(Base):
             name=conv("ck_agent_chat_session_status"),
         ),
         Index("idx_agent_chat_session_owner_updated", "owner_user_id", "updated_at"),
+        UniqueConstraint("id", "owner_user_id", name=conv("uq_agent_chat_session_archive_owner")),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("app_user.id", ondelete="CASCADE"),
@@ -87,9 +86,7 @@ class AgentChatMessage(Base):
         Index("idx_agent_chat_message_session_created", "session_id", "created_at"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_chat_session.id", ondelete="CASCADE"),
@@ -120,20 +117,14 @@ class AgentChatTurn(Base):
             name=conv("ck_agent_chat_turn_status"),
         ),
         CheckConstraint(
-            "request_content_hash IS NULL OR "
-            "request_content_hash ~ '^[0-9a-f]{64}$'",
+            "request_content_hash IS NULL OR request_content_hash ~ '^[0-9a-f]{64}$'",
             name=conv("ck_agent_chat_turn_request_content_hash"),
         ),
-        UniqueConstraint(
-            "session_id", "request_id", name=conv("uq_agent_chat_turn_request")
-        ),
-        UniqueConstraint(
-            "user_message_id", name=conv("uq_agent_chat_turn_user_message")
-        ),
-        UniqueConstraint(
-            "assistant_message_id", name=conv("uq_agent_chat_turn_assistant_message")
-        ),
+        UniqueConstraint("session_id", "request_id", name=conv("uq_agent_chat_turn_request")),
+        UniqueConstraint("user_message_id", name=conv("uq_agent_chat_turn_user_message")),
+        UniqueConstraint("assistant_message_id", name=conv("uq_agent_chat_turn_assistant_message")),
         UniqueConstraint("trace_id", name=conv("uq_agent_chat_turn_trace")),
+        UniqueConstraint("id", "session_id", name=conv("uq_agent_chat_turn_archive_session")),
         Index("idx_agent_chat_turn_session_started", "session_id", "started_at"),
         Index(
             "uq_agent_chat_turn_running_session",
@@ -143,9 +134,7 @@ class AgentChatTurn(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_chat_session.id", ondelete="CASCADE"),
@@ -193,15 +182,11 @@ class AgentChatToolCall(Base):
             "duration_ms >= 0",
             name=conv("ck_agent_chat_tool_call_duration"),
         ),
-        UniqueConstraint(
-            "turn_id", "tool_call_id", name=conv("uq_agent_chat_tool_call_id")
-        ),
+        UniqueConstraint("turn_id", "tool_call_id", name=conv("uq_agent_chat_tool_call_id")),
         Index("idx_agent_chat_tool_call_turn", "turn_id"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     turn_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("agent_chat_turn.id", ondelete="CASCADE"),

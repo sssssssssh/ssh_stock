@@ -42,6 +42,11 @@ class ToolResultContext:
     tool_call_id: str
     tool_name: str
     payload: dict[str, Any]
+    tool_version: str = "1.0"
+    arguments: dict[str, Any] = field(default_factory=dict)
+    input_schema: dict[str, Any] = field(default_factory=dict)
+    source_projections: dict[str, Any] = field(default_factory=dict)
+    cache_origin_call_id: str | None = None
 
 
 @dataclass
@@ -283,19 +288,13 @@ def _summary(audit: ToolCallAudit) -> ChatToolCallSummary:
 
 def _tool_warnings(context: ToolResultContext) -> list[str]:
     payload = context.payload
-    warnings = [
-        str(item)
-        for item in payload.get("warnings", [])
-        if isinstance(item, str) and item
-    ]
+    warnings = [str(item) for item in payload.get("warnings", []) if isinstance(item, str) and item]
     error = payload.get("error")
     if isinstance(error, dict) and error.get("code"):
         warnings.append(f"TOOL_ERROR:{context.tool_name}:{error['code']}")
     readiness = payload.get("readiness")
     if isinstance(readiness, dict) and readiness.get("ready") is False:
-        warnings.append(
-            f"TOOL_NOT_READY:{context.tool_name}:{readiness.get('code', 'UNKNOWN')}"
-        )
+        warnings.append(f"TOOL_NOT_READY:{context.tool_name}:{readiness.get('code', 'UNKNOWN')}")
     if payload.get("status") not in {None, "READY"}:
         warnings.append(f"TOOL_STATUS:{context.tool_name}:{payload['status']}")
     return warnings
