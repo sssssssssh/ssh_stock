@@ -1,13 +1,14 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.accounting_config import AccountingConfig
 from app.core.agent_config import AgentConfig
+from app.core.agent_llm_config import AgentLLMConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.experiment_config import ExperimentConfig
 from app.core.experiment_evaluation_config import ExperimentEvaluationConfig
@@ -45,6 +46,11 @@ class Settings(BaseSettings):
     tushare_token: str | None = Field(default=None, repr=False)
     tushare_http_url: str | None = "https://fastapic.stockai888.top"
     tushare_min_interval_seconds: float = 1.5
+    llm_enabled: bool | None = None
+    llm_endpoint: str | None = None
+    llm_model: str | None = None
+    llm_auth_scheme: Literal["bearer", "raw"] | None = None
+    llm_api_key: SecretStr | None = Field(default=None, repr=False)
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     log_level: str = "INFO"
@@ -113,6 +119,7 @@ class Settings(BaseSettings):
         agent_config = AgentConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "agent.yaml").get("agent", {})
         )
+        agent_config = _apply_agent_llm_overrides(agent_config, settings)
         strategy_raw = load_yaml_config(ROOT_DIR / "config" / "strategy.yaml")
         strategy = StrategyConfig.model_validate(strategy_raw).model_dump(mode="python")
         opportunity_config = load_yaml_config(ROOT_DIR / "config" / "opportunity.yaml")
@@ -186,6 +193,31 @@ class Settings(BaseSettings):
         settings.performance_period_config = performance_period_config
         settings.performance_trade_config = performance_trade_config
         return settings
+
+
+def _apply_agent_llm_overrides(config: AgentConfig, settings: Settings) -> AgentConfig:
+    overrides = {
+        "base_url": settings.llm_endpoint,
+        "model": settings.llm_model,
+        "auth_scheme": settings.llm_auth_scheme,
+    }
+    if settings.llm_enabled is None and all(value is None for value in overrides.values()):
+        return config
+    llm = AgentLLMConfig.model_validate(
+        {
+            **config.llm.model_dump(mode="python"),
+            **{key: value for key, value in overrides.items() if value is not None},
+        }
+    )
+    enabled = config.llm_enabled if settings.llm_enabled is None else settings.llm_enabled
+    return AgentConfig.model_validate(
+        {
+            **config.model_dump(mode="python"),
+            "mode": "llm_chat" if enabled else "tools_only",
+            "llm_enabled": enabled,
+            "llm": llm,
+        }
+    )
 
 
 def _validate_research_config(

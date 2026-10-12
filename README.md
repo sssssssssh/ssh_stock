@@ -1327,9 +1327,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新增 OpenAI-compatible Chat Completions Provider 与可替换协议；测试使用无需公网和密钥的
   `FakeLLMProvider`。默认 `config/agent.yaml` 仍为 `mode: tools_only`、`llm_enabled: false`，
   因此升级后原有 `/agent/status`、`/agent/tools`、`/agent/tools/execute` 可在没有模型 Key 时继续运行。
-- 启用 Chat 时把 `mode` 改为 `llm_chat`、`llm_enabled` 改为 `true`，并仅在部署环境中设置
-  `OPENAI_API_KEY`（或 `api_key_env` 指定的变量名）。不得把真实 Key 写入 YAML、`.env.example`
-  或 Git；可通过重新关闭 `llm_enabled` 立即停止模型访问而保留历史。
+- 启用 Chat 可在 `.env` 设置 `LLM_ENABLED=true`；应用会将有效配置切换为 `llm_chat`。
+  `LLM_ENDPOINT`、`LLM_MODEL`、`LLM_AUTH_SCHEME` 可覆盖 YAML 默认值，`LLM_API_KEY` 优先于
+  `api_key_env` 指定的旧环境变量。不得把真实 Key 写入 YAML、`.env.example` 或 Git；设置
+  `LLM_ENABLED=false` 并重启 Backend 可停止模型访问而保留历史。
 - 模型只能看到 M16.1 Registry 中 enabled 且只读的八个工具。每次工具执行使用独立 PostgreSQL
   `READ ONLY` 事务；模型网络等待与聊天写事务分离。工具轮数、单轮/总调用数、Provider 请求、
   总 Deadline、上下文、问题、答案和输出 token 都有配置硬上限。
@@ -1384,7 +1385,7 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 左侧导航新增“智能研究”。页面提供会话分页、新建/切换/归档、聊天流、上下文选择器、三态回答、工具轨迹以及桌面证据栏/移动端证据抽屉。股票池、行业热度和回测分析均可通过“带入智能研究”入口传递显式选择器。
 - Registry 版本为 `m16.3-v1`，当前发布九个只读工具。新增 `walk_forward.window_lineage`，输入明确的 `study_id`、`validation_id`，可选 `window_no`，并支持 `limit<=50`、`offset>=0` 分页；它只读取并验证已保存的 Window/Trial/Evaluation/M14 报告链路。
 - 回答返回 `answer_status`、`verified_claims` 与脱敏的 `rejected_claims`。混合结果为 `PARTIAL_VERIFIED`；完全没有有效 Claim 才是 `INSUFFICIENT_EVIDENCE`。旧消息由 API 读取层兼容映射，不改写数据库历史。
-- 默认仍为 `mode: tools_only`、`llm_enabled: false`。此时工作台可查看历史但不能发送。启用时在 `config/agent.yaml` 同时设置 `mode: llm_chat`、`llm_enabled: true`，并仅通过部署环境变量 `OPENAI_API_KEY` 提供密钥，随后重启 Backend；前端不保存模型密钥。
+- 默认仍为 `mode: tools_only`、`llm_enabled: false`。此时工作台可查看历史但不能发送。推荐在 `.env` 设置 `LLM_ENABLED=true` 与模型连接参数后重启 Backend；前端不保存模型密钥。
 - 本阶段没有模型或表结构变化，不需要新增迁移；常规部署仍执行 `python -m alembic upgrade head` 以确认数据库位于仓库已有最新迁移。
 - 上下文选择器不是 Evidence，所有数值必须来自当前轮只读工具并通过服务端校验。工作台不会触发数据拉取、因子补算、回测、参数修改或交易。
 
@@ -1395,3 +1396,22 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 发送期间可以切换会话；状态、错误与回答只更新所属会话。刷新页面会从服务端恢复运行中的请求。归档前必须先处理完该会话的待确认请求。
 - Evidence 的“打开业务详情”使用验证后的定位身份。Window 打开对应 Study/Validation/Window，Run 定位回测；股票与行业高亮实体。历史证据缺少定位字段或当前页面仅支持其他日期时明确提示。
 - 本轮无需新增迁移。部署更新 Backend 和 Frontend 后重启服务即可；默认 LLM 开关与密钥配置保持原样。API 兼容表、验收数据生成方式及回滚步骤见 [M16.3.1 验收记录](docs/M16_3_1_workbench_reliability.md)。
+
+### 智能研究 LLM 连接配置
+
+复制 `.env.example` 中的 LLM 配置项到本机 `.env`，按实际服务填写；真实 Token 只写入本机
+`.env` 或部署环境变量，不能提交到 Git。阿里云 PAI-EAS OpenAI-compatible 服务示例：
+
+```dotenv
+LLM_ENABLED=true
+LLM_ENDPOINT=https://your-eas-host.pai-eas.aliyuncs.com/api/predict/your-service/v1
+LLM_MODEL=your-actual-model-id
+LLM_AUTH_SCHEME=raw
+LLM_API_KEY=your-rotated-eas-token
+```
+
+- `LLM_ENDPOINT` 是 API 基础地址，末尾为 `/v1`；应用自动追加 `/chat/completions`，不要在变量中填写完整 Chat URL。`LLM_MODEL` 要与 EAS `/v1/models` 返回的模型 ID 一致，而不只是服务名；服务还必须支持 OpenAI-compatible Chat Completions 和 tool/function calling。
+- EAS 网关的 `Authorization` 直接使用 Token，因此选 `raw`；OpenAI-compatible Bearer 服务选 `bearer`。原有 `config/agent.yaml` 的 `api_key_env`（默认 `OPENAI_API_KEY`）仍可作为未设置 `LLM_API_KEY` 时的兼容来源。
+- 修改 `.env` 后重启 Backend 进程或相关容器；只重启前端不会更新后端配置。本仓库 Compose 的 Backend 使用项目目录 `.env` 作为 `env_file`；其他部署方式须自行把这些变量注入 Backend 容器。令 `LLM_ENABLED=false` 并重启可关闭新请求，历史会话仍可查看。
+- LLM 只在登录后的“智能研究”工作台发送问题时调用：解析问题、按授权调用九个只读研究工具，并生成经服务端 Evidence 校验的回答。数据拉取、基础信息同步、因子/趋势计算、股票池生成、回测和定时任务不调用 LLM，也不会因配置 LLM 而自动执行。
+- 未验证 EAS 实际网络请求前，先在自己的环境检查 HTTPS 可达、Token 权限、模型 ID 与 tool calling 兼容性。已在聊天或其他公开渠道暴露的 Token 应先在 EAS 轮换，再填入 `.env`。

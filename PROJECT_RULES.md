@@ -494,8 +494,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 
 ## Milestone 16.2 Evidence-backed Chat 规则
 
-- Chat Runtime 默认关闭；无模型 Key 时应用和 M16.1 工具接口必须正常启动。启用时只从
-  `api_key_env` 指定的环境变量读取密钥，YAML、日志、数据库和响应均不得保存或回显密钥。
+- Chat Runtime 默认关闭；无模型 Key 时应用和 M16.1 工具接口必须正常启动。启用时优先从
+  `LLM_API_KEY` 读取密钥，未设置时兼容 `api_key_env` 指定的环境变量；YAML、日志、数据库和
+  响应均不得保存或回显密钥。有效地址、模型与鉴权方式可由环境覆盖，但只能使用受控的
+  `bearer` 或 `raw` Authorization 格式，不改变只读工具和 Evidence 约束。
 - 模型只允许调用 Registry 中 enabled 且 `read_only=true` 的工具。Schema 必须来自严格
   Pydantic 输入模型；未知/禁用工具、无效参数、重复 call ID 和越权请求一律 fail closed。
 - 每次实际工具调用必须使用单独的 Agent `READ ONLY` Session 并 rollback；聊天写事务必须短，

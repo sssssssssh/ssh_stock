@@ -10,7 +10,8 @@ class AgentLLMConfig(BaseModel):
 
     provider: Literal["openai_compatible"] = "openai_compatible"
     model: str = Field(default="gpt-4o-mini", min_length=1, max_length=128)
-    base_url: AnyHttpUrl = "https://api.openai.com/v1"
+    base_url: AnyHttpUrl = Field(default="https://api.openai.com/v1", validate_default=True)
+    auth_scheme: Literal["bearer", "raw"] = "bearer"
     api_key_env: str = Field(
         default="OPENAI_API_KEY",
         min_length=1,

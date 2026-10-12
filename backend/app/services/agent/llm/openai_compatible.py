@@ -56,7 +56,9 @@ class OpenAICompatibleProvider(LLMProvider):
         endpoint = f"{str(self.config.base_url).rstrip('/')}/chat/completions"
         deadline = time.monotonic() + timeout
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": (
+                self._api_key if self.config.auth_scheme == "raw" else f"Bearer {self._api_key}"
+            ),
             "Content-Type": "application/json",
             "X-Request-ID": request_id,
         }
