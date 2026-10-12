@@ -1416,3 +1416,12 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 - 长会话默认展示最近消息，能够逐页加载全部历史；前插消息保留视窗位置，切换会话和返回工作台保留草稿与滚动位置。
 - Evidence 支持明确 Run、股票、行业及 Study/Validation/Window 定位；旧证据或目标页缺乏所需身份时必须明确降级，不能静默跳转到其他结果。
 - 401、409、模型关闭、总时限、工具超时、离线、刷新和会话切换均有受控展示。三态回答与脱敏拒绝原因继续保留；失败回答不得标为已验证。
+
+## Milestone 16.4：不可变研究报告（2026-10-12）
+
+- 登录用户可以把本人已完成、且至少含一个完整引用的 verified Claim 的助手回答冻结为研究报告。证据不足、失败、用户消息、未完成消息和其他 owner 的消息不能作为来源。
+- 报告提供列表、详情、归档、Evidence 索引、限制/警告、事实图表，以及 Markdown/HTML 下载。报告创建后正文和来源身份不可编辑；归档不删除快照。
+- `PARTIAL_VERIFIED` 可以生成报告，但必须同时展示未纳入 Claim 的脱敏原因。`INSUFFICIENT_EVIDENCE` 不允许生成。
+- 报告声明快照级别为 `CLAIM_SNAPSHOT_ONLY`，明确原始工具 payload 未归档且无法从报告独立重放。没有完整时间序列时不得绘制或暗示完整 NAV 曲线。
+- 报告比较固定输出 `COMPARABLE`、`CONTEXT_REQUIRED`、`INCOMPATIBLE`。仅第一种状态允许展示精确 Decimal 差值；后两种状态不得输出排名、赢家或无条件优劣结论。
+- 所有 API 复用登录 Session 和 owner 隔离，跨 owner 统一 404；重复 request ID 的相同请求幂等返回，不同请求体返回 409。LLM 默认关闭时报告功能仍可使用。

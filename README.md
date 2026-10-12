@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 16.3。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台。
+当前实现范围：Milestone 0 到 Milestone 16.4。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台与不可变研究报告。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -1396,6 +1396,15 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 发送期间可以切换会话；状态、错误与回答只更新所属会话。刷新页面会从服务端恢复运行中的请求。归档前必须先处理完该会话的待确认请求。
 - Evidence 的“打开业务详情”使用验证后的定位身份。Window 打开对应 Study/Validation/Window，Run 定位回测；股票与行业高亮实体。历史证据缺少定位字段或当前页面仅支持其他日期时明确提示。
 - 本轮无需新增迁移。部署更新 Backend 和 Frontend 后重启服务即可；默认 LLM 开关与密钥配置保持原样。API 兼容表、验收数据生成方式及回滚步骤见 [M16.3.1 验收记录](docs/M16_3_1_workbench_reliability.md)。
+
+### M16.4 不可变研究报告（2026-10-12）
+
+- “智能研究”中有已验证 Claim 的 assistant message 可进入“研究报告”页面生成四类报告：市场复盘、机会复盘、策略复盘和样本外验证复盘。生成过程不调用 LLM，也不重跑只读工具。
+- 报告保存 `CLAIM_SNAPSHOT_ONLY` 冻结快照、来源契约和 SHA-256；正文创建后不可改写，只能归档。列表默认隐藏已归档报告，可显式查看。
+- 报告支持 Markdown/HTML 下载。HTML 只使用转义后的快照字段，无脚本和外部样式；响应包含下载文件名、`nosniff` 和限制性 CSP。
+- 两份报告可生成冻结比较。`COMPARABLE` 才显示 Decimal 差值；`CONTEXT_REQUIRED`/`INCOMPATIBLE` 仅并列事实和原因码，不生成排名。完整日序列未归档时只显示事实表/合法同日柱状图，不伪造净值曲线。
+- 历史 `performance.summary` 消息未归档完整 M14 执行/会计/benchmark/交易日契约时，报告明确标记 `EXACT_M14_BUNDLE_NOT_ARCHIVED`，比较以 `EXACT_M14_BUNDLE_REQUIRED` 失败关闭，不隐式选择 latest Artifact。
+- 新 API 位于 `/api/v1/agent/reports` 与 `/api/v1/agent/report-comparisons`，沿用 Session Cookie 与 owner 404 隔离。迁移为 `0050_m16_4_reports`；部署执行 `python -m alembic upgrade head`。配置、限制、验收和回滚见 [M16.4 收尾记录](docs/M16_4_research_report_closeout.md)。
 
 ### 智能研究 LLM 连接配置
 

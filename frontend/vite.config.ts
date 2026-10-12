@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
         include: [
           "src/services/**/*.ts",
           "src/utils/**/*.ts",
-          "src/components/{ResearchLab,LoginView,JobCenter,AgentResearchWorkbench}.vue"
+          "src/components/{ResearchLab,LoginView,JobCenter,AgentResearchWorkbench,AgentResearchReports}.vue"
         ],
         thresholds: {
           statements: 20,

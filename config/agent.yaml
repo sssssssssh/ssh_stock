@@ -9,6 +9,14 @@ agent:
   default_timeout_seconds: 5
   max_tool_timeout_seconds: 30
   statement_timeout_ms: 5000
+  reports:
+    max_snapshot_bytes: 262144
+    max_claims: 50
+    max_citations: 100
+    max_sections: 12
+    max_charts: 8
+    max_points_per_chart: 300
+    max_comparison_facts: 100
   llm:
     provider: openai_compatible
     model: gpt-4o-mini

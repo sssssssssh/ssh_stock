@@ -22,6 +22,7 @@ import {
   type ResearchContext,
   type ResearchNavigationContext
 } from "../services/agent";
+import type { ReportSourceSelection } from "../services/agentReports";
 
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_POLL_ATTEMPTS = 12;
@@ -33,7 +34,10 @@ const props = withDefaults(defineProps<{
   ownerId?: string;
   visible?: boolean;
 }>(), { visible: true });
-const emit = defineEmits<{ navigate: [target: ResearchNavigationContext] }>();
+const emit = defineEmits<{
+  navigate: [target: ResearchNavigationContext];
+  createReport: [source: ReportSourceSelection];
+}>();
 
 const chats = ref<AgentChatSummary[]>([]);
 const chatTotal = ref(0);
@@ -128,6 +132,11 @@ function metadata(message: AgentMessage): AgentMessageMetadata {
 function verifiedClaims(message: AgentMessage) {
   const value = metadata(message);
   return value.verified_claims || value.claims || [];
+}
+
+function createReportFromMessage(message: AgentMessage) {
+  if (!activeChatId.value || !verifiedClaims(message).length) return;
+  emit("createReport", { chatId: activeChatId.value, messageId: message.message_id });
 }
 
 function newRequestId() {
@@ -795,6 +804,7 @@ onBeforeUnmount(() => {
                   {{ citation.marker }} · {{ citation.tool_name }}
                 </button>
               </div>
+              <button v-if="verifiedClaims(message).length" type="button" class="agent-report-button" @click="createReportFromMessage(message)">生成研究报告</button>
               <details v-if="metadata(message).tool_calls?.length || metadata(message).warnings?.length">
                 <summary>执行详情</summary>
                 <div v-for="call in metadata(message).tool_calls" :key="call.tool_call_id" class="agent-tool-call">
@@ -899,6 +909,7 @@ onBeforeUnmount(() => {
 .agent-rejected code { overflow-wrap: anywhere; }
 .agent-citations { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .agent-citations button { border: 1px solid #a7c7ed; border-radius: 4px; background: #f0f7ff; padding: 4px 7px; color: #1d4ed8; cursor: pointer; }
+.agent-report-button { margin-top: 10px; border: 1px solid #111827; border-radius: 5px; background: #111827; padding: 6px 10px; color: #fff; cursor: pointer; }
 .agent-message details { margin-top: 10px; }
 .agent-tool-call { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; color: #475569; }
 .agent-warning { margin: 5px 0; color: #b45309; font-size: 12px; overflow-wrap: anywhere; }

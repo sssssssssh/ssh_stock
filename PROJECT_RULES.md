@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 16.3.1；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 16.4；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -70,7 +70,8 @@
 当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime，
 M16.2.1 完成端到端时间预算、Claim 证据强绑定、请求内容幂等和基础比较策略；
 M16.2.2 进一步收口 TRAIN/OOS 持久化同源、独立回测三态可比性与有界定性推断；
-M16.3 增加窗口级血缘工具、三态回答契约和前端智能研究工作台。
+M16.3 增加窗口级血缘工具、三态回答契约和前端智能研究工作台；M16.4 增加基于已验证
+assistant message 的不可变研究报告、稳定导出和冻结快照比较。
 启用后模型也只能编排 Registry 中九个只读工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
 修改生产策略权重、阈值或 S0-S6 定义。
 
@@ -576,3 +577,13 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 导航身份只能由已验证工具 Evidence 生成。窗口使用明确 Study/Validation/Window，回测使用明确 Run，股票与行业携带实体和交易日；目标不可定位必须明示，不自动切换到其他身份。
 - 自动状态轮询每 2 秒一次，最多 12 次；后台标签页、离开工作台和组件卸载时停止。达到上限后提供人工刷新，不能将未知结果误显示为失败或完成。
 - 本轮没有 Schema、Raw/Scheduler/Job 或研究计算契约变化；验收记录、API 兼容性和回滚说明见 `docs/M16_3_1_workbench_reliability.md`。
+
+## Milestone 16.4 研究报告规则
+
+- 报告只能从当前 owner 的 `COMPLETED` assistant message 生成，且至少保留一个引用已归档 Citation 的 verified Claim。USER、FAILED、未完成、跨 owner、无证据或 `INSUFFICIENT_EVIDENCE` 来源一律拒绝。
+- 报告固定为 `CLAIM_SNAPSHOT_ONLY`。快照保存 verified Claims、脱敏 rejected Claims、实际被引用的 Citations、确定性章节/图表和来源契约；不保存原始工具 payload，因此必须明示 `SOURCE_PAYLOAD_NOT_ARCHIVED` 与 `REPLAY_UNAVAILABLE`，不得声称可重放原查询。
+- `agent_research_report` 的快照、hash、来源、类型、标题、版本和身份创建后不可改写，仅 `archived_at` 可幂等更新。`agent_research_report_comparison` 全量冻结，不因当前数据库或策略变化重算。
+- 同 owner 的 `request_id` 绑定规范化请求 hash；同请求返回同一对象，不同请求体返回 409。所有读取、导出、归档和比较均按 owner 过滤，跨 owner 统一 404。
+- 比较状态固定为 `COMPARABLE`、`CONTEXT_REQUIRED`、`INCOMPATIBLE`。只有 `COMPARABLE` 可输出 Decimal 差值；其余状态只能并列冻结事实及原因码，不输出差值、排名或胜负结论。
+- 图表只允许 `line`、`bar`、`table`，且只能来自快照中的 structured facts。当前聊天不归档完整日序列时不得伪造净值曲线，应使用表格/同日柱状图并提示 `SERIES_NOT_AVAILABLE`。
+- 默认 `llm_enabled=false` 不影响报告列表、生成、导出、比较和归档；这些操作不调用模型、不运行工具、不触发数据、研究、回测或策略计算。详细边界与上线/回滚见 `docs/M16_4_research_report_closeout.md`。

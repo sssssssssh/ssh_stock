@@ -25,9 +25,11 @@ import ChangePasswordView from "./components/ChangePasswordView.vue";
 import UserMenu from "./components/UserMenu.vue";
 import BacktestAnalyticsView from "./components/BacktestAnalyticsView.vue";
 import AgentResearchWorkbench from "./components/AgentResearchWorkbench.vue";
+import AgentResearchReports from "./components/AgentResearchReports.vue";
 import WalkForwardEvidenceView from "./components/WalkForwardEvidenceView.vue";
 import { fetchCurrentUser, logout } from "./services/auth";
 import type { ResearchContext, ResearchNavigationContext } from "./services/agent";
+import type { ReportSourceSelection } from "./services/agentReports";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -69,7 +71,7 @@ import type {
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
-type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "walk_forward";
+type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "reports" | "walk_forward";
 type PoolTab = "right" | "trend";
 type DataPanelKey = "recalc" | "tasks" | "coverage";
 
@@ -98,6 +100,7 @@ const activeView = ref<ViewKey>("overview");
 const agentContext = ref<ResearchContext | null>(null);
 const researchNavigation = ref<ResearchNavigationContext | null>(null);
 const researchNavigationNotice = ref("");
+const reportSource = ref<ReportSourceSelection | null>(null);
 const overviewMode = ref<"market" | "research">("market");
 const activePool = ref<PoolTab>("right");
 const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
@@ -153,7 +156,8 @@ const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "long", label: "长线", description: "右侧池、趋势池、行业热度" },
   { key: "short", label: "短线", description: "风险池、信号和短期动量" },
   { key: "analytics", label: "回测分析", description: "收益、风险、交易与周期对比" },
-  { key: "agent", label: "智能研究", description: "只读工具、证据与研究会话" }
+  { key: "agent", label: "智能研究", description: "只读工具、证据与研究会话" },
+  { key: "reports", label: "研究报告", description: "冻结快照、导出与口径比较" }
 ];
 
 const activeNav = computed(() => navItems.find((item) => item.key === activeView.value) || (
@@ -625,6 +629,11 @@ async function openAgentResearch(value: ResearchContext) {
   };
   researchNavigationNotice.value = "";
   await setActiveView("agent");
+}
+
+async function openResearchReport(source: ReportSourceSelection) {
+  reportSource.value = source;
+  await setActiveView("reports");
 }
 
 async function navigateFromAgent(target: ResearchNavigationContext) {
@@ -1416,7 +1425,11 @@ function statusLabel(status: string) {
       </section>
 
       <section v-show="activeView === 'agent'" class="view-stack">
-        <AgentResearchWorkbench :key="authUser.username" :owner-id="authUser.username" :visible="activeView === 'agent'" :initial-context="agentContext" @navigate="navigateFromAgent" />
+        <AgentResearchWorkbench :key="authUser.username" :owner-id="authUser.username" :visible="activeView === 'agent'" :initial-context="agentContext" @navigate="navigateFromAgent" @create-report="openResearchReport" />
+      </section>
+
+      <section v-show="activeView === 'reports'" class="view-stack">
+        <AgentResearchReports :initial-source="reportSource" @navigate="navigateFromAgent" />
       </section>
 
       <section v-show="activeView === 'walk_forward'" class="view-stack">

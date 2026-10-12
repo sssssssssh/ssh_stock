@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.agent_llm_config import AgentLLMConfig
+from app.core.agent_report_config import AgentReportConfig
 
 
 class AgentConfig(BaseModel):
@@ -12,6 +13,7 @@ class AgentConfig(BaseModel):
     mode: Literal["tools_only", "llm_chat"] = "tools_only"
     llm_enabled: bool = False
     llm: AgentLLMConfig = Field(default_factory=AgentLLMConfig)
+    reports: AgentReportConfig = Field(default_factory=AgentReportConfig)
     max_output_bytes: int = Field(default=65_536, gt=0, le=65_536)
     max_coverage_datasets: int = Field(default=32, gt=0, le=128)
     max_evidence_refs: int = Field(default=64, gt=0, le=256)

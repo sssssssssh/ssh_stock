@@ -304,3 +304,38 @@ loading/retry/empty states, explicit context selectors, structured comparison fa
 tool traces, Evidence identity drill-down and a responsive evidence drawer. Context
 selectors are untrusted locators and cannot replace tool Evidence. The default runtime
 remains `tools_only` with LLM chat disabled.
+
+## M16.4 immutable research reports
+
+M16.4 introduces a deterministic report path after evidence compilation. It reads only an
+owner-scoped, completed assistant message through the shared metadata normalizer. Claims
+without an archived Citation are rejected at the report boundary; an answer with no
+remaining verified Claim fails with `INSUFFICIENT_EVIDENCE`. The report operation never
+calls the LLM or a Registry tool.
+
+The report snapshot is canonical JSON with the explicit level `CLAIM_SNAPSHOT_ONLY`.
+It freezes verified Claims, safe rejected-claim metadata, only the Citations actually
+referenced, deterministic sections/charts, warnings and a source contract. The hash
+normalizer sorts keys and serializes dates, UUIDs and numeric values stably. Because raw
+tool payloads are not archived, every snapshot exposes `SOURCE_PAYLOAD_NOT_ARCHIVED` and
+`REPLAY_UNAVAILABLE`; missing time series produce `SERIES_NOT_AVAILABLE` rather than a
+synthetic NAV curve.
+
+Historical `performance.summary` citations do not contain the full M14 execution,
+accounting, benchmark and trade-date contract. Such snapshots carry
+`EXACT_M14_BUNDLE_NOT_ARCHIVED`; report comparison fails closed with
+`EXACT_M14_BUNDLE_REQUIRED` instead of resolving a current/latest artifact. This is a
+deliberate V1 degradation, not a replay or comparability claim.
+
+Migration `0050_m16_4_reports` adds owner/request-idempotent report and comparison tables.
+Composite foreign keys bind a source message to its chat and reports/comparisons to one
+owner. A PostgreSQL trigger permits only the report archive timestamp to change; comparison
+rows are completely update-immutable. Comparison reads the two frozen snapshots and emits
+the existing three-state vocabulary. Decimal deltas exist only for `COMPARABLE`; context
+or incompatible results keep side-by-side facts and stable reasons without rankings.
+
+The owner-scoped API adds create/list/detail/export/archive and comparison create/detail.
+Markdown and escaped standalone HTML exports are deterministic and carry safe download
+headers. The Vue report workspace is responsive and remains usable when LLM chat is
+disabled. Operational limits, verification evidence and rollback rules are documented in
+`docs/M16_4_research_report_closeout.md`.
