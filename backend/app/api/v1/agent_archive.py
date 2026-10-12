@@ -40,7 +40,8 @@ def _safe_call(method, **kwargs):
 
 
 @router.get(
-    "/chats/{chat_id}/turns/{request_id}/archive", response_model=ArchiveEnvelope[TurnArchiveView]
+    "/chats/{chat_id}/turn-archives/{request_id:path}",
+    response_model=ArchiveEnvelope[TurnArchiveView],
 )
 def turn_archive(
     chat_id: uuid.UUID,

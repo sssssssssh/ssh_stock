@@ -1,5 +1,6 @@
 import time
 import uuid
+from functools import wraps
 
 from app.domain.agent.archive import INTEGRITY_VERSION, archive_error
 from app.domain.agent.chat_errors import chat_not_found, turn_not_found
@@ -36,26 +37,56 @@ def unavailable():
     }
 
 
+def bounded_read(method):
+    @wraps(method)
+    def read(self, *args, **kwargs):
+        previous = getattr(self, "_deadline", None)
+        if previous is None:
+            self._deadline = time.monotonic() + self.config.verify_timeout_seconds
+        try:
+            self._check_budget()
+            result = method(self, *args, **kwargs)
+            self._check_budget()
+            return result
+        finally:
+            self._deadline = previous
+
+    return read
+
+
 class AgentArchiveApplication:
     def __init__(self, db, settings):
         self.db = db
         self.config = settings.agent_config.archive
         self.repo = AgentArchiveRepository(db)
 
+    def _check_budget(self):
+        if getattr(self, "_deadline", None) is not None and time.monotonic() >= self._deadline:
+            raise archive_error("ARCHIVE_VERIFY_TIMEOUT", status_code=504)
+
+    def _integrity(self, bundle):
+        return verify_archive_integrity(bundle, self.config, self._check_budget)
+
+    @bounded_read
     def load_bundle(self, owner_id, turn_id):
         manifest = self.repo.manifest_for_turn(owner_id, turn_id)
         if manifest is None:
             return None
+        self._check_budget()
         tools, bindings, audits = self.repo.load_evidence(
             owner_id,
             turn_id,
             max_calls=self.config.max_tool_calls,
             max_bindings=self.config.max_bindings,
+            max_bytes=self.config.max_turn_bytes,
+            check_budget=self._check_budget,
         )
         turn = self.db.get(AgentChatTurn, turn_id)
+        self._check_budget()
         message = self.db.get(AgentChatMessage, manifest.assistant_message_id)
         return ArchiveBundle(manifest, tools, bindings, audits, turn, message, owner_id)
 
+    @bounded_read
     def turn_archive(self, *, user, chat_id, request_id):
         owner = uuid.UUID(str(user.id))
         chat_repo = AgentChatRepository(self.db)
@@ -76,6 +107,7 @@ class AgentArchiveApplication:
             ],
         }
 
+    @bounded_read
     def report_bundle(self, *, user, report_id):
         owner = uuid.UUID(str(user.id))
         row = AgentReportRepository(self.db).get_owned_report(
@@ -103,9 +135,10 @@ class AgentArchiveApplication:
             != manifest.claim_digest
         ):
             raise archive_error("REPORT_ARCHIVE_BINDING_MISMATCH")
-        verify_archive_integrity(bundle, self.config)
+        self._integrity(bundle)
         return row, snapshot, bundle
 
+    @bounded_read
     def report_evidence(self, *, user, report_id, limit, offset):
         _, snapshot, bundle = self.report_bundle(user=user, report_id=report_id)
         if bundle is None:
@@ -122,6 +155,7 @@ class AgentArchiveApplication:
             "offset": offset,
         }
 
+    @bounded_read
     def evidence_detail(self, *, user, report_id, evidence_id):
         _, snapshot, bundle = self.report_bundle(user=user, report_id=report_id)
         if evidence_id not in {citation.evidence_id for citation in snapshot.citations}:
@@ -131,7 +165,7 @@ class AgentArchiveApplication:
         binding = next((row for row in bundle.bindings if row.evidence_id == evidence_id), None)
         if binding is None:
             return {**unavailable(), "evidence_id": evidence_id, "frozen_facts": []}
-        unsupported = verify_archive_integrity(bundle, self.config)
+        unsupported = self._integrity(bundle)
         tools = {row.id: row for row in bundle.tools}
         tool = tools[binding.tool_result_archive_id]
         facts = []
@@ -187,6 +221,7 @@ class AgentArchiveApplication:
             "warnings": unsupported + ["CALCULATION_NOT_REEXECUTED"],
         }
 
+    @bounded_read
     def verify_report_archive(self, *, user, report_id, body):
         started_at = time.monotonic()
         _, snapshot, bundle = self.report_bundle(user=user, report_id=report_id)
@@ -208,7 +243,7 @@ class AgentArchiveApplication:
         }
 
     def summary(self, bundle):
-        unsupported = verify_archive_integrity(bundle, self.config)
+        unsupported = self._integrity(bundle)
         manifest = bundle.manifest
         return {
             "archive_status": manifest.archive_status,

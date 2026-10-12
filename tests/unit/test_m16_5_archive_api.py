@@ -3,9 +3,11 @@ from types import SimpleNamespace
 
 from app.api.v1.agent import require_agent_user
 from app.api.v1.agent_archive import get_archive_application
+from app.api.v1.agent_chat import get_chat_application
 from app.domain.agent.archive import archive_error
 from app.main import app
 from fastapi.testclient import TestClient
+from test_m16_2_agent_chat_api import StubChatService
 
 
 class StubArchive:
@@ -39,10 +41,14 @@ def test_archive_api_is_strict_bounded_and_preserves_legacy_unavailable():
         assert (
             result.status_code == 200 and result.json()["data"]["archive_status"] == "UNAVAILABLE"
         )
-        result = client.get(f"/api/v1/agent/chats/{uuid.uuid4()}/turns/request/archive")
+        result = client.get(f"/api/v1/agent/chats/{uuid.uuid4()}/turn-archives/request/part")
         assert (
             result.status_code == 200 and result.json()["data"]["archive_status"] == "UNAVAILABLE"
         )
+        app.dependency_overrides[get_chat_application] = lambda: StubChatService()
+        original = client.get(f"/api/v1/agent/chats/{uuid.uuid4()}/turns/request/archive")
+        assert original.status_code == 200
+        assert original.json()["data"]["request_id"] == "request/archive"
     finally:
         app.dependency_overrides.clear()
 

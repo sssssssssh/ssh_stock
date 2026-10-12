@@ -137,6 +137,65 @@ def count(db, model, owner_id):
     )
 
 
+def test_partial_verified_archives_only_accepted_claim_bindings_and_no_rejected_number():
+    with SessionLocal() as db:
+        user = _user(db, suffix="partial-archive")
+        owner_id = user.id
+        try:
+            fake = provider()
+            raw = json.loads(fake._responses[1].final_text)
+            raw["claims"][0]["structured_facts"][0]["value"] = "999"
+            fake._responses[1].final_text = json.dumps(raw)
+            service = FixtureChat(db, archive_settings(), provider=fake)
+            chat = service.create_chat(user=user, title="Partial verified")
+            answer = service.send_message(
+                user=user, chat_id=chat.chat_id, content="核验", request_id="partial"
+            )
+            assert answer.answer_status == "PARTIAL_VERIFIED" and len(answer.verified_claims) == 2
+            manifest = db.scalar(
+                sa.select(AgentTurnArchiveManifest).where(
+                    AgentTurnArchiveManifest.owner_user_id == owner_id
+                )
+            )
+            assert len(manifest.manifest_json["required_evidence_ids"]) == 2
+            assert "999" not in db.get(AgentChatMessage, answer.message_id).content
+            result = AgentArchiveApplication(db, archive_settings()).turn_archive(
+                user=user, chat_id=chat.chat_id, request_id="partial"
+            )
+            assert result["archive_status"] == "COMPLETE" and result["archived_evidence_count"] == 2
+        finally:
+            cleanup_archives(owner_id)
+
+
+def test_post_commit_lost_response_preserves_completed_manifest_and_idempotent_recovery():
+    class LostResponseChat(FixtureChat):
+        def _complete_turn(self, **kwargs):
+            super()._complete_turn(**kwargs)
+            raise RuntimeError("synthetic network loss after durable commit")
+
+    with SessionLocal() as db:
+        user = _user(db, suffix="lost-response")
+        owner_id = user.id
+        try:
+            settings = archive_settings()
+            service = LostResponseChat(db, settings, provider=provider())
+            chat = service.create_chat(user=user, title="Lost response")
+            with pytest.raises(AgentChatError):
+                service.send_message(
+                    user=user, chat_id=chat.chat_id, content="核验", request_id="lost"
+                )
+            replay = FixtureChat(db, settings, provider=FakeLLMProvider([]))
+            answer = replay.send_message(
+                user=user, chat_id=chat.chat_id, content="核验", request_id="lost"
+            )
+            assert replay.executions == 0 and answer.answer_status == "COMPLETED"
+            status = replay.get_turn_status(user=user, chat_id=chat.chat_id, request_id="lost")
+            assert status.status == "COMPLETED" and status.answer.message_id == answer.message_id
+            assert count(db, AgentTurnArchiveManifest, owner_id) == 1
+        finally:
+            cleanup_archives(owner_id)
+
+
 def test_two_actual_calls_three_evidence_atomic_archive_and_idempotent_cached_replay():
     with SessionLocal() as db:
         user = _user(db, suffix="m16-5")

@@ -74,7 +74,7 @@ try {
     if (path === "/agent/chats/chat") return ok({ chat_id: "chat", title: "Synthetic archived chat", status: "ARCHIVED",
       messages: [{ message_id: "message", role: "ASSISTANT", content: "Synthetic verified", status: "COMPLETED", sequence_no: 2,
         source_request_id: "synthetic-request", created_at: created, metadata: { answer_status: "COMPLETED", verified_claims: [claim], citations: [] } }] }, { total: 1, has_more: false });
-    if (path.endsWith("/archive")) return ok({ ...meta, evidence: evidence.slice(0, 2) });
+    if (path.includes("/turn-archives/")) return ok({ ...meta, evidence: evidence.slice(0, 2) });
     if (path === "/dashboard/summary") return ok({ sector_heat_top: [], signal_counts: [] });
     if (path === "/system/status" || path === "/system/runtime") return ok({});
     return ok([]);

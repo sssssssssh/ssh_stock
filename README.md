@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 16.4.1。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台与不可变研究报告。
+当前实现范围：Milestone 0 到 Milestone 16.5。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署、智能研究工作台、不可变研究报告与冻结证据离线复核。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -1414,15 +1414,17 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 新报告可展示从冻结事实验证出的同日柱状图，原始数值与单位同时保留在表格。混合单位、来源绑定不明、非法值和点数超限退回表格；没有完整日序列时显示 `SERIES_NOT_AVAILABLE`。
 - 不需要 `0051`，迁移 HEAD 仍为 `0050_m16_4_reports`。更新后端与前端并重启，回滚仅回退应用代码并保留数据。部署前备份；完整验收、兼容边界和截图见 [M16.4.1 验收记录](docs/M16_4_1_report_comparison_integrity_closeout.md)。
 
-### M16.5 分阶段开发
+### M16.5 Evidence Archive 与冻结事实复核（2026-10-13）
 
 M16.5-A 已加入 Evidence Archive 的捕获契约与 `0051_m16_5_evidence_archive` 三张存储表。
 `config/agent.yaml` 的 `agent.archive.enabled` 默认 false；B 已接入新聊天的原子归档，
 C 已交付只读证据 API 与纯离线复核，D 已交付报告 v3 的 Manifest/Contract 双摘要绑定；
 E 的研究与报告页支持归档摘要、证据详情与冻结事实复核，状态分离，旧报告明确不可复核。
 不能把已有 Claim 快照描述为完整证据归档。
-迁移不回填历史；有归档数据时拒绝降级。正式启用应等待 C–F 交付。
-后续 B–F 的验证与交付进度见 [M16.5 验收记录](docs/M16_5_evidence_archive_closeout.md)。
+迁移不回填历史；有归档数据时拒绝降级。A–F 本地验收已完成；启用前备份并核对目标连接，先升级
+0051，再部署后端/前端，最后显式启用 agent.archive.enabled。关闭开关不删除已存档证据。
+归档状态、完整性、事实复核、比较许可分离；不是行情重拉或算法重跑。M14/M15 完整冻结口径未
+实现，收益差值门禁保持。API、资源预算、完整 22 项矩阵、性能、回滚与 CI 见 [M16.5 验收记录](docs/M16_5_evidence_archive_closeout.md)。
 
 ### 智能研究 LLM 连接配置
 

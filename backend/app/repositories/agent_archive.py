@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.domain.agent.archive import ARCHIVE_VERSION, ArchiveDraft, archive_error
@@ -123,7 +123,36 @@ class AgentArchiveRepository:
             )
         )
 
-    def load_evidence(self, owner_id, turn_id, *, max_calls=16, max_bindings=100):
+    def load_evidence(
+        self,
+        owner_id,
+        turn_id,
+        *,
+        max_calls=16,
+        max_bindings=100,
+        max_bytes=1048576,
+        check_budget=lambda: None,
+    ):
+        check_budget()
+        total = 0
+        for model, fields, limit in (
+            (
+                AgentToolResultArchive,
+                ("payload_json", "arguments_json", "input_schema_json"),
+                max_calls,
+            ),
+            (AgentEvidenceArchiveBinding, ("source_projection_json", "ref_json"), max_bindings),
+        ):
+            size = sum(func.octet_length(cast(getattr(model, field), Text)) for field in fields)
+            count, byte_size = self.db.execute(
+                select(func.count(), func.coalesce(func.sum(size), 0)).where(
+                    model.owner_user_id == owner_id, model.turn_id == turn_id
+                )
+            ).one()
+            check_budget()
+            total += int(byte_size)
+            if count > limit or total > max_bytes:
+                raise archive_error("ARCHIVE_LIMIT_EXCEEDED")
         tools = list(
             self.db.scalars(
                 select(AgentToolResultArchive)
@@ -134,6 +163,7 @@ class AgentArchiveRepository:
                 .limit(max_calls + 1)
             )
         )
+        check_budget()
         bindings = list(
             self.db.scalars(
                 select(AgentEvidenceArchiveBinding)
@@ -144,9 +174,11 @@ class AgentArchiveRepository:
                 .limit(max_bindings + 1)
             )
         )
+        check_budget()
         audits = list(
             self.db.scalars(
                 select(AgentChatToolCall).where(AgentChatToolCall.turn_id == turn_id).limit(17)
             )
         )
+        check_budget()
         return tools, bindings, audits

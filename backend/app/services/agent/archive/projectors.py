@@ -325,6 +325,8 @@ def check_safe(value: Any, depth: int = 0) -> None:
 
 
 def validate_payload(payload: dict[str, Any]) -> None:
+    if any(ref.get("evidence_version") not in {"v1", "v2"} for ref in payload.get("evidence", [])):
+        raise archive_error("UNSUPPORTED_EVIDENCE_VERSION")
     AgentToolResult.model_validate(payload)
     name = payload["tool_name"]
     if name not in RECORD_KEYS or payload["tool_version"] != "1.0":

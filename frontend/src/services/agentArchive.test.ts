@@ -7,7 +7,7 @@ it("uses bounded owner-authenticated endpoints, safe body and cancellable reads"
   vi.stubGlobal("fetch", fetch);
   const controller = new AbortController();
   await fetchTurnArchive("chat", "request/part", controller.signal);
-  expect(fetch.mock.calls[0][0]).toContain("/turns/request%2Fpart/archive");
+  expect(fetch.mock.calls[0][0]).toContain("/turn-archives/request%2Fpart");
   await fetchReportEvidence("report", 20, controller.signal);
   expect(fetch.mock.calls[1][0]).toContain("limit=20&offset=20");
   await fetchEvidenceDetail("report", "e/1", controller.signal);

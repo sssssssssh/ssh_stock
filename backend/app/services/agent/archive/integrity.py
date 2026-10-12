@@ -90,6 +90,8 @@ def verify_archive_integrity(
         ):
             raise ValueError("compiled message binding")
         required = sorted({eid for claim in claims for eid in claim["evidence_ids"]})
+        if len(claims) > 50 or len({claim["claim_id"] for claim in claims}) != len(claims):
+            raise ValueError("claim identities")
         if required != body["required_evidence_ids"]:
             raise ValueError("required evidence")
         if len(bundle.tools) > config.max_tool_calls or len(bundle.bindings) > config.max_bindings:
@@ -207,13 +209,22 @@ def verify_archive_integrity(
             and (not required or set(bindings) != set(required))
         ):
             raise ValueError("capture completeness")
-        citations = [
-            ChatCitation.model_validate(raw) for raw in message.metadata_json.get("citations", [])
-        ]
-        if {item.evidence_id for item in citations} != set(required) or len(citations) != len(
-            required
-        ):
+        raw_citations = message.metadata_json.get("citations", [])
+        if {item["evidence_id"] for item in raw_citations} != set(required) or len(
+            raw_citations
+        ) != len(required):
             raise ValueError("compiled citations")
+        citations = []
+        for raw in raw_citations:
+            if raw.get("evidence_version") not in {"v1", "v2"}:
+                unsupported.add("UNSUPPORTED_EVIDENCE_VERSION")
+                binding = bindings.get(raw["evidence_id"])
+                if binding is not None and raw.get("evidence_version") != binding.ref_json.get(
+                    "evidence_version"
+                ):
+                    raise ValueError("citation version binding")
+            else:
+                citations.append(ChatCitation.model_validate(raw))
         for citation in citations:
             if citation.evidence_id in bindings:
                 binding = bindings[citation.evidence_id]

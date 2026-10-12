@@ -5,6 +5,7 @@ import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
 from app.domain.agent.contracts import WalkForwardWindowLineageInput
+from app.domain.agent.policy import serialized_result
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
 from app.models.market_data import TradeCalendar
 from app.models.portfolio import PortfolioBacktestRun
@@ -14,6 +15,7 @@ from app.models.walk_forward import (
     PortfolioWalkForwardWindowValidation,
 )
 from app.services.agent.adapters.research import ResearchAgentAdapter
+from app.services.agent.archive.projectors import validate_projection
 from app.services.agent.chat.comparison_contract import (
     BacktestComparisonContractResolver,
 )
@@ -34,12 +36,16 @@ from sqlalchemy.orm import Session
 
 def _complete_bundle(db: Session, dates: tuple[date, ...]):
     case = seed_analytics_case(db, dates)
-    period = PerformancePeriodApplicationService(db).calculate_now(
-        case.run_id,
-        performance_id=case.performance_id,
-        risk_id=case.risk_id,
-        trade_id=case.trade_id,
-    ).report
+    period = (
+        PerformancePeriodApplicationService(db)
+        .calculate_now(
+            case.run_id,
+            performance_id=case.performance_id,
+            risk_id=case.risk_id,
+            trade_id=case.trade_id,
+        )
+        .report
+    )
     return case, period
 
 
@@ -94,8 +100,7 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
         with Session(bind=connection, expire_on_commit=False) as db:
             dates = tuple(date(2089, 1, 2) + timedelta(days=index) for index in range(21))
             db.add_all(
-                TradeCalendar(cal_date=value, is_open=True, exchange="SSE")
-                for value in dates
+                TradeCalendar(cal_date=value, is_open=True, exchange="SSE") for value in dates
             )
             db.flush()
             service = WalkForwardApplicationService(db)
@@ -125,13 +130,9 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             assert len(windows) == 2
 
             for window in windows:
-                train_dates = tuple(
-                    date.fromisoformat(value) for value in window.train_trade_dates
-                )
+                train_dates = tuple(date.fromisoformat(value) for value in window.train_trade_dates)
                 train_case, _ = _complete_bundle(db, train_dates)
-                experiment = service._frozen_experiment_service(
-                    study
-                ).create_from_frozen_base(
+                experiment = service._frozen_experiment_service(study).create_from_frozen_base(
                     name=f"m16.2.2-train-{window.window_no}",
                     start_date=window.train_start_date,
                     end_date=window.train_end_date,
@@ -166,14 +167,12 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
                 trial.run_id = train_case.run_id
                 _align_run_snapshot(db, train_case.run_id, experiment, trial)
                 db.commit()
-                evaluation = ExperimentEvaluationApplicationService(db).calculate_now(
-                    experiment.id
-                ).report
+                evaluation = (
+                    ExperimentEvaluationApplicationService(db).calculate_now(experiment.id).report
+                )
                 service._freeze_selection(window, experiment, evaluation)
 
-                oos_dates = tuple(
-                    date.fromisoformat(value) for value in window.test_trade_dates
-                )
+                oos_dates = tuple(date.fromisoformat(value) for value in window.test_trade_dates)
                 oos_case, oos_period = _complete_bundle(db, oos_dates)
                 _align_run_snapshot(db, oos_case.run_id, experiment, trial)
                 window.oos_run_id = oos_case.run_id
@@ -214,6 +213,13 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             assert lineage_result.records[0]["oos_run_id"] == persisted.oos_run_id
             assert lineage_result.records[0]["readiness"]["ready"] is True
             assert lineage_result.evidence[0].evidence_version == "v2"
+            frozen = serialized_result(lineage_result, max_output_bytes=65536)
+            assert (
+                validate_projection(
+                    frozen, frozen["evidence"][0], lineage_result.evidence[0]._archive_projection
+                )
+                == "records.0"
+            )
 
             train_fact = _fact(
                 role="TRAIN",
@@ -265,16 +271,12 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             assert mismatch.status == "MISMATCH"
             assert mismatch.reason_codes == ["PERFORMANCE_OWNER_MISMATCH"]
 
-            contract = BacktestComparisonContractResolver(db).resolve(
-                [train_fact, oos_fact]
-            )
+            contract = BacktestComparisonContractResolver(db).resolve([train_fact, oos_fact])
             assert contract.state == "CONTEXT_REQUIRED"
             assert "DATE_RANGE_MISMATCH" in contract.reason_codes
             assert "TRADE_DATE_SET_MISMATCH" in contract.reason_codes
 
-            incomplete = BacktestComparisonContractResolver(db).resolve(
-                [train_fact, wrong_owner]
-            )
+            incomplete = BacktestComparisonContractResolver(db).resolve([train_fact, wrong_owner])
             assert incomplete.state == "INCOMPATIBLE"
             assert incomplete.reason_codes == ("COMPARISON_CONTRACT_UNVERIFIABLE",)
 
@@ -283,8 +285,7 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
                     db.execute(
                         sa.update(PortfolioWalkForwardWindowValidation)
                         .where(
-                            PortfolioWalkForwardWindowValidation.validation_id
-                            == report.id,
+                            PortfolioWalkForwardWindowValidation.validation_id == report.id,
                             PortfolioWalkForwardWindowValidation.window_no == 1,
                         )
                         .values(selected_train_run_id=persisted.oos_run_id)

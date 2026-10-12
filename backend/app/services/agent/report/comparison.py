@@ -24,9 +24,13 @@ def compare_report_snapshots(
     comparison_intent: str = "AUTO",
 ) -> tuple[str, list[str], dict[str, Any]]:
     inventories = [collect_facts(left), collect_facts(right)]
+    numeric = [
+        [item for item in inventory.unique.values() if item.value_type == "NUMERIC"]
+        for inventory in inventories
+    ]
     intent = ReportComparisonPolicy.classify(
-        list(inventories[0].unique.values()),
-        list(inventories[1].unique.values()),
+        numeric[0] or list(inventories[0].unique.values()),
+        numeric[1] or list(inventories[1].unique.values()),
         comparison_intent,
     )
     reasons = {issue["reason_code"] for inventory in inventories for issue in inventory.issues}
@@ -34,17 +38,10 @@ def compare_report_snapshots(
         reasons.add("REPORT_TYPE_MISMATCH")
     if intent == "TRAIN_VS_OOS":
         reasons.add("FROZEN_M15_WINDOW_LINEAGE_REQUIRED")
-    if (
-        intent == "INDEPENDENT_BACKTESTS"
-        or any(
-            item.citation.tool_name in {"performance.summary", "backtest.summary"}
-            for inventory in inventories
-            for item in inventory.unique.values()
-        )
-        or any(
-            contract is not None and "EXACT_M14_BUNDLE_NOT_ARCHIVED" in contract.limitations
-            for contract in (left_contract, right_contract)
-        )
+    if intent == "INDEPENDENT_BACKTESTS" or any(
+        item.citation.tool_name in {"performance.summary", "backtest.summary"}
+        for facts in numeric
+        for item in facts
     ):
         reasons.add("EXACT_M14_BUNDLE_REQUIRED")
     context_facts = {

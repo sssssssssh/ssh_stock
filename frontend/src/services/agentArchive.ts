@@ -44,6 +44,7 @@ export interface ArchiveVerification extends ArchiveSummary {
   verification_level: string;
   fact_recheck: { status: CheckStatus; checked_claim_count: number; policy_version: string;
     results: Array<{ claim_id: string; status: CheckStatus; reason_codes: string[];
+      comparison_state?: "COMPARABLE" | "CONTEXT_REQUIRED" | "INCOMPATIBLE" | null;
       verified_fact_refs: string[]; failed_fields: Array<{ path: string; code: string }> }> };
 }
 export const unavailableArchive: ArchiveSummary = {
@@ -55,7 +56,7 @@ export const unavailableArchive: ArchiveSummary = {
 };
 export function fetchTurnArchive(chatId: string, requestId: string, signal?: AbortSignal) {
   return request<ArchiveSummary & { evidence: ArchiveEvidence[] }>(
-    `/agent/chats/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(requestId)}/archive`, { signal });
+    `/agent/chats/${encodeURIComponent(chatId)}/turn-archives/${encodeURIComponent(requestId)}`, { signal });
 }
 export function fetchReportEvidence(reportId: string, offset = 0, signal?: AbortSignal) {
   return requestPage<ArchiveEvidence[], ArchiveSummary & { total: number }>(

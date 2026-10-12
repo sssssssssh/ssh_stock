@@ -1,6 +1,8 @@
 import pytest
+from app.core.agent_report_config import AgentReportConfig
 from app.domain.agent.chat import StructuredFact
 from app.services.agent.chat.fact_validation import _ClaimValidationError, _compare_value
+from app.services.agent.report.snapshot import build_report_snapshot
 from test_m16_4_1_metric_identity import compare, no_delta, report
 
 
@@ -63,3 +65,43 @@ def test_a_b_context_cannot_swallow_unknown_units_or_calculation_identity_confli
 def test_shared_validator_rejects_bad_context_fact(unit, value, path):
     with pytest.raises(_ClaimValidationError):
         _compare_value("2026-01-02" if unit == "date" else "A", value, unit, path)
+
+
+@pytest.mark.parametrize(
+    "tool,path",
+    [
+        ("backtest.summary", "start_date"),
+        ("backtest.summary", "end_date"),
+        ("data.coverage", "latest_trading_date"),
+    ],
+)
+def test_start_end_latest_dates_do_not_block_other_legitimate_numeric_metrics(tool, path):
+    snapshots = []
+    for value in ("10", "12"):
+        number, _ = report([("A", value)])
+        context, _ = report([("date-context", "2026-10-01")], tool=tool, path=path, unit="date")
+        context.claims[0].claim_id = "context-date"
+        snapshots.append(
+            build_report_snapshot(
+                report_type=number.report_type,
+                title=number.title,
+                source_chat_id=number.source_chat_id,
+                source_message_id=number.source_message_id,
+                source_turn_id=number.source_turn_id,
+                source_metadata={
+                    "verified_claims": [
+                        item.model_dump(mode="json") for item in [*number.claims, *context.claims]
+                    ],
+                    "citations": [
+                        item.model_dump(mode="json")
+                        for item in [*number.citations, *context.citations]
+                    ],
+                },
+                config=AgentReportConfig(),
+            )
+        )
+    result = compare(*snapshots)
+    assert result[0] == "COMPARABLE"
+    assert result[2]["facts"][0]["delta"] == "2"
+    assert result[2]["context_facts"]["left"][0]["value_type"] == "DATE"
+    assert "NON_NUMERIC_METRIC" not in result[1]

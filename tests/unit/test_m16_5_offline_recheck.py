@@ -217,8 +217,51 @@ def test_unknown_projector_is_unverifiable_not_reinterpreted_using_current_versi
     assert "UNSUPPORTED_PROJECTOR_VERSION" in result["warnings"]
 
 
+@pytest.mark.parametrize("version", ["evidence", "tool", "manifest"])
+def test_unknown_frozen_versions_keep_hash_checks_but_never_use_current_parser(version):
+    value = bundle()
+    if version == "evidence":
+        value.bindings[0].ref_json["evidence_version"] = "v3"
+        value.tools[0].payload_json["evidence"][0]["evidence_version"] = "v3"
+        value.assistant.metadata_json["citations"][0]["evidence_version"] = "v3"
+        value.bindings[0].ref_hash = archive_hash(value.bindings[0].ref_json)
+        value.manifest.manifest_json["bindings"][0]["ref_hash"] = value.bindings[0].ref_hash
+    elif version == "tool":
+        value.tools[0].tool_version = value.tools[0].payload_json["tool_version"] = "2.0"
+        value.manifest.manifest_json["tools"][0]["tool_version"] = "2.0"
+    else:
+        value.manifest.manifest_version = value.manifest.manifest_json["manifest_version"] = (
+            "future"
+        )
+    value.tools[0].payload_hash = archive_hash(value.tools[0].payload_json)
+    value.manifest.manifest_json["tools"][0]["payload_hash"] = value.tools[0].payload_hash
+    reseal_message(value)
+    result = recheck(value)
+    assert result["verification_level"] == "UNVERIFIABLE"
+    assert any(item.startswith("UNSUPPORTED_") for item in result["warnings"])
+
+
 def test_verify_timeout_and_resource_option_are_enforced():
     ticks = iter([0, 10])
     with pytest.raises(AgentArchiveError) as error:
         recheck(bundle(), monotonic=lambda: next(ticks))
     assert error.value.code == "ARCHIVE_VERIFY_TIMEOUT"
+
+
+@pytest.mark.parametrize(
+    "kind, gap",
+    [
+        ("INDEPENDENT_BACKTESTS", "EXACT_M14_BUNDLE_NOT_ARCHIVED"),
+        ("TRAIN_VS_OOS", "FROZEN_M15_WINDOW_LINEAGE_REQUIRED"),
+    ],
+)
+def test_frozen_summary_does_not_regrant_database_verified_comparison_permission(kind, gap):
+    value = bundle()
+    claim = value.assistant.metadata_json["verified_claims"][0]
+    claim.update(claim_type="COMPARISON", comparison_type=kind, comparison_state="COMPARABLE")
+    reseal_message(value)
+    result = recheck(value)
+    row = result["fact_recheck"]["results"][0]
+    assert row["facts_status"] == "VERIFIED" and row["status"] == "UNVERIFIABLE"
+    assert row["comparison_state"] == "INCOMPATIBLE" and gap in row["reason_codes"]
+    assert "delta" not in str(result) and result["calculation_reproduced"] is False

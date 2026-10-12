@@ -113,7 +113,7 @@ onBeforeUnmount(() => { generation++; controller.abort(); });
       </div>
       <div v-if="verification" class="archive-verification" role="status">
         <strong>{{ verification.verification_level }} · {{ verification.fact_recheck.checked_claim_count }} 项</strong>
-        <p v-for="row in verification.fact_recheck.results" :key="row.claim_id">{{ row.claim_id }} · {{ row.status }} · {{ row.reason_codes.join(' / ') }}<span v-for="field in row.failed_fields" :key="field.path"> · {{ field.path }}：{{ field.code }}</span></p>
+        <p v-for="row in verification.fact_recheck.results" :key="row.claim_id">{{ row.claim_id }} · {{ row.status }}<span v-if="row.comparison_state"> · 比较：{{ row.comparison_state }}</span> · {{ row.reason_codes.join(' / ') }}<span v-for="field in row.failed_fields" :key="field.path"> · {{ field.path }}：{{ field.code }}</span></p>
         <p v-for="warning in verification.warnings" :key="warning"><code>{{ warning }}</code></p>
       </div>
     </template>

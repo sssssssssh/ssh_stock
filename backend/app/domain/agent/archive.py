@@ -148,6 +148,7 @@ class ClaimRecheckView(ArchiveDTO):
     reason_codes: list[str]
     failed_fields: list[dict[str, str]]
     verified_fact_refs: list[str]
+    comparison_state: Literal["COMPARABLE", "CONTEXT_REQUIRED", "INCOMPATIBLE"] | None = None
 
 
 class FactRecheckView(ArchiveDTO):

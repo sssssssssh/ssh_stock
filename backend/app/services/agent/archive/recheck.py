@@ -46,6 +46,7 @@ def recheck_archive(
         reasons = set(unsupported)
         failed_fields = []
         facts_status = "VERIFIED"
+        comparison_state = None
         if unsupported:
             facts_status = "UNVERIFIABLE"
             status = "UNVERIFIABLE"
@@ -101,9 +102,11 @@ def recheck_archive(
                     if claim.comparison_type == "INDEPENDENT_BACKTESTS":
                         reasons.add("EXACT_M14_BUNDLE_NOT_ARCHIVED")
                         status = "UNVERIFIABLE"
+                        comparison_state = "INCOMPATIBLE"
                     elif claim.comparison_type == "TRAIN_VS_OOS":
                         reasons.add("FROZEN_M15_WINDOW_LINEAGE_REQUIRED")
                         status = "UNVERIFIABLE"
+                        comparison_state = "INCOMPATIBLE"
                     elif claim.comparison_state == "CONTEXT_REQUIRED":
                         reasons.add("COMPARISON_CONTEXT_REQUIRED")
                     if claim.comparison_type not in {"INDEPENDENT_BACKTESTS", "TRAIN_VS_OOS"}:
@@ -118,6 +121,7 @@ def recheck_archive(
                             ],
                         )
                         reasons.update(decision.reason_codes)
+                        comparison_state = decision.state
                         if (
                             decision.state == "INCOMPATIBLE"
                             or decision.state != claim.comparison_state
@@ -135,6 +139,7 @@ def recheck_archive(
                 "reason_codes": sorted(reasons),
                 "failed_fields": failed_fields,
                 "verified_fact_refs": claim.verified_fact_refs,
+                "comparison_state": comparison_state,
             }
         )
     states = {row["status"] for row in results}
