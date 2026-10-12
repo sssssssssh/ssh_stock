@@ -1,7 +1,7 @@
 # M16.5 Evidence Archive 分阶段验收
 
 开发基线：`5c7c52474b0dffc5b42c513f0b657d51705a5d33`，分支 master。
-状态：A–F 本地实现与验收完成；远端 CI 结果以末尾 Git / CI 实际记录为准。
+状态：A–F 实现、本地验收与远端 CI 均完成；真实记录见末尾 Git / CI。
 
 | 阶段 | 当前状态 | 验证 |
 |---|---|---|
@@ -10,7 +10,7 @@
 | C Offline Verifier / API | 实现完成 | 20 项离线/API 单测、最新业务数据变更隔离 PG 回归、全量 1164 项通过；Ruff 通过。 |
 | D Report v3 绑定 | 实现完成 | 8 项版本/Hash 单测、真实 PG 报告创建/证据/复核/导出/归档/owner/损坏门禁；历史 v1/v2 原 JSON/Hash 不变。 |
 | E UI / 遗留整改 | 实现完成 | 后端 1179 项、前端 90 项；全局覆盖率 81.35%、归档面板 98.23%；Chrome 1440/390 合成实测通过，未调用真实模型或用户库。 |
-| F 回归 / CI / 交付 | 本地验收完成，远端 CI 待核查 | 后端 1192 passed / 86.77%；前端 90 passed / 81.35%；PG 17 / Ruff / Compose / Browser 通过。 |
+| F 回归 / CI / 交付 | 验收完成，GitHub CI Success | 后端 1192 passed / 86.77%；前端 90 passed / 81.35%；PG 17 / Ruff / Compose / Browser 通过。 |
 
 ## A 阶段契约
 
@@ -72,7 +72,7 @@ SHA 是持久化一致性校验，不是防 DB 超级用户同时改内容及 Ha
 
 ## 分阶段提交与文件范围
 
-A `f6f6e4e`，B `f2c4ef2`，C `5481ace`，D `fd03cf9`，E `bc3e5f0`；F 为本次收尾提交。
+A `f6f6e4e`，B `f2c4ef2`，C `5481ace`，D `fd03cf9`，E `bc3e5f0`；F `e05b36a`。
 后端变更集中在 core/agent_archive_config、domain/agent、models/repositories/agent_archive、
 services/agent/archive、原 chat 捕获/事实核心、report 绑定/完整性/比较以及 API 路由。
 前端复用原工作台与报告组件，新增 EvidenceArchivePanel / agentArchive service；迁移仅新增 0051。
@@ -179,4 +179,7 @@ npm run build
 
 ## Git / CI
 
-本地全量验收通过；F 提交后推送 master，核查对应 GitHub Actions 后回填真实成功记录。
+功能交付 SHA：`e05b36ab481070183b444f552b49a292b7833c3e`，已推送 `origin/master`。
+GitHub Actions：CI #76，结论 **success**；[实际运行记录](https://github.com/sssssssssh/ssh_stock/actions/runs/38298587068)。
+迁移升级/空 CI 库回退 0019 再升级、1192 项全量测试/覆盖率、Ruff、Compose config/build、
+nginx -t、npm ci、前端覆盖率与 build 全部成功。最后另提交本验收记录；不重写 A–F 历史。

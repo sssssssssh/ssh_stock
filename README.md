@@ -1423,6 +1423,7 @@ E 的研究与报告页支持归档摘要、证据详情与冻结事实复核，
 不能把已有 Claim 快照描述为完整证据归档。
 迁移不回填历史；有归档数据时拒绝降级。A–F 本地验收已完成；启用前备份并核对目标连接，先升级
 0051，再部署后端/前端，最后显式启用 agent.archive.enabled。关闭开关不删除已存档证据。
+功能交付 e05b36a 已推送 master，[GitHub CI #76 成功](https://github.com/sssssssssh/ssh_stock/actions/runs/38298587068)。
 归档状态、完整性、事实复核、比较许可分离；不是行情重拉或算法重跑。M14/M15 完整冻结口径未
 实现，收益差值门禁保持。API、资源预算、完整 22 项矩阵、性能、回滚与 CI 见 [M16.5 验收记录](docs/M16_5_evidence_archive_closeout.md)。
 
