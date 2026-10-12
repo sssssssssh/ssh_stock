@@ -9,6 +9,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.domain.agent.archive import AgentArchiveError
 from app.domain.agent.contracts import AgentToolResult
 from app.domain.agent.errors import (
     AgentError,
@@ -54,6 +55,7 @@ class AgentApplicationService:
         request_id: str,
         user: Any,
         remaining_seconds: float | None = None,
+        capture_result: Callable[[AgentToolResult], None] | None = None,
     ) -> dict[str, Any]:
         started = self._monotonic()
         spec: ToolSpec | None = None
@@ -77,24 +79,29 @@ class AgentApplicationService:
             self._check_soft_timeout(effective_timeout, started)
             self._validate_result_contract(spec, result)
             self._validate_resource_limits(spec, result)
+            if capture_result is not None:
+                capture_result(result)
             payload = serialized_result(
                 result,
                 max_output_bytes=self.config.max_output_bytes,
             )
             self._check_soft_timeout(effective_timeout, started)
         except DBAPIError as exc:
-            error = statement_timeout() if _is_statement_timeout(exc) else AgentError(
-                "INTERNAL_ERROR", "agent tool execution failed", status_code=500
+            error = (
+                statement_timeout()
+                if _is_statement_timeout(exc)
+                else AgentError("INTERNAL_ERROR", "agent tool execution failed", status_code=500)
             )
             self._audit_failure(tool_name, request_id, user, started, spec, result, error)
             raise error from exc
         except AgentError as exc:
             self._audit_failure(tool_name, request_id, user, started, spec, result, exc)
             raise
+        except AgentArchiveError as exc:
+            self._audit_failure(tool_name, request_id, user, started, spec, result, exc)
+            raise
         except Exception as exc:
-            error = AgentError(
-                "INTERNAL_ERROR", "agent tool execution failed", status_code=500
-            )
+            error = AgentError("INTERNAL_ERROR", "agent tool execution failed", status_code=500)
             self._audit_failure(tool_name, request_id, user, started, spec, result, error)
             raise error from exc
 
@@ -164,15 +171,12 @@ class AgentApplicationService:
                 f"tool returned more than {spec.max_evidence} evidence references"
             )
         if len(result.warnings) > spec.max_warnings:
-            raise resource_limit_exceeded(
-                f"tool returned more than {spec.max_warnings} warnings"
-            )
+            raise resource_limit_exceeded(f"tool returned more than {spec.max_warnings} warnings")
         for field_name, limit in spec.nested_limits.items():
             count = sum(
                 len(value)
                 for record in result.records
-                if isinstance(record, dict)
-                and isinstance((value := record.get(field_name)), list)
+                if isinstance(record, dict) and isinstance((value := record.get(field_name)), list)
             )
             if count > limit:
                 raise resource_limit_exceeded(

@@ -29,6 +29,7 @@ from app.services.agent.chat.inference_policy import (
     InferencePolicyError,
 )
 from app.services.agent.chat.orchestrator import ToolResultContext
+from app.services.agent.evidence import canonical_content_hash
 
 _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
     "test.read": ("records.*.value",),
@@ -285,9 +286,7 @@ class EvidenceCompiler:
                     checked,
                     ["COMPARISON_INCOMPATIBLE", *checked.reason_codes],
                 )
-                warnings.append(
-                    f"CLAIM_REJECTED:{claim.claim_id}:COMPARISON_INCOMPATIBLE"
-                )
+                warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:COMPARISON_INCOMPATIBLE")
                 warnings.extend(
                     f"CLAIM_REJECTED_REASON:{claim.claim_id}:{code}"
                     for code in checked.reason_codes
@@ -391,9 +390,7 @@ class EvidenceCompiler:
 
         if claim.claim_type in {"FACT", "COMPARISON"} and not claim.structured_facts:
             raise _ClaimValidationError("MISSING_STRUCTURED_FACT")
-        fact_contexts = [
-            self._validate_fact(fact, bindings) for fact in claim.structured_facts
-        ]
+        fact_contexts = [self._validate_fact(fact, bindings) for fact in claim.structured_facts]
         verified_refs = [
             f"{context.evidence['evidence_id']}:{fact.path}"
             for fact, context in zip(
@@ -407,18 +404,22 @@ class EvidenceCompiler:
                 inference = self.inference_policy.evaluate(claim, verified_claims)
             except InferencePolicyError as exc:
                 raise _ClaimValidationError(exc.code) from exc
-            return claim.model_copy(
-                update={
-                    "quality_status": "WARNING",
-                    "text": inference.text,
-                    "inference": inference.inference,
-                    "reason_codes": list(inference.reason_codes),
-                    "verified_fact_refs": list(inference.verified_fact_refs),
-                    "policy_version": inference.policy_version,
-                    "comparison_state": None,
-                    "lineage_decision": None,
-                }
-            ), [], True
+            return (
+                claim.model_copy(
+                    update={
+                        "quality_status": "WARNING",
+                        "text": inference.text,
+                        "inference": inference.inference,
+                        "reason_codes": list(inference.reason_codes),
+                        "verified_fact_refs": list(inference.verified_fact_refs),
+                        "policy_version": inference.policy_version,
+                        "comparison_state": None,
+                        "lineage_decision": None,
+                    }
+                ),
+                [],
+                True,
+            )
 
         evidence_contexts = [
             ComparisonEvidenceContext(
@@ -458,9 +459,7 @@ class EvidenceCompiler:
                     if accepted
                     else "该比较因证据同源关系或统计口径不兼容而被拒绝。"
                 ),
-                "comparison_state": (
-                    decision.state if claim.claim_type == "COMPARISON" else None
-                ),
+                "comparison_state": (decision.state if claim.claim_type == "COMPARISON" else None),
                 "lineage_decision": decision.lineage_decision,
                 "reason_codes": list(decision.reason_codes),
                 "verified_fact_refs": verified_refs,
@@ -544,10 +543,23 @@ def _evidence_map(tool_results: list[ToolResultContext]) -> dict[str, _EvidenceB
         for index, ref in enumerate(refs):
             if not isinstance(ref, dict) or not isinstance(ref.get("evidence_id"), str):
                 continue
-            result.setdefault(
-                ref["evidence_id"],
-                _EvidenceBinding(context=context, ref=ref, ref_index=index),
-            )
+            previous = result.get(ref["evidence_id"])
+            if previous is not None and canonical_content_hash(
+                {
+                    "tool": previous.context.tool_name,
+                    "payload": previous.context.payload,
+                    "ref": previous.ref,
+                }
+            ) != canonical_content_hash(
+                {"tool": context.tool_name, "payload": context.payload, "ref": ref}
+            ):
+                raise AgentChatError(
+                    "EVIDENCE_DUPLICATE_CONFLICT", "conflicting evidence identity", status_code=409
+                )
+            if previous is None:
+                result[ref["evidence_id"]] = _EvidenceBinding(
+                    context=context, ref=ref, ref_index=index
+                )
     return result
 
 
@@ -556,9 +568,7 @@ def _validate_fact_binding(
     binding: _EvidenceBinding,
 ) -> ComparisonFactContext:
     tool_name = binding.context.tool_name
-    if not any(
-        fnmatchcase(fact.path, pattern) for pattern in _ALLOWED_PATHS.get(tool_name, ())
-    ):
+    if not any(fnmatchcase(fact.path, pattern) for pattern in _ALLOWED_PATHS.get(tool_name, ())):
         raise _ClaimValidationError("UNCONTROLLED_FIELD_PATH")
     records = binding.context.payload.get("records")
     if not isinstance(records, list):
@@ -574,9 +584,7 @@ def _validate_fact_binding(
         raise _ClaimValidationError("EVIDENCE_RECORD_MISMATCH")
     if str(binding.ref.get("entity_id")) != fact.entity:
         raise _ClaimValidationError("ENTITY_MISMATCH")
-    evidence_date = binding.ref.get("trade_date") or binding.context.payload.get(
-        "as_of_date"
-    )
+    evidence_date = binding.ref.get("trade_date") or binding.context.payload.get("as_of_date")
     if str(evidence_date) != fact.trade_date.isoformat():
         raise _ClaimValidationError("TRADE_DATE_MISMATCH")
     actual = _resolve_path(binding.context.payload, fact.path)
@@ -660,9 +668,7 @@ def _allowed_units(path: str) -> set[str]:
         return {"rank"}
     if any(token in leaf for token in ("count", "rows", "days")):
         return {"count"}
-    if any(
-        token in leaf for token in ("return", "drawdown", "rate", "coverage", "ratio")
-    ):
+    if any(token in leaf for token in ("return", "drawdown", "rate", "coverage", "ratio")):
         return {"decimal", "ratio", "percent"}
     if any(token in leaf for token in ("cash", "assets", "amount", "cost", "turnover")):
         return {"currency", "decimal"}
@@ -688,10 +694,7 @@ def _citations(
                 evidence_version=ref.get("evidence_version", "v1"),
                 tool_name=binding.context.tool_name,
                 entity_id=str(ref.get("entity_id", "unknown")),
-                as_of_date=(
-                    ref.get("trade_date")
-                    or binding.context.payload.get("as_of_date")
-                ),
+                as_of_date=(ref.get("trade_date") or binding.context.payload.get("as_of_date")),
                 report_id=ref.get("report_id"),
                 calc_run_id=ref.get("calc_run_id"),
                 calc_version=ref.get("calc_version"),

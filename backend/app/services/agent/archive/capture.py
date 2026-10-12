@@ -11,6 +11,18 @@ from app.services.agent.archive.projectors import check_safe, validate_projectio
 from app.services.agent.chat.orchestrator import ToolResultContext, _args_hash
 
 
+def capture_projections(result):
+    projections = {}
+    for ref in result.evidence:
+        projection = ref._archive_projection
+        if ref.evidence_id in projections and archive_hash(
+            projections[ref.evidence_id]
+        ) != archive_hash(projection):
+            raise archive_error("EVIDENCE_DUPLICATE_CONFLICT")
+        projections[ref.evidence_id] = projection
+    return projections
+
+
 def assemble_archive(
     *,
     tool_results: list[ToolResultContext],

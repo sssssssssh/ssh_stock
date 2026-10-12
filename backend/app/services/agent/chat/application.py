@@ -7,11 +7,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.agent_db import agent_db_session
 from app.core.config import Settings
+from app.domain.agent.archive import AgentArchiveError, ArchiveDraft, archive_error
 from app.domain.agent.chat import (
     AnswerStatus,
     ChatAnswer,
@@ -30,11 +32,13 @@ from app.domain.agent.chat_errors import (
 )
 from app.domain.agent.policy import user_audit_hash
 from app.models.agent_chat import AgentChatSession, AgentChatTurn
+from app.repositories.agent_archive import AgentArchiveRepository
 from app.repositories.agent_chat import AgentChatRepository
 from app.services.agent.adapters.market_data import MarketDataAgentAdapter
 from app.services.agent.adapters.opportunities import OpportunityAgentAdapter
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.application import AgentApplicationService
+from app.services.agent.archive.capture import assemble_archive, capture_projections
 from app.services.agent.chat.comparison_contract import (
     BacktestComparisonContractResolver,
 )
@@ -42,7 +46,11 @@ from app.services.agent.chat.comparison_policy import EvidenceComparisonPolicy
 from app.services.agent.chat.evidence_compiler import EvidenceCompiler
 from app.services.agent.chat.lineage import ExperimentLineageResolver
 from app.services.agent.chat.metadata import normalized_answer_metadata
-from app.services.agent.chat.orchestrator import ToolCallAudit, ToolOrchestrator
+from app.services.agent.chat.orchestrator import (
+    CapturedToolPayload,
+    ToolCallAudit,
+    ToolOrchestrator,
+)
 from app.services.agent.chat.prompt import SYSTEM_PROMPT
 from app.services.agent.chat.request_identity import request_content_hash
 from app.services.agent.llm.contracts import ChatMessage, LLMProvider
@@ -101,9 +109,7 @@ class AgentChatApplication:
         bool,
         int | None,
     ]:
-        chat = self.repo.get_owned_session(
-            chat_id=chat_id, owner_user_id=_user_id(user)
-        )
+        chat = self.repo.get_owned_session(chat_id=chat_id, owner_user_id=_user_id(user))
         if chat is None:
             raise chat_not_found()
         if latest or before_sequence is not None:
@@ -113,9 +119,7 @@ class AgentChatApplication:
                 before_sequence=before_sequence,
             )
         else:
-            messages, total = self.repo.message_page(
-                chat_id=chat_id, limit=limit, offset=offset
-            )
+            messages, total = self.repo.message_page(chat_id=chat_id, limit=limit, offset=offset)
             has_more = offset + len(messages) < total
             next_cursor = None
         return (
@@ -162,20 +166,14 @@ class AgentChatApplication:
             answer=answer,
         )
 
-    def get_running_turn_status(
-        self, *, user: Any, chat_id: uuid.UUID
-    ) -> ChatTurnStatus | None:
-        chat = self.repo.get_owned_session(
-            chat_id=chat_id, owner_user_id=_user_id(user)
-        )
+    def get_running_turn_status(self, *, user: Any, chat_id: uuid.UUID) -> ChatTurnStatus | None:
+        chat = self.repo.get_owned_session(chat_id=chat_id, owner_user_id=_user_id(user))
         if chat is None:
             raise chat_not_found()
         turn = self.repo.running_turn(chat_id=chat_id)
         if turn is None:
             return None
-        return self.get_turn_status(
-            user=user, chat_id=chat_id, request_id=turn.request_id
-        )
+        return self.get_turn_status(user=user, chat_id=chat_id, request_id=turn.request_id)
 
     def archive_chat(self, *, user: Any, chat_id: uuid.UUID) -> ChatSessionSummary:
         chat = self.repo.get_owned_session(
@@ -205,9 +203,7 @@ class AgentChatApplication:
             raise llm_disabled()
         normalized = content.strip()
         if not normalized or len(normalized) > self.config.llm.max_user_message_chars:
-            raise AgentChatError(
-                "INVALID_ARGUMENT", "invalid user message length", status_code=422
-            )
+            raise AgentChatError("INVALID_ARGUMENT", "invalid user message length", status_code=422)
         owner_id = _user_id(user)
         deadline = self._monotonic() + self.config.llm.max_total_deadline_seconds
         turn, existing = self._start_turn(
@@ -272,12 +268,8 @@ class AgentChatApplication:
                 compiled = EvidenceCompiler(
                     max_answer_chars=self.config.llm.max_answer_chars,
                     max_claims=self.config.llm.max_claims,
-                    max_evidence_ids_per_claim=(
-                        self.config.llm.max_evidence_ids_per_claim
-                    ),
-                    max_structured_facts_per_claim=(
-                        self.config.llm.max_structured_facts_per_claim
-                    ),
+                    max_evidence_ids_per_claim=(self.config.llm.max_evidence_ids_per_claim),
+                    max_structured_facts_per_claim=(self.config.llm.max_structured_facts_per_claim),
                     comparison_policy=EvidenceComparisonPolicy(
                         lineage_resolver=ExperimentLineageResolver(evidence_db),
                         contract_resolver=BacktestComparisonContractResolver(evidence_db),
@@ -288,6 +280,18 @@ class AgentChatApplication:
                     inherited_warnings=context_warning + orchestration.warnings,
                 )
             self._ensure_deadline(deadline)
+            archive_options = {}
+            if self.config.archive.enabled:
+                archive_options = {
+                    "archive_draft": assemble_archive(
+                        tool_results=orchestration.tool_results,
+                        claims=compiled.claims,
+                        citations=compiled.citations,
+                        config=self.config.archive,
+                    ),
+                    "deadline": deadline,
+                }
+            self._ensure_deadline(deadline)
             answer = self._complete_turn(
                 chat_id=chat_id,
                 turn_id=turn.id,
@@ -295,32 +299,25 @@ class AgentChatApplication:
                 answer=compiled.answer,
                 answer_status=compiled.answer_status,
                 claims=[item.model_dump(mode="json") for item in compiled.claims],
-                rejected_claims=[
-                    item.model_dump(mode="json") for item in compiled.rejected_claims
-                ],
+                rejected_claims=[item.model_dump(mode="json") for item in compiled.rejected_claims],
                 needs_clarification=compiled.needs_clarification,
                 citations=[item.model_dump(mode="json") for item in compiled.citations],
                 warnings=compiled.warnings,
-                tool_calls=[
-                    item.model_dump(mode="json") for item in orchestration.tool_calls
-                ],
+                tool_calls=[item.model_dump(mode="json") for item in orchestration.tool_calls],
                 usage=orchestration.usage.model_dump(mode="json"),
+                **archive_options,
             )
             self._ensure_deadline(deadline)
         except AgentChatError as exc:
             usage = (
-                orchestrator.last_usage.model_dump(mode="json")
-                if orchestrator is not None
-                else {}
+                orchestrator.last_usage.model_dump(mode="json") if orchestrator is not None else {}
             )
             self._fail_turn(turn.id, exc.code, usage)
             self._audit_turn(user, request_id, turn.trace_id, "FAILED", exc.code)
             raise
         except Exception as exc:
             usage = (
-                orchestrator.last_usage.model_dump(mode="json")
-                if orchestrator is not None
-                else {}
+                orchestrator.last_usage.model_dump(mode="json") if orchestrator is not None else {}
             )
             self._fail_turn(turn.id, "INTERNAL_ERROR", usage)
             self._audit_turn(user, request_id, turn.trace_id, "FAILED", "INTERNAL_ERROR")
@@ -356,9 +353,7 @@ class AgentChatApplication:
             if chat.status != "ACTIVE":
                 self.db.rollback()
                 raise chat_conflict("chat is archived")
-            existing = self.repo.get_turn_by_request(
-                chat_id=chat_id, request_id=request_id
-            )
+            existing = self.repo.get_turn_by_request(chat_id=chat_id, request_id=request_id)
             if existing is not None:
                 if existing.request_content_hash != content_hash:
                     self.db.rollback()
@@ -368,9 +363,7 @@ class AgentChatApplication:
                     self.db.rollback()
                     return existing, result
                 self.db.rollback()
-                raise chat_conflict(
-                    "request_id already belongs to a running or failed turn"
-                )
+                raise chat_conflict("request_id already belongs to a running or failed turn")
             if self.repo.running_turn(chat_id=chat_id) is not None:
                 self.db.rollback()
                 raise chat_conflict()
@@ -422,12 +415,24 @@ class AgentChatApplication:
             self.settings,
             remaining_seconds=remaining_seconds,
         ) as db:
-            return AgentApplicationService(db, self.settings).execute(
+            projections = {}
+            capture_options = {}
+            if self.config.archive.enabled:
+                capture_options = {
+                    "capture_result": lambda result: projections.update(capture_projections(result))
+                }
+            payload = AgentApplicationService(db, self.settings).execute(
                 tool_name=tool_name,
                 raw_input=arguments,
                 request_id=f"{request_id}:{tool_call_id}",
                 user=user,
                 remaining_seconds=remaining_seconds,
+                **capture_options,
+            )
+            return (
+                CapturedToolPayload(payload, projections)
+                if self.config.archive.enabled
+                else payload
             )
 
     def _persist_tool_call(self, turn_id: uuid.UUID, audit: ToolCallAudit) -> None:
@@ -459,6 +464,8 @@ class AgentChatApplication:
         warnings: list[str],
         tool_calls: list[dict[str, Any]],
         usage: dict[str, Any],
+        archive_draft: ArchiveDraft | None = None,
+        deadline: float | None = None,
     ) -> ChatAnswer:
         metadata = {
             "status": answer_status,
@@ -473,7 +480,16 @@ class AgentChatApplication:
             "usage": usage,
             "trace_id": str(trace_id),
         }
-        turn = self.db.get(AgentChatTurn, turn_id)
+        if archive_draft is not None:
+            self._ensure_deadline(deadline)
+            remaining_ms = max(1, int((deadline - self._monotonic()) * 1000))
+            self.db.execute(
+                text("SELECT set_config('statement_timeout', :value, true)"),
+                {"value": f"{min(remaining_ms, self.config.statement_timeout_ms)}ms"},
+            )
+        turn = self.db.scalar(
+            select(AgentChatTurn).where(AgentChatTurn.id == turn_id).with_for_update()
+        )
         if turn is None or turn.status != "RUNNING":
             self.db.rollback()
             raise chat_conflict("turn is no longer running")
@@ -493,7 +509,29 @@ class AgentChatApplication:
         if chat is not None:
             chat.updated_at = datetime.now(UTC)
             self.db.add(chat)
-        self.db.commit()
+        if archive_draft is not None:
+            try:
+                AgentArchiveRepository(self.db).insert_draft(
+                    owner_id=chat.owner_user_id,
+                    chat_id=chat_id,
+                    turn_id=turn_id,
+                    assistant=assistant,
+                    draft=archive_draft,
+                    max_turn_bytes=self.config.archive.max_turn_bytes,
+                )
+                self._ensure_deadline(deadline)
+                self.db.commit()
+            except AgentArchiveError:
+                self.db.rollback()
+                raise
+            except AgentChatError:
+                self.db.rollback()
+                raise
+            except Exception as exc:
+                self.db.rollback()
+                raise archive_error("ARCHIVE_PERSIST_FAILED", status_code=500) from exc
+        else:
+            self.db.commit()
         return ChatAnswer(
             chat_id=chat_id,
             message_id=assistant.id,
@@ -511,10 +549,18 @@ class AgentChatApplication:
             trace_id=trace_id,
         )
 
-    def _fail_turn(
-        self, turn_id: uuid.UUID, error_code: str, usage: dict[str, Any]
-    ) -> None:
+    def _fail_turn(self, turn_id: uuid.UUID, error_code: str, usage: dict[str, Any]) -> None:
         try:
+            self.db.rollback()
+            # A response lost/expired after commit cannot invalidate an atomic completed archive.
+            if self.config.archive.enabled:
+                turn = self.db.get(AgentChatTurn, turn_id)
+                chat = self.db.get(AgentChatSession, turn.session_id) if turn else None
+                if chat and AgentArchiveRepository(self.db).manifest_for_turn(
+                    chat.owner_user_id, turn_id
+                ):
+                    self.db.rollback()
+                    return
             self.repo.fail_turn(turn_id=turn_id, error_code=error_code, usage=usage)
             self.db.commit()
         except Exception:

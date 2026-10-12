@@ -6,7 +6,7 @@
 | 阶段 | 当前状态 | 验证 |
 |---|---|---|
 | A 存储 / Capture Contract | 实现完成 | 11 项单测、1 项 PG 迁移/约束/Trigger/有档拒绝降级测试、全量后端 1138 项通过；Ruff 通过。 |
-| B Chat 原子完成 | 待实现 | 不授予 COMPLETE |
+| B Chat 原子完成 | 实现完成 | 2 次实际调用/3 Evidence、缓存审计、同 request 竞争、写入异常/超限/截止回滚；全量后端 1143 项通过，最新预算路径专项 36 项复核。 |
 | C Offline Verifier / API | 待实现 | 不授予 FACT_REVERIFIED |
 | D Report v3 绑定 | 待实现 | 历史报告保持 v1/v2 |
 | E UI / 遗留整改 | 待实现 | 不开放未经验证状态 |
@@ -36,6 +36,16 @@ python -m ruff check backend tests migrations scripts
 ```
 
 ## 边界
+
+## B 阶段原子完成
+
+执行服务通过内部捕获回调取得 PrivateAttr 投影，CapturedToolPayload 的投影不是 dict 键，不进入模型 JSON。
+ToolResultContext 冻结工具版本、严格输入 Schema、当次参数及原调用 ID；round cache 两次调用保留两条审计，但只执行一次。
+Assembler 在完成事务前核对证据，Repository 核对 audit args/tool/status/Evidence 与 cache origin。
+同一事务写入 ToolArchive、Binding、Manifest、Assistant 与 COMPLETED Turn；完整性/存储/资源失败 rollback 后写 FAILED。
+归档消耗原 45s 总预算，写 SQL statement_timeout 也受剩余预算约束。提交前检查 Deadline；已原子提交但 HTTP 响应丢失/过期时不得倒写失败或删除 Archive，客户端通过原 request_id 查询/重放确认结果。
+Manifest 冻结原 Claims Digest、助手 content+metadata Digest、owner/chat/turn/message 与全部工具/Binding 摘要。
+开关关闭时无归档写入；无有效 Claim 的澄清轮记录 UNAVAILABLE，不授予 COMPLETE。旧 Turn 不补档。
 
 SHA 是持久化一致性校验，不是防 DB 超级用户同时改内容及 Hash 的签名。M16.5 不实现 CALCULATION_REPRODUCED。
 当前 M14/M15 原工具响应不含完整执行/会计/费用/基准/日期集与窗口血缘证明，不能凭 Archive 存在自动开放收益差值。

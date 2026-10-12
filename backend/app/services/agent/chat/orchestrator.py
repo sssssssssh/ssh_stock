@@ -4,6 +4,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,6 +48,14 @@ class ToolResultContext:
     input_schema: dict[str, Any] = field(default_factory=dict)
     source_projections: dict[str, Any] = field(default_factory=dict)
     cache_origin_call_id: str | None = None
+
+
+class CapturedToolPayload(dict):
+    """Internal projections live outside dict keys, hence outside model-visible JSON."""
+
+    def __init__(self, payload, source_projections):
+        super().__init__(payload)
+        self.source_projections = source_projections
 
 
 @dataclass
@@ -194,7 +203,16 @@ class ToolOrchestrator:
         args_hash = _args_hash(call.name, call.arguments)
         cached = round_cache.get(args_hash)
         if cached is not None:
-            context = ToolResultContext(call.id, call.name, cached.payload)
+            context = ToolResultContext(
+                call.id,
+                call.name,
+                cached.payload,
+                tool_version=cached.tool_version,
+                arguments=deepcopy(call.arguments),
+                input_schema=cached.input_schema,
+                source_projections=cached.source_projections,
+                cache_origin_call_id=cached.tool_call_id,
+            )
             cached_error = cached.payload.get("error")
             error_code = (
                 str(cached_error["code"])
@@ -236,7 +254,15 @@ class ToolOrchestrator:
                     status_code=exc.status_code,
                 )
         duration_ms = max(0, round((self.monotonic() - started) * 1000))
-        context = ToolResultContext(call.id, call.name, payload)
+        context = ToolResultContext(
+            call.id,
+            call.name,
+            payload,
+            tool_version=spec.version,
+            arguments=deepcopy(call.arguments),
+            input_schema=spec.input_model.model_json_schema(),
+            source_projections=deepcopy(getattr(payload, "source_projections", {})),
+        )
         audit = ToolCallAudit(
             tool_call_id=call.id,
             tool_name=call.name,

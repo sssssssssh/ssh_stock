@@ -1437,3 +1437,5 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
 ## Milestone 16.5 Evidence Archive（分阶段实施）
 
 目标是对启用后新对话的真实工具证据进行冻结事实复核。归档完整/部分/不可用、Hash 完整性和逐 Claim 复核分别展示；不能将其描述为行情重拉、回测重算或算法复现。旧消息和报告保持快照级别且不回填。A 阶段先交付存储与捕获契约，用户可见功能须等待 B–F 完整验收。
+
+B 的新对话归档必须与完成回答原子一致，异常/超限不能留下伪完整档案；重复 request_id 和网络丢失重试不得重复执行工具或调用模型。
