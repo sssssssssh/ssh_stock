@@ -23,7 +23,9 @@ export interface ReportChart {
 
 export interface ReportSnapshot {
   schema_version: string;
-  snapshot_level: "CLAIM_SNAPSHOT_ONLY";
+  snapshot_level: "CLAIM_SNAPSHOT_ONLY" | "FROZEN_TOOL_EVIDENCE";
+  archive_reference?: { manifest_id: string; manifest_hash: string; manifest_version: string;
+    archive_status: "COMPLETE"; reproduction_level: "FROZEN_FACT_RECHECK" } | null;
   report_type: ReportType;
   title: string;
   as_of_date?: string | null;
@@ -60,12 +62,17 @@ export interface ResearchReport extends ResearchReportSummary {
   parent_report_id?: string | null;
   snapshot: ReportSnapshot;
   source_contract: {
-    snapshot_level: "CLAIM_SNAPSHOT_ONLY";
+    snapshot_level: "CLAIM_SNAPSHOT_ONLY" | "FROZEN_TOOL_EVIDENCE";
     report_version: string;
     comparison_policy_version: string;
     tool_names: string[];
     evidence_versions: string[];
     limitations: string[];
+    archive_manifest_hash?: string | null;
+    archive_policy_version?: string | null;
+    verification_scope?: string[];
+    frozen_fields?: string[];
+    gap_codes?: string[];
   };
 }
 
@@ -82,6 +89,8 @@ export interface ReportComparison {
       left_fact?: { trade_date: string }; right_fact?: { trade_date: string } }>;
     unmatched_facts?: Record<string, Array<{ value: string; trade_date: string;
       metric_identity: { metric_id: string; entity_id: string; unit: string; sample_role: string } }>>;
+    context_facts?: ReportComparison["result"]["unmatched_facts"];
+    side_by_side_facts?: ReportComparison["result"]["unmatched_facts"];
     delta_policy?: string;
   };
   display_result?: ReportComparison["result"] | null;

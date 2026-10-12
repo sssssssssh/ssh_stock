@@ -9,7 +9,7 @@
 | B Chat 原子完成 | 实现完成 | 2 次实际调用/3 Evidence、缓存审计、同 request 竞争、写入异常/超限/截止回滚；全量后端 1143 项通过，最新预算路径专项 36 项复核。 |
 | C Offline Verifier / API | 实现完成 | 20 项离线/API 单测、最新业务数据变更隔离 PG 回归、全量 1164 项通过；Ruff 通过。 |
 | D Report v3 绑定 | 实现完成 | 8 项版本/Hash 单测、真实 PG 报告创建/证据/复核/导出/归档/owner/损坏门禁；历史 v1/v2 原 JSON/Hash 不变。 |
-| E UI / 遗留整改 | 待实现 | 不开放未经验证状态 |
+| E UI / 遗留整改 | 实现完成 | 后端 1179 项、前端 90 项；全局覆盖率 81.35%、归档面板 98.23%；Chrome 1440/390 合成实测通过，未调用真实模型或用户库。 |
 | F 回归 / CI / 交付 | 待完成 | 最终补记真实 SHA、CI URL、覆盖率与浏览器结果 |
 
 ## A 阶段契约
@@ -36,6 +36,13 @@ python -m ruff check backend tests migrations scripts
 ```
 
 ## 边界
+
+E 使用独立 Archive Panel 展示 Capture、Integrity、Claim Recheck；详情仅白名单安全字段，
+20 条证据分页、取消旧请求、失败不保留复核成功、会话归档读档。桌面与手机截图在 assets/m16-5。
+比较新政策 m16.5-report-comparison-v3；旧 v2 的冻结签名仍核验，展示视为旧策略而关闭差值。
+DATE/IDENTIFIER 进入 context_facts，不强制 Decimal。真正 A-only/B-only 进入 side_by_side_facts，
+PAIR_MAPPING_NOT_PROVIDED 与 CONTEXT_REQUIRED、无 delta/排序；错误指标/配置仍 INCOMPATIBLE。
+前端只消费 display_result，无安全投影时不降级渲染审计 result。复核从未授予算法重跑等级。
 
 D 新报告版本 m16.5-v1 / m16.5-report-snapshot-v3，级别 FROZEN_TOOL_EVIDENCE；快照冻结
 Manifest ID/版本/hash/COMPLETE 与 FROZEN_FACT_RECHECK。Source Contract 冻结 Manifest Hash、

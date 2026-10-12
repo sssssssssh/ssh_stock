@@ -6,7 +6,8 @@ from app.domain.agent.report import ReportSourceContract
 from app.services.agent.report.canonical import canonical_hash
 from app.services.agent.report.metric_identity import FactCandidate
 
-REPORT_COMPARISON_POLICY_VERSION = "m16.4.1-report-comparison-v2"
+REPORT_COMPARISON_POLICY_VERSION = "m16.5-report-comparison-v3"
+FROZEN_HASH_POLICY_VERSIONS = {REPORT_COMPARISON_POLICY_VERSION, "m16.4.1-report-comparison-v2"}
 
 
 def contract_signature(contract: ReportSourceContract) -> str:

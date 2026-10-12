@@ -131,7 +131,9 @@ def test_different_entity_kind_role_full_path_or_unit_never_match(right_options)
 
 def test_different_entities_are_unmatched_not_a_shared_metric():
     result = compare(report([("A", "10")]), report([("B", "12")]))
-    assert result[0] == "INCOMPATIBLE"
+    assert result[0] == "CONTEXT_REQUIRED"
+    assert "EXPLICIT_ENTITY_PAIR_MAPPING_REQUIRED" in result[1]
+    assert result[2]["facts"] == []
     assert "UNMATCHED_METRICS" in result[1]
     assert result[2]["unmatched_facts"]["left"][0]["metric_identity"]["entity_id"] == "A"
     assert result[2]["unmatched_facts"]["right"][0]["metric_identity"]["entity_id"] == "B"

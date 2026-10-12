@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import asdict, dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation, localcontext
+from enum import StrEnum
 from typing import Any
 
 from app.domain.agent.chat import ChatCitation, StructuredClaim, StructuredFact
@@ -22,6 +24,12 @@ ENTITY_KINDS = {
     "walk_forward.summary": "study",
     "walk_forward.window_lineage": "window",
 }
+
+
+class MetricValueKind(StrEnum):
+    NUMERIC = "NUMERIC"
+    DATE = "DATE"
+    IDENTIFIER = "IDENTIFIER"
 
 
 @dataclass(frozen=True, order=True)
@@ -44,6 +52,7 @@ class FactCandidate:
 
     def view(self) -> dict[str, Any]:
         return {
+            "value_type": self.value_type,
             "metric_identity": asdict(self.descriptor),
             "value": self.value,
             "trade_date": self.trade_date,
@@ -53,6 +62,12 @@ class FactCandidate:
                 mode="json", exclude={"marker", "observed_at", "navigation"}
             ),
         }
+
+    @property
+    def value_type(self):
+        return {"date": MetricValueKind.DATE, "identifier": MetricValueKind.IDENTIFIER}.get(
+            self.descriptor.unit, MetricValueKind.NUMERIC
+        )
 
 
 @dataclass
@@ -117,23 +132,34 @@ def collect_claim_facts(claims: list[StructuredClaim], refs: list[ChatCitation])
             metric = metric_semantics(fact, citation)
             assert metric is not None
             try:
-                number = Decimal(str(fact.value))
-                if (
-                    not number.is_finite()
-                    or len(number.as_tuple().digits) > 128
-                    or abs(number.as_tuple().exponent) > 128
-                ):
-                    raise ValueError("numeric resource limit")
-                with localcontext() as ctx:
-                    ctx.prec = 1000
-                    value = decimal_text(number)
+                if fact.unit == "date":
+                    value = date.fromisoformat(str(fact.value)).isoformat()
+                    if value != str(fact.value):
+                        raise ValueError("noncanonical date")
+                elif fact.unit == "identifier":
+                    value = str(fact.value)
+                    if not value.strip() or len(value) > 128 or isinstance(fact.value, bool):
+                        raise ValueError("invalid identifier")
+                else:
+                    number = Decimal(str(fact.value))
+                    if (
+                        not number.is_finite()
+                        or len(number.as_tuple().digits) > 128
+                        or abs(number.as_tuple().exponent) > 128
+                    ):
+                        raise ValueError("numeric resource limit")
+                    with localcontext() as ctx:
+                        ctx.prec = 1000
+                        value = decimal_text(number)
             except (InvalidOperation, ValueError):
                 issues.append(
                     {
                         "claim_id": claim.claim_id,
                         "path": fact.path,
                         "entity": fact.entity,
-                        "reason_code": "NON_NUMERIC_METRIC",
+                        "reason_code": "INVALID_CONTEXT_FACT"
+                        if fact.unit in {"date", "identifier"}
+                        else "NON_NUMERIC_METRIC",
                     }
                 )
                 continue

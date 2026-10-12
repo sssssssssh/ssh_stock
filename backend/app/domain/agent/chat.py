@@ -159,9 +159,7 @@ class ChatUsage(ChatDTO):
     provider_calls: int = Field(default=0, ge=0)
     tool_calls: int = Field(default=0, ge=0)
 
-    def add_provider_usage(
-        self, prompt_tokens: int | None, completion_tokens: int | None
-    ) -> None:
+    def add_provider_usage(self, prompt_tokens: int | None, completion_tokens: int | None) -> None:
         self.provider_calls += 1
         self.prompt_tokens += max(0, prompt_tokens or 0)
         self.completion_tokens += max(0, completion_tokens or 0)
@@ -227,6 +225,7 @@ class ChatMessageView(ChatDTO):
     sequence_no: int
     metadata: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
+    source_request_id: str | None = None
 
 
 class StructuredAnswerDraft(ChatDTO):

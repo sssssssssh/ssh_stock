@@ -122,9 +122,10 @@ class AgentChatApplication:
             messages, total = self.repo.message_page(chat_id=chat_id, limit=limit, offset=offset)
             has_more = offset + len(messages) < total
             next_cursor = None
+        request_ids = self.repo.message_request_ids(chat_id, [row.id for row in messages])
         return (
             _session_summary(chat),
-            [_message_view(row) for row in messages],
+            [_message_view(row, request_ids.get(row.id)) for row in messages],
             total,
             has_more,
             next_cursor,
@@ -644,12 +645,13 @@ def _session_summary(chat: Any) -> ChatSessionSummary:
     )
 
 
-def _message_view(message: Any) -> ChatMessageView:
+def _message_view(message: Any, source_request_id=None) -> ChatMessageView:
     metadata = dict(message.metadata_json or {})
     if message.role == "ASSISTANT":
         metadata = _normalized_answer_metadata(metadata)
     return ChatMessageView(
         message_id=message.id,
+        source_request_id=source_request_id,
         role=message.role,
         content=message.content,
         status=message.status,

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { ResearchNavigationContext } from "../services/agent";
 import ReportSnapshotChart from "./ReportSnapshotChart.vue";
+import EvidenceArchivePanel from "./EvidenceArchivePanel.vue";
 
 import {
   archiveResearchReport,
@@ -37,13 +38,17 @@ const leftReportId = ref("");
 const rightReportId = ref("");
 const pendingCreate = ref<{ fingerprint: string; requestId: string } | null>(null);
 const pendingComparison = ref<{ fingerprint: string; requestId: string } | null>(null);
+let reportGeneration = 0;
+onBeforeUnmount(() => { reportGeneration++; });
 
 const claimsById = computed(() =>
   new Map((selected.value?.snapshot.claims || []).map((claim) => [claim.claim_id, claim]))
 );
-const comparisonDisplay = computed(() => comparison.value?.display_result || comparison.value?.result);
+// Frozen result is audit data, never a UI fallback (including older API responses).
+const comparisonDisplay = computed(() => comparison.value?.display_result);
 const deltaAllowed = computed(() => comparison.value?.state === "COMPARABLE"
-  && comparison.value?.policy_version === "m16.4.1-report-comparison-v2"
+  && comparison.value?.policy_version === "m16.5-report-comparison-v3"
+  && comparison.value?.display_safety?.legacy_policy === false
   && comparison.value?.display_safety?.delta_allowed === true);
 
 watch(
@@ -83,17 +88,21 @@ async function loadReports(reset = true) {
 }
 
 async function openReport(reportId: string) {
+  const current = ++reportGeneration;
+  selected.value = null;
   error.value = "";
   try {
-    selected.value = await fetchResearchReport(reportId);
+    const report = await fetchResearchReport(reportId);
+    if (current === reportGeneration) selected.value = report;
   } catch (value) {
-    error.value = errorText(value);
+    if (current === reportGeneration) error.value = errorText(value);
   }
 }
 
 async function createReport() {
   if (!sourceChatId.value || !sourceMessageId.value) return;
   working.value = true;
+  reportGeneration++;
   error.value = "";
   try {
     const fingerprint = JSON.stringify([
@@ -209,6 +218,7 @@ function errorText(value: unknown) {
         <template v-else>
           <header class="detail-title"><div><small>{{ selected.report_type }} · {{ selected.report_version }}</small><h2>{{ selected.title }}</h2><p>{{ selected.as_of_date || "日期未提供" }} · {{ selected.source_answer_status }}</p><small>来源 {{ selected.source_chat_id }} / {{ selected.source_message_id }}</small></div><div class="detail-actions"><button type="button" @click="download('markdown')">Markdown</button><button type="button" @click="download('html')">HTML</button><button v-if="!selected.archived_at" type="button" :disabled="working" @click="archiveSelected">归档</button></div></header>
           <div class="snapshot-meta"><code>{{ selected.snapshot_hash }}</code><span>{{ selected.source_contract.snapshot_level }}</span></div>
+          <EvidenceArchivePanel :key="selected.report_id" :report-id="selected.report_id" />
           <section v-for="section in selected.snapshot.sections" :key="section.section_id" class="report-section"><h3>{{ section.title }}</h3><p v-for="item in section.items || []" :key="item" class="section-item">{{ item }}</p><article v-for="claimId in section.claim_ids" :key="claimId"><template v-if="claimsById.get(claimId)"><strong>{{ claimsById.get(claimId)?.claim_type }}</strong><p>{{ claimsById.get(claimId)?.text }}</p><small>证据：{{ claimsById.get(claimId)?.evidence_ids.join(" / ") }}</small></template></article></section>
           <section v-if="selected.snapshot.charts.length" class="report-section"><h3>指标视图</h3><ReportSnapshotChart v-for="chart in selected.snapshot.charts" :key="`${selected.report_id}:${chart.chart_id}`" :chart="chart" :snapshot="selected.snapshot" /></section>
           <section class="report-section"><h3>证据索引</h3><div class="evidence-grid"><article v-for="citation in selected.snapshot.citations" :key="citation.evidence_id"><code>{{ citation.evidence_id }}</code><span>{{ citation.tool_name }}</span><small>{{ citation.entity_id }} · {{ citation.as_of_date || "日期未提供" }}</small><button v-if="citation.navigation" type="button" @click="emit('navigate', citation.navigation)">打开业务详情</button></article></div></section>
@@ -227,6 +237,8 @@ function errorText(value: unknown) {
         <p v-if="!deltaAllowed">当前仅并列展示事实，不输出差值或优劣排序。</p>
         <div class="table-scroll"><table><thead><tr><th>metric</th><th>left</th><th>right</th><th>pair status</th><th v-if="deltaAllowed">delta (right − left)</th></tr></thead><tbody><tr v-for="fact in comparisonDisplay?.facts || []" :key="fact.metric_key"><td>{{ fact.metric_key }}</td><td>{{ fact.left }} <small>{{ fact.left_fact?.trade_date }}</small></td><td>{{ fact.right }} <small>{{ fact.right_fact?.trade_date }}</small></td><td>{{ fact.pair_status || '旧策略未逐项验证' }} {{ fact.decision_reason_codes?.join(' / ') }}</td><td v-if="deltaAllowed">{{ fact.pair_status === 'COMPARABLE' ? fact.delta ?? '--' : '--' }}</td></tr></tbody></table></div>
         <div v-for="(facts, side) in comparisonDisplay?.unmatched_facts || {}" :key="side"><strong>{{ side }} · 未配对事实</strong><p v-for="(fact, index) in facts" :key="index">{{ fact.metric_identity.entity_id }} · {{ fact.metric_identity.metric_id }} · {{ fact.value }} {{ fact.metric_identity.unit }} · {{ fact.trade_date }} · {{ fact.metric_identity.sample_role }}</p></div>
+        <div v-for="(facts, side) in comparisonDisplay?.context_facts || {}" :key="`context-${side}`"><strong>{{ side }} · 日期与标识上下文（不作差值）</strong><p v-for="(fact, index) in facts" :key="index">{{ fact.metric_identity.entity_id }} · {{ fact.metric_identity.metric_id }} · {{ fact.value }} · {{ fact.trade_date }} · {{ fact.metric_identity.sample_role }}</p></div>
+        <p v-if="!comparisonDisplay">旧接口未提供安全展示投影。审计 result 不用于展示或绘图。</p>
       </div>
     </section>
   </section>

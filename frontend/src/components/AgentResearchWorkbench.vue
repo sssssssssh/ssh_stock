@@ -23,6 +23,7 @@ import {
   type ResearchNavigationContext
 } from "../services/agent";
 import type { ReportSourceSelection } from "../services/agentReports";
+import EvidenceArchivePanel from "./EvidenceArchivePanel.vue";
 
 const MESSAGE_PAGE_SIZE = 50;
 const MAX_POLL_ATTEMPTS = 12;
@@ -57,6 +58,9 @@ const llmEnabled = ref(false);
 const registryVersion = ref("");
 const toolCount = ref(0);
 const evidenceOpen = ref(false);
+const archiveRequest = ref<string | null>(null);
+const archiveOpen = ref(false);
+watch(activeChatId, () => { archiveOpen.value = false; archiveRequest.value = null; });
 const selectedCitation = ref<AgentCitation | null>(null);
 const citationEntries = computed(() => {
   const citation = selectedCitation.value;
@@ -805,6 +809,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <button v-if="verifiedClaims(message).length" type="button" class="agent-report-button" @click="createReportFromMessage(message)">生成研究报告</button>
+              <button type="button" class="agent-report-button" @click="archiveRequest = message.source_request_id || null; archiveOpen = true">查看证据归档</button>
               <details v-if="metadata(message).tool_calls?.length || metadata(message).warnings?.length">
                 <summary>执行详情</summary>
                 <div v-for="call in metadata(message).tool_calls" :key="call.tool_call_id" class="agent-tool-call">
@@ -814,6 +819,7 @@ onBeforeUnmount(() => {
               </details>
             </template>
           </article>
+          <section v-if="archiveOpen" aria-label="会话证据归档"><button type="button" @click="archiveOpen = false">关闭归档面板</button><EvidenceArchivePanel :key="`${activeChatId}:${archiveRequest}`" :chat-id="activeChatId" :request-id="archiveRequest" /></section>
           <div v-if="activePending" class="agent-pending" role="status">
             <strong>{{ pendingLabel(activePending.state) }}</strong>
             <span>{{ activePending.requestId }}</span>

@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import AgentResearchReports from "./AgentResearchReports.vue";
+vi.mock("./EvidenceArchivePanel.vue", () => ({ default: { template: '<section>冻结证据归档</section>' } }));
 
 const mocks = vi.hoisted(() => ({
   fetchResearchReports: vi.fn(),
@@ -117,10 +118,12 @@ it("shows only side-by-side facts when comparison requires context", async () =>
 
 it.each(["legacy", "pair-rejected"])("hides unsafe delta for %s comparisons", async (kind) => {
   mocks.createReportComparison.mockResolvedValue({
-    policy_version: kind === "legacy" ? "m16.2.2-comparison-v1" : "m16.4.1-report-comparison-v2",
+    policy_version: kind === "legacy" ? "m16.2.2-comparison-v1" : "m16.5-report-comparison-v3",
     state: "COMPARABLE", reason_codes: [],
     display_safety: { legacy_policy: kind === "legacy", delta_allowed: kind !== "legacy", warnings: [] },
     result: { facts: [{ metric_key: "score", left: "10", right: "12", delta: "999",
+      pair_status: "INCOMPATIBLE" }] },
+    display_result: { facts: [{ metric_key: "score", left: "10", right: "12", delta: "999",
       pair_status: "INCOMPATIBLE" }] }
   });
   mocks.fetchResearchReports.mockResolvedValue({ data: [summary, { ...summary, report_id: "report-2" }], meta: { total: 2 } });
@@ -133,5 +136,22 @@ it.each(["legacy", "pair-rejected"])("hides unsafe delta for %s comparisons", as
   await flushPromises();
   expect(wrapper.text()).not.toContain("999");
   if (kind === "legacy") expect(wrapper.text()).toContain("旧版比较策略");
+  wrapper.unmount();
+});
+
+it("never consumes old API audit result without safe display_result", async () => {
+  mocks.createReportComparison.mockResolvedValue({ policy_version: "m16.5-report-comparison-v3",
+    state: "COMPARABLE", reason_codes: [], display_safety: { legacy_policy: false, delta_allowed: true },
+    result: { facts: [{ metric_key: "unsafe", left: "998", right: "999", delta: "1", pair_status: "COMPARABLE" }] } });
+  mocks.fetchResearchReports.mockResolvedValue({ data: [summary, { ...summary, report_id: "report-2" }], meta: { total: 2 } });
+  const wrapper = mount(AgentResearchReports);
+  await flushPromises();
+  const selects = wrapper.findAll(".report-compare select");
+  await selects[0].setValue("report-1"); await selects[1].setValue("report-2");
+  await wrapper.findAll("button").find((button) => button.text() === "比较")!.trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).toContain("审计 result 不用于展示或绘图");
+  expect(wrapper.text()).not.toContain("998");
+  expect(wrapper.text()).not.toContain("999");
   wrapper.unmount();
 });

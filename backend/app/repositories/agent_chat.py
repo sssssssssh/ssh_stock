@@ -46,10 +46,7 @@ class AgentChatRepository:
     ) -> tuple[list[AgentChatSession], int]:
         where = [AgentChatSession.owner_user_id == owner_user_id]
         total = int(
-            self.db.scalar(
-                select(func.count()).select_from(AgentChatSession).where(*where)
-            )
-            or 0
+            self.db.scalar(select(func.count()).select_from(AgentChatSession).where(*where)) or 0
         )
         rows = list(
             self.db.execute(
@@ -71,6 +68,18 @@ class AgentChatRepository:
         self.db.flush()
         return chat
 
+    def message_request_ids(self, chat_id, message_ids):
+        if not message_ids:
+            return {}
+        return dict(
+            self.db.execute(
+                select(AgentChatTurn.assistant_message_id, AgentChatTurn.request_id).where(
+                    AgentChatTurn.session_id == chat_id,
+                    AgentChatTurn.assistant_message_id.in_(message_ids),
+                )
+            ).all()
+        )
+
     def message_page(
         self,
         *,
@@ -80,10 +89,7 @@ class AgentChatRepository:
     ) -> tuple[list[AgentChatMessage], int]:
         where = [AgentChatMessage.session_id == chat_id]
         total = int(
-            self.db.scalar(
-                select(func.count()).select_from(AgentChatMessage).where(*where)
-            )
-            or 0
+            self.db.scalar(select(func.count()).select_from(AgentChatMessage).where(*where)) or 0
         )
         rows = list(
             self.db.execute(
@@ -107,10 +113,7 @@ class AgentChatRepository:
     ) -> tuple[list[AgentChatMessage], int, bool, int | None]:
         where = [AgentChatMessage.session_id == chat_id]
         total = int(
-            self.db.scalar(
-                select(func.count()).select_from(AgentChatMessage).where(*where)
-            )
-            or 0
+            self.db.scalar(select(func.count()).select_from(AgentChatMessage).where(*where)) or 0
         )
         page_where = list(where)
         if before_sequence is not None:
@@ -193,9 +196,7 @@ class AgentChatRepository:
         self.db.flush()
         return message
 
-    def get_turn_by_request(
-        self, *, chat_id: uuid.UUID, request_id: str
-    ) -> AgentChatTurn | None:
+    def get_turn_by_request(self, *, chat_id: uuid.UUID, request_id: str) -> AgentChatTurn | None:
         return self.db.execute(
             select(AgentChatTurn).where(
                 AgentChatTurn.session_id == chat_id,

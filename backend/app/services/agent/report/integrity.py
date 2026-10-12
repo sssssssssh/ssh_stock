@@ -16,7 +16,7 @@ from app.services.agent.report.archive_binding import (
 )
 from app.services.agent.report.canonical import canonical_hash
 from app.services.agent.report.comparison_policy import (
-    REPORT_COMPARISON_POLICY_VERSION,
+    FROZEN_HASH_POLICY_VERSIONS,
     contract_signature,
 )
 
@@ -147,7 +147,7 @@ def verify_comparison(row: Any, left: Any, right: Any) -> None:
             raise ValueError("comparison metadata")
         if result["reason_codes"] != row.reason_codes_json:
             raise ValueError("comparison reasons")
-        if row.policy_version == REPORT_COMPARISON_POLICY_VERSION:
+        if row.policy_version in FROZEN_HASH_POLICY_VERSIONS:
             expected = {
                 "left": contract_signature(
                     ReportSourceContract.model_validate(left.source_contract_json)

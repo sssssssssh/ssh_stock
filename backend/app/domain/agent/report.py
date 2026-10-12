@@ -221,10 +221,14 @@ class ReportComparisonView(ReportDTO):
     policy_version: str
     state: ComparisonState
     reason_codes: list[str] = Field(default_factory=list)
-    result: dict[str, Any]
+    result: dict[str, Any] = Field(
+        description="Immutable frozen audit data; never consume as UI/chart fallback."
+    )
     left_snapshot_hash: str
     right_snapshot_hash: str
     comparison_hash: str
     created_at: datetime
     display_safety: dict[str, Any] | None = None
-    display_result: dict[str, Any] | None = None
+    display_result: dict[str, Any] | None = Field(
+        default=None, description="Only safe UI/chart projection; legacy deltas disabled."
+    )

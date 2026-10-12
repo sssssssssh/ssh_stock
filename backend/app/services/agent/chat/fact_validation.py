@@ -45,6 +45,8 @@ _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
         "records.*.liquidity.liquidity_score",
     ),
     "sector.top": (
+        "records.*.sector_id",
+        "records.*.sector_code",
         "records.*.heat_score",
         "records.*.heat_rank",
         "records.*.momentum.heat_momentum1",
@@ -53,6 +55,7 @@ _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
         "records.*.member_count",
     ),
     "theme.top": (
+        "records.*.theme_code",
         "records.*.heat_score",
         "records.*.heat_rank",
         "records.*.momentum.heat_momentum1",
@@ -63,12 +66,14 @@ _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
         "records.*.member_snapshot_date",
     ),
     "opportunity.list": (
+        "records.*.ts_code",
         "records.*.score",
         "records.*.left_reversal_score",
         "records.*.right_side_score",
         "records.*.trend_score",
     ),
     "backtest.summary": (
+        "records.*.run_id",
         "records.*.start_date",
         "records.*.end_date",
         "records.*.initial_cash",
@@ -119,6 +124,14 @@ _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
         "records.*.train_to_oos_degradation.median_drawdown_worsening",
     ),
     "walk_forward.window_lineage": (
+        "records.*.study_id",
+        "records.*.validation_id",
+        "records.*.selected_trial_id",
+        "records.*.train_run_id",
+        "records.*.oos_run_id",
+        "records.*.train_performance_id",
+        "records.*.oos_performance_id",
+        "records.*.train_evaluation_id",
         "records.*.window_no",
         "records.*.train_start",
         "records.*.train_end",

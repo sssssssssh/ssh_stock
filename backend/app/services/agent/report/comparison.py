@@ -47,10 +47,16 @@ def compare_report_snapshots(
         )
     ):
         reasons.add("EXACT_M14_BUNDLE_REQUIRED")
+    context_facts = {
+        side: [item.view() for item in inventory.unique.values() if item.value_type != "NUMERIC"]
+        for side, inventory in zip(("left", "right"), inventories, strict=True)
+    }
     groups: list[dict[tuple[str, ...], list[FactCandidate]]] = []
     for inventory in inventories:
         grouped: dict[tuple[str, ...], list[FactCandidate]] = defaultdict(list)
         for key, item in inventory.unique.items():
+            if item.value_type != "NUMERIC":
+                continue
             grouped[pairing_key(key, intent)].append(item)
         groups.append(grouped)
     rows: list[dict[str, Any]] = []
@@ -81,8 +87,72 @@ def compare_report_snapshots(
                 "decision_reason_codes": list(decision.reasons),
             }
         )
-    if not rows:
+    distinct_entities = not (
+        {item.descriptor.entity_id for item in inventories[0].unique.values()}
+        & {item.descriptor.entity_id for item in inventories[1].unique.values()}
+    )
+    side_by_side = (
+        intent == "CROSS_ENTITY_SAME_DATE"
+        and all(unmatched.values())
+        and not rows
+        and distinct_entities
+    )
+    if side_by_side:
+        # No A/B pairing is inferred. Validate comparable *contexts* before showing parallel facts.
+        left_items, right_items = (list(inventory.unique.values()) for inventory in inventories)
+        if any(
+            item.descriptor.sample_role in {"TRAIN", "OOS", "UNKNOWN"}
+            for item in [*left_items, *right_items]
+        ):
+            reasons.add("SAMPLE_CONTEXT_REQUIRED")
+        if left_contract is None or right_contract is None:
+            reasons.add("SOURCE_CONTRACT_MISSING")
+        elif (left_contract.report_version, left_contract.comparison_policy_version) != (
+            right_contract.report_version,
+            right_contract.comparison_policy_version,
+        ):
+            reasons.add("SOURCE_CONTRACT_VERSION_MISMATCH")
+        for item in [*left_items, *right_items]:
+            ref = item.citation
+            if not (
+                ref.evidence_version == "v2"
+                and (ref.calc_version or ref.algo_version)
+                and ref.config_hash
+                and (ref.source_hash or ref.content_hash)
+            ):
+                reasons.add("CALCULATION_IDENTITY_MISSING")
+        if {
+            (
+                item.descriptor.metric_id,
+                item.descriptor.entity_kind,
+                item.descriptor.unit,
+                item.descriptor.sample_role,
+                item.trade_date,
+                item.citation.calc_version,
+                item.citation.algo_version,
+                item.citation.config_hash,
+            )
+            for item in left_items
+        } != {
+            (
+                item.descriptor.metric_id,
+                item.descriptor.entity_kind,
+                item.descriptor.unit,
+                item.descriptor.sample_role,
+                item.trade_date,
+                item.citation.calc_version,
+                item.citation.algo_version,
+                item.citation.config_hash,
+            )
+            for item in right_items
+        }:
+            reasons.add("METRIC_IDENTITY_MISMATCH")
+        reasons.add("EXPLICIT_ENTITY_PAIR_MAPPING_REQUIRED")
+        reasons.add("PAIR_MAPPING_NOT_PROVIDED")
+    elif not rows and not any(context_facts.values()):
         reasons.add("NO_COMPARABLE_FACTS")
+    elif not rows:
+        reasons.add("CONTEXT_FACTS_ONLY")
     if any(unmatched.values()):
         reasons.add("UNMATCHED_METRICS")
     source_states = {
@@ -101,6 +171,8 @@ def compare_report_snapshots(
         "UNMATCHED_METRICS",
         "EXPLICIT_ENTITY_PAIR_MAPPING_REQUIRED",
         "COMPARISON_INTENT_AMBIGUOUS",
+        "CONTEXT_FACTS_ONLY",
+        "PAIR_MAPPING_NOT_PROVIDED",
     }
     state = (
         "INCOMPATIBLE"
@@ -109,7 +181,10 @@ def compare_report_snapshots(
         if reasons
         else "COMPARABLE"
     )
-    if len(rows) + sum(map(len, unmatched.values())) > max_facts:
+    if (
+        len(rows) + sum(map(len, unmatched.values())) + sum(map(len, context_facts.values()))
+        > max_facts
+    ):
         reasons.add("COMPARISON_FACTS_TRUNCATED")
         if state == "COMPARABLE":
             state = "CONTEXT_REQUIRED"
@@ -124,6 +199,9 @@ def compare_report_snapshots(
     for side in ("left", "right"):
         unmatched[side] = sorted(unmatched[side], key=canonical_hash)[:remaining]
         remaining -= len(unmatched[side])
+    for side in ("left", "right"):
+        context_facts[side] = sorted(context_facts[side], key=canonical_hash)[:remaining]
+        remaining -= len(context_facts[side])
     result = {
         "policy_version": REPORT_COMPARISON_POLICY_VERSION,
         "state": state,
@@ -132,6 +210,8 @@ def compare_report_snapshots(
         "reason_codes": sorted(reasons),
         "facts": rows[:max_facts],
         "unmatched_facts": unmatched,
+        "side_by_side_facts": unmatched if side_by_side else {"left": [], "right": []},
+        "context_facts": context_facts,
         "ambiguous_facts": {"left": inventories[0].issues, "right": inventories[1].issues},
         "source_contract_hashes": {
             "left": contract_signature(left_contract) if left_contract else None,

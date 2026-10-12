@@ -88,6 +88,7 @@ export interface AgentMessageMetadata {
 }
 
 export interface AgentMessage {
+  source_request_id?: string | null;
   message_id: string;
   role: "USER" | "ASSISTANT";
   content: string;
