@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import type { ResearchNavigationContext } from "../services/agent";
+import ReportSnapshotChart from "./ReportSnapshotChart.vue";
 
 import {
   archiveResearchReport,
@@ -40,6 +41,10 @@ const pendingComparison = ref<{ fingerprint: string; requestId: string } | null>
 const claimsById = computed(() =>
   new Map((selected.value?.snapshot.claims || []).map((claim) => [claim.claim_id, claim]))
 );
+const comparisonDisplay = computed(() => comparison.value?.display_result || comparison.value?.result);
+const deltaAllowed = computed(() => comparison.value?.state === "COMPARABLE"
+  && comparison.value?.policy_version === "m16.4.1-report-comparison-v2"
+  && comparison.value?.display_safety?.delta_allowed === true);
 
 watch(
   () => props.initialSource,
@@ -205,7 +210,7 @@ function errorText(value: unknown) {
           <header class="detail-title"><div><small>{{ selected.report_type }} · {{ selected.report_version }}</small><h2>{{ selected.title }}</h2><p>{{ selected.as_of_date || "日期未提供" }} · {{ selected.source_answer_status }}</p><small>来源 {{ selected.source_chat_id }} / {{ selected.source_message_id }}</small></div><div class="detail-actions"><button type="button" @click="download('markdown')">Markdown</button><button type="button" @click="download('html')">HTML</button><button v-if="!selected.archived_at" type="button" :disabled="working" @click="archiveSelected">归档</button></div></header>
           <div class="snapshot-meta"><code>{{ selected.snapshot_hash }}</code><span>{{ selected.source_contract.snapshot_level }}</span></div>
           <section v-for="section in selected.snapshot.sections" :key="section.section_id" class="report-section"><h3>{{ section.title }}</h3><p v-for="item in section.items || []" :key="item" class="section-item">{{ item }}</p><article v-for="claimId in section.claim_ids" :key="claimId"><template v-if="claimsById.get(claimId)"><strong>{{ claimsById.get(claimId)?.claim_type }}</strong><p>{{ claimsById.get(claimId)?.text }}</p><small>证据：{{ claimsById.get(claimId)?.evidence_ids.join(" / ") }}</small></template></article></section>
-          <section v-if="selected.snapshot.charts.length" class="report-section"><h3>指标视图</h3><div v-for="chart in selected.snapshot.charts" :key="chart.chart_id" class="report-chart"><strong>{{ chart.title }}</strong><div class="table-scroll"><table><thead><tr><th v-for="column in chart.columns" :key="column">{{ column }}</th></tr></thead><tbody><tr v-for="(row, index) in chart.rows" :key="index"><td v-for="(cell, cellIndex) in row" :key="cellIndex">{{ cell }}</td></tr></tbody></table></div></div></section>
+          <section v-if="selected.snapshot.charts.length" class="report-section"><h3>指标视图</h3><ReportSnapshotChart v-for="chart in selected.snapshot.charts" :key="`${selected.report_id}:${chart.chart_id}`" :chart="chart" :snapshot="selected.snapshot" /></section>
           <section class="report-section"><h3>证据索引</h3><div class="evidence-grid"><article v-for="citation in selected.snapshot.citations" :key="citation.evidence_id"><code>{{ citation.evidence_id }}</code><span>{{ citation.tool_name }}</span><small>{{ citation.entity_id }} · {{ citation.as_of_date || "日期未提供" }}</small><button v-if="citation.navigation" type="button" @click="emit('navigate', citation.navigation)">打开业务详情</button></article></div></section>
           <details><summary>限制、警告与未纳入主张</summary><p v-for="warning in selected.snapshot.warnings" :key="warning"><code>{{ warning }}</code></p><p v-for="claim in selected.snapshot.rejected_claims" :key="claim.claim_id"><code>{{ claim.claim_id }}</code> · {{ claim.reason_codes.join(" / ") }}</p></details>
         </template>
@@ -217,7 +222,12 @@ function errorText(value: unknown) {
       <select v-model="leftReportId"><option value="">选择左侧报告</option><option v-for="report in reports" :key="report.report_id" :value="report.report_id">{{ report.title }}</option></select>
       <select v-model="rightReportId"><option value="">选择右侧报告</option><option v-for="report in reports" :key="report.report_id" :value="report.report_id">{{ report.title }}</option></select>
       <button type="button" :disabled="working || !leftReportId || !rightReportId || leftReportId === rightReportId" @click="compareReports">比较</button>
-      <div v-if="comparison" class="comparison-result"><strong :class="comparison.state.toLowerCase()">{{ comparison.state }}</strong><span>{{ comparison.reason_codes.join(" / ") || "口径一致" }}</span><div class="table-scroll"><table><thead><tr><th>metric</th><th>left</th><th>right</th><th v-if="comparison.state === 'COMPARABLE'">delta</th></tr></thead><tbody><tr v-for="fact in comparison.result.facts || []" :key="fact.metric_key"><td>{{ fact.metric_key }}</td><td>{{ fact.left }}</td><td>{{ fact.right }}</td><td v-if="comparison.state === 'COMPARABLE'">{{ fact.delta ?? "--" }}</td></tr></tbody></table></div></div>
+      <div v-if="comparison" class="comparison-result"><strong>{{ comparison.state }}</strong><span>{{ comparison.reason_codes.join(" / ") || "口径一致" }}</span>
+        <p v-if="comparison.policy_version !== 'm16.4.1-report-comparison-v2'" role="alert">旧版比较策略：冻结结果仅供追溯，差值已隐藏。请按新版本重新创建比较。</p>
+        <p v-if="!deltaAllowed">当前仅并列展示事实，不输出差值或优劣排序。</p>
+        <div class="table-scroll"><table><thead><tr><th>metric</th><th>left</th><th>right</th><th>pair status</th><th v-if="deltaAllowed">delta (right − left)</th></tr></thead><tbody><tr v-for="fact in comparisonDisplay?.facts || []" :key="fact.metric_key"><td>{{ fact.metric_key }}</td><td>{{ fact.left }} <small>{{ fact.left_fact?.trade_date }}</small></td><td>{{ fact.right }} <small>{{ fact.right_fact?.trade_date }}</small></td><td>{{ fact.pair_status || '旧策略未逐项验证' }} {{ fact.decision_reason_codes?.join(' / ') }}</td><td v-if="deltaAllowed">{{ fact.pair_status === 'COMPARABLE' ? fact.delta ?? '--' : '--' }}</td></tr></tbody></table></div>
+        <div v-for="(facts, side) in comparisonDisplay?.unmatched_facts || {}" :key="side"><strong>{{ side }} · 未配对事实</strong><p v-for="(fact, index) in facts" :key="index">{{ fact.metric_identity.entity_id }} · {{ fact.metric_identity.metric_id }} · {{ fact.value }} {{ fact.metric_identity.unit }} · {{ fact.trade_date }} · {{ fact.metric_identity.sample_role }}</p></div>
+      </div>
     </section>
   </section>
 </template>
@@ -233,7 +243,7 @@ function errorText(value: unknown) {
 .report-create { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr auto; align-items: end; gap: 10px; padding: 12px; }
 .report-create > div, .report-compare > div:first-child { display: grid; gap: 4px; }
 label { display: grid; gap: 4px; color: #64748b; font-size: 12px; }
-input, select, button { min-height: 34px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; padding: 0 9px; }
+input, select, button { min-width: 0; max-width: 100%; min-height: 34px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; padding: 0 9px; }
 button { cursor: pointer; color: #1e293b; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 .report-create > button, .report-compare > button { border-color: #111827; background: #111827; color: #fff; }
@@ -254,6 +264,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .report-section h3 { margin: 0 0 8px; }
 .report-section > article { border-left: 3px solid #bfdbfe; margin-bottom: 8px; padding: 7px 10px; }
 .report-section article p { margin: 4px 0; line-height: 1.5; }
+.report-section article small, .report-section p, .detail-title small, .report-list small, .comparison-result p, .comparison-result span { overflow-wrap: anywhere; }
 .section-item { margin: 5px 0; color: #475569; }
 .report-chart { margin-top: 10px; }
 .table-scroll { overflow-x: auto; margin-top: 7px; }
@@ -265,9 +276,7 @@ th, td { border-bottom: 1px solid #e2e8f0; padding: 7px; text-align: left; white
 .report-compare { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; align-items: end; gap: 10px; padding: 12px; }
 .comparison-result { grid-column: 1 / -1; display: grid; gap: 7px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
 .comparison-result > strong { width: fit-content; border-radius: 999px; padding: 3px 8px; }
-.comparison-result > strong.comparable { background: #dcfce7; color: #166534; }
-.comparison-result > strong.context_required { background: #fef3c7; color: #92400e; }
-.comparison-result > strong.incompatible { background: #fee2e2; color: #991b1b; }
+.comparison-result > strong { background: #e2e8f0; color: #334155; }
 @media (max-width: 1100px) { .report-create { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-create > div { grid-column: 1 / -1; } .report-compare { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .report-create, .report-compare, .report-layout { grid-template-columns: 1fr; } .report-list { max-height: 260px; overflow-y: auto; } .evidence-grid { grid-template-columns: 1fr; } .detail-title { display: grid; } .snapshot-meta { display: grid; } }
 </style>

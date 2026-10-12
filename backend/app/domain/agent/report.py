@@ -8,12 +8,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.domain.agent.chat import ChatCitation, RejectedClaim, StructuredClaim
 
-ReportType = Literal[
-    "market_review", "opportunity_review", "strategy_review", "oos_review"
-]
+ReportType = Literal["market_review", "opportunity_review", "strategy_review", "oos_review"]
 ReportAnswerStatus = Literal["COMPLETED", "PARTIAL_VERIFIED"]
 ComparisonState = Literal["COMPARABLE", "CONTEXT_REQUIRED", "INCOMPATIBLE"]
 ChartType = Literal["line", "bar", "table"]
+ComparisonIntent = Literal[
+    "AUTO",
+    "SAME_ENTITY_OVER_TIME",
+    "CROSS_ENTITY_SAME_DATE",
+    "INDEPENDENT_BACKTESTS",
+    "TRAIN_VS_OOS",
+]
 
 
 class ReportDTO(BaseModel):
@@ -27,6 +32,10 @@ class ReportChart(ReportDTO):
     unit: str = Field(min_length=1, max_length=32)
     columns: list[str] = Field(default_factory=list, max_length=16)
     rows: list[list[str]] = Field(default_factory=list)
+    metric_id: str | None = None
+    trade_date: date | None = None
+    sample_role: str | None = None
+    entity_kind: str | None = None
 
 
 class ReportSection(ReportDTO):
@@ -57,9 +66,7 @@ class ReportSourceContract(ReportDTO):
     comparison_policy_version: str = "m16.2.2-comparison-v1"
     tool_names: list[str] = Field(default_factory=list, max_length=16)
     evidence_versions: list[str] = Field(default_factory=list, max_length=8)
-    evidence_identities: list[ReportEvidenceIdentity] = Field(
-        default_factory=list, max_length=100
-    )
+    evidence_identities: list[ReportEvidenceIdentity] = Field(default_factory=list, max_length=100)
     limitations: list[str] = Field(default_factory=list, max_length=16)
 
 
@@ -79,6 +86,7 @@ class ResearchReportSnapshot(ReportDTO):
     sections: list[ReportSection] = Field(default_factory=list, max_length=12)
     charts: list[ReportChart] = Field(default_factory=list, max_length=8)
     warnings: list[str] = Field(default_factory=list, max_length=128)
+    source_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 class CreateResearchReport(ReportDTO):
@@ -147,6 +155,7 @@ class CreateReportComparison(ReportDTO):
     left_report_id: uuid.UUID
     right_report_id: uuid.UUID
     request_id: str = Field(min_length=1, max_length=128)
+    comparison_intent: ComparisonIntent = "AUTO"
 
     @field_validator("request_id")
     @classmethod
@@ -175,3 +184,5 @@ class ReportComparisonView(ReportDTO):
     right_snapshot_hash: str
     comparison_hash: str
     created_at: datetime
+    display_safety: dict[str, Any] | None = None
+    display_result: dict[str, Any] | None = None

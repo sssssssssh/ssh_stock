@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 16.4；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 16.4.1；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -587,3 +587,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 比较状态固定为 `COMPARABLE`、`CONTEXT_REQUIRED`、`INCOMPATIBLE`。只有 `COMPARABLE` 可输出 Decimal 差值；其余状态只能并列冻结事实及原因码，不输出差值、排名或胜负结论。
 - 图表只允许 `line`、`bar`、`table`，且只能来自快照中的 structured facts。当前聊天不归档完整日序列时不得伪造净值曲线，应使用表格/同日柱状图并提示 `SERIES_NOT_AVAILABLE`。
 - 默认 `llm_enabled=false` 不影响报告列表、生成、导出、比较和归档；这些操作不调用模型、不运行工具、不触发数据、研究、回测或策略计算。详细边界与上线/回滚见 `docs/M16_4_research_report_closeout.md`。
+
+## Milestone 16.4.1 报告比较与读取完整性规则
+
+- 新比较政策为 `m16.4.1-report-comparison-v2`。指标身份来自受控完整字段路径、来源实体类别、实体、样本角色、单位和日期粒度；运行 UUID 属于来源，不作为跨运行配对的全等条件。逐事实 Citation 必须唯一绑定，冲突重复和未配对事实须显式保留诊断。
+- `comparison_intent` 默认 `AUTO`；显式意图不能补充证据或放宽权限。同主体历史日期与 source/content hash 变化为上下文差异，不能静默忽略，也不能一律按配置冲突拒绝。跨实体缺少映射、独立回测缺完整 M14 Bundle、TRAIN/OOS 缺冻结 M15 Window lineage 均不输出差值。
+- 全局状态和每对指标的 `pair_status` 同时为 `COMPARABLE` 才能输出 Decimal `right - left`。存在歧义、来源缺口、上下文差异或输出裁剪时关闭全部差值，不生成排名或赢家。
+- 详情、导出、比较、归档与幂等复用必须重算原 canonical Hash，并核对元数据、Claims/Citations/SourceContract、左右报告与比较结果绑定。失败只读拒绝，使用安全 HTTP 409；列表允许轻量查询。
+- 新快照在 JSON 内绑定 `source_contract_hash`，无需 Schema 迁移；旧快照无该摘要时只做可证明的结构一致性核验，不能宣称旧契约被 snapshot hash 覆盖。历史比较不改写，API 提供独立 `display_result/display_safety`，旧政策差值只保存在冻结审计结果中、不得作为新政策验证结果展示。
+- 柱状图必须包含冻结的完整指标、同日、同角色、实体类别与统一单位，并能逐点绑定 Claim/Citation。缺口退回表格；`CLAIM_SNAPSHOT_ONLY` 不绘制完整历史曲线。`0050` 与现有历史数据保持不变，部署/验证见 `docs/M16_4_1_report_comparison_integrity_closeout.md`。

@@ -17,6 +17,8 @@ from app.domain.agent.report import (
 from app.domain.agent.report_errors import invalid_source
 from app.services.agent.chat.comparison_policy import COMPARISON_POLICY_VERSION
 from app.services.agent.chat.metadata import normalized_answer_metadata
+from app.services.agent.report.canonical import canonical_hash
+from app.services.agent.report.metric_identity import collect_claim_facts
 
 REPORT_VERSION = "m16.4-v1"
 
@@ -49,9 +51,7 @@ def build_report_snapshot(
             citations[citation.evidence_id] = citation
 
     verified: list[StructuredClaim] = []
-    rejected = [
-        RejectedClaim.model_validate(item) for item in normalized["rejected_claims"]
-    ]
+    rejected = [RejectedClaim.model_validate(item) for item in normalized["rejected_claims"]]
     used_evidence: set[str] = set()
     for raw in normalized["verified_claims"]:
         claim = StructuredClaim.model_validate(raw)
@@ -81,9 +81,9 @@ def build_report_snapshot(
     if len(selected_citations) > config.max_citations:
         raise invalid_source("REPORT_LIMIT_EXCEEDED", "citation limit exceeded")
 
-    all_dates = [
-        fact.trade_date for claim in verified for fact in claim.structured_facts
-    ] + [citation.as_of_date for citation in selected_citations if citation.as_of_date]
+    all_dates = [fact.trade_date for claim in verified for fact in claim.structured_facts] + [
+        citation.as_of_date for citation in selected_citations if citation.as_of_date
+    ]
     as_of_date = max(all_dates) if all_dates else None
     warnings = list(
         dict.fromkeys(
@@ -94,7 +94,7 @@ def build_report_snapshot(
             ]
         )
     )
-    charts, chart_warnings = _build_charts(verified, config)
+    charts, chart_warnings = _build_charts(verified, selected_citations, config)
     warnings.extend(item for item in chart_warnings if item not in warnings)
     if len(warnings) > 128:
         raise invalid_source("REPORT_LIMIT_EXCEEDED", "warning limit exceeded")
@@ -134,6 +134,8 @@ def build_report_snapshot(
         ],
         limitations=limitations,
     )
+    snapshot.schema_version = "m16.4.1-report-snapshot-v2"
+    snapshot.source_contract_hash = canonical_hash(contract.model_dump(mode="json"))
     return snapshot, contract
 
 
@@ -149,14 +151,10 @@ def _build_sections(
         ReportSection(
             section_id="verified-facts",
             title="已验证事实",
-            claim_ids=[
-                claim.claim_id for claim in claims if claim.claim_type != "INFERENCE"
-            ],
+            claim_ids=[claim.claim_id for claim in claims if claim.claim_type != "INFERENCE"],
         ),
     ]
-    inference_ids = [
-        claim.claim_id for claim in claims if claim.claim_type == "INFERENCE"
-    ]
+    inference_ids = [claim.claim_id for claim in claims if claim.claim_type == "INFERENCE"]
     sections.append(
         ReportSection(
             section_id="bounded-inference",
@@ -188,13 +186,9 @@ def _build_sections(
 
 
 def _build_charts(
-    claims: list[StructuredClaim], config: AgentReportConfig
+    claims: list[StructuredClaim], citations: list[ChatCitation], config: AgentReportConfig
 ) -> tuple[list[ReportChart], list[str]]:
-    facts = [
-        (claim.claim_id, fact)
-        for claim in claims
-        for fact in claim.structured_facts
-    ]
+    facts = [(claim.claim_id, fact) for claim in claims for fact in claim.structured_facts]
     if not facts or config.max_charts == 0:
         return [], ["SERIES_NOT_AVAILABLE"]
     rows = [
@@ -222,24 +216,35 @@ def _build_charts(
             rows=rows,
         )
     ]
-    groups: dict[tuple[date, str, str], list[tuple[str, Any]]] = defaultdict(list)
-    for _, fact in facts:
-        groups[(fact.trade_date, fact.path.split(".")[-1], fact.unit)].append(
-            (fact.entity, fact.value)
-        )
-    for (trade_date, metric, unit), values in sorted(groups.items()):
+    groups: dict[tuple[str, str, str, str, str], list[tuple[str, str]]] = defaultdict(list)
+    inventory = collect_claim_facts(claims, citations)
+    for descriptor, candidate in inventory.unique.items():
+        groups[
+            (
+                candidate.trade_date,
+                descriptor.metric_id,
+                descriptor.unit,
+                descriptor.sample_role,
+                descriptor.entity_kind,
+            )
+        ].append((descriptor.entity_id, candidate.value))
+    for (trade_date, metric, unit, role, kind), values in sorted(groups.items()):
         if len({entity for entity, _ in values}) < 2 or len(charts) >= config.max_charts:
             continue
         charts.append(
             ReportChart(
                 chart_id=f"ranking-{len(charts)}",
                 chart_type="bar",
-                title=f"{trade_date.isoformat()} {metric}",
+                title=f"{trade_date} {metric}",
                 unit=unit,
+                metric_id=metric,
+                trade_date=date.fromisoformat(trade_date),
+                sample_role=role,
+                entity_kind=kind,
                 columns=["entity", "value"],
                 rows=[
                     [entity, str(value)]
-                    for entity, value in values[: config.max_points_per_chart]
+                    for entity, value in sorted(values)[: config.max_points_per_chart]
                 ],
             )
         )

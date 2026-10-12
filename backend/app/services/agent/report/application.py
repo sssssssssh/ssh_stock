@@ -14,8 +14,6 @@ from app.domain.agent.report import (
     CreateReportComparison,
     CreateResearchReport,
     ReportComparisonView,
-    ReportSourceContract,
-    ResearchReportSnapshot,
     ResearchReportSummary,
     ResearchReportView,
 )
@@ -28,9 +26,10 @@ from app.domain.agent.report_errors import (
 )
 from app.models.agent_report import AgentResearchReport, AgentResearchReportComparison
 from app.repositories.agent_report import AgentReportRepository
-from app.services.agent.chat.comparison_policy import COMPARISON_POLICY_VERSION
 from app.services.agent.report.canonical import canonical_hash, storage_json_bytes
 from app.services.agent.report.comparison import compare_report_snapshots
+from app.services.agent.report.comparison_policy import REPORT_COMPARISON_POLICY_VERSION
+from app.services.agent.report.integrity import verify_comparison, verify_report
 from app.services.agent.report.render import render_html, render_markdown
 from app.services.agent.report.snapshot import REPORT_VERSION, build_report_snapshot
 
@@ -77,9 +76,11 @@ class AgentReportApplication:
         )
         if turn is None:
             raise invalid_source("SOURCE_TURN_NOT_COMPLETED", "source turn is not completed")
-        if body.parent_report_id is not None and self.repo.get_owned_report(
-            owner_user_id=owner_id, report_id=body.parent_report_id
-        ) is None:
+        if (
+            body.parent_report_id is not None
+            and self.repo.get_owned_report(owner_user_id=owner_id, report_id=body.parent_report_id)
+            is None
+        ):
             raise report_not_found()
         snapshot, contract = build_report_snapshot(
             report_type=body.report_type,
@@ -115,9 +116,7 @@ class AgentReportApplication:
             self.db.refresh(row)
         except IntegrityError:
             self.db.rollback()
-            existing = self.repo.get_by_request(
-                owner_user_id=owner_id, request_id=body.request_id
-            )
+            existing = self.repo.get_by_request(owner_user_id=owner_id, request_id=body.request_id)
             if existing is None:
                 raise
             return self._same_report_or_conflict(existing, request_hash)
@@ -155,9 +154,7 @@ class AgentReportApplication:
         return [_report_summary(row) for row in rows], total
 
     def get_report(self, *, user: Any, report_id: uuid.UUID) -> ResearchReportView:
-        row = self.repo.get_owned_report(
-            owner_user_id=_user_id(user), report_id=report_id
-        )
+        row = self.repo.get_owned_report(owner_user_id=_user_id(user), report_id=report_id)
         if row is None:
             raise report_not_found()
         return _report_view(row)
@@ -169,6 +166,7 @@ class AgentReportApplication:
         )
         if row is None:
             raise report_not_found()
+        verify_report(row)
         self.repo.archive(row)
         self.db.commit()
         self.db.refresh(row)
@@ -205,12 +203,14 @@ class AgentReportApplication:
             "INVALID_EXPORT_FORMAT", "unsupported export format", status_code=422
         )
 
-    def create_comparison(
-        self, *, user: Any, body: CreateReportComparison
-    ) -> ReportComparisonView:
+    def create_comparison(self, *, user: Any, body: CreateReportComparison) -> ReportComparisonView:
         started = time.monotonic()
         owner_id = _user_id(user)
-        request_hash = canonical_hash(body.model_dump(mode="json", exclude={"request_id"}))
+        request_content = body.model_dump(mode="json", exclude={"request_id"})
+        # AUTO retains the original request hash, allowing historical idempotent replay.
+        if body.comparison_intent == "AUTO":
+            request_content.pop("comparison_intent")
+        request_hash = canonical_hash(request_content)
         existing = self.repo.get_comparison_by_request(
             owner_user_id=owner_id, request_id=body.request_id
         )
@@ -227,24 +227,19 @@ class AgentReportApplication:
                 started=started,
             )
             return replayed
-        left = self.repo.get_owned_report(
-            owner_user_id=owner_id, report_id=body.left_report_id
-        )
-        right = self.repo.get_owned_report(
-            owner_user_id=owner_id, report_id=body.right_report_id
-        )
+        left = self.repo.get_owned_report(owner_user_id=owner_id, report_id=body.left_report_id)
+        right = self.repo.get_owned_report(owner_user_id=owner_id, report_id=body.right_report_id)
         if left is None or right is None:
             raise report_not_found()
+        left_snapshot, left_contract = verify_report(left)
+        right_snapshot, right_contract = verify_report(right)
         state, reasons, result = compare_report_snapshots(
-            ResearchReportSnapshot.model_validate(left.snapshot_json),
-            ResearchReportSnapshot.model_validate(right.snapshot_json),
+            left_snapshot,
+            right_snapshot,
             max_facts=self.config.max_comparison_facts,
-            left_contract=ReportSourceContract.model_validate(
-                left.source_contract_json
-            ),
-            right_contract=ReportSourceContract.model_validate(
-                right.source_contract_json
-            ),
+            left_contract=left_contract,
+            right_contract=right_contract,
+            comparison_intent=body.comparison_intent,
         )
         frozen = {
             **result,
@@ -261,7 +256,7 @@ class AgentReportApplication:
                 right_report_id=right.id,
                 request_id=body.request_id,
                 request_hash=request_hash,
-                policy_version=COMPARISON_POLICY_VERSION,
+                policy_version=REPORT_COMPARISON_POLICY_VERSION,
                 state=state,
                 reason_codes_json=reasons,
                 result_json=frozen,
@@ -279,7 +274,7 @@ class AgentReportApplication:
             if existing is None:
                 raise
             return self._same_comparison_or_conflict(existing, request_hash)
-        result = _comparison_view(row)
+        result = self._verified_comparison_view(row)
         _audit(
             user=user,
             operation="compare_reports",
@@ -292,30 +287,35 @@ class AgentReportApplication:
         )
         return result
 
-    def get_comparison(
-        self, *, user: Any, comparison_id: uuid.UUID
-    ) -> ReportComparisonView:
+    def get_comparison(self, *, user: Any, comparison_id: uuid.UUID) -> ReportComparisonView:
         row = self.repo.get_owned_comparison(
             owner_user_id=_user_id(user), comparison_id=comparison_id
         )
         if row is None:
             raise comparison_not_found()
-        return _comparison_view(row)
+        return self._verified_comparison_view(row)
 
     @staticmethod
-    def _same_report_or_conflict(
-        row: AgentResearchReport, request_hash: str
-    ) -> ResearchReportView:
+    def _same_report_or_conflict(row: AgentResearchReport, request_hash: str) -> ResearchReportView:
         if row.request_hash != request_hash:
             raise idempotency_conflict()
         return _report_view(row)
 
-    @staticmethod
     def _same_comparison_or_conflict(
-        row: AgentResearchReportComparison, request_hash: str
+        self, row: AgentResearchReportComparison, request_hash: str
     ) -> ReportComparisonView:
         if row.request_hash != request_hash:
             raise idempotency_conflict()
+        return self._verified_comparison_view(row)
+
+    def _verified_comparison_view(self, row: AgentResearchReportComparison) -> ReportComparisonView:
+        left = self.repo.get_owned_report(
+            owner_user_id=row.owner_user_id, report_id=row.left_report_id
+        )
+        right = self.repo.get_owned_report(
+            owner_user_id=row.owner_user_id, report_id=row.right_report_id
+        )
+        verify_comparison(row, left, right)
         return _comparison_view(row)
 
 
@@ -327,6 +327,7 @@ def _user_id(user: Any) -> uuid.UUID:
 
 
 def _report_view(row: AgentResearchReport) -> ResearchReportView:
+    snapshot, contract = verify_report(row)
     return ResearchReportView(
         report_id=row.id,
         report_type=row.report_type,
@@ -340,8 +341,8 @@ def _report_view(row: AgentResearchReport) -> ResearchReportView:
         source_answer_status=row.source_answer_status,
         answer_status=row.source_answer_status,
         snapshot_hash=row.snapshot_hash,
-        snapshot=ResearchReportSnapshot.model_validate(row.snapshot_json),
-        source_contract=ReportSourceContract.model_validate(row.source_contract_json),
+        snapshot=snapshot,
+        source_contract=contract,
         archived_at=row.archived_at,
         created_at=row.created_at,
     )
@@ -364,6 +365,20 @@ def _report_summary(row: AgentResearchReport) -> ResearchReportSummary:
 
 
 def _comparison_view(row: AgentResearchReportComparison) -> ReportComparisonView:
+    legacy = row.policy_version != REPORT_COMPARISON_POLICY_VERSION
+    display_result = {
+        **row.result_json,
+        "facts": [
+            {
+                key: value
+                for key, value in fact.items()
+                if not (legacy and key in {"delta", "delta_semantics"})
+            }
+            for fact in row.result_json.get("facts", [])
+        ],
+    }
+    if legacy:
+        display_result["delta_policy"] = "DISABLED"
     return ReportComparisonView(
         comparison_id=row.id,
         left_report_id=row.left_report_id,
@@ -376,6 +391,12 @@ def _comparison_view(row: AgentResearchReportComparison) -> ReportComparisonView
         right_snapshot_hash=row.right_snapshot_hash,
         comparison_hash=row.comparison_hash,
         created_at=row.created_at,
+        display_safety={
+            "legacy_policy": legacy,
+            "delta_allowed": not legacy and row.state == "COMPARABLE",
+            "warnings": ["LEGACY_COMPARISON_POLICY_RECREATE_REQUIRED"] if legacy else [],
+        },
+        display_result=display_result,
     )
 
 

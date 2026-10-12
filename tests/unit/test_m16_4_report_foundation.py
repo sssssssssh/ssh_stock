@@ -41,7 +41,7 @@ def _claim(
         evidence_ids=["ev-1"],
         structured_facts=[
             StructuredFact(
-                path="records.0.market.market_score",
+                path="records.0.market_score",
                 value=value,
                 unit="score",
                 trade_date=date(2026, 10, 10),
@@ -64,7 +64,7 @@ def _snapshot(
         source_turn_id=TURN_ID,
         source_metadata={
             "answer_status": "COMPLETED",
-            "verified_claims": [_claim(value, entity=f"run-{value}", role=role)],
+            "verified_claims": [_claim(value, role=role)],
             "citations": [_citation()],
         },
         config=AgentReportConfig(),
@@ -137,8 +137,21 @@ def test_partial_verified_keeps_rejections_visible() -> None:
 
 
 def test_comparison_only_emits_decimal_delta_when_comparable() -> None:
+    _, contract = build_report_snapshot(
+        report_type="strategy_review",
+        title=None,
+        source_chat_id=CHAT_ID,
+        source_message_id=MESSAGE_ID,
+        source_turn_id=TURN_ID,
+        source_metadata={"verified_claims": [_claim()], "citations": [_citation()]},
+        config=AgentReportConfig(),
+    )
     state, reasons, result = compare_report_snapshots(
-        _snapshot("0.10"), _snapshot("0.12"), max_facts=100
+        _snapshot("0.10"),
+        _snapshot("0.12"),
+        max_facts=100,
+        left_contract=contract,
+        right_contract=contract,
     )
     assert state == "COMPARABLE"
     assert reasons == []

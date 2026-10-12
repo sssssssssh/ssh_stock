@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from app.api.v1.agent import require_agent_user
 from app.api.v1.agent_reports import get_report_application
-from app.domain.agent.report_errors import report_not_found
+from app.domain.agent.report_errors import AgentReportError, report_not_found
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -33,9 +33,7 @@ class StubReportService:
     def export_report(self, **kwargs):
         extension = "md" if kwargs["export_format"] == "markdown" else "html"
         media_type = (
-            "text/markdown; charset=utf-8"
-            if extension == "md"
-            else "text/html; charset=utf-8"
+            "text/markdown; charset=utf-8" if extension == "md" else "text/html; charset=utf-8"
         )
         return "safe export\n", media_type, f"report.{extension}"
 
@@ -65,15 +63,11 @@ def test_report_api_is_strict_and_returns_safe_export_headers() -> None:
         }
         created = client.post("/api/v1/agent/reports", json=payload)
         assert created.status_code == 201
-        rejected = client.post(
-            "/api/v1/agent/reports", json={**payload, "unknown_field": True}
-        )
+        rejected = client.post("/api/v1/agent/reports", json={**payload, "unknown_field": True})
         assert rejected.status_code == 422
 
         report_id = uuid.uuid4()
-        exported = client.get(
-            f"/api/v1/agent/reports/{report_id}/export?format=html"
-        )
+        exported = client.get(f"/api/v1/agent/reports/{report_id}/export?format=html")
         assert exported.status_code == 200
         assert exported.headers["x-content-type-options"] == "nosniff"
         assert exported.headers["content-security-policy"].startswith("default-src 'none'")
@@ -92,5 +86,34 @@ def test_owner_hidden_report_maps_to_404() -> None:
         response = client.get(f"/api/v1/agent/reports/{uuid.uuid4()}")
         assert response.status_code == 404
         assert response.json()["detail"]["code"] == "REPORT_NOT_FOUND"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_integrity_errors_map_to_safe_409_before_exporting_content() -> None:
+    class BrokenService(StubReportService):
+        def get_report(self, **kwargs):
+            raise AgentReportError(
+                "REPORT_SNAPSHOT_INTEGRITY_ERROR", "integrity failed", status_code=409
+            )
+
+        export_report = get_report
+
+        def get_comparison(self, **kwargs):
+            raise AgentReportError(
+                "REPORT_COMPARISON_INTEGRITY_ERROR", "integrity failed", status_code=409
+            )
+
+    client = _client(BrokenService())
+    try:
+        for path, code in [
+            (f"/reports/{uuid.uuid4()}", "REPORT_SNAPSHOT_INTEGRITY_ERROR"),
+            (f"/reports/{uuid.uuid4()}/export?format=html", "REPORT_SNAPSHOT_INTEGRITY_ERROR"),
+            (f"/report-comparisons/{uuid.uuid4()}", "REPORT_COMPARISON_INTEGRITY_ERROR"),
+        ]:
+            response = client.get(f"/api/v1/agent{path}")
+            assert response.status_code == 409
+            assert response.json()["detail"]["code"] == code
+            assert "snapshot_json" not in response.text and "SELECT" not in response.text
     finally:
         app.dependency_overrides.clear()

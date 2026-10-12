@@ -114,3 +114,24 @@ it("shows only side-by-side facts when comparison requires context", async () =>
   expect(wrapper.text()).toContain("AS_OF_DATE_MISMATCH");
   expect(wrapper.findAll("th").some((cell) => cell.text() === "delta")).toBe(false);
 });
+
+it.each(["legacy", "pair-rejected"])("hides unsafe delta for %s comparisons", async (kind) => {
+  mocks.createReportComparison.mockResolvedValue({
+    policy_version: kind === "legacy" ? "m16.2.2-comparison-v1" : "m16.4.1-report-comparison-v2",
+    state: "COMPARABLE", reason_codes: [],
+    display_safety: { legacy_policy: kind === "legacy", delta_allowed: kind !== "legacy", warnings: [] },
+    result: { facts: [{ metric_key: "score", left: "10", right: "12", delta: "999",
+      pair_status: "INCOMPATIBLE" }] }
+  });
+  mocks.fetchResearchReports.mockResolvedValue({ data: [summary, { ...summary, report_id: "report-2" }], meta: { total: 2 } });
+  const wrapper = mount(AgentResearchReports);
+  await flushPromises();
+  const selects = wrapper.findAll(".report-compare select");
+  await selects[0].setValue("report-1");
+  await selects[1].setValue("report-2");
+  await wrapper.findAll("button").find((button) => button.text() === "比较")?.trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("999");
+  if (kind === "legacy") expect(wrapper.text()).toContain("旧版比较策略");
+  wrapper.unmount();
+});

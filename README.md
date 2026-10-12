@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 16.4。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台与不可变研究报告。
+当前实现范围：Milestone 0 到 Milestone 16.4.1。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台与不可变研究报告。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -1405,6 +1405,14 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 两份报告可生成冻结比较。`COMPARABLE` 才显示 Decimal 差值；`CONTEXT_REQUIRED`/`INCOMPATIBLE` 仅并列事实和原因码，不生成排名。完整日序列未归档时只显示事实表/合法同日柱状图，不伪造净值曲线。
 - 历史 `performance.summary` 消息未归档完整 M14 执行/会计/benchmark/交易日契约时，报告明确标记 `EXACT_M14_BUNDLE_NOT_ARCHIVED`，比较以 `EXACT_M14_BUNDLE_REQUIRED` 失败关闭，不隐式选择 latest Artifact。
 - 新 API 位于 `/api/v1/agent/reports` 与 `/api/v1/agent/report-comparisons`，沿用 Session Cookie 与 owner 404 隔离。迁移为 `0050_m16_4_reports`；部署执行 `python -m alembic upgrade head`。配置、限制、验收和回滚见 [M16.4 收尾记录](docs/M16_4_research_report_closeout.md)。
+
+### M16.4.1 报告比较正确性与完整性收尾（2026-10-13）
+
+- 新比较按完整指标语义、实体类别/实体、TRAIN/OOS/LIVE 角色、单位和日期逐项配对。重复冲突、未配对指标和来源变化都有明确原因码；全局与逐项状态都为 `COMPARABLE` 才显示 Decimal 差值。
+- 比较创建兼容增加 `comparison_intent`（默认 `AUTO`），新政策为 `m16.4.1-report-comparison-v2`。同实体跨日期/来源变化只并列展示；缺 M14 完整 Bundle 或冻结 M15 Window lineage 的策略/OOS 比较继续拒绝差值。
+- 打开详情、下载、比较和幂等返回会重新校验 Hash 及冻结关联。损坏返回 `REPORT_SNAPSHOT_INTEGRITY_ERROR` / `REPORT_COMPARISON_INTEGRITY_ERROR`（HTTP 409）。历史记录保持原样；旧政策比较显示风险说明和独立安全视图，不展示历史差值。
+- 新报告可展示从冻结事实验证出的同日柱状图，原始数值与单位同时保留在表格。混合单位、来源绑定不明、非法值和点数超限退回表格；没有完整日序列时显示 `SERIES_NOT_AVAILABLE`。
+- 不需要 `0051`，迁移 HEAD 仍为 `0050_m16_4_reports`。更新后端与前端并重启，回滚仅回退应用代码并保留数据。部署前备份；完整验收、兼容边界和截图见 [M16.4.1 验收记录](docs/M16_4_1_report_comparison_integrity_closeout.md)。
 
 ### 智能研究 LLM 连接配置
 

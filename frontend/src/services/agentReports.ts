@@ -15,6 +15,10 @@ export interface ReportChart {
   unit: string;
   columns: string[];
   rows: string[][];
+  metric_id?: string | null;
+  trade_date?: string | null;
+  sample_role?: string | null;
+  entity_kind?: string | null;
 }
 
 export interface ReportSnapshot {
@@ -73,9 +77,15 @@ export interface ReportComparison {
   state: ReportComparisonState;
   reason_codes: string[];
   result: {
-    facts?: Array<{ metric_key: string; left: string; right: string; delta?: string }>;
+    facts?: Array<{ metric_key: string; left: string; right: string; delta?: string;
+      pair_status?: ReportComparisonState; decision_reason_codes?: string[];
+      left_fact?: { trade_date: string }; right_fact?: { trade_date: string } }>;
+    unmatched_facts?: Record<string, Array<{ value: string; trade_date: string;
+      metric_identity: { metric_id: string; entity_id: string; unit: string; sample_role: string } }>>;
     delta_policy?: string;
   };
+  display_result?: ReportComparison["result"] | null;
+  display_safety?: { legacy_policy: boolean; delta_allowed: boolean; warnings: string[] } | null;
   left_snapshot_hash: string;
   right_snapshot_hash: string;
   comparison_hash: string;
@@ -132,6 +142,8 @@ export function createReportComparison(payload: {
   left_report_id: string;
   right_report_id: string;
   request_id: string;
+  comparison_intent?: "AUTO" | "SAME_ENTITY_OVER_TIME" | "CROSS_ENTITY_SAME_DATE"
+    | "INDEPENDENT_BACKTESTS" | "TRAIN_VS_OOS";
 }): Promise<ReportComparison> {
   return request<ReportComparison>("/agent/report-comparisons", {
     method: "POST",
