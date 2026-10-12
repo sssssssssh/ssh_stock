@@ -16,6 +16,16 @@ def render_markdown(snapshot: ResearchReportSnapshot, snapshot_hash: str) -> str
         f"- 快照哈希：`{snapshot_hash}`",
         "",
     ]
+    if snapshot.archive_reference is not None:
+        ref = snapshot.archive_reference
+        lines.extend(
+            [
+                f"- 归档状态：`{ref.archive_status}`",
+                f"- 归档 Manifest：`{ref.manifest_id}` · `{ref.manifest_hash}`",
+                f"- 复核等级：`{ref.reproduction_level}`（不是原算法重跑）",
+                "",
+            ]
+        )
     claims = {claim.claim_id: claim for claim in snapshot.claims}
     for section in snapshot.sections:
         lines.extend([f"## {section.title}", ""])
@@ -71,7 +81,7 @@ def render_html(snapshot: ResearchReportSnapshot, snapshot_hash: str) -> str:
         blocks.append("</ul>")
     body = "\n".join(blocks)
     return (
-        "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
-        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
         f"<title>{html.escape(snapshot.title)}</title></head><body>{body}</body></html>\n"
     )

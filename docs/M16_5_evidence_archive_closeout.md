@@ -8,7 +8,7 @@
 | A 存储 / Capture Contract | 实现完成 | 11 项单测、1 项 PG 迁移/约束/Trigger/有档拒绝降级测试、全量后端 1138 项通过；Ruff 通过。 |
 | B Chat 原子完成 | 实现完成 | 2 次实际调用/3 Evidence、缓存审计、同 request 竞争、写入异常/超限/截止回滚；全量后端 1143 项通过，最新预算路径专项 36 项复核。 |
 | C Offline Verifier / API | 实现完成 | 20 项离线/API 单测、最新业务数据变更隔离 PG 回归、全量 1164 项通过；Ruff 通过。 |
-| D Report v3 绑定 | 待实现 | 历史报告保持 v1/v2 |
+| D Report v3 绑定 | 实现完成 | 8 项版本/Hash 单测、真实 PG 报告创建/证据/复核/导出/归档/owner/损坏门禁；历史 v1/v2 原 JSON/Hash 不变。 |
 | E UI / 遗留整改 | 待实现 | 不开放未经验证状态 |
 | F 回归 / CI / 交付 | 待完成 | 最终补记真实 SHA、CI URL、覆盖率与浏览器结果 |
 
@@ -36,6 +36,12 @@ python -m ruff check backend tests migrations scripts
 ```
 
 ## 边界
+
+D 新报告版本 m16.5-v1 / m16.5-report-snapshot-v3，级别 FROZEN_TOOL_EVIDENCE；快照冻结
+Manifest ID/版本/hash/COMPLETE 与 FROZEN_FACT_RECHECK。Source Contract 冻结 Manifest Hash、
+复核政策、校验范围、字段绑定及 M14/M15 缺口；先计算 Contract Hash 再计算 Snapshot Hash，无循环。
+仅完整性及字段重验真实通过才创建 v3，详情/导出/归档/幂等/比较读取再次验证归档绑定。
+无档来源继续创建 v2，旧 DTO 序列化与契约签名保持原形，不填 null 或新字段改变旧摘要。
 
 C 抽出实时与离线共用的纯字段验证核心；精确路径、日期/实体/单位、Decimal 值与真实 Evidence 绑定一并验证。
 离线只读加载 Archive/Chat/Report，重核全部 Hash、Audit、缓存来源、Message/Turn 及 Citation 身份。

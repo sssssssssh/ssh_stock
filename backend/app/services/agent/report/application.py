@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.domain.agent.archive import AgentArchiveError
 from app.domain.agent.policy import user_audit_hash
 from app.domain.agent.report import (
     CreateReportComparison,
@@ -26,12 +27,15 @@ from app.domain.agent.report_errors import (
 )
 from app.models.agent_report import AgentResearchReport, AgentResearchReportComparison
 from app.repositories.agent_report import AgentReportRepository
+from app.services.agent.archive.application import AgentArchiveApplication
+from app.services.agent.archive.recheck import recheck_archive
+from app.services.agent.report.archive_binding import bind_archive
 from app.services.agent.report.canonical import canonical_hash, storage_json_bytes
 from app.services.agent.report.comparison import compare_report_snapshots
 from app.services.agent.report.comparison_policy import REPORT_COMPARISON_POLICY_VERSION
 from app.services.agent.report.integrity import verify_comparison, verify_report
 from app.services.agent.report.render import render_html, render_markdown
-from app.services.agent.report.snapshot import REPORT_VERSION, build_report_snapshot
+from app.services.agent.report.snapshot import build_report_snapshot
 
 
 class AgentReportApplication:
@@ -39,6 +43,7 @@ class AgentReportApplication:
         if settings.agent_config is None:
             raise RuntimeError("agent config is not loaded")
         self.db = db
+        self.settings = settings
         self.config = settings.agent_config.reports
         self.repo = AgentReportRepository(db)
 
@@ -91,6 +96,20 @@ class AgentReportApplication:
             source_metadata=dict(source.metadata_json or {}),
             config=self.config,
         )
+        archive = AgentArchiveApplication(self.db, self.settings)
+        bundle = archive.load_bundle(owner_id, turn.id)
+        if bundle is not None and bundle.manifest.archive_status == "COMPLETE":
+            try:
+                result = recheck_archive(bundle, config=archive.config)
+                if result["integrity"]["status"] != "VERIFIED" or any(
+                    item["facts_status"] != "VERIFIED" for item in result["fact_recheck"]["results"]
+                ):
+                    raise AgentArchiveError(
+                        "REPORT_ARCHIVE_UNVERIFIABLE", "frozen facts unavailable", status_code=409
+                    )
+                bind_archive(snapshot, contract, bundle.manifest)
+            except AgentArchiveError as exc:
+                raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
         snapshot_json = snapshot.model_dump(mode="json")
         if len(storage_json_bytes(snapshot_json)) > self.config.max_snapshot_bytes:
             raise invalid_source("REPORT_LIMIT_EXCEEDED", "snapshot size limit exceeded")
@@ -104,7 +123,7 @@ class AgentReportApplication:
                 request_id=body.request_id,
                 request_hash=request_hash,
                 report_type=body.report_type,
-                report_version=REPORT_VERSION,
+                report_version=contract.report_version,
                 title=snapshot.title,
                 as_of_date=snapshot.as_of_date,
                 source_answer_status=snapshot.source_answer_status,
@@ -120,7 +139,7 @@ class AgentReportApplication:
             if existing is None:
                 raise
             return self._same_report_or_conflict(existing, request_hash)
-        result = _report_view(row)
+        result = self._verified_report_view(row)
         _audit(
             user=user,
             operation="create_report",
@@ -157,7 +176,7 @@ class AgentReportApplication:
         row = self.repo.get_owned_report(owner_user_id=_user_id(user), report_id=report_id)
         if row is None:
             raise report_not_found()
-        return _report_view(row)
+        return self._verified_report_view(row)
 
     def archive_report(self, *, user: Any, report_id: uuid.UUID) -> ResearchReportView:
         started = time.monotonic()
@@ -167,10 +186,11 @@ class AgentReportApplication:
         if row is None:
             raise report_not_found()
         verify_report(row)
+        self._verify_archive(row)
         self.repo.archive(row)
         self.db.commit()
         self.db.refresh(row)
-        result = _report_view(row)
+        result = self._verified_report_view(row)
         _audit(
             user=user,
             operation="archive_report",
@@ -233,6 +253,8 @@ class AgentReportApplication:
             raise report_not_found()
         left_snapshot, left_contract = verify_report(left)
         right_snapshot, right_contract = verify_report(right)
+        self._verify_archive(left)
+        self._verify_archive(right)
         state, reasons, result = compare_report_snapshots(
             left_snapshot,
             right_snapshot,
@@ -295,11 +317,26 @@ class AgentReportApplication:
             raise comparison_not_found()
         return self._verified_comparison_view(row)
 
-    @staticmethod
-    def _same_report_or_conflict(row: AgentResearchReport, request_hash: str) -> ResearchReportView:
+    def _same_report_or_conflict(
+        self, row: AgentResearchReport, request_hash: str
+    ) -> ResearchReportView:
         if row.request_hash != request_hash:
             raise idempotency_conflict()
-        return _report_view(row)
+        return self._verified_report_view(row)
+
+    def _verify_archive(self, row):
+        if row.snapshot_json.get("archive_reference") is not None:
+            try:
+                AgentArchiveApplication(self.db, self.settings).report_bundle(
+                    user=type("Owner", (), {"id": row.owner_user_id})(), report_id=row.id
+                )
+            except AgentArchiveError as exc:
+                raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
+
+    def _verified_report_view(self, row):
+        result = _report_view(row)
+        self._verify_archive(row)
+        return result
 
     def _same_comparison_or_conflict(
         self, row: AgentResearchReportComparison, request_hash: str
@@ -316,6 +353,8 @@ class AgentReportApplication:
             owner_user_id=row.owner_user_id, report_id=row.right_report_id
         )
         verify_comparison(row, left, right)
+        self._verify_archive(left)
+        self._verify_archive(right)
         return _comparison_view(row)
 
 
@@ -340,6 +379,7 @@ def _report_view(row: AgentResearchReport) -> ResearchReportView:
         parent_report_id=row.parent_report_id,
         source_answer_status=row.source_answer_status,
         answer_status=row.source_answer_status,
+        snapshot_level=snapshot.snapshot_level,
         snapshot_hash=row.snapshot_hash,
         snapshot=snapshot,
         source_contract=contract,

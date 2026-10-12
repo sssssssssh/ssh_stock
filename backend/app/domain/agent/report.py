@@ -4,7 +4,14 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from app.domain.agent.chat import ChatCitation, RejectedClaim, StructuredClaim
 
@@ -61,18 +68,45 @@ class ReportEvidenceIdentity(ReportDTO):
 
 
 class ReportSourceContract(ReportDTO):
-    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY"] = "CLAIM_SNAPSHOT_ONLY"
+    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY", "FROZEN_TOOL_EVIDENCE"] = "CLAIM_SNAPSHOT_ONLY"
     report_version: str = "m16.4-v1"
     comparison_policy_version: str = "m16.2.2-comparison-v1"
     tool_names: list[str] = Field(default_factory=list, max_length=16)
     evidence_versions: list[str] = Field(default_factory=list, max_length=8)
     evidence_identities: list[ReportEvidenceIdentity] = Field(default_factory=list, max_length=100)
     limitations: list[str] = Field(default_factory=list, max_length=16)
+    archive_manifest_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    archive_policy_version: str | None = None
+    verification_scope: list[str] = Field(default_factory=list, max_length=16)
+    frozen_fields: list[str] = Field(default_factory=list, max_length=2000)
+    gap_codes: list[str] = Field(default_factory=list, max_length=16)
+
+    @model_serializer(mode="wrap")
+    def historical_contract_shape(self, handler):
+        data = handler(self)
+        if self.report_version == "m16.4-v1":
+            for key in (
+                "archive_manifest_hash",
+                "archive_policy_version",
+                "verification_scope",
+                "frozen_fields",
+                "gap_codes",
+            ):
+                data.pop(key, None)
+        return data
+
+
+class ReportArchiveReference(ReportDTO):
+    manifest_id: uuid.UUID
+    manifest_version: str
+    manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    archive_status: Literal["COMPLETE"]
+    reproduction_level: Literal["FROZEN_FACT_RECHECK"]
 
 
 class ResearchReportSnapshot(ReportDTO):
     schema_version: str = "m16.4-report-snapshot-v1"
-    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY"] = "CLAIM_SNAPSHOT_ONLY"
+    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY", "FROZEN_TOOL_EVIDENCE"] = "CLAIM_SNAPSHOT_ONLY"
     report_type: ReportType
     title: str = Field(min_length=1, max_length=160)
     as_of_date: date | None = None
@@ -87,6 +121,14 @@ class ResearchReportSnapshot(ReportDTO):
     charts: list[ReportChart] = Field(default_factory=list, max_length=8)
     warnings: list[str] = Field(default_factory=list, max_length=128)
     source_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    archive_reference: ReportArchiveReference | None = None
+
+    @model_serializer(mode="wrap")
+    def historical_snapshot_shape(self, handler):
+        data = handler(self)
+        if self.schema_version != "m16.5-report-snapshot-v3" and self.archive_reference is None:
+            data.pop("archive_reference", None)
+        return data
 
 
 class CreateResearchReport(ReportDTO):
@@ -128,7 +170,7 @@ class ResearchReportView(ReportDTO):
     parent_report_id: uuid.UUID | None
     source_answer_status: ReportAnswerStatus
     answer_status: ReportAnswerStatus
-    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY"] = "CLAIM_SNAPSHOT_ONLY"
+    snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY", "FROZEN_TOOL_EVIDENCE"] = "CLAIM_SNAPSHOT_ONLY"
     read_only_research: bool = True
     snapshot_hash: str
     snapshot: ResearchReportSnapshot

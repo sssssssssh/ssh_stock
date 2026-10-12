@@ -8,6 +8,12 @@ from app.domain.agent.report import (
     ResearchReportSnapshot,
 )
 from app.domain.agent.report_errors import AgentReportError
+from app.services.agent.report.archive_binding import (
+    ARCHIVED_REPORT_VERSION,
+    ARCHIVED_SNAPSHOT_VERSION,
+    archive_gaps,
+    verify_archive_contract,
+)
 from app.services.agent.report.canonical import canonical_hash
 from app.services.agent.report.comparison_policy import (
     REPORT_COMPARISON_POLICY_VERSION,
@@ -38,13 +44,26 @@ def verify_report(row: Any) -> tuple[ResearchReportSnapshot, ReportSourceContrac
                 raise ValueError("snapshot metadata")
         if row.report_version != contract.report_version:
             raise ValueError("report version")
-        if row.report_version != "m16.4-v1":
+        if row.report_version not in {"m16.4-v1", ARCHIVED_REPORT_VERSION}:
             raise ValueError("unsupported frozen report version")
-        if snapshot.schema_version not in {
+        if row.report_version == ARCHIVED_REPORT_VERSION:
+            if (
+                snapshot.schema_version != ARCHIVED_SNAPSHOT_VERSION
+                or snapshot.source_contract_hash is None
+            ):
+                raise ValueError("archive snapshot schema")
+            verify_archive_contract(snapshot, contract)
+        elif snapshot.schema_version not in {
             "m16.4-report-snapshot-v1",
             "m16.4.1-report-snapshot-v2",
         }:
             raise ValueError("snapshot schema")
+        elif (
+            snapshot.archive_reference is not None
+            or snapshot.snapshot_level != "CLAIM_SNAPSHOT_ONLY"
+            or contract.snapshot_level != "CLAIM_SNAPSHOT_ONLY"
+        ):
+            raise ValueError("historical archive escalation")
         if (
             snapshot.schema_version == "m16.4.1-report-snapshot-v2"
             and snapshot.source_contract_hash is None
@@ -96,6 +115,12 @@ def verify_source_contract(
     expected_limits = {"SOURCE_PAYLOAD_NOT_ARCHIVED", "REPLAY_UNAVAILABLE"}
     if "performance.summary" in contract.tool_names:
         expected_limits.add("EXACT_M14_BUNDLE_NOT_ARCHIVED")
+    if contract.report_version == ARCHIVED_REPORT_VERSION:
+        expected_limits = {
+            "HISTORICAL_TOOL_RESULT_ONLY",
+            "CALCULATION_NOT_REEXECUTED",
+            *archive_gaps(contract.tool_names),
+        }
     if set(contract.limitations) != expected_limits:
         raise ValueError("source limitations mismatch")
     if contract.comparison_policy_version != "m16.2.2-comparison-v1":
