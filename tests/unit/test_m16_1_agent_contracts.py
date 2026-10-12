@@ -17,6 +17,7 @@ from app.domain.agent.contracts import (
     SectorTopInput,
     ThemeTopInput,
     WalkForwardSummaryInput,
+    WalkForwardWindowLineageInput,
 )
 from app.domain.agent.errors import AgentError
 from app.services.agent.application import AgentApplicationService
@@ -44,6 +45,14 @@ _INPUTS = {
         {
             "study_id": "33333333-3333-3333-3333-333333333333",
             "validation_id": "44444444-4444-4444-4444-444444444444",
+        },
+    ),
+    "walk_forward.window_lineage": (
+        WalkForwardWindowLineageInput,
+        {
+            "study_id": "33333333-3333-3333-3333-333333333333",
+            "validation_id": "44444444-4444-4444-4444-444444444444",
+            "limit": 20,
         },
     ),
 }
@@ -80,9 +89,9 @@ def _registry(*, large: bool = False) -> AgentToolRegistry:
     return AgentToolRegistry(specs)
 
 
-def test_registry_contains_only_the_eight_fixed_tools_and_executes_each() -> None:
+def test_registry_contains_only_the_nine_published_tools_and_executes_each() -> None:
     registry = _registry()
-    assert len(registry) == 8
+    assert len(registry) == 9
     assert {item["name"] for item in registry.catalog()} == set(_INPUTS)
     service = AgentApplicationService(object(), get_settings(), registry=registry)
     user = SimpleNamespace(username="admin")
@@ -107,7 +116,7 @@ def test_registry_contains_only_the_eight_fixed_tools_and_executes_each() -> Non
 def test_registry_is_extensible_but_rejects_unsafe_or_invalid_specs() -> None:
     base = next(iter(_registry()._specs.values()))
     ninth = replace(base, name="research.extra")
-    assert len(AgentToolRegistry([*list(_registry()._specs.values()), ninth])) == 9
+    assert len(AgentToolRegistry([*list(_registry()._specs.values()), ninth])) == 10
     with pytest.raises(ValueError, match="unique"):
         AgentToolRegistry([base, base])
     for invalid, message in (
@@ -145,6 +154,18 @@ def test_contracts_reject_extra_fields_limits_ranges_and_ambiguous_reports() -> 
         PerformanceSummaryInput(
             run_id="11111111-1111-1111-1111-111111111111",
             report_id="22222222-2222-2222-2222-222222222222",
+        )
+    with pytest.raises(ValidationError):
+        WalkForwardWindowLineageInput(
+            study_id="33333333-3333-3333-3333-333333333333",
+            validation_id="44444444-4444-4444-4444-444444444444",
+            limit=51,
+        )
+    with pytest.raises(ValidationError):
+        WalkForwardWindowLineageInput(
+            study_id="33333333-3333-3333-3333-333333333333",
+            validation_id="44444444-4444-4444-4444-444444444444",
+            offset=-1,
         )
 
 

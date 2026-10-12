@@ -27,8 +27,8 @@ def test_agent_status_and_catalog_are_authenticated_and_fixed() -> None:
         assert status.status_code == 200
         assert status.json()["data"] == {
             "agent_mode": "tools_only",
-            "registry_version": "m16.1-v1",
-            "tool_count": 8,
+            "registry_version": "m16.3-v1",
+            "tool_count": 9,
             "llm_enabled": False,
             "read_only": True,
             "statement_timeout_ms": 5000,
@@ -36,7 +36,7 @@ def test_agent_status_and_catalog_are_authenticated_and_fixed() -> None:
         }
         catalog = client.get("/api/v1/agent/tools")
         assert catalog.status_code == 200
-        assert len(catalog.json()["data"]) == 8
+        assert len(catalog.json()["data"]) == 9
         assert all("input_schema" in item for item in catalog.json()["data"])
     finally:
         app.dependency_overrides.clear()

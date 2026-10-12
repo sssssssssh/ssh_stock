@@ -10,7 +10,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.domain.agent.chat import (
+    AnswerStatus,
     ChatCitation,
+    RejectedClaim,
     StructuredAnswerDraft,
     StructuredClaim,
     StructuredFact,
@@ -123,6 +125,29 @@ _ALLOWED_PATHS: dict[str, tuple[str, ...]] = {
         "records.*.train_to_oos_degradation.mean_drawdown_worsening",
         "records.*.train_to_oos_degradation.median_drawdown_worsening",
     ),
+    "walk_forward.window_lineage": (
+        "records.*.window_no",
+        "records.*.train_start",
+        "records.*.train_end",
+        "records.*.test_start",
+        "records.*.test_end",
+        "records.*.train_metrics.annualized_return",
+        "records.*.train_metrics.max_drawdown_abs",
+        "records.*.train_metrics.sharpe_ratio",
+        "records.*.train_metrics.annualized_turnover",
+        "records.*.oos_metrics.cumulative_return",
+        "records.*.oos_metrics.annualized_return",
+        "records.*.oos_metrics.max_drawdown_abs",
+        "records.*.oos_metrics.sharpe_ratio",
+        "records.*.oos_metrics.annualized_turnover",
+        "records.*.oos_metrics.total_cost_to_initial_capital",
+        "records.*.oos_metrics.win_rate",
+        "records.*.oos_metrics.profit_factor",
+        "records.*.degradation.return",
+        "records.*.degradation.sharpe",
+        "records.*.degradation.drawdown",
+        "records.*.degradation.turnover",
+    ),
 }
 
 
@@ -139,21 +164,42 @@ class _ClaimValidationError(ValueError):
         super().__init__(code)
 
 
+def _rejected_claim(
+    claim: StructuredClaim,
+    reason_codes: list[str],
+) -> RejectedClaim:
+    return RejectedClaim(
+        claim_id=claim.claim_id,
+        claim_type=claim.claim_type,
+        reason_codes=list(dict.fromkeys(reason_codes)) or ["CLAIM_REJECTED"],
+        comparison_state=claim.comparison_state,
+        policy_version=claim.policy_version,
+    )
+
+
 class CompiledEvidenceAnswer:
     def __init__(
         self,
         *,
         answer: str,
         claims: list[StructuredClaim],
+        rejected_claims: list[RejectedClaim],
         citations: list[ChatCitation],
         warnings: list[str],
-        insufficient_evidence: bool,
+        answer_status: AnswerStatus,
+        needs_clarification: bool,
     ) -> None:
         self.answer = answer
         self.claims = claims
+        self.rejected_claims = rejected_claims
         self.citations = citations
         self.warnings = warnings
-        self.insufficient_evidence = insufficient_evidence
+        self.answer_status = answer_status
+        self.needs_clarification = needs_clarification
+
+    @property
+    def insufficient_evidence(self) -> bool:
+        return self.answer_status != "COMPLETED"
 
 
 class EvidenceCompiler:
@@ -203,13 +249,17 @@ class EvidenceCompiler:
             )
 
         accepted_by_id: dict[str, StructuredClaim] = {}
-        rejected_by_id: dict[str, StructuredClaim] = {}
+        rejected_by_id: dict[str, RejectedClaim] = {}
         rejected = False
         seen_claim_ids: set[str] = set()
         unique_claims: list[StructuredClaim] = []
         for claim in draft.claims:
             if claim.claim_id in seen_claim_ids:
                 warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:DUPLICATE_CLAIM_ID")
+                rejected_by_id.setdefault(
+                    claim.claim_id,
+                    _rejected_claim(claim, ["DUPLICATE_CLAIM_ID"]),
+                )
                 rejected = True
                 continue
             seen_claim_ids.add(claim.claim_id)
@@ -223,13 +273,17 @@ class EvidenceCompiler:
                 )
             except _ClaimValidationError as exc:
                 warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:{exc.code}")
+                rejected_by_id[claim.claim_id] = _rejected_claim(claim, [exc.code])
                 rejected = True
                 continue
             warnings.extend(policy_warnings)
             if accepted:
                 accepted_by_id[checked.claim_id] = checked
             else:
-                rejected_by_id[checked.claim_id] = checked
+                rejected_by_id[checked.claim_id] = _rejected_claim(
+                    checked,
+                    ["COMPARISON_INCOMPATIBLE", *checked.reason_codes],
+                )
                 warnings.append(
                     f"CLAIM_REJECTED:{claim.claim_id}:COMPARISON_INCOMPATIBLE"
                 )
@@ -247,13 +301,17 @@ class EvidenceCompiler:
                 )
             except _ClaimValidationError as exc:
                 warnings.append(f"CLAIM_REJECTED:{claim.claim_id}:{exc.code}")
+                rejected_by_id[claim.claim_id] = _rejected_claim(claim, [exc.code])
                 rejected = True
                 continue
             warnings.extend(policy_warnings)
             if accepted:
                 accepted_by_id[checked.claim_id] = checked
             else:
-                rejected_by_id[checked.claim_id] = checked
+                rejected_by_id[checked.claim_id] = _rejected_claim(
+                    checked,
+                    checked.reason_codes or ["INFERENCE_REJECTED"],
+                )
                 rejected = True
 
         accepted = [
@@ -279,7 +337,7 @@ class EvidenceCompiler:
                 draft.answer,
                 warnings,
                 draft.needs_clarification,
-                claims=rejected_claims,
+                rejected_claims=rejected_claims,
             )
 
         citations = _citations(bound_evidence_ids, evidence)
@@ -301,10 +359,12 @@ class EvidenceCompiler:
             )
         return CompiledEvidenceAnswer(
             answer=answer,
-            claims=[*accepted, *rejected_claims],
+            claims=accepted,
+            rejected_claims=rejected_claims,
             citations=citations,
             warnings=list(dict.fromkeys(warnings)),
-            insufficient_evidence=rejected,
+            answer_status="PARTIAL_VERIFIED" if rejected else "COMPLETED",
+            needs_clarification=draft.needs_clarification,
         )
 
     def _validate_claim(
@@ -437,7 +497,7 @@ class EvidenceCompiler:
         draft_answer: str,
         warnings: list[str],
         preserve_answer: bool,
-        claims: list[StructuredClaim] | None = None,
+        rejected_claims: list[RejectedClaim] | None = None,
     ) -> CompiledEvidenceAnswer:
         warnings.append("INSUFFICIENT_EVIDENCE")
         answer = (
@@ -453,10 +513,12 @@ class EvidenceCompiler:
             )
         return CompiledEvidenceAnswer(
             answer=answer,
-            claims=claims or [],
+            claims=[],
+            rejected_claims=rejected_claims or [],
             citations=[],
             warnings=list(dict.fromkeys(warnings)),
-            insufficient_evidence=True,
+            answer_status="INSUFFICIENT_EVIDENCE",
+            needs_clarification=preserve_answer,
         )
 
     @staticmethod

@@ -5,7 +5,7 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 16.1。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及只读研究 Agent 工具层。
+当前实现范围：Milestone 0 到 Milestone 16.3。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署，以及证据化智能研究工作台。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
@@ -1378,3 +1378,12 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - 决策、原因码、已验证字段引用、策略版本和 Evidence v2 身份继续保存在原有
   消息 JSON 元数据，所以本阶段无新 Alembic 迁移。详见
   `docs/M16_2_2_comparison_closeout.md`。
+
+### M16.3 智能研究工作台（2026-10-12）
+
+- 左侧导航新增“智能研究”。页面提供会话分页、新建/切换/归档、聊天流、上下文选择器、三态回答、工具轨迹以及桌面证据栏/移动端证据抽屉。股票池、行业热度和回测分析均可通过“带入智能研究”入口传递显式选择器。
+- Registry 版本为 `m16.3-v1`，当前发布九个只读工具。新增 `walk_forward.window_lineage`，输入明确的 `study_id`、`validation_id`，可选 `window_no`，并支持 `limit<=50`、`offset>=0` 分页；它只读取并验证已保存的 Window/Trial/Evaluation/M14 报告链路。
+- 回答返回 `answer_status`、`verified_claims` 与脱敏的 `rejected_claims`。混合结果为 `PARTIAL_VERIFIED`；完全没有有效 Claim 才是 `INSUFFICIENT_EVIDENCE`。旧消息由 API 读取层兼容映射，不改写数据库历史。
+- 默认仍为 `mode: tools_only`、`llm_enabled: false`。此时工作台可查看历史但不能发送。启用时在 `config/agent.yaml` 同时设置 `mode: llm_chat`、`llm_enabled: true`，并仅通过部署环境变量 `OPENAI_API_KEY` 提供密钥，随后重启 Backend；前端不保存模型密钥。
+- 本阶段没有模型或表结构变化，不需要新增迁移；常规部署仍执行 `python -m alembic upgrade head` 以确认数据库位于仓库已有最新迁移。
+- 上下文选择器不是 Evidence，所有数值必须来自当前轮只读工具并通过服务端校验。工作台不会触发数据拉取、因子补算、回测、参数修改或交易。

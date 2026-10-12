@@ -23,6 +23,9 @@ import AnalyticsNavChart from "./AnalyticsNavChart.vue";
 import AnalyticsPeriodTable from "./AnalyticsPeriodTable.vue";
 import AnalyticsSummaryCards from "./AnalyticsSummaryCards.vue";
 
+const props = defineProps<{ initialRunId?: string }>();
+const emit = defineEmits<{ research: [context: { run_id: string }] }>();
+
 const runs = ref<BacktestRun[]>([]);
 const selectedRunId = ref("");
 const summary = ref<AnalyticsSummary | null>(null);
@@ -69,6 +72,9 @@ async function loadWorkspace() {
   error.value = "";
   try {
     runs.value = await fetchBacktests();
+    if (props.initialRunId && successRuns.value.some((row) => row.id === props.initialRunId)) {
+      selectedRunId.value = props.initialRunId;
+    }
     if (!selectedRunId.value) selectedRunId.value = successRuns.value[0]?.id || "";
     if (selectedRunId.value) await loadSelectedRun();
   } catch (value) {
@@ -202,6 +208,12 @@ watch(selectedRunId, () => {
   episodePage.value = 0;
   void loadSelectedRun();
 });
+watch(
+  () => props.initialRunId,
+  (value) => {
+    if (value && workspaceReady && value !== selectedRunId.value) selectedRunId.value = value;
+  }
+);
 onMounted(async () => {
   await loadWorkspace();
   workspaceReady = true;
@@ -219,6 +231,7 @@ onMounted(async () => {
           </option>
         </select>
       </label>
+      <button v-if="selectedRunId" type="button" class="primary-button" @click="emit('research', { run_id: selectedRunId })">带入智能研究</button>
     </header>
 
     <div v-if="loading" class="analytics-state">正在加载分析数据</div>

@@ -24,7 +24,9 @@ import LoginView from "./components/LoginView.vue";
 import ChangePasswordView from "./components/ChangePasswordView.vue";
 import UserMenu from "./components/UserMenu.vue";
 import BacktestAnalyticsView from "./components/BacktestAnalyticsView.vue";
+import AgentResearchWorkbench from "./components/AgentResearchWorkbench.vue";
 import { fetchCurrentUser, logout } from "./services/auth";
+import type { ResearchContext } from "./services/agent";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -66,7 +68,7 @@ import type {
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
-type ViewKey = "overview" | "data" | "long" | "short" | "analytics";
+type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent";
 type PoolTab = "right" | "trend";
 type DataPanelKey = "recalc" | "tasks" | "coverage";
 
@@ -92,6 +94,7 @@ const submittingRecalculation = ref(false);
 const errorMessage = ref("");
 const jobMessage = ref("");
 const activeView = ref<ViewKey>("overview");
+const agentContext = ref<ResearchContext | null>(null);
 const overviewMode = ref<"market" | "research">("market");
 const activePool = ref<PoolTab>("right");
 const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
@@ -146,7 +149,8 @@ const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "data", label: "数据", description: "覆盖、拉取和任务进度" },
   { key: "long", label: "长线", description: "右侧池、趋势池、行业热度" },
   { key: "short", label: "短线", description: "风险池、信号和短期动量" },
-  { key: "analytics", label: "回测分析", description: "收益、风险、交易与周期对比" }
+  { key: "analytics", label: "回测分析", description: "收益、风险、交易与周期对比" },
+  { key: "agent", label: "智能研究", description: "只读工具、证据与研究会话" }
 ];
 
 const activeNav = computed(() => navItems.find((item) => item.key === activeView.value));
@@ -604,6 +608,19 @@ async function setActiveView(view: ViewKey) {
   activeView.value = view;
   await nextTick();
   renderCharts();
+}
+
+async function openAgentResearch(value: ResearchContext) {
+  agentContext.value = { ...value };
+  await setActiveView("agent");
+}
+
+async function navigateFromAgent(target: {
+  view: "overview" | "long" | "analytics";
+  run_id?: string;
+}) {
+  if (target.run_id) agentContext.value = { run_id: target.run_id };
+  await setActiveView(target.view);
 }
 
 async function shiftCalendarMonth(delta: number) {
@@ -1148,6 +1165,7 @@ function statusLabel(status: string) {
             subtitle="申万一级行业"
             :rows="sectorHeat.slice(0, 15)"
             :format-number="formatNumber"
+            @research="openAgentResearch"
           />
           <ThemeHeatTable
             :rows="themeHeat"
@@ -1285,6 +1303,7 @@ function statusLabel(status: string) {
           :format-number="formatNumber"
           :reason-text="reasonText"
           @select="openRealtimeKline"
+          @research="openAgentResearch"
         >
           <template #actions>
             <div class="segmented">
@@ -1302,6 +1321,7 @@ function statusLabel(status: string) {
           subtitle="按热度排序"
           :rows="sectorHeat.slice(0, 20)"
           :format-number="formatNumber"
+          @research="openAgentResearch"
         />
       </section>
 
@@ -1316,6 +1336,7 @@ function statusLabel(status: string) {
             :format-number="formatNumber"
             :reason-text="reasonText"
             @select="openRealtimeKline"
+            @research="openAgentResearch"
           />
 
           <article class="panel">
@@ -1340,12 +1361,17 @@ function statusLabel(status: string) {
             :rows="shortSectorRows"
             momentum
             :format-number="formatNumber"
+            @research="openAgentResearch"
           />
         </section>
       </section>
 
       <section v-show="activeView === 'analytics'" class="view-stack">
-        <BacktestAnalyticsView />
+        <BacktestAnalyticsView :initial-run-id="agentContext?.run_id" @research="openAgentResearch" />
+      </section>
+
+      <section v-show="activeView === 'agent'" class="view-stack">
+        <AgentResearchWorkbench :initial-context="agentContext" @navigate="navigateFromAgent" />
       </section>
     </section>
 

@@ -1,7 +1,7 @@
 from typing import Any
 
-from sqlalchemy import desc, select
-from sqlalchemy.orm import Session
+from sqlalchemy import desc, func, select
+from sqlalchemy.orm import Session, aliased
 
 from app.domain.agent.contracts import (
     AgentToolResult,
@@ -9,8 +9,11 @@ from app.domain.agent.contracts import (
     PerformanceSummaryInput,
     Readiness,
     WalkForwardSummaryInput,
+    WalkForwardWindowLineageInput,
 )
 from app.domain.agent.errors import identity_mismatch, invalid_argument, not_found, not_ready
+from app.models.experiment import PortfolioExperimentTrial
+from app.models.experiment_evaluation import PortfolioExperimentEvaluationReport
 from app.models.performance import PortfolioPerformanceReport
 from app.models.performance_period import PortfolioPerformancePeriodReport
 from app.models.performance_risk import PortfolioPerformanceRiskReport
@@ -19,6 +22,8 @@ from app.models.portfolio import PortfolioBacktestRun, PortfolioNavDaily
 from app.models.walk_forward import (
     PortfolioWalkForwardStudy,
     PortfolioWalkForwardValidationReport,
+    PortfolioWalkForwardWindow,
+    PortfolioWalkForwardWindowValidation,
 )
 from app.services.agent.evidence import evidence_ref
 from app.services.performance.analytics_bundle import (
@@ -322,6 +327,250 @@ class ResearchAgentAdapter:
                 )
             ],
             warnings=sorted(set(warnings)),
+            readiness=Readiness(ready=True, code="READY"),
+        )
+
+    def walk_forward_window_lineage(
+        self, request: WalkForwardWindowLineageInput
+    ) -> AgentToolResult:
+        study = self.db.get(PortfolioWalkForwardStudy, request.study_id)
+        if study is None:
+            raise not_found("walk-forward study not found")
+        report = self.db.scalar(
+            select(PortfolioWalkForwardValidationReport).where(
+                PortfolioWalkForwardValidationReport.id == request.validation_id,
+                PortfolioWalkForwardValidationReport.study_id == request.study_id,
+            )
+        )
+        if report is None or report.status != "SUCCESS":
+            raise not_ready("VALIDATION_NOT_READY: walk-forward validation is unavailable")
+
+        validation = PortfolioWalkForwardWindowValidation
+        filters = [
+            validation.validation_id == request.validation_id,
+            validation.study_id == request.study_id,
+        ]
+        if request.window_no is not None:
+            filters.append(validation.window_no == request.window_no)
+        total = int(
+            self.db.scalar(select(func.count()).select_from(validation).where(*filters)) or 0
+        )
+        if request.window_no is not None and total == 0:
+            raise not_found("walk-forward window validation not found")
+
+        train_run = aliased(PortfolioBacktestRun)
+        train_performance = aliased(PortfolioPerformanceReport)
+        train_risk = aliased(PortfolioPerformanceRiskReport)
+        train_trade = aliased(PortfolioPerformanceTradeReport)
+        train_period = aliased(PortfolioPerformancePeriodReport)
+        oos_run = aliased(PortfolioBacktestRun)
+        oos_performance = aliased(PortfolioPerformanceReport)
+        oos_risk = aliased(PortfolioPerformanceRiskReport)
+        oos_trade = aliased(PortfolioPerformanceTradeReport)
+        oos_period = aliased(PortfolioPerformancePeriodReport)
+        statement = (
+            select(
+                validation,
+                PortfolioWalkForwardWindow,
+                PortfolioExperimentTrial,
+                PortfolioExperimentEvaluationReport,
+                train_run,
+                train_performance,
+                train_risk,
+                train_trade,
+                train_period,
+                oos_run,
+                oos_performance,
+                oos_risk,
+                oos_trade,
+                oos_period,
+            )
+            .join(
+                PortfolioWalkForwardWindow,
+                (PortfolioWalkForwardWindow.study_id == validation.study_id)
+                & (PortfolioWalkForwardWindow.window_no == validation.window_no),
+            )
+            .join(
+                PortfolioExperimentTrial,
+                PortfolioExperimentTrial.id == validation.selected_trial_id,
+            )
+            .join(
+                PortfolioExperimentEvaluationReport,
+                PortfolioExperimentEvaluationReport.id == validation.train_evaluation_id,
+            )
+            .join(train_run, train_run.id == validation.selected_train_run_id)
+            .join(train_performance, train_performance.id == validation.train_performance_id)
+            .join(train_risk, train_risk.id == validation.train_risk_id)
+            .join(train_trade, train_trade.id == validation.train_trade_id)
+            .join(train_period, train_period.id == validation.train_period_id)
+            .join(oos_run, oos_run.id == validation.oos_run_id)
+            .join(oos_performance, oos_performance.id == validation.oos_performance_id)
+            .join(oos_risk, oos_risk.id == validation.oos_risk_id)
+            .join(oos_trade, oos_trade.id == validation.oos_trade_id)
+            .join(oos_period, oos_period.id == validation.oos_period_id)
+            .where(*filters)
+            .order_by(validation.window_no)
+            .offset(request.offset)
+            .limit(request.limit)
+        )
+        rows = list(self.db.execute(statement).all())
+        expected_page_size = min(request.limit, max(total - request.offset, 0))
+        if len(rows) != expected_page_size:
+            raise not_ready(
+                "WINDOW_LINEAGE_NOT_READY: one or more persisted report bundles are unavailable"
+            )
+
+        records: list[dict[str, Any]] = []
+        evidence = []
+        for row in rows:
+            (
+                window_result,
+                window,
+                selected_trial,
+                train_evaluation,
+                train_run_row,
+                train_performance_row,
+                train_risk_row,
+                train_trade_row,
+                train_period_row,
+                oos_run_row,
+                oos_performance_row,
+                oos_risk_row,
+                oos_trade_row,
+                oos_period_row,
+            ) = row
+            try:
+                validate_exact_analytics_bundle(
+                    AnalyticsArtifactBundle(
+                        train_run_row,
+                        train_performance_row,
+                        train_risk_row,
+                        train_trade_row,
+                        train_period_row,
+                    ),
+                    require_period=True,
+                )
+                validate_exact_analytics_bundle(
+                    AnalyticsArtifactBundle(
+                        oos_run_row,
+                        oos_performance_row,
+                        oos_risk_row,
+                        oos_trade_row,
+                        oos_period_row,
+                    ),
+                    require_period=True,
+                )
+            except AnalyticsBundleError as exc:
+                if exc.code == "ANALYTICS_ARTIFACT_BUNDLE_INCOMPLETE":
+                    raise not_ready(f"WINDOW_LINEAGE_NOT_READY: {exc}") from exc
+                raise identity_mismatch(
+                    "walk-forward window analytics identity is inconsistent"
+                ) from exc
+            if (
+                window.train_evaluation_id != window_result.train_evaluation_id
+                or window.selected_trial_id != window_result.selected_trial_id
+                or window.oos_run_id != window_result.oos_run_id
+                or selected_trial.experiment_id != window_result.train_experiment_id
+                or selected_trial.run_id != window_result.selected_train_run_id
+                or train_evaluation.experiment_id != window_result.train_experiment_id
+                or train_evaluation.selected_trial_id != window_result.selected_trial_id
+                or train_evaluation.selected_run_id != window_result.selected_train_run_id
+            ):
+                raise identity_mismatch("walk-forward window lineage is inconsistent")
+            record = {
+                "study_id": study.id,
+                "validation_id": report.id,
+                "window_no": window.window_no,
+                "train_start": window.train_start_date,
+                "train_end": window.train_end_date,
+                "test_start": window.test_start_date,
+                "test_end": window.test_end_date,
+                "train_run_id": window_result.selected_train_run_id,
+                "train_performance_id": window_result.train_performance_id,
+                "oos_run_id": window_result.oos_run_id,
+                "oos_performance_id": window_result.oos_performance_id,
+                "selected_trial_id": window_result.selected_trial_id,
+                "train_evaluation_id": window_result.train_evaluation_id,
+                "report_status": report.status,
+                "validation_status": report.status,
+                "train_report_status": train_performance_row.status,
+                "oos_report_status": oos_performance_row.status,
+                "train_metrics": {
+                    "annualized_return": window_result.train_annualized_return,
+                    "max_drawdown_abs": window_result.train_max_drawdown_abs,
+                    "sharpe_ratio": window_result.train_sharpe_ratio,
+                    "annualized_turnover": window_result.train_annualized_turnover,
+                },
+                "oos_metrics": {
+                    "cumulative_return": window_result.oos_cumulative_return,
+                    "annualized_return": window_result.oos_annualized_return,
+                    "max_drawdown_abs": window_result.oos_max_drawdown_abs,
+                    "sharpe_ratio": window_result.oos_sharpe_ratio,
+                    "annualized_turnover": window_result.oos_annualized_turnover,
+                    "total_cost_to_initial_capital": (
+                        window_result.oos_total_cost_to_initial_capital
+                    ),
+                    "win_rate": window_result.oos_win_rate,
+                    "profit_factor": window_result.oos_profit_factor,
+                },
+                "degradation": {
+                    "return": window_result.return_degradation,
+                    "sharpe": window_result.sharpe_degradation,
+                    "drawdown": window_result.drawdown_worsening,
+                    "turnover": window_result.turnover_change,
+                },
+                "readiness": {
+                    "ready": True,
+                    "code": "READY",
+                    "details": {"train_bundle": "READY", "oos_bundle": "READY"},
+                },
+            }
+            records.append(record)
+            evidence.append(
+                evidence_ref(
+                    layer="STRATEGY_VALIDATION",
+                    source_type="report",
+                    entity_id=f"{study.id}:window:{window.window_no}",
+                    date_value=window.test_end_date,
+                    source_record_id=f"{report.id}:{window.window_no}",
+                    calc_version=report.walk_forward_version,
+                    config_hash=report.validation_policy_hash,
+                    source_hash=report.source_hash,
+                    report_id=str(report.id),
+                    content={
+                        "study_id": study.id,
+                        "validation_id": report.id,
+                        "window": record,
+                    },
+                    observed_at=report.calculated_at,
+                    quality_status="PASS",
+                    limitations=[
+                        "Window-level persisted TRAIN/OOS research evidence",
+                        "Historical research evidence; not a trading recommendation",
+                    ],
+                )
+            )
+
+        identity = {
+            "study_id": study.id,
+            "validation_id": report.id,
+            "walk_forward_version": report.walk_forward_version,
+            "policy_identity_version": report.policy_identity_version,
+            "validation_policy_hash": report.validation_policy_hash,
+            "source_hash": report.source_hash,
+            "definition_hash": study.definition_hash,
+            "total": total,
+            "limit": request.limit,
+            "offset": request.offset,
+        }
+        return AgentToolResult(
+            tool_name="walk_forward.window_lineage",
+            status="READY" if records else "EMPTY_RESULT",
+            as_of_date=max((item[1].test_end_date for item in rows), default=None),
+            identity=identity,
+            records=records,
+            evidence=evidence,
+            warnings=[],
             readiness=Readiness(ready=True, code="READY"),
         )
 

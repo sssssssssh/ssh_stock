@@ -14,6 +14,7 @@ from app.domain.agent.contracts import (
     SectorTopInput,
     ThemeTopInput,
     WalkForwardSummaryInput,
+    WalkForwardWindowLineageInput,
 )
 from app.domain.agent.errors import AgentError
 from app.models.market_data import MarketDaily
@@ -150,6 +151,22 @@ def test_l3_missing_or_unready_sources_are_explicit() -> None:
             )
         )
     assert walk_error.value.code == "NOT_READY"
+
+    validation_id = UUID("44444444-4444-4444-4444-444444444444")
+    missing_bundle_db = _FakeDb(
+        scalar_values=[SimpleNamespace(id=validation_id, status="SUCCESS"), 1],
+        execute_rows=[],
+        get_values={PortfolioWalkForwardStudy: study},
+    )
+    with pytest.raises(AgentError) as missing_bundle:
+        ResearchAgentAdapter(missing_bundle_db).walk_forward_window_lineage(
+            WalkForwardWindowLineageInput(
+                study_id=study.id,
+                validation_id=validation_id,
+                window_no=1,
+            )
+        )
+    assert missing_bundle.value.code == "NOT_READY"
 
 
 def test_theme_top_exposes_persisted_pit_snapshot_and_degradation() -> None:

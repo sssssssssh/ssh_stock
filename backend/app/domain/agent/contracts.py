@@ -76,6 +76,14 @@ class WalkForwardSummaryInput(AgentDTO):
     validation_id: uuid.UUID
 
 
+class WalkForwardWindowLineageInput(AgentDTO):
+    study_id: uuid.UUID
+    validation_id: uuid.UUID
+    window_no: int | None = Field(default=None, ge=1)
+    limit: int = Field(default=20, ge=1, le=50)
+    offset: int = Field(default=0, ge=0)
+
+
 class EvidenceRef(AgentDTO):
     evidence_id: str
     evidence_version: Literal["v1", "v2"] = "v2"

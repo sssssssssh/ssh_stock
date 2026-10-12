@@ -121,7 +121,8 @@ class ExperimentLineageResolver:
         validation_ids = {
             _uuid_or_none(item.identity.get("validation_id"))
             for item in evidence
-            if item.tool_name == "walk_forward.summary"
+            if item.tool_name
+            in {"walk_forward.summary", "walk_forward.window_lineage"}
         }
         validation_ids.discard(None)
         if len(validation_ids) > 1:

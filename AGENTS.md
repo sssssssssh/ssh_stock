@@ -19,12 +19,13 @@
 
 ## 当前基线与范围
 
-- 当前仓库已完成 Milestone 0 至 Milestone 16.2.2；准确状态以 `PROJECT_RULES.md` 的“当前阶段”
+- 当前仓库已完成 Milestone 0 至 Milestone 16.3；准确状态以 `PROJECT_RULES.md` 的“当前阶段”
   和最新 Git 提交为准。
 - 已封版模块、版本身份、PIT 语义、收益口径和 append-only 约束必须遵守
   `PROJECT_RULES.md`。除非用户任务明确要求，不扩展或重构这些边界。
-- Milestone 16.1 的确定性八工具接口保持只读兼容。Milestone 16.2 可选 Chat Runtime 默认关闭；
-  启用后也只能由模型编排这八个工具，不得开放任意 SQL/HTTP/代码执行、修改策略参数或触发
+- Milestone 16.1 的确定性八工具接口保持只读兼容。Milestone 16.3 Registry 新增一个窗口血缘工具；
+  可选 Chat Runtime 默认关闭，启用后也只能由模型编排九个显式只读工具，不得开放任意
+  SQL/HTTP/代码执行、修改策略参数或触发
   数据、回测和研究计算。
 - 不修改生产策略权重、阈值、S0-S6 定义或研究口径，除非任务书和用户明确要求且同步提供
   对应验收标准。

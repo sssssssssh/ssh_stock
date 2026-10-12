@@ -8,7 +8,7 @@ from app.core.agent_llm_config import AgentLLMConfig
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    registry_version: str = "m16.1-v1"
+    registry_version: str = "m16.3-v1"
     mode: Literal["tools_only", "llm_chat"] = "tools_only"
     llm_enabled: bool = False
     llm: AgentLLMConfig = Field(default_factory=AgentLLMConfig)

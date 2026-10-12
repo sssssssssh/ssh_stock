@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
+from app.domain.agent.contracts import WalkForwardWindowLineageInput
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
 from app.models.market_data import TradeCalendar
 from app.models.portfolio import PortfolioBacktestRun
@@ -12,6 +13,7 @@ from app.models.walk_forward import (
     PortfolioWalkForwardWindow,
     PortfolioWalkForwardWindowValidation,
 )
+from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.chat.comparison_contract import (
     BacktestComparisonContractResolver,
 )
@@ -194,6 +196,24 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             )
             assert persisted is not None
             window = windows[0]
+
+            lineage_result = ResearchAgentAdapter(db).walk_forward_window_lineage(
+                WalkForwardWindowLineageInput(
+                    study_id=study_id,
+                    validation_id=report.id,
+                    limit=1,
+                )
+            )
+            assert lineage_result.status == "READY"
+            assert lineage_result.identity["total"] == 2
+            assert lineage_result.identity["limit"] == 1
+            assert len(lineage_result.records) == 1
+            assert len(lineage_result.evidence) == 1
+            assert lineage_result.records[0]["window_no"] == 1
+            assert lineage_result.records[0]["train_run_id"] == persisted.selected_train_run_id
+            assert lineage_result.records[0]["oos_run_id"] == persisted.oos_run_id
+            assert lineage_result.records[0]["readiness"]["ready"] is True
+            assert lineage_result.evidence[0].evidence_version == "v2"
 
             train_fact = _fact(
                 role="TRAIN",

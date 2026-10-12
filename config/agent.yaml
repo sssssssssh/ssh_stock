@@ -1,5 +1,5 @@
 agent:
-  registry_version: m16.1-v1
+  registry_version: m16.3-v1
   mode: tools_only
   llm_enabled: false
   max_output_bytes: 65536

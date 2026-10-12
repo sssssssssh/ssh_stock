@@ -1400,3 +1400,11 @@ Persisted fills are the only accounting input. Daily cash, holdings, available q
   推断不得新增未验证的收益率、价格、日期、排名或确定因果。
 - 同一轮部分比较或推断被拒绝时，仍保留已验证事实并明示拒绝原因。原八个只读工具、
   API envelope、鉴权、幂等、Deadline 和历史会话保持兼容。
+
+## Milestone 16.3：智能研究工作台（2026-10-12）
+
+- 登录用户可以在“智能研究”页面管理本人会话、发送问题、查看工具轨迹和 Evidence v2 身份，并从股票池、行业热度和回测分析带入显式上下文选择器。
+- 新增窗口级 `walk_forward.window_lineage` 只读工具，以 Study/Validation/Window 精确定位 Selected Trial、Evaluation、Train/OOS Run 与 M14 报告；缺失或身份冲突时拒绝结果，不触发补算。
+- 回答明确区分全部验证、部分验证和证据不足。部分验证只展示通过的结论；拒绝项只展示 Claim ID 与原因码，不显示未验证金融数值。
+- 比较视图展示字段、单位、日期、样本角色、比较状态和原因码。`INCOMPATIBLE` 不得生成优劣排名；TRAIN/OOS 必须标明训练期与窗口级样本外。
+- 默认关闭 LLM 时页面明确提示配置状态并禁止发送，但仍可查看历史。工作台不保存 API Key，不提供自动回测、策略修改、数据任务或交易能力。

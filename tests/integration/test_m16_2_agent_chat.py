@@ -320,6 +320,7 @@ class CoverageProvider:
                 "backtest.summary",
                 "performance.summary",
                 "walk_forward.summary",
+                "walk_forward.window_lineage",
             }
             return LLMResponse(
                 tool_calls=[

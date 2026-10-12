@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 16.2.2；后续 M13-M16 的冻结规则见本文后续章节：
+当前已完成 Milestone 0 到 Milestone 16.3；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -69,8 +69,9 @@
 
 当前阶段 M16.1 的确定性只读工具保持兼容；M16.2 增加默认关闭的可选 LLM Chat Runtime，
 M16.2.1 完成端到端时间预算、Claim 证据强绑定、请求内容幂等和基础比较策略；
-M16.2.2 进一步收口 TRAIN/OOS 持久化同源、独立回测三态可比性与有界定性推断。
-启用后模型也只能编排既有八工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
+M16.2.2 进一步收口 TRAIN/OOS 持久化同源、独立回测三态可比性与有界定性推断；
+M16.3 增加窗口级血缘工具、三态回答契约和前端智能研究工作台。
+启用后模型也只能编排 Registry 中九个只读工具，所有数值事实与引用必须来自工具 Evidence v2。本轮不继续
 修改生产策略权重、阈值或 S0-S6 定义。
 
 ## 架构规则
@@ -473,7 +474,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - M16.1 的三个接口固定为确定性只读工具语义，并在默认配置
   `tools_only + llm_enabled=false` 下不依赖真实 LLM。M16.2 的可选 Chat 不得改变这些接口，
   也不得写策略参数或触发任何数据、回测和研究计算。
-- 默认 Registry 必须显式发布既有八个 V1 工具，目录数量从实际 Registry 计算；Registry 允许后续显式增加合法只读 Spec，但禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
+- 默认 Registry 必须显式发布九个 V1 工具，包含窗口级 `walk_forward.window_lineage`；目录数量从实际 Registry 计算。Registry 禁止反射注册、动态 import、任意 SQL/HTTP/Python/Shell/文件路径参数和未声明工具。
 - Agent 只可经 DTO 读取 L1/L2/L3 已持久化结果，禁止把 ORM、Session 或 Provider 对象返回给调用方；所有输入模型必须 `extra=forbid`。
 - 市场、行业、题材、机会必须使用当前身份过滤；历史题材必须使用已持久化 PIT snapshot identity，禁止用当前成员覆盖历史。
 - M14/M15 报告证据必须使用已存 UUID、version、config hash、source hash；同一 Run 多报告时不得暗取 latest。
@@ -488,7 +489,7 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - `max_records` 只约束顶层 `records`。Coverage dataset、Evidence、Warnings 和最终序列化字节必须分别有显式上限；结构数量超限使用 `RESOURCE_LIMIT_EXCEEDED`，64 KiB 字节超限使用 `OUTPUT_LIMIT_EXCEEDED`，禁止静默截断后仍声称统计完整。
 - 新证据固定为 `evidence_version=v2`，`source_record_id` 只负责业务定位，`evidence_id` 必须绑定源身份、真实运行/报告身份、质量限制和确定性内容哈希。请求 ID、当前时间不得进入 Evidence ID；历史 Evidence 不回写。
 - `performance.summary` 不得选择 latest 解决歧义。必须用公共只读 M14 Bundle validator 核对 owner、状态、日期和版本/配置/来源身份；Period 在概览中可缺失但必须 warning，存在时必须通过同 Bundle 校验。
-- Registry 安全性由显式 Spec allowlist、唯一合法名称、合法版本/layer、只读属性及正向预算保证，不得再以“数量必须等于 8”替代约束。默认构建仍必须精确返回已发布的八个工具。
+- Registry 安全性由显式 Spec allowlist、唯一合法名称、合法版本/layer、只读属性及正向预算保证，不得仅以固定数量替代约束。默认构建必须精确返回当前发布的九个工具。
 - 所有成功、输入校验失败、业务错误、SQL 超时和未知异常都必须记录结构化耗时审计及安全错误码；日志不得包含完整输入、SQL、DSN、Cookie、Token 或结果正文。
 
 ## Milestone 16.2 Evidence-backed Chat 规则
@@ -556,3 +557,11 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - `lineage_decision`、`comparison_state`、`reason_codes`、`verified_fact_refs`、策略版本与
   Evidence v2 身份保存在既有 assistant message JSON 元数据。本阶段不新增迁移；历史会话和
   旧 INFERENCE 固定安全声明保持可读。
+
+## Milestone 16.3 智能研究工作台规则
+
+- `walk_forward.window_lineage` 只能按明确 Study、Validation 和可选 Window 读取已持久化 M15/M14 关系；必须校验 Window、Selected Trial、Evaluation、Train/OOS Run 与完整报告 Bundle，禁止把 Study 聚合 OOS 当作单窗口事实。
+- 回答状态固定为 `COMPLETED`、`PARTIAL_VERIFIED`、`INSUFFICIENT_EVIDENCE`。只有已验证 Claim 可以进入正式文本；被拒绝 Claim 只能保存和返回 ID、类型、原因码、比较状态及策略版本，不得回显其原始文本或数值。
+- 旧会话在读取时映射到新三态并脱敏，不改写历史消息 JSONB。本阶段没有数据库结构变化，不新增 Alembic 迁移。
+- 前端上下文入口只提供显式选择器，不是 Evidence。事实仍必须经认证 API、只读工具、Evidence v2 与服务端字段校验；前端不得自行提升比较状态或绘制不兼容结果排名。
+- 智能研究工作台复用 Session Cookie、owner 隔离和现有 API 客户端。默认 `llm_enabled=false`，关闭时只允许查看历史并明确显示配置状态，不自动启用模型。

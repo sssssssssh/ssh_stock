@@ -22,13 +22,14 @@ rollback. No Agent endpoint creates `job_run`, starts calculations, or commits d
 | `backtest.summary` | exact `run_id` | 1 | `NOT_FOUND` / `NOT_READY` |
 | `performance.summary` | exactly one of `run_id`, `report_id` | 1 | `NOT_FOUND` / `NOT_READY` |
 | `walk_forward.summary` | exact `study_id`, `validation_id` | 1 | `NOT_FOUND` / `NOT_READY` |
+| `walk_forward.window_lineage` | exact `study_id`, `validation_id`; optional `window_no`, pagination | 50 | `NOT_FOUND` / `NOT_READY` / `EMPTY_RESULT` |
 
 `max_records` in the catalog applies only to the top-level `records` array. Evidence,
 warnings and declared nested lists have separate positive limits; the final serialized
 payload is limited to 64 KiB. All schemas reject unknown fields. The registry is explicit;
 reflection, dynamic import,
 arbitrary SQL, arbitrary URL, Python expression, filesystem path and shell inputs are
-not accepted. The default builder returns exactly the published eight tools, while the
+not accepted. The default builder returns exactly the published nine tools, while the
 registry validator itself checks unique legal names, versions, allowed layers, read-only
 handlers and positive budgets instead of treating a hard-coded count as a safety boundary.
 
@@ -62,7 +63,7 @@ POST /api/v1/agent/tools/execute
 }
 ```
 
-`GET /api/v1/agent/tools` returns the eight JSON schemas. `GET /api/v1/agent/status`
+`GET /api/v1/agent/tools` returns the nine JSON schemas. `GET /api/v1/agent/status`
 returns `agent_mode=tools_only`, registry version, the actual registry length, read-only
 mode, LLM-disabled state, and the hard per-SQL statement timeout metadata.
 
@@ -97,6 +98,7 @@ evidence, warnings, and readiness.
 | `backtest.summary` | `run_id=11111111-1111-1111-1111-111111111111` | `status=SUCCESS, latest_nav=1.05, source_identity={...}` |
 | `performance.summary` | `report_id=22222222-2222-2222-2222-222222222222` | `report_ids, performance, risk, trade, period` |
 | `walk_forward.summary` | `study_id=33333333-3333-3333-3333-333333333333, validation_id=44444444-4444-4444-4444-444444444444` | `result_stage=OOS, oos_sample, returns, parameter_switching` |
+| `walk_forward.window_lineage` | same IDs, optional `window_no=1` | exact Window dates, Trial/Evaluation, Train/OOS report IDs and readiness |
 
 Values above are fixtures, not claims about production data.
 
@@ -281,3 +283,24 @@ Evidence compilation opens a separate bounded `agent_db_session` transaction, pr
 PostgreSQL READ ONLY and statement-timeout enforcement without extending the chat write
 transaction. Detailed contracts and verification evidence are recorded in
 `docs/M16_2_2_comparison_closeout.md`.
+
+## M16.3 intelligent research workspace
+
+The registry adds `walk_forward.window_lineage` as the ninth read-only tool. One bounded
+query page joins the persisted Window Validation, Window, selected Trial, Evaluation,
+Train/OOS Run and exact M14 report bundles. The adapter validates both bundles and all
+ownership links before returning Evidence v2. It never runs M14/M15 calculations and
+never substitutes study-level stitched OOS metrics for a window report.
+
+Assistant metadata now has three answer states: `COMPLETED`, `PARTIAL_VERIFIED`, and
+`INSUFFICIENT_EVIDENCE`. `verified_claims` is the only source for rendered conclusion
+text. `rejected_claims` contains only claim identity and deterministic rejection metadata;
+unverified prose and structured values are discarded. The API normalizes legacy message
+metadata on read, so no historical JSONB rewrite or Alembic migration is required.
+
+The Vue workbench reuses Session Cookie authentication and the existing `/api/v1/agent`
+chat endpoints. It provides paginated owner-scoped conversations, idempotent request IDs,
+loading/retry/empty states, explicit context selectors, structured comparison facts,
+tool traces, Evidence identity drill-down and a responsive evidence drawer. Context
+selectors are untrusted locators and cannot replace tool Evidence. The default runtime
+remains `tools_only` with LLM chat disabled.

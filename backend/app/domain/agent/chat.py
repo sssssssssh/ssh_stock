@@ -29,6 +29,7 @@ class ChatCitation(ChatDTO):
 
 
 ClaimType = Literal["FACT", "INFERENCE", "COMPARISON"]
+AnswerStatus = Literal["COMPLETED", "PARTIAL_VERIFIED", "INSUFFICIENT_EVIDENCE"]
 ComparisonType = Literal[
     "SAME_DATE_RANKING",
     "ENTITY_OVER_TIME",
@@ -122,6 +123,14 @@ class StructuredClaim(ChatDTO):
         return self
 
 
+class RejectedClaim(ChatDTO):
+    claim_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    claim_type: ClaimType
+    reason_codes: list[str] = Field(min_length=1, max_length=24)
+    comparison_state: ComparisonState | None = None
+    policy_version: str | None = Field(default=None, max_length=64)
+
+
 class ChatToolCallSummary(ChatDTO):
     tool_call_id: str
     tool_name: str
@@ -148,14 +157,32 @@ class ChatUsage(ChatDTO):
 class ChatAnswer(ChatDTO):
     chat_id: uuid.UUID
     message_id: uuid.UUID
-    status: Literal["COMPLETED", "INSUFFICIENT_EVIDENCE"]
+    status: AnswerStatus = "COMPLETED"
+    answer_status: AnswerStatus = "COMPLETED"
     answer: str
     claims: list[StructuredClaim] = Field(default_factory=list)
+    verified_claims: list[StructuredClaim] = Field(default_factory=list)
+    rejected_claims: list[RejectedClaim] = Field(default_factory=list)
+    needs_clarification: bool = False
     citations: list[ChatCitation] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     tool_calls: list[ChatToolCallSummary] = Field(default_factory=list)
     usage: ChatUsage = Field(default_factory=ChatUsage)
     trace_id: uuid.UUID
+
+    @model_validator(mode="after")
+    def normalize_compatibility_fields(self) -> ChatAnswer:
+        if "answer_status" not in self.model_fields_set:
+            self.answer_status = self.status
+        elif "status" not in self.model_fields_set:
+            self.status = self.answer_status
+        elif self.status != self.answer_status:
+            raise ValueError("status and answer_status must match")
+        if "verified_claims" not in self.model_fields_set:
+            self.verified_claims = list(self.claims)
+        elif "claims" not in self.model_fields_set:
+            self.claims = list(self.verified_claims)
+        return self
 
 
 class ChatSessionSummary(ChatDTO):

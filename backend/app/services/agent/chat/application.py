@@ -13,9 +13,12 @@ from sqlalchemy.orm import Session
 from app.core.agent_db import agent_db_session
 from app.core.config import Settings
 from app.domain.agent.chat import (
+    AnswerStatus,
     ChatAnswer,
     ChatMessageView,
     ChatSessionSummary,
+    RejectedClaim,
+    StructuredClaim,
 )
 from app.domain.agent.chat_errors import (
     AgentChatError,
@@ -215,12 +218,12 @@ class AgentChatApplication:
                 turn_id=turn.id,
                 trace_id=turn.trace_id,
                 answer=compiled.answer,
-                status=(
-                    "INSUFFICIENT_EVIDENCE"
-                    if compiled.insufficient_evidence
-                    else "COMPLETED"
-                ),
+                answer_status=compiled.answer_status,
                 claims=[item.model_dump(mode="json") for item in compiled.claims],
+                rejected_claims=[
+                    item.model_dump(mode="json") for item in compiled.rejected_claims
+                ],
+                needs_clarification=compiled.needs_clarification,
                 citations=[item.model_dump(mode="json") for item in compiled.citations],
                 warnings=compiled.warnings,
                 tool_calls=[
@@ -373,16 +376,22 @@ class AgentChatApplication:
         turn_id: uuid.UUID,
         trace_id: uuid.UUID,
         answer: str,
-        status: str,
+        answer_status: AnswerStatus,
         claims: list[dict[str, Any]],
+        rejected_claims: list[dict[str, Any]],
+        needs_clarification: bool,
         citations: list[dict[str, Any]],
         warnings: list[str],
         tool_calls: list[dict[str, Any]],
         usage: dict[str, Any],
     ) -> ChatAnswer:
         metadata = {
-            "status": status,
+            "status": answer_status,
+            "answer_status": answer_status,
             "claims": claims,
+            "verified_claims": claims,
+            "rejected_claims": rejected_claims,
+            "needs_clarification": needs_clarification,
             "citations": citations,
             "warnings": warnings,
             "tool_calls": tool_calls,
@@ -413,9 +422,13 @@ class AgentChatApplication:
         return ChatAnswer(
             chat_id=chat_id,
             message_id=assistant.id,
-            status=status,
+            status=answer_status,
+            answer_status=answer_status,
             answer=answer,
             claims=claims,
+            verified_claims=claims,
+            rejected_claims=rejected_claims,
+            needs_clarification=needs_clarification,
             citations=citations,
             warnings=warnings,
             tool_calls=tool_calls,
@@ -440,17 +453,22 @@ class AgentChatApplication:
         if message is None:
             raise chat_conflict("completed turn response is unavailable")
         metadata = dict(message.metadata_json or {})
+        normalized = _normalized_answer_metadata(metadata)
         return ChatAnswer(
             chat_id=turn.session_id,
             message_id=message.id,
-            status=metadata.get("status", "COMPLETED"),
+            status=normalized["answer_status"],
+            answer_status=normalized["answer_status"],
             answer=message.content,
-            claims=metadata.get("claims", []),
-            citations=metadata.get("citations", []),
-            warnings=metadata.get("warnings", []),
-            tool_calls=metadata.get("tool_calls", []),
-            usage=metadata.get("usage", {}),
-            trace_id=metadata.get("trace_id", str(turn.trace_id)),
+            claims=normalized["verified_claims"],
+            verified_claims=normalized["verified_claims"],
+            rejected_claims=normalized["rejected_claims"],
+            needs_clarification=normalized["needs_clarification"],
+            citations=normalized["citations"],
+            warnings=normalized["warnings"],
+            tool_calls=normalized["tool_calls"],
+            usage=normalized["usage"],
+            trace_id=normalized.get("trace_id") or str(turn.trace_id),
         )
 
     def _ensure_deadline(self, deadline: float) -> None:
@@ -497,12 +515,112 @@ def _session_summary(chat: Any) -> ChatSessionSummary:
 
 
 def _message_view(message: Any) -> ChatMessageView:
+    metadata = dict(message.metadata_json or {})
+    if message.role == "ASSISTANT":
+        metadata = _normalized_answer_metadata(metadata)
     return ChatMessageView(
         message_id=message.id,
         role=message.role,
         content=message.content,
         status=message.status,
         sequence_no=message.sequence_no,
-        metadata=dict(message.metadata_json or {}),
+        metadata=metadata,
         created_at=message.created_at,
     )
+
+
+def _normalized_answer_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    raw_claims = metadata.get("verified_claims", metadata.get("claims", []))
+    verified: list[dict[str, Any]] = []
+    rejected: dict[str, dict[str, Any]] = {}
+    if isinstance(raw_claims, list):
+        for raw in raw_claims:
+            if not isinstance(raw, dict):
+                continue
+            if raw.get("comparison_state") == "INCOMPATIBLE":
+                safe = _safe_rejected_claim(raw, ["COMPARISON_INCOMPATIBLE"])
+                if safe is not None:
+                    rejected[safe["claim_id"]] = safe
+                continue
+            try:
+                verified.append(StructuredClaim.model_validate(raw).model_dump(mode="json"))
+            except ValueError:
+                continue
+
+    raw_rejected = metadata.get("rejected_claims", [])
+    if isinstance(raw_rejected, list):
+        for raw in raw_rejected:
+            if not isinstance(raw, dict):
+                continue
+            safe = _safe_rejected_claim(raw, [])
+            if safe is not None:
+                rejected[safe["claim_id"]] = safe
+
+    warnings = [
+        str(item)
+        for item in metadata.get("warnings", [])
+        if isinstance(item, str)
+    ]
+    for warning in warnings:
+        parts = warning.split(":", 2)
+        if len(parts) == 3 and parts[0] == "CLAIM_REJECTED":
+            claim_id, reason = parts[1], parts[2]
+            existing = rejected.get(claim_id)
+            if existing is None:
+                safe = _safe_rejected_claim(
+                    {"claim_id": claim_id, "claim_type": "FACT"},
+                    [reason],
+                )
+                if safe is not None:
+                    rejected[claim_id] = safe
+            elif reason not in existing["reason_codes"]:
+                existing["reason_codes"].append(reason)
+
+    stored_status = metadata.get("answer_status", metadata.get("status"))
+    if verified and rejected:
+        answer_status: AnswerStatus = "PARTIAL_VERIFIED"
+    elif verified:
+        answer_status = "COMPLETED"
+    elif stored_status == "PARTIAL_VERIFIED":
+        answer_status = "INSUFFICIENT_EVIDENCE"
+    elif stored_status in {"COMPLETED", "INSUFFICIENT_EVIDENCE"}:
+        answer_status = stored_status
+    else:
+        answer_status = "INSUFFICIENT_EVIDENCE"
+    return {
+        "status": answer_status,
+        "answer_status": answer_status,
+        "claims": verified,
+        "verified_claims": verified,
+        "rejected_claims": list(rejected.values()),
+        "needs_clarification": bool(metadata.get("needs_clarification", False)),
+        "citations": metadata.get("citations", []),
+        "warnings": warnings,
+        "tool_calls": metadata.get("tool_calls", []),
+        "usage": metadata.get("usage", {}),
+        "trace_id": metadata.get("trace_id"),
+    }
+
+
+def _safe_rejected_claim(
+    raw: dict[str, Any],
+    fallback_reasons: list[str],
+) -> dict[str, Any] | None:
+    reasons = [
+        str(item)
+        for item in raw.get("reason_codes", [])
+        if isinstance(item, str) and item
+    ]
+    reasons = list(dict.fromkeys([*fallback_reasons, *reasons]))
+    if not reasons:
+        reasons = ["CLAIM_REJECTED"]
+    try:
+        return RejectedClaim(
+            claim_id=raw.get("claim_id"),
+            claim_type=raw.get("claim_type", "FACT"),
+            reason_codes=reasons,
+            comparison_state=raw.get("comparison_state"),
+            policy_version=raw.get("policy_version"),
+        ).model_dump(mode="json")
+    except ValueError:
+        return None

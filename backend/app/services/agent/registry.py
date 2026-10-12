@@ -16,6 +16,7 @@ from app.domain.agent.contracts import (
     SectorTopInput,
     ThemeTopInput,
     WalkForwardSummaryInput,
+    WalkForwardWindowLineageInput,
 )
 from app.domain.agent.errors import AgentError
 from app.services.agent.adapters.market_data import MarketDataAgentAdapter
@@ -32,6 +33,7 @@ DEFAULT_TOOL_NAMES = frozenset(
         "backtest.summary",
         "performance.summary",
         "walk_forward.summary",
+        "walk_forward.window_lineage",
     }
 )
 _ALLOWED_LAYERS = frozenset({"DATA", "FACTOR_TREND", "STRATEGY_VALIDATION"})
@@ -237,6 +239,18 @@ def build_registry(
             layer="STRATEGY_VALIDATION",
             max_records=1,
             max_evidence=min(config.max_evidence_refs, 1),
+            max_warnings=config.max_warnings,
+            timeout_seconds=config.default_timeout_seconds,
+        ),
+        ToolSpec(
+            name="walk_forward.window_lineage",
+            version="1.0",
+            description="Read validated window-level TRAIN/OOS report lineage.",
+            input_model=WalkForwardWindowLineageInput,
+            handler=research.walk_forward_window_lineage,
+            layer="STRATEGY_VALIDATION",
+            max_records=50,
+            max_evidence=min(config.max_evidence_refs, 50),
             max_warnings=config.max_warnings,
             timeout_seconds=config.default_timeout_seconds,
         ),

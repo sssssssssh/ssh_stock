@@ -8,6 +8,8 @@ defineProps<{
   momentum?: boolean;
   formatNumber: (value: number | null | undefined, digits?: number) => string;
 }>();
+
+defineEmits<{ research: [context: { sector_id: string }] }>();
 </script>
 
 <template>
@@ -16,7 +18,7 @@ defineProps<{
     <div class="sector-list">
       <div v-for="row in rows" :key="row.sector_id" class="sector-row">
         <span class="sector-rank">{{ row.heat_rank ?? "--" }}</span>
-        <span class="sector-name">{{ row.name || row.sector_name || row.sector_id }}</span>
+        <button class="sector-name stock-code-button" type="button" title="带入智能研究" @click="$emit('research', { sector_id: String(row.sector_id) })">{{ row.name || row.sector_name || row.sector_id }}</button>
         <div class="heat-track">
           <i :style="{ width: `${Math.max(0, Math.min(row.heat_score ?? 0, 100))}%` }"></i>
         </div>
