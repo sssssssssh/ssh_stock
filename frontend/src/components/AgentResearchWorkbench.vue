@@ -649,7 +649,7 @@ function uniqueMessages(rows: AgentMessage[]) {
 
 async function scrollToEnd() {
   await nextTick();
-  streamRef.value?.scrollTo({ top: streamRef.value.scrollHeight, behavior: "smooth" });
+  if (streamRef.value) streamRef.value.scrollTop = streamRef.value.scrollHeight;
 }
 
 async function restorePosition(chatId: string) {

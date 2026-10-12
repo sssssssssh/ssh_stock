@@ -151,6 +151,16 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator(".agent-citations button").filter({ hasText: "walk_forward.window_lineage" }).last().click();
   await page.locator(".agent-evidence-pane.open").waitFor();
+  await page.waitForFunction(() => {
+    const pane = document.querySelector(".agent-evidence-pane.open");
+    return pane && Math.abs(pane.getBoundingClientRect().right - window.innerWidth) < 1;
+  });
+  const actionsFit = await page.locator(".agent-evidence-detail").evaluate((detail) =>
+    [...detail.querySelectorAll("button")].every((button) =>
+      button.getBoundingClientRect().right <= window.innerWidth + 1
+    )
+  );
+  assert.equal(actionsFit, true, "mobile evidence actions clipped");
   await page.screenshot({ path: resolve(outputDir, "mobile.png") });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
   assert.equal(overflow, false, "mobile horizontal overflow");

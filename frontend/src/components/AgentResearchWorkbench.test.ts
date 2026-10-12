@@ -220,6 +220,8 @@ it("does not force scroll to the bottom when the reader moved upward", async () 
   delayed.resolve({});
   await flushPromises();
   expect(stream.scrollTop).toBe(100);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(stream.scrollTop).toBe(100);
 });
 
 it.each([
