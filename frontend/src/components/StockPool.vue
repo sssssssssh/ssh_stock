@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import type { StockPoolItem } from "../types";
+import type { ResearchContext } from "../services/agent";
 
 defineProps<{
   title: string;
   subtitle?: string;
   rows: StockPoolItem[];
+  highlightTsCode?: string;
+  highlightTradeDate?: string;
   warning?: boolean;
   emptyText: string;
   formatNumber: (value: number | null | undefined, digits?: number) => string;
@@ -13,7 +16,7 @@ defineProps<{
 
 defineEmits<{
   select: [row: StockPoolItem];
-  research: [context: { ts_code: string; trade_date: string }];
+  research: [context: ResearchContext];
 }>();
 </script>
 
@@ -33,7 +36,7 @@ defineEmits<{
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="`${row.ts_code}-${row.trade_date}`">
+          <tr v-for="row in rows" :key="`${row.ts_code}-${row.trade_date}`" :class="{ 'research-highlight': row.ts_code === highlightTsCode && (!highlightTradeDate || row.trade_date === highlightTradeDate) }">
             <td>
               <button class="stock-code-button" type="button" @click="$emit('select', row)">
                 {{ row.ts_code }}
@@ -46,7 +49,7 @@ defineEmits<{
             <td>{{ formatNumber(row.trend_score, 1) }}</td>
             <td>{{ row.sector_name || row.industry || "--" }}</td>
             <td class="reason-cell">{{ reasonText(row.reason_codes) }}</td>
-            <td><button class="stock-code-button" type="button" title="带入智能研究" @click="$emit('research', { ts_code: row.ts_code, trade_date: row.trade_date })">↗</button></td>
+            <td><button class="stock-code-button" type="button" title="带入智能研究" @click="$emit('research', { view: 'long', ts_code: row.ts_code, trade_date: row.trade_date, source_tool: 'ui.stock_pool' })">↗</button></td>
           </tr>
           <tr v-if="!rows.length"><td colspan="9" class="empty-cell">{{ emptyText }}</td></tr>
         </tbody>
@@ -54,3 +57,7 @@ defineEmits<{
     </div>
   </article>
 </template>
+
+<style scoped>
+.research-highlight { background: #fff7d6; box-shadow: inset 3px 0 #d97706; }
+</style>

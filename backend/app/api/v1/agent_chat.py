@@ -68,25 +68,60 @@ def get_chat(
     chat_id: uuid.UUID,
     limit: int = Query(default=100, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    before_sequence: int | None = Query(default=None, ge=1),
+    latest: bool = Query(default=False),
     user: Any = Depends(require_agent_user),
     service: AgentChatApplication = Depends(get_chat_application),
 ) -> dict[str, Any]:
     try:
-        chat, messages, total = service.get_chat(
+        chat, messages, total, has_more, next_cursor = service.get_chat(
             user=user,
             chat_id=chat_id,
             limit=limit,
             offset=offset,
+            before_sequence=before_sequence,
+            latest=latest,
         )
+        active_turn = service.get_running_turn_status(user=user, chat_id=chat_id)
     except AgentChatError as exc:
         raise _http_error(exc) from exc
     return envelope(
         {
             **chat.model_dump(mode="json"),
             "messages": [message.model_dump(mode="json") for message in messages],
+            "active_turn": active_turn.model_dump(mode="json") if active_turn else None,
         },
-        {"limit": limit, "offset": offset, "total": total},
+        {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+        },
     )
+
+
+@router.get("/chats/{chat_id}/turns/{request_id:path}")
+def get_turn_status(
+    chat_id: uuid.UUID,
+    request_id: str,
+    user: Any = Depends(require_agent_user),
+    service: AgentChatApplication = Depends(get_chat_application),
+) -> dict[str, Any]:
+    if not request_id or len(request_id) > 128:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_ARGUMENT", "message": "invalid request_id"},
+        )
+    try:
+        result = service.get_turn_status(
+            user=user,
+            chat_id=chat_id,
+            request_id=request_id,
+        )
+    except AgentChatError as exc:
+        raise _http_error(exc) from exc
+    return envelope(result.model_dump(mode="json"))
 
 
 @router.post("/chats/{chat_id}/messages")

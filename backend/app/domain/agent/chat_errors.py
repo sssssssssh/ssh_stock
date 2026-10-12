@@ -9,6 +9,10 @@ def chat_not_found() -> AgentChatError:
     return AgentChatError("CHAT_NOT_FOUND", "chat not found", status_code=404)
 
 
+def turn_not_found() -> AgentChatError:
+    return AgentChatError("TURN_NOT_FOUND", "chat turn not found", status_code=404)
+
+
 def chat_conflict(message: str = "another turn is already running") -> AgentChatError:
     return AgentChatError("CHAT_CONFLICT", message, status_code=409)
 

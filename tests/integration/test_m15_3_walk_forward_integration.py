@@ -406,6 +406,15 @@ def test_complete_pinned_source_validation_job_persists_and_reuses_artifact() ->
                 )
             )
             assert len(validation_windows) == 2
+            precise, precise_total = service.validation_windows(
+                study_id, report.id, limit=1, offset=0, window_no=2
+            )
+            assert precise_total == 1
+            assert [row["window_no"] for row in precise] == [2]
+            absent, absent_total = service.validation_windows(
+                study_id, report.id, limit=1, offset=0, window_no=999
+            )
+            assert absent == [] and absent_total == 0
             assert validation_windows[0].identity_snapshot["schema_version"] == (
                 "walk_forward_window_validation_identity_v1"
             )

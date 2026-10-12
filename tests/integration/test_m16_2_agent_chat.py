@@ -1,6 +1,8 @@
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -88,9 +90,7 @@ def _cleanup_users(*user_ids: uuid.UUID) -> None:
     with SessionLocal() as db:
         chat_ids = select_ids(
             db,
-            sa.select(AgentChatSession.id).where(
-                AgentChatSession.owner_user_id.in_(user_ids)
-            ),
+            sa.select(AgentChatSession.id).where(AgentChatSession.owner_user_id.in_(user_ids)),
         )
         if chat_ids:
             turn_ids = select_ids(
@@ -99,19 +99,11 @@ def _cleanup_users(*user_ids: uuid.UUID) -> None:
             )
             if turn_ids:
                 db.execute(
-                    sa.delete(AgentChatToolCall).where(
-                        AgentChatToolCall.turn_id.in_(turn_ids)
-                    )
+                    sa.delete(AgentChatToolCall).where(AgentChatToolCall.turn_id.in_(turn_ids))
                 )
                 db.execute(sa.delete(AgentChatTurn).where(AgentChatTurn.id.in_(turn_ids)))
-            db.execute(
-                sa.delete(AgentChatMessage).where(
-                    AgentChatMessage.session_id.in_(chat_ids)
-                )
-            )
-            db.execute(
-                sa.delete(AgentChatSession).where(AgentChatSession.id.in_(chat_ids))
-            )
+            db.execute(sa.delete(AgentChatMessage).where(AgentChatMessage.session_id.in_(chat_ids)))
+            db.execute(sa.delete(AgentChatSession).where(AgentChatSession.id.in_(chat_ids)))
         db.execute(sa.delete(AuthSession).where(AuthSession.user_id.in_(user_ids)))
         db.execute(sa.delete(AppUser).where(AppUser.id.in_(user_ids)))
         db.commit()
@@ -128,9 +120,7 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
         other = _user(db, suffix="other")
         owner_id, other_id = owner.id, other.id
         try:
-            service = AgentChatApplication(
-                db, settings, provider=_clarification_provider()
-            )
+            service = AgentChatApplication(db, settings, provider=_clarification_provider())
             chat = service.create_chat(user=owner, title="回测研究")
             first = service.send_message(
                 user=owner,
@@ -154,16 +144,36 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
                 )
             assert reused.value.code == "IDEMPOTENCY_CONFLICT"
             assert first.status == "INSUFFICIENT_EVIDENCE"
-            assert db.scalar(
-                sa.select(sa.func.count())
-                .select_from(AgentChatTurn)
-                .where(AgentChatTurn.session_id == chat.chat_id)
-            ) == 1
-            assert db.scalar(
-                sa.select(sa.func.count())
-                .select_from(AgentChatMessage)
-                .where(AgentChatMessage.session_id == chat.chat_id)
-            ) == 2
+            assert (
+                db.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(AgentChatTurn)
+                    .where(AgentChatTurn.session_id == chat.chat_id)
+                )
+                == 1
+            )
+            assert (
+                db.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(AgentChatMessage)
+                    .where(AgentChatMessage.session_id == chat.chat_id)
+                )
+                == 2
+            )
+            turn_status = service.get_turn_status(
+                user=owner,
+                chat_id=chat.chat_id,
+                request_id="idempotent-request",
+            )
+            assert turn_status.status == "COMPLETED"
+            assert turn_status.answer == first
+            with pytest.raises(AgentChatError) as hidden_turn:
+                service.get_turn_status(
+                    user=other,
+                    chat_id=chat.chat_id,
+                    request_id="idempotent-request",
+                )
+            assert hidden_turn.value.code == "CHAT_NOT_FOUND"
             completed_turn = db.scalar(
                 sa.select(AgentChatTurn).where(
                     AgentChatTurn.session_id == chat.chat_id,
@@ -203,6 +213,7 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
                     chat_id=chat.chat_id,
                     limit=20,
                     offset=0,
+                    latest=True,
                 )
             assert hidden.value.code == "CHAT_NOT_FOUND"
             other_chats, other_total = service.list_chats(
@@ -237,6 +248,161 @@ def test_chat_owner_isolation_idempotency_and_running_turn_conflict() -> None:
         finally:
             db.close()
             _cleanup_users(owner_id, other_id)
+
+
+@pytest.mark.parametrize("size", [0, 1, 199, 200, 201, 1001])
+def test_message_cursor_returns_latest_and_loads_history_without_overlap(size: int) -> None:
+    settings = _enabled_settings()
+    with SessionLocal() as db:
+        owner = _user(db, suffix="cursor")
+        owner_id = owner.id
+        try:
+            service = AgentChatApplication(db, settings)
+            chat = service.create_chat(user=owner, title="长会话")
+            if size:
+                db.execute(
+                    sa.insert(AgentChatMessage),
+                    [
+                        {
+                            "id": uuid.uuid4(),
+                            "session_id": chat.chat_id,
+                            "role": "USER" if sequence % 2 else "ASSISTANT",
+                            "content": f"message-{sequence}",
+                            "status": "COMPLETED",
+                            "sequence_no": sequence,
+                            "metadata_json": {},
+                        }
+                        for sequence in range(1, size + 1)
+                    ],
+                )
+            db.commit()
+
+            _, latest, total, has_more, cursor = service.get_chat(
+                user=owner,
+                chat_id=chat.chat_id,
+                limit=200,
+                offset=0,
+                latest=True,
+            )
+            assert total == size
+            first_sequence = max(1, size - 199)
+            assert [row.sequence_no for row in latest] == list(range(first_sequence, size + 1))
+            assert has_more is (size > 200)
+            assert cursor == (first_sequence if size > 200 else None)
+
+            _, earlier, _, earlier_has_more, earlier_cursor = service.get_chat(
+                user=owner,
+                chat_id=chat.chat_id,
+                limit=200,
+                offset=0,
+                before_sequence=first_sequence,
+            )
+            earlier_first = max(1, first_sequence - 200)
+            assert [row.sequence_no for row in earlier] == list(
+                range(earlier_first, first_sequence)
+            )
+            assert earlier_has_more is (earlier_first > 1)
+            assert earlier_cursor == (earlier_first if earlier_first > 1 else None)
+            assert {row.message_id for row in latest}.isdisjoint(
+                {row.message_id for row in earlier}
+            )
+            all_sequences = [row.sequence_no for row in earlier + latest]
+            while earlier_cursor is not None:
+                _, older, _, _, earlier_cursor = service.get_chat(
+                    user=owner,
+                    chat_id=chat.chat_id,
+                    limit=200,
+                    offset=0,
+                    before_sequence=earlier_cursor,
+                )
+                all_sequences = [row.sequence_no for row in older] + all_sequences
+            assert all_sequences == list(range(1, size + 1))
+
+            _, legacy, _, _, _ = service.get_chat(
+                user=owner,
+                chat_id=chat.chat_id,
+                limit=1,
+                offset=0,
+            )
+            assert [row.sequence_no for row in legacy] == ([1] if size else [])
+
+            if size != 1001:
+                return
+            db.execute(sa.text("ANALYZE agent_chat_message"))
+            plan = "\n".join(
+                row[0]
+                for row in db.execute(
+                    sa.text(
+                        "EXPLAIN SELECT * FROM agent_chat_message "
+                        "WHERE session_id = :chat_id AND sequence_no < :cursor "
+                        "ORDER BY sequence_no DESC LIMIT 200"
+                    ),
+                    {"chat_id": chat.chat_id, "cursor": cursor},
+                )
+            )
+            assert "uq_agent_chat_message_sequence" in plan
+        finally:
+            db.close()
+            _cleanup_users(owner_id)
+
+
+def test_concurrent_same_request_only_calls_provider_once() -> None:
+    entered, release = Event(), Event()
+
+    class WaitingProvider(FakeLLMProvider):
+        def complete(self, *args, **kwargs):
+            entered.set()
+            if not release.wait(20):
+                raise RuntimeError("test provider release timed out")
+            return super().complete(*args, **kwargs)
+
+    settings = _enabled_settings()
+    provider = WaitingProvider([_clarification_response()])
+    with SessionLocal() as db:
+        owner = _user(db, suffix="concurrent")
+        owner_id = owner.id
+        chat = AgentChatApplication(db, settings).create_chat(user=owner, title="concurrent")
+
+    def send_in_session():
+        with SessionLocal() as session:
+            return AgentChatApplication(session, settings, provider=provider).send_message(
+                user=SimpleNamespace(id=owner_id),
+                chat_id=chat.chat_id,
+                content="same request",
+                request_id="concurrent-request",
+            )
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            original = pool.submit(send_in_session)
+            assert entered.wait(20)
+            with pytest.raises(AgentChatError) as conflict:
+                send_in_session()
+            assert conflict.value.code == "CHAT_CONFLICT"
+            release.set()
+            answer = original.result(timeout=20)
+        assert send_in_session() == answer
+        assert len(provider.calls) == 1
+        with SessionLocal() as db:
+            assert (
+                db.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(AgentChatTurn)
+                    .where(AgentChatTurn.session_id == chat.chat_id)
+                )
+                == 1
+            )
+            assert (
+                db.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(AgentChatMessage)
+                    .where(AgentChatMessage.session_id == chat.chat_id)
+                )
+                == 2
+            )
+    finally:
+        release.set()
+        _cleanup_users(owner_id)
 
 
 def test_context_truncation_is_reported_and_provider_failure_finishes_turn() -> None:
@@ -522,17 +688,15 @@ def test_chat_tool_call_uses_read_only_session_and_persists_only_chat_audit() ->
         db.commit()
         quality_id = quality.id
         before = db.scalar(
-            sa.select(sa.func.count()).select_from(DataQualityDaily).where(
-                DataQualityDaily.id == quality_id
-            )
+            sa.select(sa.func.count())
+            .select_from(DataQualityDaily)
+            .where(DataQualityDaily.id == quality_id)
         )
         try:
             with agent_db_session(settings) as read_db:
                 assert read_db.scalar(sa.text("SHOW transaction_read_only")) == "on"
 
-            service = AgentChatApplication(
-                db, settings, provider=CoverageProvider(target_date)
-            )
+            service = AgentChatApplication(db, settings, provider=CoverageProvider(target_date))
             chat = service.create_chat(user=owner, title="覆盖率研究")
             result = service.send_message(
                 user=owner,
@@ -551,11 +715,14 @@ def test_chat_tool_call_uses_read_only_session_and_persists_only_chat_audit() ->
             assert audit is not None
             assert audit.status == "READY"
             assert audit.evidence_ids_json == [result.citations[0].evidence_id]
-            assert db.scalar(
-                sa.select(sa.func.count()).select_from(DataQualityDaily).where(
-                    DataQualityDaily.id == quality_id
+            assert (
+                db.scalar(
+                    sa.select(sa.func.count())
+                    .select_from(DataQualityDaily)
+                    .where(DataQualityDaily.id == quality_id)
                 )
-            ) == before
+                == before
+            )
         finally:
             db.execute(sa.delete(DataQualityDaily).where(DataQualityDaily.id == quality_id))
             db.commit()
@@ -631,7 +798,13 @@ def test_comparison_and_bounded_inference_are_compiled_and_persisted() -> None:
             assert inference.policy_version == "m16.2.2-inference-v1"
             assert inference.verified_fact_refs == comparison.verified_fact_refs
             assert "可能" in inference.text
-            assert "99" not in result.answer
+            assert "99%" not in result.answer
+            assert "99" not in inference.text
+            assert "模型原文声称" not in result.answer
+            assert [fact.value for fact in comparison.structured_facts] == ["88", "76"]
+            assert [fact.entity for fact in comparison.structured_facts] == [
+                str(value) for value in sector_ids
+            ]
             assert len(result.citations) == 2
             assert all(item.observed_at is not None for item in result.citations)
 
@@ -644,8 +817,8 @@ def test_comparison_and_bounded_inference_are_compiled_and_persisted() -> None:
             assert persisted is not None
             stored_claims = persisted.metadata_json["claims"]
             assert stored_claims[0]["comparison_state"] == "COMPARABLE"
-            assert stored_claims[1]["verified_fact_refs"] == (
-                stored_claims[0]["verified_fact_refs"]
+            assert (
+                stored_claims[1]["verified_fact_refs"] == (stored_claims[0]["verified_fact_refs"])
             )
             assert persisted.metadata_json["citations"][0]["observed_at"]
         finally:
@@ -695,6 +868,16 @@ def test_real_session_cookie_authentication_and_cross_user_404() -> None:
         )
         assert created.status_code == 201
         chat_id = created.json()["data"]["chat_id"]
+        with SessionLocal() as db:
+            service = AgentChatApplication(
+                db, _enabled_settings(), provider=_clarification_provider()
+            )
+            service.send_message(
+                user=SimpleNamespace(id=owner_id),
+                chat_id=uuid.UUID(chat_id),
+                content="cookie request",
+                request_id="cookie-request",
+            )
         owner_view = client.get(
             f"/api/v1/agent/chats/{chat_id}",
             cookies={SESSION_COOKIE: raw_owner_token},
@@ -706,33 +889,56 @@ def test_real_session_cookie_authentication_and_cross_user_404() -> None:
         )
         assert hidden.status_code == 404
         assert hidden.json()["detail"]["code"] == "CHAT_NOT_FOUND"
+        owner_turn = client.get(
+            f"/api/v1/agent/chats/{chat_id}/turns/cookie-request",
+            cookies={SESSION_COOKIE: raw_owner_token},
+        )
+        assert owner_turn.status_code == 200
+        assert owner_turn.json()["data"]["status"] == "COMPLETED"
+        other_turn = client.get(
+            f"/api/v1/agent/chats/{chat_id}/turns/cookie-request",
+            cookies={SESSION_COOKIE: raw_other_token},
+        )
+        assert other_turn.status_code == 404
+        assert other_turn.json()["detail"]["code"] == "CHAT_NOT_FOUND"
     finally:
         _cleanup_users(owner_id, other_id)
 
 
 def test_m16_2_postgresql_constraints_and_indexes_exist() -> None:
     with SessionLocal() as db:
-        assert db.scalar(
-            sa.text(
-                "SELECT count(*) FROM pg_indexes "
-                "WHERE indexname='uq_agent_chat_turn_running_session'"
+        assert (
+            db.scalar(
+                sa.text(
+                    "SELECT count(*) FROM pg_indexes "
+                    "WHERE indexname='uq_agent_chat_turn_running_session'"
+                )
             )
-        ) == 1
-        assert db.scalar(
-            sa.text(
-                "SELECT count(*) FROM pg_constraint "
-                "WHERE conname='uq_agent_chat_turn_request'"
+            == 1
+        )
+        assert (
+            db.scalar(
+                sa.text(
+                    "SELECT count(*) FROM pg_constraint WHERE conname='uq_agent_chat_turn_request'"
+                )
             )
-        ) == 1
-        assert db.scalar(
-            sa.text(
-                "SELECT count(*) FROM pg_constraint "
-                "WHERE conname='ck_agent_chat_message_content_length'"
+            == 1
+        )
+        assert (
+            db.scalar(
+                sa.text(
+                    "SELECT count(*) FROM pg_constraint "
+                    "WHERE conname='ck_agent_chat_message_content_length'"
+                )
             )
-        ) == 1
-        assert db.scalar(
-            sa.text(
-                "SELECT count(*) FROM pg_constraint "
-                "WHERE conname LIKE 'ck_agent_chat_%_ck_agent_chat_%'"
+            == 1
+        )
+        assert (
+            db.scalar(
+                sa.text(
+                    "SELECT count(*) FROM pg_constraint "
+                    "WHERE conname LIKE 'ck_agent_chat_%_ck_agent_chat_%'"
+                )
             )
-        ) == 0
+            == 0
+        )

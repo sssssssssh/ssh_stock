@@ -17,6 +17,7 @@ from app.domain.agent.chat import (
     ChatAnswer,
     ChatMessageView,
     ChatSessionSummary,
+    ChatTurnStatus,
     RejectedClaim,
     StructuredClaim,
 )
@@ -27,6 +28,7 @@ from app.domain.agent.chat_errors import (
     idempotency_conflict,
     llm_disabled,
     total_deadline_exceeded,
+    turn_not_found,
 )
 from app.domain.agent.policy import user_audit_hash
 from app.models.agent_chat import AgentChatSession, AgentChatTurn
@@ -91,16 +93,90 @@ class AgentChatApplication:
         chat_id: uuid.UUID,
         limit: int,
         offset: int,
-    ) -> tuple[ChatSessionSummary, list[ChatMessageView], int]:
+        before_sequence: int | None = None,
+        latest: bool = False,
+    ) -> tuple[
+        ChatSessionSummary,
+        list[ChatMessageView],
+        int,
+        bool,
+        int | None,
+    ]:
         chat = self.repo.get_owned_session(
             chat_id=chat_id, owner_user_id=_user_id(user)
         )
         if chat is None:
             raise chat_not_found()
-        messages, total = self.repo.message_page(
-            chat_id=chat_id, limit=limit, offset=offset
+        if latest or before_sequence is not None:
+            messages, total, has_more, next_cursor = self.repo.message_cursor_page(
+                chat_id=chat_id,
+                limit=limit,
+                before_sequence=before_sequence,
+            )
+        else:
+            messages, total = self.repo.message_page(
+                chat_id=chat_id, limit=limit, offset=offset
+            )
+            has_more = offset + len(messages) < total
+            next_cursor = None
+        return (
+            _session_summary(chat),
+            [_message_view(row) for row in messages],
+            total,
+            has_more,
+            next_cursor,
         )
-        return _session_summary(chat), [_message_view(row) for row in messages], total
+
+    def get_turn_status(
+        self,
+        *,
+        user: Any,
+        chat_id: uuid.UUID,
+        request_id: str,
+    ) -> ChatTurnStatus:
+        chat = self.repo.get_owned_session(
+            chat_id=chat_id,
+            owner_user_id=_user_id(user),
+        )
+        if chat is None:
+            raise chat_not_found()
+        turn = self.repo.get_turn_by_request(
+            chat_id=chat_id,
+            request_id=request_id,
+        )
+        if turn is None:
+            raise turn_not_found()
+        user_message = self.repo.get_message(turn.user_message_id)
+        if user_message is None:
+            raise chat_conflict("turn user message is unavailable")
+        answer = self._answer_from_turn(turn) if turn.status == "COMPLETED" else None
+        return ChatTurnStatus(
+            chat_id=chat_id,
+            request_id=turn.request_id,
+            status=turn.status,
+            error_code=turn.error_code,
+            content=user_message.content,
+            user_message_id=turn.user_message_id,
+            assistant_message_id=turn.assistant_message_id,
+            started_at=turn.started_at,
+            finished_at=turn.finished_at,
+            answer=answer,
+        )
+
+    def get_running_turn_status(
+        self, *, user: Any, chat_id: uuid.UUID
+    ) -> ChatTurnStatus | None:
+        chat = self.repo.get_owned_session(
+            chat_id=chat_id, owner_user_id=_user_id(user)
+        )
+        if chat is None:
+            raise chat_not_found()
+        turn = self.repo.running_turn(chat_id=chat_id)
+        if turn is None:
+            return None
+        return self.get_turn_status(
+            user=user, chat_id=chat_id, request_id=turn.request_id
+        )
 
     def archive_chat(self, *, user: Any, chat_id: uuid.UUID) -> ChatSessionSummary:
         chat = self.repo.get_owned_session(

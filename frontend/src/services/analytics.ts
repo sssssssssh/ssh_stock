@@ -21,6 +21,10 @@ export function fetchBacktests(): Promise<BacktestRun[]> {
   return request<BacktestRun[]>("/portfolio/backtests?limit=200");
 }
 
+export function fetchBacktest(runId: string): Promise<BacktestRun> {
+  return request<BacktestRun>(`/portfolio/backtests/${encodeURIComponent(runId)}`);
+}
+
 export function fetchAnalyticsSummary(
   runId: string,
   identity?: Pick<AnalyticsIdentity, "performance_id" | "risk_id" | "trade_id">

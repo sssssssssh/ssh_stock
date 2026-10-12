@@ -151,8 +151,11 @@ class WalkForwardRepository:
         *,
         limit: int,
         offset: int,
+        window_no: int | None = None,
     ) -> tuple[list[PortfolioWalkForwardWindowValidation], int]:
         where = PortfolioWalkForwardWindowValidation.validation_id == validation_id
+        if window_no is not None:
+            where = where & (PortfolioWalkForwardWindowValidation.window_no == window_no)
         total = int(
             self.db.scalar(
                 select(func.count())

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import { archiveAgentChat, fetchAgentChats, sendAgentMessage } from "./agent";
+import { archiveAgentChat, fetchAgentChats, fetchLatestAgentChat, fetchEarlierAgentMessages, fetchAgentTurnStatus, fetchWalkForwardValidationWindow, normalizeAgentRequestContent, sendAgentMessage } from "./agent";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -28,4 +28,20 @@ it("maps paginated chats, idempotent messages, and archive requests", async () =
     request_id: "request-1"
   });
   expect(fetchMock.mock.calls[2][1]).toMatchObject({ method: "DELETE" });
+});
+
+it("uses bounded keyset reads and safely encodes request identities", async () => {
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => response({}, { total: 201, has_more: true, next_cursor: 152 }));
+  await fetchLatestAgentChat("chat/a");
+  await fetchEarlierAgentMessages("chat/a", 152);
+  await fetchAgentTurnStatus("chat/a", "request/a");
+  await fetchWalkForwardValidationWindow("study-a", "validation-a", 301);
+  expect(fetchMock.mock.calls[0][0]).toContain("chat%2Fa?limit=50&latest=true");
+  expect(fetchMock.mock.calls[1][0]).toContain("before_sequence=152");
+  expect(fetchMock.mock.calls[2][0]).toContain("turns/request%2Fa");
+  expect(fetchMock.mock.calls[3][0]).toContain("limit=1&window_no=301");
+});
+
+it("matches the server's NFKC, newline and trailing-space normalization", () => {
+  expect(normalizeAgentRequestContent("  ＡＢＣ\r\nsecond  \rthird  ")).toBe("ABC\nsecond\nthird");
 });

@@ -605,7 +605,8 @@ button {
 }
 
 .error-strip,
-.success-strip {
+.success-strip,
+.navigation-strip {
   margin-bottom: 14px;
   border-radius: 7px;
   padding: 10px 12px;
@@ -623,6 +624,12 @@ button {
   border: 1px solid #bbf7d0;
   background: #f0fdf4;
   color: #166534;
+}
+
+.navigation-strip {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .metric-grid {

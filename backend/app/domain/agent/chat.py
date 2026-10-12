@@ -11,6 +11,18 @@ class ChatDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ResearchNavigationContext(ChatDTO):
+    view: Literal["overview", "long", "analytics", "walk_forward"]
+    ts_code: str | None = None
+    trade_date: date | None = None
+    sector_id: str | None = None
+    run_id: str | None = None
+    study_id: str | None = None
+    validation_id: str | None = None
+    window_no: int | None = Field(default=None, ge=1)
+    source_tool: str
+
+
 class ChatCitation(ChatDTO):
     marker: str
     evidence_id: str
@@ -26,6 +38,7 @@ class ChatCitation(ChatDTO):
     source_hash: str | None = None
     content_hash: str | None = None
     observed_at: datetime | None = None
+    navigation: ResearchNavigationContext | None = None
 
 
 ClaimType = Literal["FACT", "INFERENCE", "COMPARISON"]
@@ -183,6 +196,19 @@ class ChatAnswer(ChatDTO):
         elif "claims" not in self.model_fields_set:
             self.claims = list(self.verified_claims)
         return self
+
+
+class ChatTurnStatus(ChatDTO):
+    chat_id: uuid.UUID
+    request_id: str
+    status: Literal["RUNNING", "COMPLETED", "FAILED"]
+    error_code: str | None = None
+    content: str
+    user_message_id: uuid.UUID
+    assistant_message_id: uuid.UUID | None = None
+    started_at: datetime
+    finished_at: datetime | None = None
+    answer: ChatAnswer | None = None
 
 
 class ChatSessionSummary(ChatDTO):

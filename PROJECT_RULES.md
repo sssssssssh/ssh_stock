@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前已完成 Milestone 0 到 Milestone 16.3；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 16.3.1；后续 M13-M16 的冻结规则见本文后续章节：
 
 - 工程骨架
 - 数据库与迁移
@@ -565,3 +565,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 旧会话在读取时映射到新三态并脱敏，不改写历史消息 JSONB。本阶段没有数据库结构变化，不新增 Alembic 迁移。
 - 前端上下文入口只提供显式选择器，不是 Evidence。事实仍必须经认证 API、只读工具、Evidence v2 与服务端字段校验；前端不得自行提升比较状态或绘制不兼容结果排名。
 - 智能研究工作台复用 Session Cookie、owner 隔离和现有 API 客户端。默认 `llm_enabled=false`，关闭时只允许查看历史并明确显示配置状态，不自动启用模型。
+
+## Milestone 16.3.1 工作台可靠性规则
+
+- 一次用户提交只分配一个 request_id。网络结果未知时先读取受 owner 鉴权保护的 Turn 状态；只有服务端尚未发现该请求才允许沿用原 ID 和原内容重发。明确业务拒绝不得自动重放，FAILED 只能由用户显式作为新请求提交。
+- 消息查询保留旧升序 offset/limit 契约；工作台显式使用 latest=true 读取最新 50 条，再通过 before_sequence 向前分页。消息按 sequence_no 去重，前插保持视窗锚点，新回复只在底部时自动滚动。
+- 浏览器只在按登录用户分区的 sessionStorage 保存 chatId/requestId/state/createdAt，最长 24 小时；不保存问题正文、Evidence、Token 或完整会话。RUNNING 状态可由会话查询中的 active_turn 恢复。
+- 导航身份只能由已验证工具 Evidence 生成。窗口使用明确 Study/Validation/Window，回测使用明确 Run，股票与行业携带实体和交易日；目标不可定位必须明示，不自动切换到其他身份。
+- 自动状态轮询每 2 秒一次，最多 12 次；后台标签页、离开工作台和组件卸载时停止。达到上限后提供人工刷新，不能将未知结果误显示为失败或完成。
+- 本轮没有 Schema、Raw/Scheduler/Job 或研究计算契约变化；验收记录、API 兼容性和回滚说明见 `docs/M16_3_1_workbench_reliability.md`。

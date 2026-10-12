@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   compareAnalytics: vi.fn(),
   fetchAllAnalyticsSeries: vi.fn(),
   fetchAnalyticsSummary: vi.fn(),
+  fetchBacktest: vi.fn(),
   fetchBacktests: vi.fn(),
   fetchPeriods: vi.fn(),
   fetchTradeEpisodes: vi.fn()
@@ -98,6 +99,7 @@ beforeEach(() => {
     }
   ]);
   mocks.fetchAnalyticsSummary.mockResolvedValue(summary);
+  mocks.fetchBacktest.mockRejectedValue(new Error("BACKTEST_NOT_FOUND"));
   mocks.fetchAllAnalyticsSeries.mockResolvedValue([]);
   mocks.fetchPeriods.mockResolvedValue([]);
   mocks.fetchTradeEpisodes.mockResolvedValue({
@@ -113,6 +115,38 @@ beforeEach(() => {
 });
 
 describe("BacktestAnalyticsView bundle pinning", () => {
+  it("does not silently fall back when an evidence run is absent", async () => {
+    const wrapper = mount(BacktestAnalyticsView, { props: { initialRunId: "missing-run" } });
+    await flushPromises();
+    expect(wrapper.text()).toContain("未自动回退到其他回测");
+    expect(mocks.fetchAnalyticsSummary).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("locates an evidence run even when it is outside the first listing page", async () => {
+    mocks.fetchBacktest.mockResolvedValue({ id: "run-older", status: "SUCCESS" });
+    const wrapper = mount(BacktestAnalyticsView, { props: { initialRunId: "run-older" } });
+    await flushPromises();
+    expect(mocks.fetchBacktest).toHaveBeenCalledWith("run-older");
+    expect(mocks.fetchAnalyticsSummary).toHaveBeenCalledWith("run-older");
+    expect(wrapper.text()).not.toContain("未自动回退");
+    wrapper.unmount();
+  });
+
+  it("reapplies the same evidence run after the user selected a different run", async () => {
+    const run = { id: "run-a", status: "SUCCESS", name: "A", start_date: "2020-01-01", end_date: "2024-12-31" };
+    mocks.fetchBacktests.mockResolvedValue([run, { ...run, id: "run-b", name: "B" }]);
+    const target = { view: "analytics" as const, run_id: "run-a", source_tool: "performance.summary" };
+    const wrapper = mount(BacktestAnalyticsView, { props: { initialRunId: "run-a", navigation: target } });
+    await flushPromises();
+    await wrapper.get("select").setValue("run-b");
+    await flushPromises();
+    await wrapper.setProps({ navigation: { ...target } });
+    await flushPromises();
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("run-a");
+    expect(mocks.fetchAnalyticsSummary.mock.calls.map((call) => call[0])).toEqual(["run-a", "run-b", "run-a"]);
+    wrapper.unmount();
+  });
   it("loads the initial run once and pins every child read to summary identity", async () => {
     const wrapper = mount(BacktestAnalyticsView, {
       global: {

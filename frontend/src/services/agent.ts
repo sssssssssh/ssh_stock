@@ -62,6 +62,7 @@ export interface AgentCitation {
   source_hash?: string | null;
   content_hash?: string | null;
   observed_at?: string | null;
+  navigation?: ResearchNavigationContext | null;
 }
 
 export interface AgentToolCall {
@@ -98,6 +99,15 @@ export interface AgentMessage {
 
 export interface AgentChatDetail extends AgentChatSummary {
   messages: AgentMessage[];
+  active_turn?: AgentTurnStatus | null;
+}
+
+export interface AgentMessagePageMeta {
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  next_cursor: number | null;
 }
 
 export interface AgentAnswer {
@@ -116,13 +126,54 @@ export interface AgentAnswer {
   trace_id: string;
 }
 
-export interface ResearchContext {
+export interface ResearchNavigationContext {
+  view: "overview" | "long" | "analytics" | "walk_forward";
   ts_code?: string;
   trade_date?: string;
   sector_id?: string;
   run_id?: string;
   study_id?: string;
   validation_id?: string;
+  window_no?: number;
+  source_tool: string;
+}
+
+export type ResearchContext = Partial<ResearchNavigationContext>;
+
+export type PendingSendState =
+  | "IDLE"
+  | "SENDING"
+  | "UNKNOWN_RESULT"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED";
+
+export interface PendingSend {
+  chatId: string;
+  requestId: string;
+  normalizedContent: string;
+  state: PendingSendState;
+  createdAt: string;
+}
+
+export interface AgentTurnStatus {
+  chat_id: string;
+  request_id: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED";
+  error_code?: string | null;
+  content: string;
+  user_message_id: string;
+  assistant_message_id?: string | null;
+  started_at: string;
+  finished_at?: string | null;
+  answer?: AgentAnswer | null;
+}
+
+export type WalkForwardDetail = Record<string, unknown>;
+
+export function normalizeAgentRequestContent(content: string): string {
+  return content.normalize("NFKC").replace(/\r\n?/g, "\n").trim()
+    .split("\n").map((line) => line.trimEnd()).join("\n");
 }
 
 export function fetchAgentStatus(): Promise<AgentStatus> {
@@ -147,16 +198,69 @@ export function fetchAgentChat(chatId: string, limit = 100, offset = 0): Promise
   );
 }
 
+export function fetchLatestAgentChat(
+  chatId: string,
+  limit = 50
+): Promise<ApiPage<AgentChatDetail, AgentMessagePageMeta>> {
+  return requestPage<AgentChatDetail, AgentMessagePageMeta>(
+    `/agent/chats/${encodeURIComponent(chatId)}?limit=${limit}&latest=true`
+  );
+}
+
+export function fetchEarlierAgentMessages(
+  chatId: string,
+  beforeSequence: number,
+  limit = 50
+): Promise<ApiPage<AgentChatDetail, AgentMessagePageMeta>> {
+  return requestPage<AgentChatDetail, AgentMessagePageMeta>(
+    `/agent/chats/${encodeURIComponent(chatId)}?limit=${limit}&before_sequence=${beforeSequence}`
+  );
+}
+
+export function fetchAgentTurnStatus(chatId: string, requestId: string): Promise<AgentTurnStatus> {
+  return request<AgentTurnStatus>(
+    `/agent/chats/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(requestId)}`
+  );
+}
+
 export function archiveAgentChat(chatId: string): Promise<AgentChatSummary> {
   return request<AgentChatSummary>(`/agent/chats/${encodeURIComponent(chatId)}`, {
     method: "DELETE"
   });
 }
 
-export function sendAgentMessage(chatId: string, content: string, requestId: string): Promise<AgentAnswer> {
-  return request<AgentAnswer>(`/agent/chats/${encodeURIComponent(chatId)}/messages`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, request_id: requestId })
-  });
+export async function sendAgentMessage(chatId: string, content: string, requestId: string): Promise<AgentAnswer> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 180000);
+  try {
+    return await request<AgentAnswer>(`/agent/chats/${encodeURIComponent(chatId)}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, request_id: requestId }),
+      signal: controller.signal
+    });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export function fetchWalkForwardStudy(studyId: string): Promise<WalkForwardDetail> {
+  return request<WalkForwardDetail>(`/portfolio/walk-forwards/${encodeURIComponent(studyId)}`);
+}
+
+export function fetchWalkForwardValidation(
+  studyId: string,
+  validationId: string
+): Promise<WalkForwardDetail> {
+  return request<WalkForwardDetail>(
+    `/portfolio/walk-forwards/${encodeURIComponent(studyId)}/validations/${encodeURIComponent(validationId)}`
+  );
+}
+
+export function fetchWalkForwardValidationWindow(
+  studyId: string, validationId: string, windowNo: number
+): Promise<ApiPage<WalkForwardDetail[], { total: number }>> {
+  return requestPage<WalkForwardDetail[], { total: number }>(
+    `/portfolio/walk-forwards/${encodeURIComponent(studyId)}/validations/${encodeURIComponent(validationId)}/windows?limit=1&window_no=${windowNo}`
+  );
 }

@@ -644,11 +644,13 @@ class WalkForwardApplicationService:
         *,
         limit: int,
         offset: int,
+        window_no: int | None = None,
     ) -> tuple[list[dict[str, Any]], int]:
         self._validation(study_id, validation_id)
-        rows, total = self.repository.window_validation_page(
-            validation_id, limit=limit, offset=offset
-        )
+        options = {"limit": limit, "offset": offset}
+        if window_no is not None:
+            options["window_no"] = window_no
+        rows, total = self.repository.window_validation_page(validation_id, **options)
         payloads = [_model_payload(row, {"created_at"}) for row in rows]
         for payload in payloads:
             payload["identity"] = payload["identity_snapshot"]

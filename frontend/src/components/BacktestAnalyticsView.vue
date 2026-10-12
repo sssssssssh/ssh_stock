@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { ApiError } from "../services/api";
+import type { ResearchNavigationContext } from "../services/agent";
 import {
   calculatePeriods,
   compareAnalytics,
   fetchAllAnalyticsSeries,
   fetchAnalyticsSummary,
+  fetchBacktest,
   fetchBacktests,
   fetchPeriods,
   fetchTradeEpisodes
@@ -23,7 +25,7 @@ import AnalyticsNavChart from "./AnalyticsNavChart.vue";
 import AnalyticsPeriodTable from "./AnalyticsPeriodTable.vue";
 import AnalyticsSummaryCards from "./AnalyticsSummaryCards.vue";
 
-const props = defineProps<{ initialRunId?: string }>();
+const props = defineProps<{ initialRunId?: string; navigation?: ResearchNavigationContext | null }>();
 const emit = defineEmits<{ research: [context: { run_id: string }] }>();
 
 const runs = ref<BacktestRun[]>([]);
@@ -35,6 +37,7 @@ const yearPeriods = ref<AnalyticsPeriod[]>([]);
 const periodType = ref<"MONTH" | "YEAR">("MONTH");
 const loading = ref(true);
 const error = ref("");
+const navigationError = ref("");
 const periodMissing = ref(false);
 const periodJobRunning = ref(false);
 const compareSelection = ref<string[]>([]);
@@ -50,6 +53,7 @@ const episodeLimit = 20;
 let workspaceReady = false;
 let loadGeneration = 0;
 let episodeGeneration = 0;
+let navigationGeneration = 0;
 
 const successRuns = computed(() => runs.value.filter((row) => row.status === "SUCCESS"));
 const visiblePeriods = computed(() => periodType.value === "MONTH" ? monthPeriods.value : yearPeriods.value);
@@ -72,16 +76,36 @@ async function loadWorkspace() {
   error.value = "";
   try {
     runs.value = await fetchBacktests();
-    if (props.initialRunId && successRuns.value.some((row) => row.id === props.initialRunId)) {
-      selectedRunId.value = props.initialRunId;
+    if (props.initialRunId) {
+      await selectNavigationRun(props.initialRunId);
     }
-    if (!selectedRunId.value) selectedRunId.value = successRuns.value[0]?.id || "";
+    if (!props.initialRunId && !selectedRunId.value) selectedRunId.value = successRuns.value[0]?.id || "";
     if (selectedRunId.value) await loadSelectedRun();
   } catch (value) {
     error.value = errorText(value);
   } finally {
     loading.value = false;
   }
+}
+
+async function selectNavigationRun(runId: string) {
+  const current = ++navigationGeneration;
+  if (!successRuns.value.some((row) => row.id === runId)) {
+    try {
+      const run = await fetchBacktest(runId);
+      if (current !== navigationGeneration) return;
+      if (run.status !== "SUCCESS") throw new Error("BACKTEST_NOT_SUCCESS");
+      runs.value = [...runs.value.filter((row) => row.id !== runId), run];
+    } catch (value) {
+      if (current !== navigationGeneration) return;
+      selectedRunId.value = "";
+      navigationError.value = `无法读取证据中的回测 ${runId}，未自动回退到其他回测。${errorText(value)}`;
+      return;
+    }
+  }
+  if (current !== navigationGeneration) return;
+  navigationError.value = "";
+  selectedRunId.value = runId;
 }
 
 async function loadSelectedRun() {
@@ -209,14 +233,18 @@ watch(selectedRunId, () => {
   void loadSelectedRun();
 });
 watch(
-  () => props.initialRunId,
-  (value) => {
-    if (value && workspaceReady && value !== selectedRunId.value) selectedRunId.value = value;
+  () => [props.initialRunId, props.navigation] as const,
+  () => {
+    const value = props.navigation?.run_id || props.initialRunId;
+    if (!value || !workspaceReady || value === selectedRunId.value) return;
+    void selectNavigationRun(value);
   }
 );
 onMounted(async () => {
   await loadWorkspace();
   workspaceReady = true;
+  const target = props.navigation?.run_id || props.initialRunId;
+  if (target && target !== selectedRunId.value) void selectNavigationRun(target);
 });
 </script>
 
@@ -234,6 +262,7 @@ onMounted(async () => {
       <button v-if="selectedRunId" type="button" class="primary-button" @click="emit('research', { run_id: selectedRunId })">带入智能研究</button>
     </header>
 
+    <div v-if="navigationError" class="analytics-state analytics-error compact">{{ navigationError }}</div>
     <div v-if="loading" class="analytics-state">正在加载分析数据</div>
     <div v-else-if="error" class="analytics-state analytics-error">{{ error }}</div>
     <div v-else-if="!selectedRunId" class="analytics-state">暂无 SUCCESS Backtest</div>

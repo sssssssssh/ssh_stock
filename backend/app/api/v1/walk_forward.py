@@ -220,11 +220,15 @@ def list_walk_forward_validation_windows(
     validation_id: uuid.UUID,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    window_no: int | None = Query(default=None, ge=1),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     try:
+        options = {"limit": limit, "offset": offset}
+        if window_no is not None:
+            options["window_no"] = window_no
         rows, total = WalkForwardApplicationService(db).validation_windows(
-            study_id, validation_id, limit=limit, offset=offset
+            study_id, validation_id, **options
         )
     except WalkForwardApplicationError as exc:
         raise _http_error(exc) from exc

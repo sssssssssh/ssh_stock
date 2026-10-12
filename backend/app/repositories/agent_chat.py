@@ -98,6 +98,48 @@ class AgentChatRepository:
         )
         return rows, total
 
+    def message_cursor_page(
+        self,
+        *,
+        chat_id: uuid.UUID,
+        limit: int,
+        before_sequence: int | None,
+    ) -> tuple[list[AgentChatMessage], int, bool, int | None]:
+        where = [AgentChatMessage.session_id == chat_id]
+        total = int(
+            self.db.scalar(
+                select(func.count()).select_from(AgentChatMessage).where(*where)
+            )
+            or 0
+        )
+        page_where = list(where)
+        if before_sequence is not None:
+            page_where.append(AgentChatMessage.sequence_no < before_sequence)
+        rows = list(
+            self.db.execute(
+                select(AgentChatMessage)
+                .where(*page_where)
+                .order_by(AgentChatMessage.sequence_no.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        rows.reverse()
+        first_sequence = rows[0].sequence_no if rows else None
+        has_more = bool(
+            first_sequence is not None
+            and self.db.scalar(
+                select(AgentChatMessage.id)
+                .where(
+                    AgentChatMessage.session_id == chat_id,
+                    AgentChatMessage.sequence_no < first_sequence,
+                )
+                .limit(1)
+            )
+        )
+        return rows, total, has_more, first_sequence if has_more else None
+
     def recent_messages(
         self, *, chat_id: uuid.UUID, limit: int
     ) -> tuple[list[AgentChatMessage], bool]:

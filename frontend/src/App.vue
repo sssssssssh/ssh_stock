@@ -25,8 +25,9 @@ import ChangePasswordView from "./components/ChangePasswordView.vue";
 import UserMenu from "./components/UserMenu.vue";
 import BacktestAnalyticsView from "./components/BacktestAnalyticsView.vue";
 import AgentResearchWorkbench from "./components/AgentResearchWorkbench.vue";
+import WalkForwardEvidenceView from "./components/WalkForwardEvidenceView.vue";
 import { fetchCurrentUser, logout } from "./services/auth";
-import type { ResearchContext } from "./services/agent";
+import type { ResearchContext, ResearchNavigationContext } from "./services/agent";
 import {
   enqueueBackfillJob,
   enqueueRecalculateJob,
@@ -68,7 +69,7 @@ import type {
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
-type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent";
+type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "walk_forward";
 type PoolTab = "right" | "trend";
 type DataPanelKey = "recalc" | "tasks" | "coverage";
 
@@ -95,6 +96,8 @@ const errorMessage = ref("");
 const jobMessage = ref("");
 const activeView = ref<ViewKey>("overview");
 const agentContext = ref<ResearchContext | null>(null);
+const researchNavigation = ref<ResearchNavigationContext | null>(null);
+const researchNavigationNotice = ref("");
 const overviewMode = ref<"market" | "research">("market");
 const activePool = ref<PoolTab>("right");
 const collapsedDataPanels = ref<Record<DataPanelKey, boolean>>({
@@ -153,7 +156,11 @@ const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "agent", label: "智能研究", description: "只读工具、证据与研究会话" }
 ];
 
-const activeNav = computed(() => navItems.find((item) => item.key === activeView.value));
+const activeNav = computed(() => navItems.find((item) => item.key === activeView.value) || (
+  activeView.value === "walk_forward"
+    ? { key: "walk_forward", label: "Walk-forward 明细", description: "证据定位窗口" }
+    : undefined
+));
 
 const currentPool = computed(() => {
   if (activePool.value === "trend") return trendPool.value;
@@ -611,16 +618,45 @@ async function setActiveView(view: ViewKey) {
 }
 
 async function openAgentResearch(value: ResearchContext) {
-  agentContext.value = { ...value };
+  agentContext.value = {
+    ...value,
+    view: value.view || (activeView.value === "analytics" ? "analytics" : "long"),
+    source_tool: value.source_tool || `ui.${activeView.value}`
+  };
+  researchNavigationNotice.value = "";
   await setActiveView("agent");
 }
 
-async function navigateFromAgent(target: {
-  view: "overview" | "long" | "analytics";
-  run_id?: string;
-}) {
-  if (target.run_id) agentContext.value = { run_id: target.run_id };
+async function navigateFromAgent(target: ResearchNavigationContext) {
+  researchNavigation.value = target;
+  researchNavigationNotice.value = "";
+  if (target.view === "analytics") {
+    if (!target.run_id) {
+      researchNavigationNotice.value = "该证据缺少 run_id，无法精准定位回测。";
+      return;
+    }
+  } else if (target.view === "long") {
+    const notices: string[] = [];
+    if (target.ts_code) {
+      if (trendPool.value.some((row) => row.ts_code === target.ts_code)) activePool.value = "trend";
+      else if (rightSidePool.value.some((row) => row.ts_code === target.ts_code)) activePool.value = "right";
+      else notices.push(`股票 ${target.ts_code} 不在当前长线池，无法在本页高亮。`);
+      const row = currentPool.value.find((item) => item.ts_code === target.ts_code);
+      if (row && target.trade_date && row.trade_date !== target.trade_date) {
+        notices.push(`本页该股票日期为 ${row.trade_date}，证据日期为 ${target.trade_date}，不作为同日定位。`);
+      }
+    }
+    if (target.sector_id) {
+      const row = sectorHeat.value.find((item) => String(item.sector_id) === target.sector_id);
+      if (!row) notices.push(`行业 ${target.sector_id} 不在当前行业榜，无法在本页高亮。`);
+      else if (target.trade_date && row.trade_date !== target.trade_date) {
+        notices.push(`本页该行业日期为 ${row.trade_date}，证据日期为 ${target.trade_date}，不作为同日定位。`);
+      }
+    }
+    researchNavigationNotice.value = notices.join(" ");
+  }
   await setActiveView(target.view);
+  document.querySelector(".research-highlight")?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 async function shiftCalendarMonth(delta: number) {
@@ -1134,6 +1170,7 @@ function statusLabel(status: string) {
 
       <div v-if="errorMessage" class="error-strip">{{ errorMessage }}</div>
       <div v-if="jobMessage" class="success-strip">{{ jobMessage }}</div>
+      <div v-if="researchNavigationNotice" class="navigation-strip" role="status">{{ researchNavigationNotice }}</div>
 
       <section v-show="activeView === 'overview'" class="view-stack">
         <div class="overview-mode-switch" role="tablist" aria-label="总览视图">
@@ -1302,6 +1339,8 @@ function statusLabel(status: string) {
           empty-text="暂无符合条件的股票"
           :format-number="formatNumber"
           :reason-text="reasonText"
+          :highlight-ts-code="researchNavigation?.view === 'long' ? researchNavigation.ts_code : undefined"
+          :highlight-trade-date="researchNavigation?.view === 'long' ? researchNavigation.trade_date : undefined"
           @select="openRealtimeKline"
           @research="openAgentResearch"
         >
@@ -1319,8 +1358,10 @@ function statusLabel(status: string) {
         <SectorHeatPanel
           title="长线行业"
           subtitle="按热度排序"
-          :rows="sectorHeat.slice(0, 20)"
+          :rows="researchNavigation?.sector_id ? sectorHeat : sectorHeat.slice(0, 20)"
           :format-number="formatNumber"
+          :highlight-sector-id="researchNavigation?.view === 'long' ? researchNavigation.sector_id : undefined"
+          :highlight-trade-date="researchNavigation?.view === 'long' ? researchNavigation.trade_date : undefined"
           @research="openAgentResearch"
         />
       </section>
@@ -1335,6 +1376,8 @@ function statusLabel(status: string) {
             empty-text="暂无短线风险股票"
             :format-number="formatNumber"
             :reason-text="reasonText"
+            :highlight-ts-code="researchNavigation?.view === 'long' ? researchNavigation.ts_code : undefined"
+            :highlight-trade-date="researchNavigation?.view === 'long' ? researchNavigation.trade_date : undefined"
             @select="openRealtimeKline"
             @research="openAgentResearch"
           />
@@ -1361,17 +1404,23 @@ function statusLabel(status: string) {
             :rows="shortSectorRows"
             momentum
             :format-number="formatNumber"
+            :highlight-sector-id="researchNavigation?.view === 'long' ? researchNavigation.sector_id : undefined"
+            :highlight-trade-date="researchNavigation?.view === 'long' ? researchNavigation.trade_date : undefined"
             @research="openAgentResearch"
           />
         </section>
       </section>
 
       <section v-show="activeView === 'analytics'" class="view-stack">
-        <BacktestAnalyticsView :initial-run-id="agentContext?.run_id" @research="openAgentResearch" />
+        <BacktestAnalyticsView :initial-run-id="researchNavigation?.view === 'analytics' ? researchNavigation.run_id : agentContext?.run_id" :navigation="researchNavigation?.view === 'analytics' ? researchNavigation : null" @research="openAgentResearch" />
       </section>
 
       <section v-show="activeView === 'agent'" class="view-stack">
-        <AgentResearchWorkbench :initial-context="agentContext" @navigate="navigateFromAgent" />
+        <AgentResearchWorkbench :key="authUser.username" :owner-id="authUser.username" :visible="activeView === 'agent'" :initial-context="agentContext" @navigate="navigateFromAgent" />
+      </section>
+
+      <section v-show="activeView === 'walk_forward'" class="view-stack">
+        <WalkForwardEvidenceView :navigation="researchNavigation" @back="setActiveView('agent')" />
       </section>
     </section>
 

@@ -13,6 +13,7 @@ from app.domain.agent.chat import (
     AnswerStatus,
     ChatCitation,
     RejectedClaim,
+    ResearchNavigationContext,
     StructuredAnswerDraft,
     StructuredClaim,
     StructuredFact,
@@ -699,9 +700,73 @@ def _citations(
                 source_hash=ref.get("source_hash"),
                 content_hash=ref.get("content_hash"),
                 observed_at=ref.get("observed_at"),
+                navigation=_navigation_context(binding),
             )
         )
     return citations
+
+
+def _navigation_context(
+    binding: _EvidenceBinding,
+) -> ResearchNavigationContext | None:
+    tool_name = binding.context.tool_name
+    ref = binding.ref
+    entity_id = str(ref.get("entity_id", ""))
+    trade_date = ref.get("trade_date") or binding.context.payload.get("as_of_date")
+    if tool_name in {"backtest.summary", "performance.summary"}:
+        run_id = ref.get("calc_run_id") or entity_id
+        if not run_id:
+            return None
+        return ResearchNavigationContext(
+            view="analytics",
+            run_id=str(run_id),
+            trade_date=trade_date,
+            source_tool=tool_name,
+        )
+    if tool_name == "sector.top":
+        if not entity_id:
+            return None
+        return ResearchNavigationContext(
+            view="long",
+            sector_id=entity_id,
+            trade_date=trade_date,
+            source_tool=tool_name,
+        )
+    if tool_name == "opportunity.list":
+        if not entity_id:
+            return None
+        return ResearchNavigationContext(
+            view="long",
+            ts_code=entity_id,
+            trade_date=trade_date,
+            source_tool=tool_name,
+        )
+    if tool_name == "walk_forward.window_lineage":
+        identity = binding.context.payload.get("identity")
+        records = binding.context.payload.get("records")
+        record = (
+            records[binding.ref_index]
+            if isinstance(records, list)
+            and binding.ref_index < len(records)
+            and isinstance(records[binding.ref_index], dict)
+            else {}
+        )
+        if not isinstance(identity, dict):
+            return None
+        study_id = identity.get("study_id")
+        validation_id = identity.get("validation_id")
+        window_no = record.get("window_no")
+        if not study_id or not validation_id or not isinstance(window_no, int):
+            return None
+        return ResearchNavigationContext(
+            view="walk_forward",
+            study_id=str(study_id),
+            validation_id=str(validation_id),
+            window_no=window_no,
+            trade_date=trade_date,
+            source_tool=tool_name,
+        )
+    return None
 
 
 def _answer_with_claim_markers(

@@ -8,6 +8,7 @@ from app.domain.agent.chat import (
     ChatAnswer,
     ChatMessageView,
     ChatSessionSummary,
+    ChatTurnStatus,
 )
 from app.domain.agent.chat_errors import chat_not_found, llm_disabled
 from app.main import app
@@ -43,7 +44,22 @@ class StubChatService:
                 )
             ],
             1,
+            False,
+            None,
         )
+
+    def get_turn_status(self, **kwargs):
+        return ChatTurnStatus(
+            chat_id=CHAT_ID,
+            request_id=kwargs["request_id"],
+            status="RUNNING",
+            content="问题",
+            user_message_id=MESSAGE_ID,
+            started_at=NOW,
+        )
+
+    def get_running_turn_status(self, **kwargs):
+        return None
 
     def send_message(self, **kwargs):
         self.sent.append(kwargs)
@@ -95,6 +111,11 @@ def test_chat_crud_and_send_use_authenticated_envelope() -> None:
         detail = client.get(f"/api/v1/agent/chats/{CHAT_ID}")
         assert detail.status_code == 200
         assert detail.json()["data"]["messages"][0]["role"] == "USER"
+        assert detail.json()["meta"]["has_more"] is False
+
+        turn = client.get(f"/api/v1/agent/chats/{CHAT_ID}/turns/request-1")
+        assert turn.status_code == 200
+        assert turn.json()["data"]["status"] == "RUNNING"
 
         sent = client.post(
             f"/api/v1/agent/chats/{CHAT_ID}/messages",
@@ -170,6 +191,7 @@ def test_chat_endpoints_require_authentication() -> None:
             client.post("/api/v1/agent/chats", json={}),
             client.get("/api/v1/agent/chats"),
             client.get(f"/api/v1/agent/chats/{CHAT_ID}"),
+            client.get(f"/api/v1/agent/chats/{CHAT_ID}/turns/request-1"),
             client.post(
                 f"/api/v1/agent/chats/{CHAT_ID}/messages",
                 json={"content": "hello"},
