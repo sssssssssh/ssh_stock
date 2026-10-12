@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     agent,
+    agent_archive,
     agent_chat,
     agent_reports,
     analytics,
@@ -24,6 +25,7 @@ from app.services.auth.dependencies import require_authenticated_user
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
+api_router.include_router(agent_archive.router, prefix="/agent", tags=["agent-archive"])
 api_router.include_router(agent_chat.router, prefix="/agent", tags=["agent-chat"])
 api_router.include_router(agent_reports.router, prefix="/agent", tags=["agent-reports"])
 protected = APIRouter(dependencies=[Depends(require_authenticated_user)])
@@ -36,9 +38,7 @@ protected.include_router(portfolio.router, prefix="/portfolio", tags=["portfolio
 protected.include_router(experiments.router, prefix="/portfolio", tags=["experiments"])
 protected.include_router(performance.router, prefix="/portfolio", tags=["performance"])
 protected.include_router(analytics.router, prefix="/portfolio", tags=["analytics"])
-protected.include_router(
-    walk_forward.router, prefix="/portfolio", tags=["walk-forward"]
-)
+protected.include_router(walk_forward.router, prefix="/portfolio", tags=["walk-forward"])
 protected.include_router(stocks.router, prefix="/stocks", tags=["stocks"])
 protected.include_router(research.router, prefix="/research", tags=["research"])
 protected.include_router(jobs.router, prefix="/jobs", tags=["jobs"])

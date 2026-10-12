@@ -7,7 +7,7 @@ from app.domain.agent.archive import (
 )
 from app.domain.agent.chat import ChatCitation, StructuredClaim
 from app.services.agent.archive.canonical import archive_hash, archive_json, archive_storage_size
-from app.services.agent.archive.projectors import check_safe, validate_projection
+from app.services.agent.archive.projectors import check_safe, validate_projection, verify_citation
 from app.services.agent.chat.orchestrator import ToolResultContext, _args_hash
 
 
@@ -66,6 +66,9 @@ def assemble_archive(
                 candidates[eid] = (signature, context, ref, projection, path)
     if set(candidates) != set(required):
         raise archive_error("ARCHIVE_EVIDENCE_MISSING")
+    for citation in citations:
+        _, context, ref, _, _ = candidates[citation.evidence_id]
+        verify_citation(citation, ref, context.tool_name)
     tools = []
     for call_id, context in sorted(selected_tools.items()):
         if context.payload.get("tool_name") != context.tool_name:

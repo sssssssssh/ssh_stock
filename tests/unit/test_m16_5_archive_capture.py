@@ -77,6 +77,9 @@ def claims_for(context):
             tool_name="market.snapshot",
             entity_id="market",
             as_of_date=date(2026, 1, 2),
+            calc_version=context.payload["evidence"][0]["calc_version"],
+            config_hash=context.payload["evidence"][0]["config_hash"],
+            content_hash=context.payload["evidence"][0]["content_hash"],
         )
     ]
     return claims, citations

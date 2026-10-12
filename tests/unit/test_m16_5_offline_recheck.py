@@ -1,0 +1,224 @@
+import json
+import uuid
+from copy import deepcopy
+from datetime import UTC, datetime
+from types import SimpleNamespace
+
+import pytest
+from app.core.agent_archive_config import AgentArchiveConfig
+from app.domain.agent.archive import ARCHIVE_VERSION, AgentArchiveError
+from app.repositories.agent_archive import compiled_message_digest
+from app.services.agent.archive.canonical import archive_hash
+from app.services.agent.archive.capture import assemble_archive
+from app.services.agent.archive.integrity import ArchiveBundle
+from app.services.agent.archive.recheck import recheck_archive
+from app.services.agent.chat.evidence_compiler import EvidenceCompiler
+from test_m16_5_archive_capture import claims_for, market_context
+
+
+def bundle():
+    context = market_context()
+    claims, _ = claims_for(context)
+    compiled = EvidenceCompiler(max_answer_chars=8000).compile(
+        final_text=json.dumps(
+            {
+                "answer": "verified",
+                "claims": [item.model_dump(mode="json") for item in claims],
+                "evidence_ids": [],
+                "warnings": [],
+                "needs_clarification": False,
+            }
+        ),
+        tool_results=[context],
+        inherited_warnings=[],
+    )
+    draft = assemble_archive(
+        tool_results=[context],
+        claims=compiled.claims,
+        citations=compiled.citations,
+        config=AgentArchiveConfig(),
+    )
+    owner, chat, turn_id, message_id = (uuid.uuid4() for _ in range(4))
+    shared = dict(owner_user_id=owner, chat_id=chat, turn_id=turn_id, created_at=datetime.now(UTC))
+    tools = [
+        SimpleNamespace(id=uuid.uuid4(), **shared, **item.model_dump(mode="python"))
+        for item in draft.tools
+    ]
+    bindings = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            **shared,
+            tool_result_archive_id=tools[0].id,
+            **item.model_dump(mode="python", exclude={"tool_call_id"}),
+        )
+        for item in draft.bindings
+    ]
+    metadata = {
+        "verified_claims": [item.model_dump(mode="json") for item in compiled.claims],
+        "citations": [item.model_dump(mode="json") for item in compiled.citations],
+    }
+    message = SimpleNamespace(
+        id=message_id,
+        session_id=chat,
+        role="ASSISTANT",
+        status="COMPLETED",
+        metadata_json=metadata,
+        content=compiled.answer,
+    )
+    digest = compiled_message_digest(message.content, metadata)
+    body = {
+        "manifest_version": ARCHIVE_VERSION,
+        "owner_user_id": str(owner),
+        "chat_id": str(chat),
+        "turn_id": str(turn_id),
+        "assistant_message_id": str(message_id),
+        "archive_status": "COMPLETE",
+        "required_evidence_ids": draft.required_evidence_ids,
+        "claim_digest": draft.claim_digest,
+        "compiled_message_digest": digest,
+        "tools": [
+            item.model_dump(
+                mode="json", exclude={"payload_json", "arguments_json", "input_schema_json"}
+            )
+            for item in draft.tools
+        ],
+        "bindings": [
+            item.model_dump(mode="json", exclude={"ref_json", "source_projection_json"})
+            for item in draft.bindings
+        ],
+    }
+    manifest = SimpleNamespace(
+        id=uuid.uuid4(),
+        **shared,
+        assistant_message_id=message_id,
+        manifest_version=ARCHIVE_VERSION,
+        archive_status="COMPLETE",
+        manifest_json=body,
+        manifest_hash=archive_hash(body),
+        claim_digest=draft.claim_digest,
+        compiled_message_digest=digest,
+    )
+    turn = SimpleNamespace(
+        id=turn_id, session_id=chat, status="COMPLETED", assistant_message_id=message_id
+    )
+    audits = [
+        SimpleNamespace(
+            tool_call_id=context.tool_call_id,
+            tool_name=context.tool_name,
+            args_hash=draft.tools[0].arguments_hash,
+            status="READY",
+            cache_reused=False,
+            evidence_ids_json=draft.required_evidence_ids,
+        )
+    ]
+    return ArchiveBundle(manifest, tools, bindings, audits, turn, message, owner)
+
+
+def recheck(value, **kwargs):
+    return recheck_archive(value, config=AgentArchiveConfig(), **kwargs)
+
+
+def test_pure_recheck_reuses_frozen_facts_without_any_database_or_llm_dependency():
+    value = bundle()
+    before = deepcopy(value.tools[0].payload_json)
+    result = recheck(value)
+    assert result["integrity"]["status"] == "VERIFIED"
+    assert result["fact_recheck"]["status"] == "VERIFIED"
+    assert result["verification_level"] == "FACT_REVERIFIED"
+    assert result["calculation_reproduced"] is False
+    assert value.tools[0].payload_json == before
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "payload",
+        "arguments",
+        "schema",
+        "ref",
+        "projection",
+        "manifest",
+        "owner",
+        "audit",
+        "assistant",
+        "turn",
+    ],
+)
+def test_each_frozen_integrity_surface_is_checked(fault):
+    value = bundle()
+    if fault == "payload":
+        value.tools[0].payload_json["records"][0]["market_score"] = "999"
+    elif fault == "arguments":
+        value.tools[0].arguments_json["trade_date"] = "2026-01-03"
+    elif fault == "schema":
+        value.tools[0].input_schema_json["title"] = "tampered"
+    elif fault == "ref":
+        value.bindings[0].ref_json["entity_id"] = "other"
+    elif fault == "projection":
+        value.bindings[0].source_projection_json["market_score"] = "999"
+    elif fault == "manifest":
+        value.manifest.manifest_json["required_evidence_ids"] = []
+    elif fault == "owner":
+        value.owner_id = uuid.uuid4()
+    elif fault == "audit":
+        value.audits[0].args_hash = "e" * 64
+    elif fault == "assistant":
+        value.assistant.content = "tampered"
+    else:
+        value.turn.status = "FAILED"
+    with pytest.raises(AgentArchiveError):
+        recheck(value)
+
+
+def reseal_message(value):
+    # Deliberately emulate fully consistent SHA metadata to prove SHA alone does not verify a Claim.
+    value.manifest.claim_digest = archive_hash(value.assistant.metadata_json["verified_claims"])
+    value.manifest.compiled_message_digest = compiled_message_digest(
+        value.assistant.content, value.assistant.metadata_json
+    )
+    value.manifest.manifest_json.update(
+        claim_digest=value.manifest.claim_digest,
+        compiled_message_digest=value.manifest.compiled_message_digest,
+    )
+    value.manifest.manifest_hash = archive_hash(value.manifest.manifest_json)
+
+
+@pytest.mark.parametrize(
+    "field, bad",
+    [
+        ("value", "999"),
+        ("unit", "currency"),
+        ("entity", "other"),
+        ("trade_date", "2026-01-03"),
+        ("path", "records.0.hidden.market_score"),
+    ],
+)
+def test_consistent_hashes_still_cannot_promote_a_wrong_fact(field, bad):
+    value = bundle()
+    claim = value.assistant.metadata_json["verified_claims"][0]
+    claim["structured_facts"][0][field] = bad
+    if field == "path":
+        claim["verified_fact_refs"] = [f"{claim['evidence_ids'][0]}:{bad}"]
+    reseal_message(value)
+    result = recheck(value)
+    assert result["integrity"]["status"] == "VERIFIED"
+    assert result["fact_recheck"]["status"] == "MISMATCH"
+    assert result["fact_recheck"]["results"][0]["failed_fields"]
+    assert "999" not in str(result)  # never return the unsafe claimed number
+
+
+def test_unknown_projector_is_unverifiable_not_reinterpreted_using_current_version():
+    value = bundle()
+    value.tools[0].projector_version = "unknown-projector"
+    value.manifest.manifest_json["tools"][0]["projector_version"] = "unknown-projector"
+    value.manifest.manifest_hash = archive_hash(value.manifest.manifest_json)
+    result = recheck(value)
+    assert result["integrity"]["status"] == "UNVERIFIABLE"
+    assert "UNSUPPORTED_PROJECTOR_VERSION" in result["warnings"]
+
+
+def test_verify_timeout_and_resource_option_are_enforced():
+    ticks = iter([0, 10])
+    with pytest.raises(AgentArchiveError) as error:
+        recheck(bundle(), monotonic=lambda: next(ticks))
+    assert error.value.code == "ARCHIVE_VERIFY_TIMEOUT"

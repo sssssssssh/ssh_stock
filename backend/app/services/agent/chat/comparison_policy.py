@@ -7,6 +7,7 @@ from app.domain.agent.chat import LineageDecision, StructuredClaim
 from app.services.agent.chat.comparison_contract import (
     BacktestComparisonContractResolver,
 )
+from app.services.agent.chat.fact_validation import ComparisonFactContext as ComparisonFactContext
 from app.services.agent.chat.lineage import ExperimentLineageResolver
 
 COMPARISON_POLICY_VERSION = "m16.2.2-comparison-v1"
@@ -14,18 +15,6 @@ COMPARISON_POLICY_VERSION = "m16.2.2-comparison-v1"
 
 class ComparisonPolicyError(ValueError):
     pass
-
-
-@dataclass(frozen=True)
-class ComparisonFactContext:
-    tool_name: str
-    entity: str
-    trade_date: str
-    path: str
-    unit: str
-    sample_role: str
-    evidence: dict[str, Any]
-    identity: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -171,14 +160,11 @@ def _require_same_identity(
         for fact in facts
     }
     signature = next(iter(signatures))
-    if len(signatures) != 1 or any(
-        signature[index] is None for index in range(len(required_keys))
-    ):
+    if len(signatures) != 1 or any(signature[index] is None for index in range(len(required_keys))):
         raise ComparisonPolicyError("CALCULATION_IDENTITY_MISMATCH")
     if include_source_hash:
         source_hashes = {
-            fact.evidence.get("source_hash") or fact.identity.get("source_hash")
-            for fact in facts
+            fact.evidence.get("source_hash") or fact.identity.get("source_hash") for fact in facts
         }
         source_hashes.discard(None)
         if len(source_hashes) > 1:

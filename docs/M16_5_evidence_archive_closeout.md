@@ -7,7 +7,7 @@
 |---|---|---|
 | A 存储 / Capture Contract | 实现完成 | 11 项单测、1 项 PG 迁移/约束/Trigger/有档拒绝降级测试、全量后端 1138 项通过；Ruff 通过。 |
 | B Chat 原子完成 | 实现完成 | 2 次实际调用/3 Evidence、缓存审计、同 request 竞争、写入异常/超限/截止回滚；全量后端 1143 项通过，最新预算路径专项 36 项复核。 |
-| C Offline Verifier / API | 待实现 | 不授予 FACT_REVERIFIED |
+| C Offline Verifier / API | 实现完成 | 20 项离线/API 单测、最新业务数据变更隔离 PG 回归、全量 1164 项通过；Ruff 通过。 |
 | D Report v3 绑定 | 待实现 | 历史报告保持 v1/v2 |
 | E UI / 遗留整改 | 待实现 | 不开放未经验证状态 |
 | F 回归 / CI / 交付 | 待完成 | 最终补记真实 SHA、CI URL、覆盖率与浏览器结果 |
@@ -36,6 +36,12 @@ python -m ruff check backend tests migrations scripts
 ```
 
 ## 边界
+
+C 抽出实时与离线共用的纯字段验证核心；精确路径、日期/实体/单位、Decimal 值与真实 Evidence 绑定一并验证。
+离线只读加载 Archive/Chat/Report，重核全部 Hash、Audit、缓存来源、Message/Turn 及 Citation 身份。
+未知版本 UNVERIFIABLE；一致 Hash 但错误 Claim 返回 MISMATCH，不发布失败数值。旧无归档返回 UNAVAILABLE。
+四个 owner 隔离 API 使用只读事务、严格 DTO/OpenAPI、分页/数量与 5s 复核预算；重放也核验现存 Manifest。
+独立回测与 TRAIN/OOS 缺完整 M14/M15 冻结契约时保持缺口，不授予差值或算法重跑等级。
 
 ## B 阶段原子完成
 

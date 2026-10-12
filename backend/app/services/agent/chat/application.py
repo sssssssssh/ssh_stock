@@ -152,7 +152,9 @@ class AgentChatApplication:
         user_message = self.repo.get_message(turn.user_message_id)
         if user_message is None:
             raise chat_conflict("turn user message is unavailable")
-        answer = self._answer_from_turn(turn) if turn.status == "COMPLETED" else None
+        answer = (
+            self._answer_from_turn(turn, _user_id(user)) if turn.status == "COMPLETED" else None
+        )
         return ChatTurnStatus(
             chat_id=chat_id,
             request_id=turn.request_id,
@@ -359,7 +361,7 @@ class AgentChatApplication:
                     self.db.rollback()
                     raise idempotency_conflict()
                 if existing.status == "COMPLETED":
-                    result = self._answer_from_turn(existing)
+                    result = self._answer_from_turn(existing, owner_id)
                     self.db.rollback()
                     return existing, result
                 self.db.rollback()
@@ -567,7 +569,14 @@ class AgentChatApplication:
             self.db.rollback()
             raise
 
-    def _answer_from_turn(self, turn: Any) -> ChatAnswer:
+    def _answer_from_turn(self, turn: Any, owner_id: uuid.UUID) -> ChatAnswer:
+        from app.services.agent.archive.application import AgentArchiveApplication
+        from app.services.agent.archive.integrity import verify_archive_integrity
+
+        archive = AgentArchiveApplication(self.db, self.settings)
+        bundle = archive.load_bundle(owner_id, turn.id)
+        if bundle is not None:
+            verify_archive_integrity(bundle, self.config.archive)
         if turn.assistant_message_id is None:
             raise chat_conflict("completed turn has no assistant message")
         message = self.repo.get_message(turn.assistant_message_id)

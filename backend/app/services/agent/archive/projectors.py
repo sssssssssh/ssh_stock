@@ -3,6 +3,7 @@
 from typing import Any
 
 from app.domain.agent.archive import PROJECTOR_VERSION, archive_error
+from app.domain.agent.chat import ChatCitation
 from app.domain.agent.contracts import AgentToolResult, EvidenceRef
 from app.services.agent.archive.canonical import archive_hash, archive_json
 from app.services.agent.evidence import evidence_ref
@@ -96,6 +97,30 @@ ARTIFACT_TYPES = {
     "trade_id": "PortfolioPerformanceTradeReport",
     "period_id": "PortfolioPerformancePeriodReport",
 }
+
+
+def verify_citation(citation: ChatCitation, ref, tool_name):
+    fields = {
+        "evidence_id",
+        "evidence_version",
+        "entity_id",
+        "report_id",
+        "calc_run_id",
+        "calc_version",
+        "algo_version",
+        "config_hash",
+        "source_hash",
+        "content_hash",
+    }
+    data = citation.model_dump(mode="json")
+    if (
+        citation.tool_name != tool_name
+        or data["as_of_date"] != ref.get("trade_date")
+        or any(data[field] != ref.get(field) for field in fields)
+    ):
+        raise archive_error("ARCHIVE_CITATION_MISMATCH")
+
+
 SENSITIVE_KEYS = {
     "token",
     "api_key",
@@ -109,6 +134,175 @@ SENSITIVE_KEYS = {
     "user_prompt",
     "prompt",
 }
+
+RUN_IDENTITY_KEYS = {
+    "algo_version",
+    "source_strategy_config_hash",
+    "opportunity_calc_version",
+    "opportunity_config_hash",
+    "portfolio_version",
+    "portfolio_config_hash",
+    "execution_version",
+    "execution_config_hash",
+    "accounting_version",
+    "accounting_config_hash",
+    "backtest_engine_version",
+}
+NESTED_RECORD_KEYS = {
+    "market.snapshot": {
+        "breadth": {"breadth20", "breadth60", "up_count", "down_count", "up_rate"},
+        "liquidity": {"total_amount", "amount_ratio20", "liquidity_score"},
+    },
+    "sector.top": {"momentum": {"heat_momentum1", "heat_momentum3", "rank_change"}},
+    "theme.top": {"momentum": {"heat_momentum1", "heat_momentum3", "rank_change"}},
+    "opportunity.list": {
+        "versions": {"algo_version", "calc_version", "config_hash", "source_strategy_config_hash"}
+    },
+    "backtest.summary": {
+        "source_identity": RUN_IDENTITY_KEYS,
+        "result_summary": {
+            "total_trade_days",
+            "completed_trade_days",
+            "final_trade_date",
+            "final_nav",
+            "checkpoint_version",
+        },
+    },
+    "performance.summary": {
+        "report_ids": set(ARTIFACT_TYPES),
+        "performance": {
+            "start_date",
+            "end_date",
+            "trade_days",
+            "final_nav",
+            "cumulative_return",
+            "annualized_return",
+            "max_drawdown",
+        },
+        "risk": {
+            "benchmark_code",
+            "benchmark_cumulative_return",
+            "excess_cumulative_return",
+            "sharpe_ratio",
+            "sortino_ratio",
+            "calmar_ratio",
+        },
+        "trade": {
+            "total_turnover",
+            "total_execution_cost",
+            "closed_episode_count",
+            "open_episode_count",
+            "win_rate",
+            "profit_factor",
+        },
+        "period": {"month_count", "year_count"},
+    },
+    "walk_forward.summary": {
+        "oos_sample": {
+            "window_count",
+            "total_oos_trade_days",
+            "positive_oos_window_count",
+            "positive_oos_window_rate",
+        },
+        "returns": {
+            "stitched_oos_final_nav",
+            "stitched_oos_cumulative_return",
+            "stitched_oos_annualized_return",
+            "stitched_oos_max_drawdown",
+            "stitched_excess_cumulative_return",
+        },
+        "parameter_switching": {
+            "unique_selected_parameter_hash_count",
+            "dominant_parameter_hash",
+            "dominant_parameter_hash_rate",
+            "transition_count",
+            "switch_count",
+            "switch_rate",
+        },
+        "train_to_oos_degradation": {
+            "mean_return_degradation",
+            "median_return_degradation",
+            "mean_drawdown_worsening",
+            "median_drawdown_worsening",
+        },
+        "policy_identity": {"policy_identity_version", "validation_policy_hash"},
+    },
+    "walk_forward.window_lineage": {
+        "train_metrics": {
+            "annualized_return",
+            "max_drawdown_abs",
+            "sharpe_ratio",
+            "annualized_turnover",
+        },
+        "oos_metrics": {
+            "cumulative_return",
+            "annualized_return",
+            "max_drawdown_abs",
+            "sharpe_ratio",
+            "annualized_turnover",
+            "total_cost_to_initial_capital",
+            "win_rate",
+            "profit_factor",
+        },
+        "degradation": {"return", "sharpe", "drawdown", "turnover"},
+        "readiness": {"ready", "code", "details"},
+    },
+}
+IDENTITY_KEYS = {
+    "data.coverage": {"start_date", "end_date", "calendar"},
+    "market.snapshot": {"calc_version", "config_hash"},
+    "sector.top": {"calc_version", "config_hash"},
+    "theme.top": {
+        "algo_version",
+        "config_hash",
+        "calc_version",
+        "theme_config_hash",
+        "source_strategy_config_hash",
+    },
+    "opportunity.list": {"algo_version", "config_hash", "calc_version", "opportunity_config_hash"},
+    "backtest.summary": RUN_IDENTITY_KEYS,
+    "performance.summary": {
+        "run_id",
+        "run_identity",
+        "run_start_date",
+        "run_end_date",
+        "initial_cash",
+        "benchmark_code",
+        *ARTIFACT_TYPES,
+        *[
+            f"{prefix}_{suffix}"
+            for prefix in ("performance", "risk", "trade", "period")
+            for suffix in ("version", "config_hash", "source_hash")
+        ],
+    },
+    "walk_forward.summary": {
+        "study_id",
+        "validation_id",
+        "walk_forward_version",
+        "walk_forward_config_hash",
+        "policy_identity_version",
+        "validation_policy_hash",
+        "source_hash",
+        "definition_hash",
+    },
+    "walk_forward.window_lineage": {
+        "study_id",
+        "validation_id",
+        "walk_forward_version",
+        "policy_identity_version",
+        "validation_policy_hash",
+        "source_hash",
+        "definition_hash",
+        "total",
+        "limit",
+        "offset",
+    },
+}
+
+
+def _check_object_keys(value, allowed):
+    if value is not None and (not isinstance(value, dict) or set(value) - allowed):
+        raise archive_error("ARCHIVE_UNSAFE_CONTENT")
 
 
 def check_safe(value: Any, depth: int = 0) -> None:
@@ -136,9 +330,32 @@ def validate_payload(payload: dict[str, Any]) -> None:
     if name not in RECORD_KEYS or payload["tool_version"] != "1.0":
         raise archive_error("UNSUPPORTED_TOOL_VERSION")
     check_safe(payload)
+    _check_object_keys(payload["identity"], IDENTITY_KEYS[name])
+    if "run_identity" in payload["identity"]:
+        _check_object_keys(payload["identity"]["run_identity"], RUN_IDENTITY_KEYS)
     for record in payload["records"]:
         if set(record) - RECORD_KEYS[name]:
             raise archive_error("ARCHIVE_UNSAFE_CONTENT")
+        for field, keys in NESTED_RECORD_KEYS.get(name, {}).items():
+            if field in record:
+                _check_object_keys(record[field], keys)
+        if name == "data.coverage":
+            for row in record.get("dataset_coverage", []):
+                _check_object_keys(
+                    row,
+                    {
+                        "dataset",
+                        "quality_status",
+                        "expected_rows",
+                        "actual_rows",
+                        "coverage_rate",
+                        "quality_days",
+                        "open_trade_days",
+                        "missing_quality_days",
+                    },
+                )
+        if name == "walk_forward.window_lineage" and "readiness" in record:
+            _check_object_keys(record["readiness"].get("details"), {"train_bundle", "oos_bundle"})
 
 
 def verify_evidence_identity(ref: dict[str, Any], projection: dict[str, Any]) -> None:

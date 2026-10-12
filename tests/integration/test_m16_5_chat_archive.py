@@ -6,13 +6,22 @@ from types import SimpleNamespace
 
 import pytest
 import sqlalchemy as sa
+from app.core.agent_db import agent_db_session
 from app.core.db import SessionLocal
 from app.domain.agent.chat_errors import AgentChatError
 from app.domain.agent.contracts import AgentToolResult, Readiness
 from app.domain.agent.policy import serialized_result
 from app.models.agent_archive import AgentToolResultArchive, AgentTurnArchiveManifest
-from app.models.agent_chat import AgentChatMessage, AgentChatToolCall, AgentChatTurn
+from app.models.agent_chat import (
+    AgentChatMessage,
+    AgentChatSession,
+    AgentChatToolCall,
+    AgentChatTurn,
+)
+from app.models.market_data import MarketDaily
 from app.repositories.agent_archive import AgentArchiveRepository
+from app.services.agent.archive.application import AgentArchiveApplication
+from app.services.agent.archive.recheck import recheck_archive
 from app.services.agent.chat.application import AgentChatApplication
 from app.services.agent.chat.orchestrator import CapturedToolPayload
 from app.services.agent.evidence import evidence_ref
@@ -293,3 +302,89 @@ def test_same_request_race_has_one_archive_and_one_assistant():
     finally:
         release.set()
         cleanup_archives(owner_id)
+
+
+def test_offline_archive_is_readonly_owner_scoped_and_independent_of_current_market_data():
+    settings = archive_settings()
+    with SessionLocal() as db:
+        user = _user(db, suffix="offline")
+        other = _user(db, suffix="offline-other")
+        owner_id, other_id = user.id, other.id
+        try:
+            service = FixtureChat(db, settings, provider=provider())
+            chat = service.create_chat(user=user, title="offline")
+            service.send_message(
+                user=user, chat_id=chat.chat_id, content="核验", request_id="offline"
+            )
+            archive = AgentArchiveApplication(db, settings)
+            turn = db.scalar(
+                sa.select(AgentChatTurn).where(AgentChatTurn.session_id == chat.chat_id)
+            )
+            before = recheck_archive(
+                archive.load_bundle(owner_id, turn.id), config=settings.agent_config.archive
+            )
+            # A current/latest derived fact changes after capture; verifier must never read it.
+            db.add(
+                MarketDaily(
+                    trade_date=date(2098, 1, 2),
+                    market_score=999,
+                    calc_version="synthetic-latest",
+                    config_hash="d" * 64,
+                )
+            )
+            db.commit()
+            owned_chat = db.get(AgentChatSession, chat.chat_id)
+            owned_chat.status = "ARCHIVED"
+            db.commit()
+            statements = []
+
+            def observe(conn, cursor, statement, parameters, context, executemany):
+                statements.append(statement)
+
+            sa.event.listen(db.bind, "before_cursor_execute", observe)
+            try:
+                with agent_db_session(settings) as readonly:
+                    archive = AgentArchiveApplication(readonly, settings)
+                    summary = archive.turn_archive(
+                        user=SimpleNamespace(id=owner_id),
+                        chat_id=chat.chat_id,
+                        request_id="offline",
+                    )
+                    after = recheck_archive(
+                        archive.load_bundle(owner_id, turn.id), config=settings.agent_config.archive
+                    )
+                    with pytest.raises(AgentChatError) as hidden:
+                        archive.turn_archive(
+                            user=SimpleNamespace(id=other_id),
+                            chat_id=chat.chat_id,
+                            request_id="offline",
+                        )
+                    assert hidden.value.status_code == 404
+            finally:
+                sa.event.remove(db.bind, "before_cursor_execute", observe)
+            assert before == after
+            assert summary["archive_status"] == "COMPLETE"
+            assert summary["integrity"]["status"] == "VERIFIED"
+            assert len(summary["evidence"]) == 3
+            assert all(
+                "market_daily" not in sql.lower() and "portfolio_" not in sql.lower()
+                for sql in statements
+            )
+            assert not any(
+                sql.lstrip().upper().startswith(("UPDATE", "INSERT", "DELETE"))
+                for sql in statements
+            )
+            assert "payload_json" not in str(summary) and "source_projection_json" not in str(
+                summary
+            )
+        finally:
+            db.rollback()
+            db.execute(
+                sa.delete(MarketDaily).where(
+                    MarketDaily.trade_date == date(2098, 1, 2),
+                    MarketDaily.calc_version == "synthetic-latest",
+                )
+            )
+            db.commit()
+            cleanup_archives(owner_id)
+            cleanup_archives(other_id)

@@ -1418,7 +1418,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 
 M16.5-A 已加入 Evidence Archive 的捕获契约与 `0051_m16_5_evidence_archive` 三张存储表。
 `config/agent.yaml` 的 `agent.archive.enabled` 默认 false；B 已接入新聊天的原子归档，
-离线复核 API 与报告 UI 仍在后续阶段验收。不能把已有 Claim 快照描述为完整证据归档。
+ C 已交付只读证据 API 与纯离线复核；报告绑定与 UI 仍在后续阶段验收。
+不能把已有 Claim 快照描述为完整证据归档。
 迁移不回填历史；有归档数据时拒绝降级。正式启用应等待 C–F 交付。
 后续 B–F 的验证与交付进度见 [M16.5 验收记录](docs/M16_5_evidence_archive_closeout.md)。
 

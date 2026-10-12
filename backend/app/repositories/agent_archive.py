@@ -123,24 +123,30 @@ class AgentArchiveRepository:
             )
         )
 
-    def load_evidence(self, owner_id, turn_id):
+    def load_evidence(self, owner_id, turn_id, *, max_calls=16, max_bindings=100):
         tools = list(
             self.db.scalars(
-                select(AgentToolResultArchive).where(
+                select(AgentToolResultArchive)
+                .where(
                     AgentToolResultArchive.owner_user_id == owner_id,
                     AgentToolResultArchive.turn_id == turn_id,
                 )
+                .limit(max_calls + 1)
             )
         )
         bindings = list(
             self.db.scalars(
-                select(AgentEvidenceArchiveBinding).where(
+                select(AgentEvidenceArchiveBinding)
+                .where(
                     AgentEvidenceArchiveBinding.owner_user_id == owner_id,
                     AgentEvidenceArchiveBinding.turn_id == turn_id,
                 )
+                .limit(max_bindings + 1)
             )
         )
         audits = list(
-            self.db.scalars(select(AgentChatToolCall).where(AgentChatToolCall.turn_id == turn_id))
+            self.db.scalars(
+                select(AgentChatToolCall).where(AgentChatToolCall.turn_id == turn_id).limit(17)
+            )
         )
         return tools, bindings, audits
