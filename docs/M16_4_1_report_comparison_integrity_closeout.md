@@ -5,7 +5,9 @@
 
 ## 提交与 CI
 
-- 本轮代码提交和 GitHub Actions Run 在首次推送验证后补记到此处。
+- 代码提交：[`3bff1b2f81bedbbad542ff3fc302bc7db19bd847`](https://github.com/sssssssssh/ssh_stock/commit/3bff1b2f81bedbbad542ff3fc302bc7db19bd847)，`Fix M16.4.1 report comparison and snapshot integrity`。
+- 本轮整改 CI：**completed / success**，[Run 38282677411](https://github.com/sssssssssh/ssh_stock/actions/runs/38282677411)。该 Run 绑定上述代码 SHA，验证了全量 pytest、Ruff、迁移升级/隔离降级重升级、Compose 构建、Nginx 配置、前端 coverage/build。
+- 后续仅补记本验收结果的文档提交不改变上述代码；最终交付 HEAD 由 `git log -1` 及交付总结给出，不在本文件写入自引用 SHA。
 - 基线 CI 已确认成功：[M16.4 基线 CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38258873503)。这不是本轮整改的 CI 结果。
 
 ## T01–T05 对照
