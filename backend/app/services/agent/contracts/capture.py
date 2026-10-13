@@ -1,5 +1,3 @@
-from dataclasses import asdict
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -13,13 +11,8 @@ from app.models.performance_period import PortfolioPerformancePeriodReport
 from app.models.performance_risk import PortfolioPerformanceRiskReport
 from app.models.performance_trade import PortfolioPerformanceTradeReport
 from app.models.portfolio import PortfolioBacktestRun
-from app.services.agent.chat.comparison_contract import build_comparison_contract
-from app.services.agent.contracts.canonical import contract_json
-from app.services.performance.analytics_bundle import (
-    AnalyticsArtifactBundle,
-    AnalyticsBundleError,
-    validate_exact_analytics_bundle,
-)
+from app.services.agent.contracts.m14 import m14_contract_body
+from app.services.performance.analytics_bundle import AnalyticsArtifactBundle
 
 
 def capture_research_contracts(
@@ -29,102 +22,53 @@ def capture_research_contracts(
     tool_call_id: str,
     max_trade_dates: int,
 ) -> list[FrozenContractDraft]:
-    if result.status != "READY" or result.tool_name != "performance.summary":
+    if result.status != "READY":
+        return []
+    if result.tool_name in {"walk_forward.summary", "walk_forward.window_lineage"}:
+        from app.services.agent.contracts.m15 import capture_m15_contracts
+
+        return capture_m15_contracts(
+            db, result, tool_call_id=tool_call_id, max_trade_dates=max_trade_dates
+        )
+    if result.tool_name != "performance.summary":
         return []
     ids = result.identity
     try:
-        run_id = UUID(str(ids["run_id"]))
-        performance_id = UUID(str(ids["performance_id"]))
-        risk_id = UUID(str(ids["risk_id"]))
-        trade_id = UUID(str(ids["trade_id"]))
-        period_id = UUID(str(ids["period_id"])) if ids.get("period_id") else None
+        selected = {
+            name: UUID(str(ids[name])) if ids.get(name) else None
+            for name in ("run_id", "performance_id", "risk_id", "trade_id", "period_id")
+        }
+        if any(
+            selected[name] is None for name in ("run_id", "performance_id", "risk_id", "trade_id")
+        ):
+            raise ValueError("missing selection")
     except (KeyError, TypeError, ValueError) as exc:
         raise identity_mismatch("selected analytics identity is incomplete") from exc
-
-    selected = {
-        "run_id": str(run_id),
-        "performance_id": str(performance_id),
-        "risk_id": str(risk_id),
-        "trade_id": str(trade_id),
-        "period_id": str(period_id) if period_id else None,
-    }
-    evidence = [
-        {
-            "evidence_id": item.evidence_id,
-            "content_hash": item.content_hash,
-            "report_id": item.report_id,
-        }
-        for item in result.evidence
+    rows = [
+        db.scalar(select(model).where(model.id == selected[name])) if selected[name] else None
+        for name, model in (
+            ("run_id", PortfolioBacktestRun),
+            ("performance_id", PortfolioPerformanceReport),
+            ("risk_id", PortfolioPerformanceRiskReport),
+            ("trade_id", PortfolioPerformanceTradeReport),
+            ("period_id", PortfolioPerformancePeriodReport),
+        )
     ]
-    if period_id is None:
-        body: dict[str, Any] = {
-            "status": "GAP",
-            "reason_codes": ["PERIOD_REPORT_MISSING"],
-            "selected": selected,
-            "evidence": evidence,
-        }
-    else:
-        bundle = AnalyticsArtifactBundle(
-            _selected(db, PortfolioBacktestRun, run_id),
-            _selected(db, PortfolioPerformanceReport, performance_id),
-            _selected(db, PortfolioPerformanceRiskReport, risk_id),
-            _selected(db, PortfolioPerformanceTradeReport, trade_id),
-            _selected(db, PortfolioPerformancePeriodReport, period_id),
-        )
-        if any(item is None for item in asdict_bundle(bundle)):
-            raise identity_mismatch("selected analytics bundle disappeared")
-        try:
-            validate_exact_analytics_bundle(bundle, require_period=True)
-        except AnalyticsBundleError as exc:
-            raise identity_mismatch("selected analytics bundle changed") from exc
-        dates = tuple(
-            value.isoformat()
-            for value in db.scalars(
-                select(PortfolioPerformanceDaily.trade_date)
-                .where(PortfolioPerformanceDaily.performance_id == performance_id)
-                .order_by(PortfolioPerformanceDaily.trade_date)
-                .limit(max_trade_dates + 1)
-            ).all()
-        )
-        if len(dates) > max_trade_dates:
-            raise resource_limit_exceeded("frozen contract trade dates exceed the limit")
-        if (
-            len(dates) != bundle.performance.trade_days
-            or not dates
-            or dates[0] != bundle.performance.start_date.isoformat()
-            or dates[-1] != bundle.performance.end_date.isoformat()
-            or len(set(dates)) != len(dates)
-        ):
-            body = {
-                "status": "GAP",
-                "reason_codes": ["PERFORMANCE_DATE_SERIES_INCOMPLETE"],
-                "selected": selected,
-                "evidence": evidence,
-            }
-        else:
-            try:
-                comparison = build_comparison_contract(bundle, dates)
-            except (KeyError, TypeError, ValueError):
-                body = {
-                    "status": "GAP",
-                    "reason_codes": ["EXECUTION_ACCOUNTING_SNAPSHOT_INCOMPLETE"],
-                    "selected": selected,
-                    "evidence": evidence,
-                }
-            else:
-                body = {
-                    "status": "COMPLETE",
-                    "selected": selected,
-                    "comparison_contract": contract_json(asdict(comparison)),
-                    "record": contract_json(result.records[0]),
-                    "evidence": evidence,
-                    "limitations": list(result.warnings),
-                }
+    if any(row is None for row in rows[:4]) or (selected["period_id"] and rows[4] is None):
+        raise identity_mismatch("selected analytics bundle disappeared")
+    dates = performance_dates(db, [selected["performance_id"]], max_trade_dates)
+    body = m14_contract_body(
+        AnalyticsArtifactBundle(*rows),
+        dates[selected["performance_id"]],
+        evidence=evidence_anchors(result),
+        record=result.records[0],
+        limitations=result.warnings,
+    )
     return [
         FrozenContractDraft(
             tool_call_id=tool_call_id,
             contract_kind="M14_EXACT_BUNDLE",
-            subject_id=str(run_id),
+            subject_id=str(selected["run_id"]),
             role="LIVE",
             schema_version=M14_CONTRACT_VERSION,
             verification_scope="FROZEN_CONTRACT_RECHECK",
@@ -133,11 +77,26 @@ def capture_research_contracts(
     ]
 
 
-def asdict_bundle(bundle: AnalyticsArtifactBundle) -> tuple[Any, ...]:
-    return (bundle.run, bundle.performance, bundle.risk, bundle.trade, bundle.period)
+def performance_dates(db, ids, max_trade_dates):
+    grouped = {row_id: [] for row_id in ids}
+    for row_id, value in db.execute(
+        select(PortfolioPerformanceDaily.performance_id, PortfolioPerformanceDaily.trade_date)
+        .where(PortfolioPerformanceDaily.performance_id.in_(ids))
+        .order_by(PortfolioPerformanceDaily.performance_id, PortfolioPerformanceDaily.trade_date)
+        .limit(len(ids) * max_trade_dates + 1)
+    ):
+        grouped[row_id].append(value.isoformat())
+        if len(grouped[row_id]) > max_trade_dates:
+            raise resource_limit_exceeded("frozen contract trade dates exceed the limit")
+    return {row_id: tuple(values) for row_id, values in grouped.items()}
 
 
-def _selected(db: Session, model: Any, row_id: UUID):
-    return db.scalar(
-        select(model).where(model.id == row_id).execution_options(populate_existing=True)
-    )
+def evidence_anchors(result):
+    return [
+        {
+            "evidence_id": ref.evidence_id,
+            "content_hash": ref.content_hash,
+            "report_id": ref.report_id,
+        }
+        for ref in result.evidence
+    ]

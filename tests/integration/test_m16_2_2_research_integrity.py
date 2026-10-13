@@ -4,7 +4,8 @@ from datetime import date, timedelta
 import pytest
 import sqlalchemy as sa
 from app.core.config import get_settings
-from app.domain.agent.contracts import WalkForwardWindowLineageInput
+from app.domain.agent.contracts import WalkForwardSummaryInput, WalkForwardWindowLineageInput
+from app.domain.agent.errors import AgentError
 from app.domain.agent.policy import serialized_result
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
 from app.models.market_data import TradeCalendar
@@ -24,6 +25,7 @@ from app.services.agent.chat.comparison_policy import (
     ComparisonFactContext,
 )
 from app.services.agent.chat.lineage import ExperimentLineageResolver
+from app.services.agent.contracts.capture import capture_research_contracts
 from app.services.experiment_evaluation import ExperimentEvaluationApplicationService
 from app.services.performance.period_application import (
     PerformancePeriodApplicationService,
@@ -213,6 +215,44 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             assert lineage_result.records[0]["oos_run_id"] == persisted.oos_run_id
             assert lineage_result.records[0]["readiness"]["ready"] is True
             assert lineage_result.evidence[0].evidence_version == "v2"
+            captured = capture_research_contracts(
+                db, lineage_result, tool_call_id="window-call", max_trade_dates=100
+            )
+            assert len(captured) == 3
+            assert {item.role for item in captured} == {"TRAIN", "OOS", "STUDY"}
+            assert all(item.contract_json["status"] == "COMPLETE" for item in captured)
+            window_contract = next(item for item in captured if item.role == "STUDY")
+            assert window_contract.subject_id == f"{study_id}:{report.id}:1"
+            assert window_contract.contract_json["window"]["train_trade_dates"] == (
+                window.train_trade_dates
+            )
+            full_result = ResearchAgentAdapter(db).walk_forward_window_lineage(
+                WalkForwardWindowLineageInput(study_id=study_id, validation_id=report.id, limit=50)
+            )
+            full_result.records.reverse()
+            full_result.evidence.reverse()
+            multi = capture_research_contracts(
+                db, full_result, tool_call_id="multi-window", max_trade_dates=100
+            )
+            assert len(multi) == 6
+            assert {item.subject_id for item in multi if item.role == "STUDY"} == {
+                f"{study_id}:{report.id}:1", f"{study_id}:{report.id}:2"
+            }
+            summary = ResearchAgentAdapter(db).walk_forward_summary(
+                WalkForwardSummaryInput(study_id=study_id, validation_id=report.id)
+            )
+            aggregate = capture_research_contracts(
+                db, summary, tool_call_id="summary-call", max_trade_dates=100
+            )[0]
+            assert aggregate.verification_scope == "STUDY_AGGREGATE_ONLY"
+            old_hash = window.selected_parameter_hash
+            window.selected_parameter_hash = "0" * 64
+            with pytest.raises(AgentError, match="lineage changed"):
+                capture_research_contracts(
+                    db, lineage_result, tool_call_id="wrong-selection", max_trade_dates=100
+                )
+            window.selected_parameter_hash = old_hash
+            db.flush()
             frozen = serialized_result(lineage_result, max_output_bytes=65536)
             assert (
                 validate_projection(

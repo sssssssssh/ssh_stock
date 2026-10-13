@@ -49,12 +49,12 @@ class AgentFrozenContractRepository:
             tool = tools.get(draft.tool_call_id)
             if tool is None or tool.status != "READY":
                 raise archive_error("CONTRACT_TOOL_BINDING_MISMATCH")
-            expected_tool = {
-                "M14_EXACT_BUNDLE": "performance.summary",
-                "M15_WINDOW_LINEAGE": "walk_forward.window_lineage",
-                "M15_STUDY_AGGREGATE": "walk_forward.summary",
+            expected_tools = {
+                "M14_EXACT_BUNDLE": {"performance.summary", "walk_forward.window_lineage"},
+                "M15_WINDOW_LINEAGE": {"walk_forward.window_lineage"},
+                "M15_STUDY_AGGREGATE": {"walk_forward.summary"},
             }[draft.contract_kind]
-            if tool.tool_name != expected_tool:
+            if tool.tool_name not in expected_tools:
                 raise archive_error("CONTRACT_TOOL_BINDING_MISMATCH")
             key = (tool.id, draft.contract_kind, draft.subject_id, draft.role)
             if key in keys:
@@ -94,11 +94,39 @@ class AgentFrozenContractRepository:
                 "contract_hash": row.contract_hash,
             }
             for call_id, row in sorted(
-                rows, key=lambda item: (
-                    item[0], item[1].contract_kind, item[1].subject_id, item[1].role
-                )
+                rows,
+                key=lambda item: (item[0], item[1].contract_kind, item[1].subject_id, item[1].role),
             )
         ]
+        for ref, (_, row) in zip(
+            refs,
+            sorted(
+                rows,
+                key=lambda item: (item[0], item[1].contract_kind, item[1].subject_id, item[1].role),
+            ),
+            strict=True,
+        ):
+            if row.contract_kind != "M15_WINDOW_LINEAGE":
+                continue
+            dependencies = []
+            for endpoint in row.contract_json["m14_contract_refs"]:
+                matches = [
+                    candidate
+                    for candidate in refs
+                    if (
+                        candidate["tool_result_archive_id"] == ref["tool_result_archive_id"]
+                        and candidate["contract_kind"] == "M14_EXACT_BUNDLE"
+                        and candidate["subject_id"] == endpoint["subject_id"]
+                        and candidate["role"] == endpoint["role"]
+                        and candidate["contract_hash"] == endpoint["contract_hash"]
+                    )
+                ]
+                if len(matches) != 1:
+                    raise archive_error("CONTRACT_DEPENDENCY_MISMATCH")
+                dependencies.append(
+                    {key: matches[0][key] for key in ("id", "role", "contract_hash")}
+                )
+            ref["dependencies"] = dependencies
         ids_hash = contract_hash(refs)
         body = contract_json(
             {

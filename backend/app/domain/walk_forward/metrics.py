@@ -13,6 +13,18 @@ ONE = Decimal("1")
 ZERO = Decimal("0")
 
 
+def window_degradation(row: WindowMetricInput) -> dict[str, Decimal | None]:
+    return {
+        "return_degradation": row.train_annualized_return - row.oos_annualized_return,
+        "sharpe_degradation": (
+            row.train_sharpe_ratio - row.oos_sharpe_ratio
+            if row.train_sharpe_ratio is not None and row.oos_sharpe_ratio is not None else None
+        ),
+        "drawdown_worsening": row.oos_max_drawdown_abs - row.train_max_drawdown_abs,
+        "turnover_change": row.oos_annualized_turnover - row.train_annualized_turnover,
+    }
+
+
 def _median(values: tuple[Decimal, ...]) -> Decimal:
     if not values:
         raise ValueError("median requires at least one observation")
@@ -121,21 +133,7 @@ def calculate_validation_metrics(
             ),
             oos_win_rate=row.oos_win_rate,
             oos_profit_factor=row.oos_profit_factor,
-            return_degradation=(
-                row.train_annualized_return - row.oos_annualized_return
-            ),
-            sharpe_degradation=(
-                row.train_sharpe_ratio - row.oos_sharpe_ratio
-                if row.train_sharpe_ratio is not None
-                and row.oos_sharpe_ratio is not None
-                else None
-            ),
-            drawdown_worsening=(
-                row.oos_max_drawdown_abs - row.train_max_drawdown_abs
-            ),
-            turnover_change=(
-                row.oos_annualized_turnover - row.train_annualized_turnover
-            ),
+            **window_degradation(row),
         )
         for row in windows
     )

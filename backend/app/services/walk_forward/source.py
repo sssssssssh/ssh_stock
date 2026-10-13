@@ -694,8 +694,8 @@ class WalkForwardValidationSourceProvider:
         }
         return metric, identity, compatibility
 
+    @staticmethod
     def _validate_selection(
-        self,
         study: PortfolioWalkForwardStudy,
         window: PortfolioWalkForwardWindow,
         experiment: PortfolioExperiment,
@@ -809,8 +809,8 @@ class WalkForwardValidationSourceProvider:
                 action="NO_AUTOMATIC_REPAIR",
             )
 
+    @staticmethod
     def _validate_oos(
-        self,
         study: PortfolioWalkForwardStudy,
         window: PortfolioWalkForwardWindow,
         experiment: PortfolioExperiment,
