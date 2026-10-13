@@ -83,6 +83,8 @@ __all__ = [
     "AgentToolResultArchive",
     "AgentEvidenceArchiveBinding",
     "AgentTurnArchiveManifest",
+    "AgentFrozenContractManifest",
+    "AgentFrozenResearchContract",
     "AuthSession",
     "AgentChatMessage",
     "AgentChatSession",
@@ -151,4 +153,8 @@ from app.models.agent_archive import (
     AgentEvidenceArchiveBinding,
     AgentToolResultArchive,
     AgentTurnArchiveManifest,
+)
+from app.models.agent_frozen_contract import (
+    AgentFrozenContractManifest,
+    AgentFrozenResearchContract,
 )

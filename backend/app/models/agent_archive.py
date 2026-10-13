@@ -131,6 +131,9 @@ class AgentTurnArchiveManifest(ArchiveColumns, Base):
     __table_args__ = (
         *owner_constraints("agent_archive_manifest"),
         UniqueConstraint("turn_id", name=conv("uq_agent_archive_manifest_turn")),
+        UniqueConstraint(
+            "id", "owner_user_id", "turn_id", name=conv("uq_agent_archive_manifest_owner")
+        ),
         ForeignKeyConstraint(
             ["assistant_message_id", "chat_id"],
             ["agent_chat_message.id", "agent_chat_message.session_id"],
