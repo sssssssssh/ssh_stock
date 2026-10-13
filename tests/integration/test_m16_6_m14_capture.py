@@ -26,7 +26,7 @@ def test_performance_tool_captures_selected_bundle_and_trade_dates_in_same_trans
                     trade_id=case.trade_id,
                 ).report
                 result = ResearchAgentAdapter(db).performance_summary(
-                    PerformanceSummaryInput(run_id=case.run_id, report_id=case.performance_id)
+                    PerformanceSummaryInput(report_id=case.performance_id)
                 )
                 assert str(result.identity["period_id"]) == str(period.id)
                 drafts = capture_research_contracts(
