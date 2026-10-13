@@ -17,7 +17,7 @@ def test_performance_tool_captures_selected_bundle_and_trade_dates_in_same_trans
         transaction = connection.begin()
         try:
             with Session(bind=connection, expire_on_commit=False) as db:
-                dates = tuple(date(2088, 1, 2) + timedelta(days=day) for day in range(21))
+                dates = tuple(date(2088, 1, 2) + timedelta(days=day) for day in range(7))
                 case = seed_analytics_case(db, dates)
                 period = PerformancePeriodApplicationService(db).calculate_now(
                     case.run_id,

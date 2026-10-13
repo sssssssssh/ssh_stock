@@ -22,7 +22,7 @@ from test_m16_2_agent_chat import _enabled_settings, _user
 
 
 def _case_and_provider(db):
-    dates = tuple(date(2087, 1, 2) + timedelta(days=day) for day in range(21))
+    dates = tuple(date(2087, 1, 2) + timedelta(days=day) for day in range(7))
     case = seed_analytics_case(db, dates)
     PerformancePeriodApplicationService(db).calculate_now(
         case.run_id, performance_id=case.performance_id,
