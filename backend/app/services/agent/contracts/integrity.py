@@ -8,7 +8,11 @@ from app.domain.agent.frozen_contracts import (
     M15_AGGREGATE_CONTRACT_VERSION,
     M15_WINDOW_CONTRACT_VERSION,
 )
-from app.services.agent.contracts.canonical import contract_hash, contract_storage_size
+from app.services.agent.contracts.canonical import (
+    contract_hash,
+    contract_storage_size,
+    remember_contract_evidence,
+)
 from app.services.agent.contracts.semantics import (
     ContractSemanticError,
     require,
@@ -103,6 +107,7 @@ def verify_contract_archive(manifest, rows, base, config, check_budget=lambda: N
         total_bytes = contract_storage_size(body)
         statuses = {}
         verified = {}
+        evidence_contracts = {}
         for ref in refs:
             check_budget()
             row = by_id[ref["id"]]
@@ -148,6 +153,7 @@ def verify_contract_archive(manifest, rows, base, config, check_budget=lambda: N
                 statuses[str(row.id)] = ("UNVERIFIABLE", ["CONTRACT_VERSION_UNSUPPORTED"])
                 continue
             _tool_binding(row, tool)
+            remember_contract_evidence(row, evidence_contracts)
             if row.contract_kind == "M15_WINDOW_LINEAGE":
                 continue
             if row.contract_kind == "M15_STUDY_AGGREGATE" or row.contract_json["status"] == "GAP":

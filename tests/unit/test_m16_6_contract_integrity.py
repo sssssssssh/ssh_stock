@@ -122,3 +122,34 @@ def test_contract_tampering_cannot_gain_permission(mutation):
     with pytest.raises(AgentArchiveError) as caught:
         verify_contract_archive(manifest, rows, base, AgentFrozenContractConfig())
     assert caught.value.status_code == 409
+
+
+def test_offline_same_evidence_conflicting_private_contracts_refuse_even_resealed_manifest():
+    manifest, rows, base = synthetic_archive()
+    second = deepcopy(rows[0])
+    second.id = uuid.uuid4()
+    second.tool_result_archive_id = uuid.uuid4()
+    second.contract_json["bundle_rows"]["run"]["initial_cash"] = "2000000"
+    second.contract_json["comparison_contract"]["initial_cash"] = "2000000"
+    second.contract_hash = contract_hash(second.contract_json)
+    second.size_bytes = contract_storage_size(second.contract_json)
+    tool = deepcopy(base.tools[0])
+    tool.id = second.tool_result_archive_id
+    tool.tool_call_id = "call-b"
+    base.tools.append(tool)
+    rows.append(second)
+    ref = deepcopy(manifest.manifest_json["contracts"][0])
+    ref.update(
+        id=str(second.id),
+        tool_call_id=tool.tool_call_id,
+        tool_result_archive_id=str(tool.id),
+        contract_hash=second.contract_hash,
+    )
+    manifest.manifest_json["contracts"].append(ref)
+    manifest.contract_count = 2
+    manifest.contract_ids_hash = contract_hash(manifest.manifest_json["contracts"])
+    manifest.manifest_json.update(contract_count=2, contract_ids_hash=manifest.contract_ids_hash)
+    manifest.manifest_hash = contract_hash(manifest.manifest_json)
+    with pytest.raises(AgentArchiveError) as caught:
+        verify_contract_archive(manifest, rows, base, AgentFrozenContractConfig())
+    assert caught.value.code == "CONTRACT_EVIDENCE_CONFLICT"

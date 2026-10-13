@@ -2,7 +2,7 @@
 
 ## 实测状态
 
-当前 A–E 已验收；F 容量、全量 CI、Linux 浏览器正在验收，尚未正式封版。
+当前 A–E 已验收，F 基础全量/容量/Linux 浏览器已通过；收尾审查增加的同 Evidence 合同冲突与写后回滚补丁正在验收，尚未正式封版。
 
 - 规划基线：`07e288c3826618192b4022e8b63d0df06db679ec`，当前分支保持 `master`。
 - A：`d625edc37744584472943eedf3cf9697a7f10920`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38340339216)。
@@ -10,6 +10,7 @@
 - C：`ec49593bb1957c1137a3c8633be905685efb5f2d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38358271783)。
 - D：`54920b8631589adfff3acb9a51f9150fd25b2a5d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38364353253)。
 - E：`878ba1cae5609bf369e5cbd290928aaff0143874`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728)，1277 pytest passed、后端覆盖率 87%、100 前端测试、前端构建、Ruff、Docker config/build/nginx 和迁移往返通过。
+- F 基础：`974d07b6cd1e2525c5c2d5760fce780b869beffb`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481)，1285 pytest passed、87% 后端覆盖率；current/heads 同为 0052；100 前端测试/81.42% 行覆盖率；Docker 和 1440px/390px Chromium 浏览器通过。最终冲突/写后回滚补丁待最新 CI。
 - 本机完成 `npm ci`、1062 单元测试、Ruff、100 前端测试、81.42% 前端行覆盖率及 build；Node 18 有 engine 警告。浏览器用隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 截图与交互通过；CI 使用 Node 22 和 Chromium。
 - 本机没有可安全运行完整集成测试的数据库和 Docker；完整测试/DDL/容器由隔离 GitHub CI 执行。未对用户业务库写入、迁移或清理。
 
@@ -42,9 +43,9 @@
 | 10 | 同口径精确 Decimal right-left | U/test_m16_6_contract_policy.py；I/test_m16_6_report_api.py |
 | 11 | 同起止日期但交易日集合不同不授权 | U/test_m16_6_contract_policy.py |
 | 12 | 样本/假设敏感性只上下文 | U/test_m16_6_contract_policy.py；I/test_m16_6_report_api.py |
-| 13 | 相同 Evidence ID 内容冲突不能覆盖 | U/test_m16_5_archive_capture.py 同 ID 负例；M16.6 复用该归档前置门禁 |
+| 13 | 相同 Evidence/来源/角色合同内容冲突不能覆盖，缓存相同内容和不同角色正常 | U/test_m16_6_resources.py、test_m16_6_contract_integrity.py；原 test_m16_5_archive_capture.py |
 | 14 | canonical/历史 SHA 和 JSON 不变 | U/test_m16_6_contract_canonical.py、test_m16_5_report_binding.py；I/test_m16_5_closeout.py |
-| 15 | 合同写入失败原子回滚回答/Turn/原 Archive | I/test_m16_6_contract_atomic.py fail_insert=True |
+| 15 | 合同写入前或子 Manifest 已 flush 后失败，整体回滚回答/Turn/原 Archive | I/test_m16_6_contract_atomic.py before/after_manifest |
 | 16 | 同 request_id 恢复无重复合同/调用 | I/test_m16_6_contract_atomic.py；原 test_m16_5_chat_archive.py 网络响应丢失用例 |
 | 17 | cache_origin 保留，不发给 LLM | U/test_m16_6_private_capture.py |
 | 18 | JSON/hash/owner/FK 篡改 409；未知版本不可核验 | U/test_m16_6_contract_integrity.py；I/test_m16_6_contract_migration.py |
@@ -72,7 +73,7 @@
 ## 容量与重现
 
 - 单合同 128KiB、单 Turn 1MiB、默认 100 合同、最多 5000 交易日/源报告、离线 5 秒；开关和预算实际位于 `config/agent.yaml`，不是 `.env` 或策略 YAML。
-- 最大 36 窗口（现行 planner 上限）的批量读取测量使用真实 PG17/服务产物。每窗口 3 合同，36 窗口共 108：默认 100 上限必须写前拒绝，用户应按窗口分页查询，不应盲目放大硬限。实际测量等待 F CI 记录。
+- 最大 36 窗口（现行 planner 上限）的批量读取测量使用真实 PG17/服务产物。F 基础 CI：1/36 窗口均为 14 次 SELECT，分别 0.0255/0.1782 秒，合同 JSONB 31905/1148661 字节。36 窗口 108 合同同时超过默认 100 和 1MiB 硬限；写前拒绝，用户应分页查询（如每次 10 窗口），不能盲目放大硬限。本次观测值不是生产 SLA。
 - SQL 批量读取、不按窗口 N+1；离线读取前先统计实际 JSONB bytes/count，超限/超时不伪造成功。
 - 本机后端安全命令：`python -m pytest tests/unit`、`python -m ruff check backend tests migrations scripts`。
 - 全量测试须显式将 `DATABASE_URL` 指向允许测试的 PG17；M16.6 临时库 helper 另要求 `TEST_DATABASE_URL` 或隔离 CI。不可直接对 `.env` 业务库运行完整测试；helper 不跳过失败。
@@ -81,6 +82,8 @@
 ## 依赖风险（独立 P2）
 
 2026-10-13 实际官方 npm registry 审计：11 项（4 critical、3 high、4 moderate），不是 11 个新漏洞。镜像 registry 的 audit 返回 404，不能据此宣称安全；用命令 `npm audit --json --registry=https://registry.npmjs.org` 复查。未执行 `audit fix --force`，未改变应用 lockfile。
+
+`npm audit --omit=dev` 仍报告 4 项（echarts/esbuild/vite/source-map-js，2 high、2 moderate）：当前 package.json 把 Vite/plugin 放在 dependencies，不能用“全是 devDependency”忽略。Compose 前端最终 Nginx 镜像只拷贝 dist，不启动 Node dev/test server；但 ECharts 进入浏览器包，source-map-js/Vue 编译依赖的最终 bundle 影响须随安全升级进一步核查。
 
 | 依赖 | 直接/传递 | 本轮风险判断与后续验证 |
 |---|---|---|

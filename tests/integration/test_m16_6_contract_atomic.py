@@ -13,6 +13,7 @@ from app.models.agent_frozen_contract import (
     AgentFrozenContractManifest,
     AgentFrozenResearchContract,
 )
+from app.repositories.agent_frozen_contract import AgentFrozenContractRepository
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.chat.application import AgentChatApplication
 from app.services.agent.contracts.application import AgentFrozenContractApplication
@@ -85,7 +86,7 @@ def _case_and_provider(db, *, benchmark_code="000300.SH"):
     return provider
 
 
-@pytest.mark.parametrize("fail_insert", [False, True])
+@pytest.mark.parametrize("fail_insert", [False, "before", "after_manifest"])
 def test_real_readonly_tool_capture_atomic_commit_replay_and_failure(monkeypatch, fail_insert):
     with isolated_contract_database(monkeypatch) as (factory, engine):
         with factory() as db:
@@ -97,8 +98,16 @@ def test_real_readonly_tool_capture_atomic_commit_replay_and_failure(monkeypatch
             service = AgentChatApplication(db, settings, provider=fake)
             chat = service.create_chat(user=user, title="Synthetic M16.6 test")
             if fail_insert:
+                original_insert = AgentFrozenContractRepository.insert_drafts
 
-                def fail(*args, **kwargs):
+                def fail(repository, *args, **kwargs):
+                    if fail_insert == "after_manifest":
+                        original_insert(repository, *args, **kwargs)
+                        for model in (AgentFrozenResearchContract, AgentFrozenContractManifest):
+                            assert (
+                                repository.db.scalar(sa.select(sa.func.count()).select_from(model))
+                                == 1
+                            )
                     raise RuntimeError("synthetic contract write failure")
 
                 monkeypatch.setattr(

@@ -15,6 +15,7 @@ from app.services.agent.contracts.canonical import (
     contract_hash,
     contract_json,
     contract_storage_size,
+    remember_contract_evidence,
 )
 
 
@@ -77,6 +78,9 @@ class AgentFrozenContractRepository:
             return None
         if len(drafts) > config.max_contracts:
             raise archive_error("CONTRACT_LIMIT_EXCEEDED")
+        evidence_contracts = {}
+        for draft in drafts:
+            remember_contract_evidence(draft, evidence_contracts)
         tools = {
             row.tool_call_id: row
             for row in self.db.scalars(

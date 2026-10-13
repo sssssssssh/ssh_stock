@@ -7,6 +7,7 @@ from app.core.agent_frozen_contract_config import AgentFrozenContractConfig
 from app.domain.agent.archive import AgentArchiveError
 from app.repositories.agent_frozen_contract import AgentFrozenContractRepository
 from app.services.agent.contracts.application import AgentFrozenContractApplication
+from app.services.agent.contracts.canonical import remember_contract_evidence
 from app.services.agent.contracts.integrity import verify_contract_archive
 from test_m16_6_contract_integrity import synthetic_archive
 
@@ -54,3 +55,35 @@ def test_offline_contract_check_observes_budget_callback():
     with pytest.raises(AgentArchiveError) as caught:
         verify_contract_archive(manifest, rows, base, AgentFrozenContractConfig(), expired)
     assert caught.value.status_code == 504
+
+
+def test_private_contract_conflict_with_same_evidence_subject_role_is_rejected_before_sql():
+    from copy import deepcopy
+
+    _, rows, _ = synthetic_archive()
+    first = rows[0]
+    second = deepcopy(first)
+    second.contract_json["bundle_rows"]["run"]["initial_cash"] = "2000000"
+    second.contract_json["comparison_contract"]["initial_cash"] = "2000000"
+    with pytest.raises(AgentArchiveError) as caught:
+        AgentFrozenContractRepository(object()).insert_drafts(
+            base_manifest=None,
+            drafts=[first, second],
+            config=AgentFrozenContractConfig(),
+        )
+    assert caught.value.code == "CONTRACT_EVIDENCE_CONFLICT"
+
+
+def test_cache_identical_contract_or_distinct_endpoint_role_is_not_a_conflict():
+    from copy import deepcopy
+
+    _, rows, _ = synthetic_archive()
+    first = rows[0]
+    seen = {}
+    remember_contract_evidence(first, seen)
+    remember_contract_evidence(deepcopy(first), seen)
+    endpoint = deepcopy(first)
+    endpoint.role = "OOS"
+    endpoint.contract_json["record"] = {"window_metrics": {"annualized_return": "0.2"}}
+    remember_contract_evidence(endpoint, seen)
+    assert len(seen) == 2
