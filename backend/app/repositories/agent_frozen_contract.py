@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.core.agent_frozen_contract_config import AgentFrozenContractConfig
@@ -21,6 +21,50 @@ from app.services.agent.contracts.canonical import (
 class AgentFrozenContractRepository:
     def __init__(self, db: Session):
         self.db = db
+
+    def load_for_turn(self, *, owner_id, turn_id, config, check_budget=lambda: None):
+        check_budget()
+        manifest = self.db.scalar(
+            select(AgentFrozenContractManifest).where(
+                AgentFrozenContractManifest.owner_user_id == owner_id,
+                AgentFrozenContractManifest.turn_id == turn_id,
+            )
+        )
+        count, size = self.db.execute(
+            select(
+                func.count(),
+                func.coalesce(
+                    func.sum(
+                        func.octet_length(cast(AgentFrozenResearchContract.contract_json, Text))
+                    ),
+                    0,
+                ),
+            ).where(
+                AgentFrozenResearchContract.owner_user_id == owner_id,
+                AgentFrozenResearchContract.turn_id == turn_id,
+            )
+        ).one()
+        check_budget()
+        if count > config.max_contracts or size > config.max_turn_bytes:
+            raise archive_error("CONTRACT_LIMIT_EXCEEDED")
+        if manifest is None:
+            if count:
+                raise archive_error("CONTRACT_MANIFEST_MISSING")
+            return None, []
+        if count != manifest.contract_count:
+            raise archive_error("CONTRACT_SET_MISMATCH")
+        rows = list(
+            self.db.scalars(
+                select(AgentFrozenResearchContract)
+                .where(
+                    AgentFrozenResearchContract.owner_user_id == owner_id,
+                    AgentFrozenResearchContract.turn_id == turn_id,
+                )
+                .limit(config.max_contracts + 1)
+            )
+        )
+        check_budget()
+        return manifest, rows
 
     def insert_drafts(
         self,

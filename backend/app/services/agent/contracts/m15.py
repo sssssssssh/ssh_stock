@@ -177,6 +177,9 @@ def capture_m15_contracts(db, result, *, tool_call_id, max_trade_dates):
             *BASE_IDENTITY_FIELDS,
         ),
     )
+    study_projection["base_snapshot_hashes"] = {
+        name: config_hash(value) for name, value in study.base_config_snapshot.items()
+    }
     for record in result.records:
         number = int(record["window_no"])
         link, window = links[number], windows[number]
@@ -354,6 +357,25 @@ def capture_m15_contracts(db, result, *, tool_call_id, max_trade_dates):
                         "selected_run_id",
                     ),
                 ),
+                "experiment": {
+                    **_project(
+                        experiment,
+                        (
+                            "id",
+                            "definition_hash",
+                            "parameter_space_hash",
+                            "start_date",
+                            "end_date",
+                            "initial_cash",
+                            "benchmark_code",
+                            *BASE_IDENTITY_FIELDS,
+                        ),
+                    ),
+                    "base_snapshot_hashes": {
+                        name: config_hash(value)
+                        for name, value in experiment.base_config_snapshot.items()
+                    },
+                },
                 "trial_evaluation": _project(
                     trial_evaluation,
                     (
@@ -373,6 +395,7 @@ def capture_m15_contracts(db, result, *, tool_call_id, max_trade_dates):
                     ),
                 ),
                 "selection_snapshot_hash": config_hash(window.selected_portfolio_config_snapshot),
+                "selection_snapshot": window.selected_portfolio_config_snapshot,
                 "m14_contract_refs": endpoint_refs,
                 "identity_snapshot": link.identity_snapshot,
                 "record": record,

@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 import pytest
 import sqlalchemy as sa
+from alembic import command
+from alembic.config import Config
 from app.domain.agent.chat_errors import AgentChatError
 from app.domain.agent.contracts import PerformanceSummaryInput
 from app.models.agent_archive import AgentTurnArchiveManifest
@@ -13,6 +15,7 @@ from app.models.agent_frozen_contract import (
 )
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.chat.application import AgentChatApplication
+from app.services.agent.contracts.application import AgentFrozenContractApplication
 from app.services.agent.llm.contracts import LLMResponse, ToolCall
 from app.services.agent.llm.fake import FakeLLMProvider
 from app.services.performance.period_application import PerformancePeriodApplicationService
@@ -59,7 +62,7 @@ def _case_and_provider(db):
 
 @pytest.mark.parametrize("fail_insert", [False, True])
 def test_real_readonly_tool_capture_atomic_commit_replay_and_failure(monkeypatch, fail_insert):
-    with isolated_contract_database(monkeypatch) as (factory, _):
+    with isolated_contract_database(monkeypatch) as (factory, engine):
         with factory() as db:
             fake = _case_and_provider(db)
             settings = _enabled_settings()
@@ -88,6 +91,24 @@ def test_real_readonly_tool_capture_atomic_commit_replay_and_failure(monkeypatch
                     user=user, chat_id=chat.chat_id, content="核验收益", request_id="frozen"
                 )
                 assert replay.message_id == answer.message_id
+                turn = db.scalar(sa.select(AgentChatTurn))
+                frozen = AgentFrozenContractApplication(db, settings).check_turn(
+                    owner_id=user.id, turn_id=turn.id
+                )
+                assert frozen.check["contract_semantics"]["status"] == "VERIFIED"
+                assert frozen.check["archive_integrity"]["status"] == "VERIFIED"
+                assert frozen.check["calculation_reproduced"] is False
+                frozen_hash = frozen.manifest.manifest_hash
+                db.rollback()
+                with pytest.raises(RuntimeError, match="frozen contracts exist"):
+                    with engine.begin() as connection:
+                        migration = Config("alembic.ini")
+                        migration.attributes["connection"] = connection
+                        command.downgrade(migration, "0051_m16_5_evidence_archive")
+                again = AgentFrozenContractApplication(db, settings).check_turn(
+                    owner_id=user.id, turn_id=turn.id
+                )
+                assert again.manifest.manifest_hash == frozen_hash
             for model in (
                 AgentTurnArchiveManifest, AgentFrozenContractManifest, AgentFrozenResearchContract,
             ):

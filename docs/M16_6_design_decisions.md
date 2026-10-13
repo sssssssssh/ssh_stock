@@ -31,3 +31,5 @@
 - PR-B：精确 M14 ID 只 SELECT，复用原比较契约构建器；合同走私有 ToolResultContext，归档仅引用已选 ToolArchive。合同/子 Manifest 与完成回答共用一次 commit。缺 Period/日期/假设仅冻结 Gap。默认关闭。新增独立临时 PG17 数据库中的真实工具/Chat、回滚和幂等用例；结果以本阶段 CI 为准。
 - PR-B 验收：`c048b84` 的 [CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38356151219) Success，真实捕获、请求幂等与失败共同回滚已通过。新增测试复用了固定 7 日的交易夹具，精确查询输入只传 report_id。
 - PR-C：窗口工具按精确窗口批量捕获双端 M14 及 Window 合同，Manifest 绑定合同依赖 ID/Hash。复用 M15 原选择/OOS 校验及退化公式；摘要只冻结 Aggregate Gap。新增真实 M15 两窗口乱序/错误参数测试，本阶段结果以 CI 为准。
+- PR-C 验收：`ec49593` 的 [CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38358271783) Success；本地 unit 1007 passed，Ruff 通过。新合同增加明确的报告关系及白名单执行/会计快照，并验证假设 Hash。
+- PR-D：离线校验合同集合、Tool/Evidence/Window 绑定、源报告关系、精确日期集、假设与选择参数。提交前运行同一核验；新 v4 政策为独立纯函数，严格同样本才授权逐指标 Decimal 差值；敏感性只展示上下文；单窗口退化复用 M15。原 v3 比较函数保持原行为，接入新报告/API 属 PR-E。阶段结果以 CI 为准。

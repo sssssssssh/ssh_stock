@@ -26,6 +26,7 @@ from app.services.agent.chat.comparison_policy import (
 )
 from app.services.agent.chat.lineage import ExperimentLineageResolver
 from app.services.agent.contracts.capture import capture_research_contracts
+from app.services.agent.contracts.semantics import verify_m14, verify_m15
 from app.services.experiment_evaluation import ExperimentEvaluationApplicationService
 from app.services.performance.period_application import (
     PerformancePeriodApplicationService,
@@ -238,6 +239,21 @@ def test_persisted_walk_forward_lineage_and_m14_contract_are_enforced() -> None:
             assert {item.subject_id for item in multi if item.role == "STUDY"} == {
                 f"{study_id}:{report.id}:1", f"{study_id}:{report.id}:2"
             }
+            endpoints = {item.role: item.contract_json for item in captured if item.role != "STUDY"}
+            for endpoint in endpoints.values():
+                verify_m14(endpoint)
+            assert verify_m15(window_contract.contract_json, endpoints)["return_degradation"] == (
+                persisted.return_degradation
+            )
+            train_run = db.get(PortfolioBacktestRun, persisted.selected_train_run_id)
+            original_cash = train_run.initial_cash
+            train_run.initial_cash += 1
+            db.flush()
+            assert verify_m15(window_contract.contract_json, endpoints)["return_degradation"] == (
+                persisted.return_degradation
+            )
+            train_run.initial_cash = original_cash
+            db.flush()
             summary = ResearchAgentAdapter(db).walk_forward_summary(
                 WalkForwardSummaryInput(study_id=study_id, validation_id=report.id)
             )

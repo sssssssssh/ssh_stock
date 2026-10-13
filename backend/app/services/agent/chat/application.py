@@ -555,6 +555,13 @@ class AgentChatApplication:
                         drafts=frozen_contracts,
                         config=self.config.frozen_contract,
                     )
+                    from app.services.agent.contracts.application import (
+                        AgentFrozenContractApplication,
+                    )
+
+                    AgentFrozenContractApplication(self.db, self.settings).check_turn(
+                        owner_id=chat.owner_user_id, turn_id=turn_id, deadline=deadline
+                    )
                 self._ensure_deadline(deadline)
                 self.db.commit()
             except AgentArchiveError:
