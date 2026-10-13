@@ -14,6 +14,10 @@ from pydantic import (
 )
 
 from app.domain.agent.chat import ChatCitation, RejectedClaim, StructuredClaim
+from app.domain.agent.frozen_contracts import (
+    CONTRACT_REPORT_SNAPSHOT_VERSION,
+    CONTRACT_REPORT_VERSION,
+)
 
 ReportType = Literal["market_review", "opportunity_review", "strategy_review", "oos_review"]
 ReportAnswerStatus = Literal["COMPLETED", "PARTIAL_VERIFIED"]
@@ -67,6 +71,18 @@ class ReportEvidenceIdentity(ReportDTO):
     content_hash: str | None = None
 
 
+class ReportFrozenContractReference(ReportDTO):
+    contract_id: uuid.UUID
+    contract_kind: Literal["M14_EXACT_BUNDLE", "M15_WINDOW_LINEAGE", "M15_STUDY_AGGREGATE"]
+    subject_id: str
+    role: Literal["LIVE", "TRAIN", "OOS", "STUDY"]
+    schema_version: str
+    contract_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    status: Literal["VERIFIED", "UNVERIFIABLE"]
+    reason_codes: list[str] = Field(default_factory=list, max_length=32)
+    tool_result_archive_id: uuid.UUID
+
+
 class ReportSourceContract(ReportDTO):
     snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY", "FROZEN_TOOL_EVIDENCE"] = "CLAIM_SNAPSHOT_ONLY"
     report_version: str = "m16.4-v1"
@@ -80,10 +96,24 @@ class ReportSourceContract(ReportDTO):
     verification_scope: list[str] = Field(default_factory=list, max_length=16)
     frozen_fields: list[str] = Field(default_factory=list, max_length=2000)
     gap_codes: list[str] = Field(default_factory=list, max_length=16)
+    contract_manifest_id: uuid.UUID | None = None
+    contract_manifest_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    contract_policy_version: str | None = None
+    contract_scope: list[str] = Field(default_factory=list, max_length=3)
+    contract_refs: list[ReportFrozenContractReference] = Field(default_factory=list, max_length=800)
 
     @model_serializer(mode="wrap")
     def historical_contract_shape(self, handler):
         data = handler(self)
+        if self.report_version != CONTRACT_REPORT_VERSION:
+            for key in (
+                "contract_manifest_id",
+                "contract_manifest_hash",
+                "contract_policy_version",
+                "contract_scope",
+                "contract_refs",
+            ):
+                data.pop(key, None)
         if self.report_version == "m16.4-v1":
             for key in (
                 "archive_manifest_hash",
@@ -104,6 +134,18 @@ class ReportArchiveReference(ReportDTO):
     reproduction_level: Literal["FROZEN_FACT_RECHECK"]
 
 
+class ReportContractReference(ReportDTO):
+    manifest_id: uuid.UUID
+    manifest_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    policy_version: str
+    contract_ids_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    contract_refs_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    contract_count: int = Field(ge=1, le=800)
+    contract_scope: list[str] = Field(default_factory=list, max_length=3)
+    gap_codes: list[str] = Field(default_factory=list, max_length=16)
+    reproduction_level: Literal["FROZEN_CONTRACT_RECHECK"] = "FROZEN_CONTRACT_RECHECK"
+
+
 class ResearchReportSnapshot(ReportDTO):
     schema_version: str = "m16.4-report-snapshot-v1"
     snapshot_level: Literal["CLAIM_SNAPSHOT_ONLY", "FROZEN_TOOL_EVIDENCE"] = "CLAIM_SNAPSHOT_ONLY"
@@ -122,10 +164,13 @@ class ResearchReportSnapshot(ReportDTO):
     warnings: list[str] = Field(default_factory=list, max_length=128)
     source_contract_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     archive_reference: ReportArchiveReference | None = None
+    contract_reference: ReportContractReference | None = None
 
     @model_serializer(mode="wrap")
     def historical_snapshot_shape(self, handler):
         data = handler(self)
+        if self.schema_version != CONTRACT_REPORT_SNAPSHOT_VERSION:
+            data.pop("contract_reference", None)
         if self.schema_version != "m16.5-report-snapshot-v3" and self.archive_reference is None:
             data.pop("archive_reference", None)
         return data
@@ -177,6 +222,7 @@ class ResearchReportView(ReportDTO):
     source_contract: ReportSourceContract
     archived_at: datetime | None
     created_at: datetime
+    contract_check: dict[str, Any] | None = None
 
 
 class ResearchReportSummary(ReportDTO):
@@ -198,6 +244,16 @@ class CreateReportComparison(ReportDTO):
     right_report_id: uuid.UUID
     request_id: str = Field(min_length=1, max_length=128)
     comparison_intent: ComparisonIntent = "AUTO"
+    comparison_mode: (
+        Literal["STRICT_SAME_SAMPLE", "DIFFERENT_ASSUMPTIONS", "WINDOW_DEGRADATION"] | None
+    ) = None
+
+    @model_serializer(mode="wrap")
+    def historical_request_shape(self, handler):
+        data = handler(self)
+        if self.comparison_mode is None:
+            data.pop("comparison_mode", None)
+        return data
 
     @field_validator("request_id")
     @classmethod
@@ -211,6 +267,16 @@ class CreateReportComparison(ReportDTO):
     def reports_must_differ(self) -> CreateReportComparison:
         if self.left_report_id == self.right_report_id:
             raise ValueError("left and right reports must differ")
+        if self.comparison_mode == "WINDOW_DEGRADATION" and self.comparison_intent not in {
+            "AUTO",
+            "TRAIN_VS_OOS",
+        }:
+            raise ValueError("window degradation requires TRAIN_VS_OOS intent")
+        if self.comparison_mode in {
+            "STRICT_SAME_SAMPLE",
+            "DIFFERENT_ASSUMPTIONS",
+        } and self.comparison_intent not in {"AUTO", "INDEPENDENT_BACKTESTS"}:
+            raise ValueError("backtest mode requires INDEPENDENT_BACKTESTS intent")
         return self
 
 

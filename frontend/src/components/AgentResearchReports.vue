@@ -9,13 +9,15 @@ import {
   createReportComparison,
   createResearchReport,
   downloadResearchReport,
+  downloadReportComparison,
   fetchResearchReport,
   fetchResearchReports,
   type ReportComparison,
   type ReportSourceSelection,
   type ReportType,
   type ResearchReport,
-  type ResearchReportSummary
+  type ResearchReportSummary,
+  type ResearchComparisonMode
 } from "../services/agentReports";
 
 const props = defineProps<{ initialSource?: ReportSourceSelection | null }>();
@@ -27,6 +29,7 @@ const selected = ref<ResearchReport | null>(null);
 const comparison = ref<ReportComparison | null>(null);
 const loading = ref(true);
 const working = ref(false);
+const comparing = ref(false);
 const error = ref("");
 const includeArchived = ref(false);
 const reportFilter = ref<ReportType | "">("");
@@ -36,10 +39,16 @@ const reportType = ref<ReportType>("market_review");
 const title = ref("");
 const leftReportId = ref("");
 const rightReportId = ref("");
+const comparisonMode = ref<ResearchComparisonMode>("AUTO");
 const pendingCreate = ref<{ fingerprint: string; requestId: string } | null>(null);
 const pendingComparison = ref<{ fingerprint: string; requestId: string } | null>(null);
 let reportGeneration = 0;
-onBeforeUnmount(() => { reportGeneration++; });
+let listGeneration = 0, comparisonGeneration = 0;
+let reportController = new AbortController(), listController = new AbortController(), comparisonController = new AbortController();
+onBeforeUnmount(() => {
+  reportGeneration++; listGeneration++; comparisonGeneration++;
+  reportController.abort(); listController.abort(); comparisonController.abort();
+});
 
 const claimsById = computed(() =>
   new Map((selected.value?.snapshot.claims || []).map((claim) => [claim.claim_id, claim]))
@@ -47,9 +56,30 @@ const claimsById = computed(() =>
 // Frozen result is audit data, never a UI fallback (including older API responses).
 const comparisonDisplay = computed(() => comparison.value?.display_result);
 const deltaAllowed = computed(() => comparison.value?.state === "COMPARABLE"
-  && comparison.value?.policy_version === "m16.5-report-comparison-v3"
+  && ["m16.5-report-comparison-v3", "m16.6-report-comparison-v4"].includes(comparison.value?.policy_version || "")
   && comparison.value?.display_safety?.legacy_policy === false
-  && comparison.value?.display_safety?.delta_allowed === true);
+  && comparison.value?.display_safety?.delta_allowed === true
+  && (comparison.value?.policy_version !== "m16.6-report-comparison-v4"
+    || comparisonDisplay.value?.comparison_permissions?.allowed === true));
+const windowComparison = computed(() => comparisonDisplay.value?.comparison_mode === "WINDOW_DEGRADATION");
+function pairAllowed(fact: NonNullable<ReportComparison["result"]["facts"]>[number]) {
+  return deltaAllowed.value && fact.pair_status === "COMPARABLE"
+    && (comparison.value?.policy_version !== "m16.6-report-comparison-v4"
+      || (fact.comparison_permission?.allowed === true
+        && ["RIGHT_MINUS_LEFT", "TRAIN_MINUS_OOS", "OOS_MINUS_TRAIN"].includes(fact.formula || "")));
+}
+function formulaLabel(formula?: string) {
+  return ({ RIGHT_MINUS_LEFT: "右 − 左", TRAIN_MINUS_OOS: "TRAIN − OOS", OOS_MINUS_TRAIN: "OOS − TRAIN" } as Record<string, string>)[formula || ""] || "右 − 左";
+}
+function sampleRange(side: string) {
+  const value = comparisonDisplay.value?.sample_context?.[side];
+  if (!value || typeof value !== "object") return "";
+  const sample = value as Record<string, unknown>;
+  return `${sample.start_date || '--'} 至 ${sample.end_date || '--'} · ${sample.trade_days ?? '--'} 个交易日`;
+}
+watch(() => [leftReportId.value, rightReportId.value, comparisonMode.value], () => {
+  comparisonGeneration++; comparisonController.abort(); comparing.value = false; comparison.value = null;
+});
 
 watch(
   () => props.initialSource,
@@ -64,6 +94,8 @@ watch(
 onMounted(() => loadReports());
 
 async function loadReports(reset = true) {
+  const current = ++listGeneration;
+  listController.abort(); listController = new AbortController();
   if (reset) loading.value = true;
   error.value = "";
   try {
@@ -72,8 +104,10 @@ async function loadReports(reset = true) {
       reportLimit,
       offset,
       includeArchived.value,
-      reportFilter.value || undefined
+      reportFilter.value || undefined,
+      listController.signal
     );
+    if (current !== listGeneration) return;
     reports.value = reset ? page.data : [...reports.value, ...page.data];
     reportTotal.value = page.meta.total;
     if (selected.value) {
@@ -81,18 +115,19 @@ async function loadReports(reset = true) {
       if (!current && !includeArchived.value) selected.value = null;
     }
   } catch (value) {
-    error.value = errorText(value);
+    if (current === listGeneration) error.value = errorText(value);
   } finally {
-    if (reset) loading.value = false;
+    if (reset && current === listGeneration) loading.value = false;
   }
 }
 
 async function openReport(reportId: string) {
   const current = ++reportGeneration;
+  reportController.abort(); reportController = new AbortController();
   selected.value = null;
   error.value = "";
   try {
-    const report = await fetchResearchReport(reportId);
+    const report = await fetchResearchReport(reportId, reportController.signal);
     if (current === reportGeneration) selected.value = report;
   } catch (value) {
     if (current === reportGeneration) error.value = errorText(value);
@@ -146,24 +181,39 @@ async function archiveSelected() {
 
 async function compareReports() {
   if (!leftReportId.value || !rightReportId.value || leftReportId.value === rightReportId.value) return;
-  working.value = true;
+  const current = ++comparisonGeneration;
+  comparisonController.abort(); comparisonController = new AbortController();
+  comparing.value = true;
   error.value = "";
   try {
-    const fingerprint = `${leftReportId.value}:${rightReportId.value}`;
+    const fingerprint = `${leftReportId.value}:${rightReportId.value}:${comparisonMode.value}`;
     if (pendingComparison.value?.fingerprint !== fingerprint) {
       pendingComparison.value = { fingerprint, requestId: newRequestId() };
     }
-    comparison.value = await createReportComparison({
+    const mode = comparisonMode.value;
+    const result = await createReportComparison({
       left_report_id: leftReportId.value,
       right_report_id: rightReportId.value,
-      request_id: pendingComparison.value.requestId
-    });
+      request_id: pendingComparison.value.requestId,
+      ...(mode === "AUTO" ? {} : {
+        comparison_mode: mode,
+        comparison_intent: mode === "WINDOW_DEGRADATION" ? "TRAIN_VS_OOS" as const : "INDEPENDENT_BACKTESTS" as const
+      })
+    }, comparisonController.signal);
+    if (current !== comparisonGeneration) return;
+    comparison.value = result;
     pendingComparison.value = null;
   } catch (value) {
-    error.value = errorText(value);
+    if (current === comparisonGeneration) error.value = errorText(value);
   } finally {
-    working.value = false;
+    if (current === comparisonGeneration) comparing.value = false;
   }
+}
+
+async function downloadComparison(format: "markdown" | "html") {
+  if (!comparison.value) return;
+  try { await downloadReportComparison(comparison.value.comparison_id, format); }
+  catch (value) { error.value = errorText(value); }
 }
 
 async function download(format: "markdown" | "html") {
@@ -218,7 +268,7 @@ function errorText(value: unknown) {
         <template v-else>
           <header class="detail-title"><div><small>{{ selected.report_type }} · {{ selected.report_version }}</small><h2>{{ selected.title }}</h2><p>{{ selected.as_of_date || "日期未提供" }} · {{ selected.source_answer_status }}</p><small>来源 {{ selected.source_chat_id }} / {{ selected.source_message_id }}</small></div><div class="detail-actions"><button type="button" @click="download('markdown')">Markdown</button><button type="button" @click="download('html')">HTML</button><button v-if="!selected.archived_at" type="button" :disabled="working" @click="archiveSelected">归档</button></div></header>
           <div class="snapshot-meta"><code>{{ selected.snapshot_hash }}</code><span>{{ selected.source_contract.snapshot_level }}</span></div>
-          <EvidenceArchivePanel :key="selected.report_id" :report-id="selected.report_id" />
+          <EvidenceArchivePanel :key="selected.report_id" :report-id="selected.report_id" :contract-reference="selected.snapshot.contract_reference" />
           <section v-for="section in selected.snapshot.sections" :key="section.section_id" class="report-section"><h3>{{ section.title }}</h3><p v-for="item in section.items || []" :key="item" class="section-item">{{ item }}</p><article v-for="claimId in section.claim_ids" :key="claimId"><template v-if="claimsById.get(claimId)"><strong>{{ claimsById.get(claimId)?.claim_type }}</strong><p>{{ claimsById.get(claimId)?.text }}</p><small>证据：{{ claimsById.get(claimId)?.evidence_ids.join(" / ") }}</small></template></article></section>
           <section v-if="selected.snapshot.charts.length" class="report-section"><h3>指标视图</h3><ReportSnapshotChart v-for="chart in selected.snapshot.charts" :key="`${selected.report_id}:${chart.chart_id}`" :chart="chart" :snapshot="selected.snapshot" /></section>
           <section class="report-section"><h3>证据索引</h3><div class="evidence-grid"><article v-for="citation in selected.snapshot.citations" :key="citation.evidence_id"><code>{{ citation.evidence_id }}</code><span>{{ citation.tool_name }}</span><small>{{ citation.entity_id }} · {{ citation.as_of_date || "日期未提供" }}</small><button v-if="citation.navigation" type="button" @click="emit('navigate', citation.navigation)">打开业务详情</button></article></div></section>
@@ -231,11 +281,18 @@ function errorText(value: unknown) {
       <div><strong>冻结快照比较</strong><small>只有 COMPARABLE 才显示 Decimal 差值</small></div>
       <select v-model="leftReportId"><option value="">选择左侧报告</option><option v-for="report in reports" :key="report.report_id" :value="report.report_id">{{ report.title }}</option></select>
       <select v-model="rightReportId"><option value="">选择右侧报告</option><option v-for="report in reports" :key="report.report_id" :value="report.report_id">{{ report.title }}</option></select>
-      <button type="button" :disabled="working || !leftReportId || !rightReportId || leftReportId === rightReportId" @click="compareReports">比较</button>
+      <select v-model="comparisonMode" aria-label="比较模式"><option value="AUTO">原事实口径</option><option value="STRICT_SAME_SAMPLE">同样本回测</option><option value="DIFFERENT_ASSUMPTIONS">假设敏感性</option><option value="WINDOW_DEGRADATION">窗口 TRAIN/OOS</option></select>
+      <button type="button" :disabled="working || comparing || !leftReportId || !rightReportId || leftReportId === rightReportId" @click="compareReports">{{ comparing ? '比较中' : '比较' }}</button>
       <div v-if="comparison" class="comparison-result"><strong>{{ comparison.state }}</strong><span>{{ comparison.reason_codes.join(" / ") || "口径一致" }}</span>
-        <p v-if="comparison.policy_version !== 'm16.4.1-report-comparison-v2'" role="alert">旧版比较策略：冻结结果仅供追溯，差值已隐藏。请按新版本重新创建比较。</p>
+        <p v-if="comparison.display_safety?.legacy_policy !== false" role="alert">旧版比较策略 · 差值已隐藏</p>
+        <div class="comparison-actions"><button type="button" @click="downloadComparison('markdown')">导出比较 Markdown</button><button type="button" @click="downloadComparison('html')">导出比较 HTML</button></div>
+        <div v-for="(check, side) in comparisonDisplay?.contract_check || {}" :key="side" class="comparison-checks"><strong>{{ side }}</strong><span>内容 {{ check.archive_integrity?.status || 'UNVERIFIABLE' }}</span><span>事实 {{ check.frozen_fact_recheck?.status || 'UNVERIFIABLE' }}</span><span>合同 {{ check.contract_integrity.status }}</span><span>口径 {{ check.contract_semantics.status }}</span><span>算法未重跑</span></div>
+        <p v-if="windowComparison">窗口 {{ comparisonDisplay?.sample_context?.window_no }} · 训练 {{ comparisonDisplay?.sample_context?.train_start_date }} 至 {{ comparisonDisplay?.sample_context?.train_end_date }} · 样本外 {{ comparisonDisplay?.sample_context?.oos_start_date }} 至 {{ comparisonDisplay?.sample_context?.oos_end_date }}</p>
+        <p v-else-if="sampleRange('left') || sampleRange('right')">左 {{ sampleRange('left') }} / 右 {{ sampleRange('right') }}</p>
         <p v-if="!deltaAllowed">当前仅并列展示事实，不输出差值或优劣排序。</p>
-        <div class="table-scroll"><table><thead><tr><th>metric</th><th>left</th><th>right</th><th>pair status</th><th v-if="deltaAllowed">delta (right − left)</th></tr></thead><tbody><tr v-for="fact in comparisonDisplay?.facts || []" :key="fact.metric_key"><td>{{ fact.metric_key }}</td><td>{{ fact.left }} <small>{{ fact.left_fact?.trade_date }}</small></td><td>{{ fact.right }} <small>{{ fact.right_fact?.trade_date }}</small></td><td>{{ fact.pair_status || '旧策略未逐项验证' }} {{ fact.decision_reason_codes?.join(' / ') }}</td><td v-if="deltaAllowed">{{ fact.pair_status === 'COMPARABLE' ? fact.delta ?? '--' : '--' }}</td></tr></tbody></table></div>
+        <div class="table-scroll"><table><thead><tr><th>指标</th><th>{{ windowComparison ? 'TRAIN' : '左值' }}</th><th>{{ windowComparison ? 'OOS' : '右值' }}</th><th>逐项许可</th><th v-if="deltaAllowed">{{ windowComparison ? '窗口退化' : '授权差值' }}</th></tr></thead><tbody><tr v-for="fact in comparisonDisplay?.facts || []" :key="fact.metric_key"><td>{{ fact.metric_key }}</td><td>{{ fact.left }} <small>{{ fact.left_fact?.trade_date }} · {{ fact.left_fact?.metric_identity?.sample_role }}</small></td><td>{{ fact.right }} <small>{{ fact.right_fact?.trade_date }} · {{ fact.right_fact?.metric_identity?.sample_role }}</small></td><td>{{ fact.pair_status || '旧策略未逐项验证' }} {{ fact.decision_reason_codes?.join(' / ') }}</td><td v-if="deltaAllowed">{{ pairAllowed(fact) ? fact.delta ?? '--' : '--' }}<small v-if="pairAllowed(fact)">{{ formulaLabel(fact.formula) }} · {{ fact.left_fact?.metric_identity?.unit }}</small></td></tr></tbody></table></div>
+        <details v-if="comparisonDisplay?.explain_reasons?.length"><summary>口径差异</summary><p v-for="row in comparisonDisplay.explain_reasons" :key="row.field">{{ row.field }}<code>{{ row.left }}</code><code>{{ row.right }}</code></p></details>
+        <details v-if="comparisonDisplay?.contract_refs"><summary>比较合同身份</summary><div v-for="(refs, side) in comparisonDisplay.contract_refs" :key="side"><p v-for="ref in refs" :key="ref.contract_id">{{ side }} · {{ ref.role }} · {{ ref.subject_id }}<code>{{ ref.contract_hash }}</code></p></div></details>
         <div v-for="(facts, side) in comparisonDisplay?.unmatched_facts || {}" :key="side"><strong>{{ side }} · 未配对事实</strong><p v-for="(fact, index) in facts" :key="index">{{ fact.metric_identity.entity_id }} · {{ fact.metric_identity.metric_id }} · {{ fact.value }} {{ fact.metric_identity.unit }} · {{ fact.trade_date }} · {{ fact.metric_identity.sample_role }}</p></div>
         <div v-for="(facts, side) in comparisonDisplay?.context_facts || {}" :key="`context-${side}`"><strong>{{ side }} · 日期与标识上下文（不作差值）</strong><p v-for="(fact, index) in facts" :key="index">{{ fact.metric_identity.entity_id }} · {{ fact.metric_identity.metric_id }} · {{ fact.value }} · {{ fact.trade_date }} · {{ fact.metric_identity.sample_role }}</p></div>
         <p v-if="!comparisonDisplay">旧接口未提供安全展示投影。审计 result 不用于展示或绘图。</p>
@@ -285,10 +342,12 @@ th, td { border-bottom: 1px solid #e2e8f0; padding: 7px; text-align: left; white
 .evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
 .evidence-grid article { display: grid; gap: 3px; border: 1px solid #e2e8f0; border-radius: 5px; padding: 8px; }
 .evidence-grid code { overflow-wrap: anywhere; }
-.report-compare { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; align-items: end; gap: 10px; padding: 12px; }
+.report-compare { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr auto; align-items: end; gap: 10px; padding: 12px; }
 .comparison-result { grid-column: 1 / -1; display: grid; gap: 7px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
 .comparison-result > strong { width: fit-content; border-radius: 999px; padding: 3px 8px; }
 .comparison-result > strong { background: #e2e8f0; color: #334155; }
+.comparison-actions, .comparison-checks { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.comparison-result code { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 1100px) { .report-create { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-create > div { grid-column: 1 / -1; } .report-compare { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 720px) { .report-create, .report-compare, .report-layout { grid-template-columns: 1fr; } .report-list { max-height: 260px; overflow-y: auto; } .evidence-grid { grid-template-columns: 1fr; } .detail-title { display: grid; } .snapshot-meta { display: grid; } }
 </style>

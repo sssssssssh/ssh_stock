@@ -16,7 +16,9 @@ class AgentFrozenContractApplication:
         self.config = settings.agent_config.frozen_contract
         self.repo = AgentFrozenContractRepository(db)
 
-    def check_turn(self, *, owner_id, turn_id, expected_reference=None, deadline=None):
+    def check_turn(
+        self, *, owner_id, turn_id, expected_reference=None, deadline=None, base_bundle=None
+    ):
         self._deadline = deadline or time.monotonic() + self.config.verify_timeout_seconds
         self._check_budget()
         if self.db.get_bind().dialect.name == "postgresql":
@@ -45,7 +47,7 @@ class AgentFrozenContractApplication:
             raise archive_error("REPORT_CONTRACT_BINDING_MISMATCH")
         archive = AgentArchiveApplication(self.db, self.settings)
         archive._deadline = self._deadline
-        base = archive.load_bundle(owner_id, turn_id)
+        base = base_bundle if base_bundle is not None else archive.load_bundle(owner_id, turn_id)
         if base is None:
             raise archive_error("CONTRACT_BASE_ARCHIVE_MISSING")
         facts = recheck_archive(

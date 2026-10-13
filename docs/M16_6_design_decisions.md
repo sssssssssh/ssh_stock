@@ -1,5 +1,13 @@
 # M16.6 路径映射与设计决策
 
+## PR-E 验收中
+
+- 双锚点绑定：`contracts/report_binding.py`；读取同时核验原 Manifest 与子 Manifest，旧 v1/v2/v3 的序列化及 AUTO 请求哈希不变。
+- `report/application.py` 新增 v4 分派、提交前完整复核、冻结政策重检、分页安全投影和比较导出；不查询最新业务表。
+- API 新增 `/reports/{id}/contracts`、`/contracts/{contract_id}`、`/verify-contracts`，以及 `/report-comparisons/{id}/export`；相同 Cookie/owner 404 与严格 DTO。
+- Vue 复核状态独立、分页/错误恢复/请求取消、专用窗口退化表，全局和逐项许可双门禁；只消费 `display_result`。
+- 本机单元 1058 passed，Ruff passed，前端 100 passed、覆盖率 80.83%、构建 passed。实际 PG 工具捕获→归档→Report API→Comparison API 用例随本阶段提交，由隔离 CI 执行；尚未宣称 PG/浏览器最终通过。
+
 基线：`07e288c3826618192b4022e8b63d0df06db679ec`。本文件记录实现前核对，不改变既有冻结口径。
 
 | 职责 | 当前代码路径 | 本阶段接入点 |

@@ -54,6 +54,24 @@ def _contexts(left, right):
     }
 
 
+def _contract_refs(verification):
+    if verification is None:
+        return []
+    refs = []
+    for item in verification.check.get("results", []):
+        body = verification.verified.get(item["contract_id"])
+        source_ids = None
+        if body is not None:
+            source_ids = body.get("selected") or {
+                "study_id": body["study"]["id"],
+                "validation_id": body["validation"]["id"],
+                "window_no": body["window"]["window_no"],
+                "selected_trial_id": body["trial"]["id"],
+            }
+        refs.append({**item, "source_ids": source_ids})
+    return refs
+
+
 def compare_frozen_research(
     left,
     right,
@@ -69,12 +87,18 @@ def compare_frozen_research(
         "policy_version": CONTRACT_COMPARISON_POLICY_VERSION,
         "comparison_intent": comparison_intent,
         "comparison_mode": comparison_mode,
+        "max_facts": max_facts,
         "facts": [],
         "context_facts": _contexts(*inventories),
-        "unmatched_facts": {"left": [], "right": []},
+        "unmatched_facts": {
+            side: [
+                fact.view() for fact in inventory.unique.values() if fact.value_type == "NUMERIC"
+            ]
+            for side, inventory in zip(("left", "right"), inventories, strict=True)
+        },
         "ambiguous_facts": {"left": inventories[0].issues, "right": inventories[1].issues},
         "contract_refs": {
-            side: value.check.get("results", []) if value else []
+            side: _contract_refs(value)
             for side, value in (("left", left_verification), ("right", right_verification))
         },
         "contract_check": {
@@ -152,6 +176,11 @@ def compare_frozen_research(
         }
     )
     result["facts"] = result["facts"][:max_facts]
+    remaining = max_facts - len(result["facts"])
+    for group in ("unmatched_facts", "context_facts"):
+        for side in ("left", "right"):
+            result[group][side] = result[group][side][:remaining]
+            remaining -= len(result[group][side])
     return state, sorted(reasons), result
 
 
@@ -240,6 +269,10 @@ def _independent_pairs(result, inventories, left_verification, right_verificatio
                 context.prec = 1000
                 row["delta"] = decimal_text(Decimal(b.value) - Decimal(a.value))
         result["facts"].append(row)
+    result["unmatched_facts"] = {
+        side: [fact.view() for key, fact in groups[index].items() if key not in groups[1 - index]]
+        for index, side in enumerate(("left", "right"))
+    }
     return state, codes
 
 
@@ -323,6 +356,10 @@ def _window_pairs(result, inventories, left_verification, right_verification):
         "study_id": body["study"]["id"],
         "validation_id": body["validation"]["id"],
         "window_no": body["window"]["window_no"],
+        "train_start_date": body["window"]["train_start_date"],
+        "train_end_date": body["window"]["train_end_date"],
+        "oos_start_date": body["window"]["test_start_date"],
+        "oos_end_date": body["window"]["test_end_date"],
         "mode": "WINDOW_DEGRADATION",
         "train_trade_dates_hash": body["window"]["train_date_hash"],
         "oos_trade_dates_hash": body["window"]["test_date_hash"],
@@ -359,4 +396,11 @@ def _window_pairs(result, inventories, left_verification, right_verification):
                 "delta_semantics": "WINDOW_DEGRADATION",
             }
         )
+    for side, group, inventory in zip(("left", "right"), groups, inventories, strict=True):
+        matched = {fact.descriptor for fact in group.values()}
+        result["unmatched_facts"][side] = [
+            fact.view()
+            for fact in inventory.unique.values()
+            if fact.value_type == "NUMERIC" and fact.descriptor not in matched
+        ]
     return "COMPARABLE", []

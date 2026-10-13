@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
+import ContractArchivePanel from "./ContractArchivePanel.vue";
+import type { ContractManifestReference } from "../services/agentReports";
 import { fetchEvidenceDetail, fetchReportEvidence, fetchTurnArchive, unavailableArchive,
   verifyFrozenReport, type ArchiveDetail, type ArchiveEvidence, type ArchiveSummary,
   type ArchiveVerification } from "../services/agentArchive";
 
-const props = defineProps<{ reportId?: string; chatId?: string; requestId?: string | null }>();
+const props = defineProps<{ reportId?: string; chatId?: string; requestId?: string | null; contractReference?: ContractManifestReference | null }>();
 const summary = ref<ArchiveSummary | null>(null);
 const evidence = ref<ArchiveEvidence[]>([]);
 const total = ref(0);
@@ -125,6 +127,7 @@ onBeforeUnmount(() => { generation++; controller.abort(); });
         <p v-for="warning in verification.warnings" :key="warning"><code>{{ warning }}</code></p>
       </div>
     </template>
+    <ContractArchivePanel v-if="reportId" :report-id="reportId" :reference="contractReference" />
   </section>
 </template>
 

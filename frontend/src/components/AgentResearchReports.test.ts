@@ -155,3 +155,45 @@ it("never consumes old API audit result without safe display_result", async () =
   expect(wrapper.text()).not.toContain("999");
   wrapper.unmount();
 });
+
+it.each(["global-denied", "pair-denied", "bad-formula", "window-allowed"])("enforces v4 dual permission: %s", async (kind) => {
+  mocks.fetchResearchReports.mockResolvedValue({ data: [summary, { ...summary, report_id: "report-2" }], meta: { total: 2 } });
+  mocks.createReportComparison.mockResolvedValue({ policy_version: "m16.6-report-comparison-v4", state: "COMPARABLE", reason_codes: [],
+    display_safety: { legacy_policy: false, delta_allowed: true }, result: { facts: [{ delta: "audit-secret" }] },
+    display_result: { comparison_mode: "WINDOW_DEGRADATION", comparison_permissions: { allowed: kind !== "global-denied" },
+      facts: [{ metric_key: "annualized_return", left: "0.2", right: "0.1", delta: "0.123456",
+        pair_status: "COMPARABLE", comparison_permission: { allowed: kind !== "pair-denied" },
+        formula: kind === "bad-formula" ? "UNKNOWN_FORMULA" : "TRAIN_MINUS_OOS" }] } });
+  const wrapper = mount(AgentResearchReports);
+  await flushPromises();
+  const selects = wrapper.findAll(".report-compare select");
+  await selects[0].setValue("report-1"); await selects[1].setValue("report-2");
+  await selects[2].setValue("WINDOW_DEGRADATION");
+  await wrapper.findAll("button").find(b => b.text() === "比较")!.trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("audit-secret");
+  expect(wrapper.text().includes("0.123456")).toBe(kind === "window-allowed");
+  if (kind === "window-allowed") {
+    expect(wrapper.text()).toContain("TRAIN − OOS");
+    expect(wrapper.findAll("th").map(x => x.text())).toContain("窗口退化");
+  }
+  wrapper.unmount();
+});
+
+it("cancels a comparison when the mode changes and ignores its late reply", async () => {
+  let resolve!: (value: unknown) => void;
+  mocks.createReportComparison.mockReturnValueOnce(new Promise(r => { resolve = r; }));
+  mocks.fetchResearchReports.mockResolvedValue({ data: [summary, { ...summary, report_id: "report-2" }], meta: { total: 2 } });
+  const wrapper = mount(AgentResearchReports);
+  await flushPromises();
+  const selects = wrapper.findAll(".report-compare select");
+  await selects[0].setValue("report-1"); await selects[1].setValue("report-2");
+  await wrapper.findAll("button").find(b => b.text() === "比较")!.trigger("click");
+  const signal = mocks.createReportComparison.mock.calls[0][1];
+  await selects[2].setValue("STRICT_SAME_SAMPLE");
+  expect(signal.aborted).toBe(true);
+  resolve({ state: "STALE-COMPARISON", reason_codes: [] });
+  await flushPromises();
+  expect(wrapper.text()).not.toContain("STALE-COMPARISON");
+  wrapper.unmount();
+});

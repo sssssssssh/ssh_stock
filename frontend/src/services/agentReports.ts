@@ -7,6 +7,44 @@ export type ReportType =
   | "strategy_review"
   | "oos_review";
 export type ReportComparisonState = "COMPARABLE" | "CONTEXT_REQUIRED" | "INCOMPATIBLE";
+export type ContractCheckState = "VERIFIED" | "UNVERIFIABLE" | "MISMATCH";
+export type ResearchComparisonMode = "AUTO" | "STRICT_SAME_SAMPLE" | "DIFFERENT_ASSUMPTIONS" | "WINDOW_DEGRADATION";
+
+export interface FrozenContractReference {
+  contract_id: string;
+  contract_kind: "M14_EXACT_BUNDLE" | "M15_WINDOW_LINEAGE" | "M15_STUDY_AGGREGATE";
+  subject_id: string;
+  role: "LIVE" | "TRAIN" | "OOS" | "STUDY";
+  schema_version: string;
+  contract_hash: string;
+  status: ContractCheckState;
+  reason_codes: string[];
+  tool_result_archive_id: string;
+}
+export interface ContractVerification {
+  contract_manifest_id?: string | null;
+  contract_manifest_hash?: string | null;
+  policy_version?: string | null;
+  archive_integrity?: { status: ContractCheckState } | null;
+  frozen_fact_recheck?: { status: ContractCheckState } | null;
+  contract_integrity: { status: ContractCheckState; reason_codes?: string[] };
+  contract_semantics: { status: ContractCheckState; reason_codes?: string[] };
+  comparison_permission: { allowed: boolean; reason_codes: string[] };
+  calculation_reproduced: false;
+  results?: Array<Omit<FrozenContractReference, "tool_result_archive_id">>;
+}
+export interface ContractManifestReference {
+  manifest_id: string;
+  manifest_hash: string;
+  policy_version: string;
+  contract_count: number;
+  contract_scope: string[];
+  gap_codes: string[];
+  reproduction_level: "FROZEN_CONTRACT_RECHECK";
+}
+export interface FrozenContractDetail extends FrozenContractReference {
+  projection: Record<string, unknown> | null;
+}
 
 export interface ReportChart {
   chart_id: string;
@@ -26,6 +64,7 @@ export interface ReportSnapshot {
   snapshot_level: "CLAIM_SNAPSHOT_ONLY" | "FROZEN_TOOL_EVIDENCE";
   archive_reference?: { manifest_id: string; manifest_hash: string; manifest_version: string;
     archive_status: "COMPLETE"; reproduction_level: "FROZEN_FACT_RECHECK" } | null;
+  contract_reference?: ContractManifestReference | null;
   report_type: ReportType;
   title: string;
   as_of_date?: string | null;
@@ -73,7 +112,13 @@ export interface ResearchReport extends ResearchReportSummary {
     verification_scope?: string[];
     frozen_fields?: string[];
     gap_codes?: string[];
+    contract_manifest_id?: string | null;
+    contract_manifest_hash?: string | null;
+    contract_policy_version?: string | null;
+    contract_scope?: string[];
+    contract_refs?: FrozenContractReference[];
   };
+  contract_check?: ContractVerification | null;
 }
 
 export interface ReportComparison {
@@ -86,12 +131,21 @@ export interface ReportComparison {
   result: {
     facts?: Array<{ metric_key: string; left: string; right: string; delta?: string;
       pair_status?: ReportComparisonState; decision_reason_codes?: string[];
-      left_fact?: { trade_date: string }; right_fact?: { trade_date: string } }>;
+      comparison_permission?: { allowed: boolean; reason_codes: string[] };
+      formula?: string; delta_semantics?: string;
+      left_fact?: { trade_date: string; metric_identity?: { sample_role: string; unit: string } };
+      right_fact?: { trade_date: string; metric_identity?: { sample_role: string; unit: string } } }>;
     unmatched_facts?: Record<string, Array<{ value: string; trade_date: string;
       metric_identity: { metric_id: string; entity_id: string; unit: string; sample_role: string } }>>;
     context_facts?: ReportComparison["result"]["unmatched_facts"];
     side_by_side_facts?: ReportComparison["result"]["unmatched_facts"];
     delta_policy?: string;
+    comparison_mode?: ResearchComparisonMode;
+    comparison_permissions?: { allowed: boolean; reason_codes: string[] };
+    contract_check?: Record<string, ContractVerification>;
+    contract_refs?: Record<string, Array<Omit<FrozenContractReference, "tool_result_archive_id"> & { source_ids?: Record<string, string | number> | null }>>;
+    sample_context?: Record<string, unknown>;
+    explain_reasons?: Array<{ field: string; left: string; right: string }>;
   };
   display_result?: ReportComparison["result"] | null;
   display_safety?: { legacy_policy: boolean; delta_allowed: boolean; warnings: string[] } | null;
@@ -110,7 +164,8 @@ export function fetchResearchReports(
   limit = 20,
   offset = 0,
   includeArchived = false,
-  reportType?: ReportType
+  reportType?: ReportType,
+  signal?: AbortSignal
 ): Promise<ApiPage<ResearchReportSummary[], { total: number }>> {
   const query = new URLSearchParams({
     limit: String(limit),
@@ -119,12 +174,24 @@ export function fetchResearchReports(
   });
   if (reportType) query.set("type", reportType);
   return requestPage<ResearchReportSummary[], { total: number }>(
-    `/agent/reports?${query.toString()}`
+    `/agent/reports?${query.toString()}`, signal ? { signal } : undefined
   );
 }
 
-export function fetchResearchReport(reportId: string): Promise<ResearchReport> {
-  return request<ResearchReport>(`/agent/reports/${encodeURIComponent(reportId)}`);
+export function fetchResearchReport(reportId: string, signal?: AbortSignal): Promise<ResearchReport> {
+  return request<ResearchReport>(`/agent/reports/${encodeURIComponent(reportId)}`, signal ? { signal } : undefined);
+}
+
+export function fetchReportContracts(reportId: string, offset = 0, signal?: AbortSignal): Promise<ApiPage<FrozenContractReference[], { total: number; check: ContractVerification }>> {
+  return requestPage(`/agent/reports/${encodeURIComponent(reportId)}/contracts?limit=20&offset=${offset}`, { signal });
+}
+export function fetchReportContract(reportId: string, contractId: string, signal?: AbortSignal): Promise<FrozenContractDetail> {
+  return request(`/agent/reports/${encodeURIComponent(reportId)}/contracts/${encodeURIComponent(contractId)}`, { signal });
+}
+export function verifyReportContracts(reportId: string, signal?: AbortSignal): Promise<ContractVerification> {
+  return request(`/agent/reports/${encodeURIComponent(reportId)}/verify-contracts`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal
+  });
 }
 
 export function createResearchReport(payload: {
@@ -153,12 +220,27 @@ export function createReportComparison(payload: {
   request_id: string;
   comparison_intent?: "AUTO" | "SAME_ENTITY_OVER_TIME" | "CROSS_ENTITY_SAME_DATE"
     | "INDEPENDENT_BACKTESTS" | "TRAIN_VS_OOS";
-}): Promise<ReportComparison> {
+  comparison_mode?: Exclude<ResearchComparisonMode, "AUTO">;
+}, signal?: AbortSignal): Promise<ReportComparison> {
   return request<ReportComparison>("/agent/report-comparisons", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload), signal
   });
+}
+
+export async function downloadReportComparison(comparisonId: string, format: "markdown" | "html"): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/agent/report-comparisons/${encodeURIComponent(comparisonId)}/export?format=${format}`, { credentials: "include" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(body?.detail?.code || `HTTP ${response.status}`, response.status, body?.detail || null);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `research-comparison-${comparisonId}.${format === "html" ? "html" : "md"}`;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function downloadResearchReport(

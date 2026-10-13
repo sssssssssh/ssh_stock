@@ -6,6 +6,8 @@ M14_CONTRACT_VERSION = "m16.6-m14-bundle-v1"
 M15_WINDOW_CONTRACT_VERSION = "m16.6-m15-window-v1"
 M15_AGGREGATE_CONTRACT_VERSION = "m16.6-m15-aggregate-v1"
 CONTRACT_MANIFEST_VERSION = "m16.6-contract-manifest-v1"
+CONTRACT_REPORT_VERSION = "m16.6-report-v1"
+CONTRACT_REPORT_SNAPSHOT_VERSION = "m16.6-report-snapshot-v4"
 
 
 class FrozenContractDraft(BaseModel):
@@ -34,3 +36,34 @@ class FrozenContractDraft(BaseModel):
         elif self.verification_scope != "FROZEN_CONTRACT_RECHECK":
             raise ValueError("source contract requires frozen recheck scope")
         return self
+
+
+class FrozenContractCheckStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["VERIFIED", "UNVERIFIABLE", "MISMATCH"]
+    reason_codes: list[str] = Field(default_factory=list, max_length=64)
+    policy_version: str | None = None
+
+
+class FrozenComparisonPermission(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allowed: bool
+    reason_codes: list[str] = Field(default_factory=list, max_length=64)
+
+
+class FrozenContractVerificationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    contract_manifest_id: str | None = None
+    contract_manifest_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    policy_version: str | None = None
+    archive_integrity: FrozenContractCheckStatus | None = None
+    frozen_fact_recheck: FrozenContractCheckStatus | None = None
+    contract_integrity: FrozenContractCheckStatus
+    contract_semantics: FrozenContractCheckStatus
+    comparison_permission: FrozenComparisonPermission
+    calculation_reproduced: Literal[False] = False
+    results: list[dict[str, Any]] = Field(default_factory=list, max_length=800)
+
+
+class VerifyFrozenContractsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")

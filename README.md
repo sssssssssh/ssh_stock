@@ -1308,6 +1308,8 @@ docker compose logs --tail=200 backend worker scheduler frontend
 
 0052 新增冻结研究合同及子 Manifest，不改写历史归档。`config/agent.yaml` 的 `agent.frozen_contract.enabled` 默认关闭；启用必须同时开启 `agent.archive.enabled`。当前正按 A–F 验收，请保持开关关闭直到最终交付。阶段、迁移与实测见 [设计决策与验收记录](docs/M16_6_design_decisions.md)。
 
+A–D 已通过隔离 PostgreSQL 17 CI。E 新增研究报告合同列表/明细/离线复核、同样本回测/假设敏感性/窗口 TRAIN/OOS 比较模式及安全导出。仅有合同创建时双锚点的 v4 报告可以请求新比较；旧报告显示“无合同归档”，不提供补历史按钮。当前仍待 E/F 全量验收。
+
 ## Milestone 16.1 只读研究 Agent 工具层（2026-10-10）
 
 - 当前仅启用 `tools_only`，`llm_enabled=false`，不需要填写任何模型 API Key，也不连接云端模型。

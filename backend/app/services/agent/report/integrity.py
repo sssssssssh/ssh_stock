@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.domain.agent.frozen_contracts import (
+    CONTRACT_REPORT_SNAPSHOT_VERSION,
+    CONTRACT_REPORT_VERSION,
+)
 from app.domain.agent.report import (
     ReportEvidenceIdentity,
     ReportSourceContract,
     ResearchReportSnapshot,
 )
 from app.domain.agent.report_errors import AgentReportError
+from app.services.agent.contracts.report_binding import verify_contract_report
 from app.services.agent.report.archive_binding import (
     ARCHIVED_REPORT_VERSION,
     ARCHIVED_SNAPSHOT_VERSION,
@@ -45,9 +50,16 @@ def verify_report(row: Any) -> tuple[ResearchReportSnapshot, ReportSourceContrac
                 raise ValueError("snapshot metadata")
         if row.report_version != contract.report_version:
             raise ValueError("report version")
-        if row.report_version not in {"m16.4-v1", ARCHIVED_REPORT_VERSION}:
+        if row.report_version not in {"m16.4-v1", ARCHIVED_REPORT_VERSION, CONTRACT_REPORT_VERSION}:
             raise ValueError("unsupported frozen report version")
-        if row.report_version == ARCHIVED_REPORT_VERSION:
+        if row.report_version == CONTRACT_REPORT_VERSION:
+            if (
+                snapshot.schema_version != CONTRACT_REPORT_SNAPSHOT_VERSION
+                or snapshot.source_contract_hash is None
+            ):
+                raise ValueError("frozen contract snapshot schema")
+            verify_contract_report(snapshot, contract)
+        elif row.report_version == ARCHIVED_REPORT_VERSION:
             if (
                 snapshot.schema_version != ARCHIVED_SNAPSHOT_VERSION
                 or snapshot.source_contract_hash is None
@@ -65,6 +77,15 @@ def verify_report(row: Any) -> tuple[ResearchReportSnapshot, ReportSourceContrac
             or contract.snapshot_level != "CLAIM_SNAPSHOT_ONLY"
         ):
             raise ValueError("historical archive escalation")
+        if row.report_version != CONTRACT_REPORT_VERSION and (
+            snapshot.contract_reference is not None
+            or contract.contract_manifest_id is not None
+            or contract.contract_manifest_hash is not None
+            or contract.contract_policy_version is not None
+            or contract.contract_refs
+            or contract.contract_scope
+        ):
+            raise ValueError("historical contract escalation")
         if (
             snapshot.schema_version == "m16.4.1-report-snapshot-v2"
             and snapshot.source_contract_hash is None
@@ -124,6 +145,13 @@ def verify_source_contract(
             "CALCULATION_NOT_REEXECUTED",
             *archive_gaps(contract.tool_names),
         }
+    elif contract.report_version == CONTRACT_REPORT_VERSION:
+        expected_limits = {
+            "HISTORICAL_TOOL_RESULT_ONLY",
+            "FROZEN_CONTRACT_RECHECK",
+            "CALCULATION_NOT_REEXECUTED",
+            *contract.gap_codes,
+        }
     if set(contract.limitations) != expected_limits:
         raise ValueError("source limitations mismatch")
     if contract.comparison_policy_version != "m16.2.2-comparison-v1":
@@ -166,5 +194,13 @@ def verify_comparison(row: Any, left: Any, right: Any) -> None:
                     row.state != "COMPARABLE" or fact.get("pair_status") != "COMPARABLE"
                 ):
                     raise ValueError("comparison delta permission")
+                if row.policy_version == "m16.6-report-comparison-v4" and "delta" in fact:
+                    if not (
+                        result.get("comparison_permissions", {}).get("allowed") is True
+                        and fact.get("comparison_permission", {}).get("allowed") is True
+                        and fact.get("formula")
+                        in {"RIGHT_MINUS_LEFT", "TRAIN_MINUS_OOS", "OOS_MINUS_TRAIN"}
+                    ):
+                        raise ValueError("contract comparison permission")
     except (AgentReportError, ValueError, TypeError, AttributeError, KeyError) as exc:
         raise _failure("REPORT_COMPARISON_INTEGRITY_ERROR") from exc

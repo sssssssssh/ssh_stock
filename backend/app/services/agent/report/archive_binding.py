@@ -118,7 +118,7 @@ def bind_archive(snapshot, contract, manifest):
     snapshot.source_contract_hash = canonical_hash(contract.model_dump(mode="json"))
 
 
-def verify_archive_contract(snapshot, contract):
+def verify_archive_contract(snapshot, contract, *, expected_gaps=None, expected_scope=None):
     validate_frozen_claim_bindings(snapshot)
     ref = snapshot.archive_reference
     if (
@@ -128,8 +128,10 @@ def verify_archive_contract(snapshot, contract):
         or contract.snapshot_level != snapshot.snapshot_level
         or contract.archive_manifest_hash != ref.manifest_hash
         or contract.archive_policy_version != RECHECK_VERSION
-        or contract.verification_scope != ARCHIVE_CHECK_SCOPE
+        or contract.verification_scope
+        != (ARCHIVE_CHECK_SCOPE if expected_scope is None else expected_scope)
         or contract.frozen_fields != frozen_fields(snapshot)
-        or contract.gap_codes != archive_gaps(contract.tool_names)
+        or contract.gap_codes
+        != (archive_gaps(contract.tool_names) if expected_gaps is None else expected_gaps)
     ):
         raise ValueError("archive source contract")

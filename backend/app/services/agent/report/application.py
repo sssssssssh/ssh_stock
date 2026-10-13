@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.domain.agent.archive import AgentArchiveError
+from app.domain.agent.frozen_contracts import CONTRACT_REPORT_VERSION
 from app.domain.agent.policy import user_audit_hash
 from app.domain.agent.report import (
     CreateReportComparison,
@@ -29,12 +30,27 @@ from app.models.agent_report import AgentResearchReport, AgentResearchReportComp
 from app.repositories.agent_report import AgentReportRepository
 from app.services.agent.archive.application import AgentArchiveApplication
 from app.services.agent.archive.recheck import recheck_archive
+from app.services.agent.contracts.application import AgentFrozenContractApplication
+from app.services.agent.contracts.integrity import missing_contracts
+from app.services.agent.contracts.policy import (
+    CONTRACT_COMPARISON_POLICY_VERSION,
+    compare_frozen_research,
+)
+from app.services.agent.contracts.projection import safe_contract_projection
+from app.services.agent.contracts.report_binding import (
+    bind_contract_report,
+    contract_report_refs,
+    report_contract_gaps,
+)
 from app.services.agent.report.archive_binding import bind_archive
 from app.services.agent.report.canonical import canonical_hash, storage_json_bytes
 from app.services.agent.report.comparison import compare_report_snapshots
-from app.services.agent.report.comparison_policy import REPORT_COMPARISON_POLICY_VERSION
+from app.services.agent.report.comparison_policy import (
+    REPORT_COMPARISON_POLICY_VERSION,
+    contract_signature,
+)
 from app.services.agent.report.integrity import verify_comparison, verify_report
-from app.services.agent.report.render import render_html, render_markdown
+from app.services.agent.report.render import render_comparison, render_html, render_markdown
 from app.services.agent.report.snapshot import build_report_snapshot
 
 
@@ -106,6 +122,13 @@ class AgentReportApplication:
                         "REPORT_ARCHIVE_UNVERIFIABLE", "frozen facts unavailable", status_code=409
                     )
                 bind_archive(snapshot, contract, bundle.manifest)
+                frozen = AgentFrozenContractApplication(self.db, self.settings).check_turn(
+                    owner_id=owner_id,
+                    turn_id=turn.id,
+                    base_bundle=bundle,
+                )
+                if frozen.manifest is not None:
+                    bind_contract_report(snapshot, contract, frozen)
         except AgentArchiveError as exc:
             self.db.rollback()
             raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
@@ -218,15 +241,29 @@ class AgentReportApplication:
         self, *, user: Any, report_id: uuid.UUID, export_format: str
     ) -> tuple[str, str, str]:
         report = self.get_report(user=user, report_id=report_id)
+        contracts = None
+        if report.snapshot.contract_reference is not None:
+            verification = self._report_contracts(user=user, report_id=report_id)
+            contracts = [
+                {
+                    "metadata": ref.model_dump(mode="json"),
+                    "projection": safe_contract_projection(verification.rows[str(ref.contract_id)]),
+                }
+                for ref in contract_report_refs(verification)
+            ]
         if export_format == "markdown":
+            content = render_markdown(report.snapshot, report.snapshot_hash, contracts)
+            self._check_export_size(content)
             return (
-                render_markdown(report.snapshot, report.snapshot_hash),
+                content,
                 "text/markdown; charset=utf-8",
                 f"research-report-{report.report_id}.md",
             )
         if export_format == "html":
+            content = render_html(report.snapshot, report.snapshot_hash, contracts)
+            self._check_export_size(content)
             return (
-                render_html(report.snapshot, report.snapshot_hash),
+                content,
                 "text/html; charset=utf-8",
                 f"research-report-{report.report_id}.html",
             )
@@ -234,10 +271,34 @@ class AgentReportApplication:
             "INVALID_EXPORT_FORMAT", "unsupported export format", status_code=422
         )
 
+    def _check_export_size(self, content):
+        if len(content.encode("utf-8")) > self.settings.agent_config.frozen_contract.max_turn_bytes:
+            raise AgentReportError(
+                "REPORT_EXPORT_LIMIT_EXCEEDED", "export exceeds byte limit", status_code=422
+            )
+
+    def export_comparison(self, *, user, comparison_id, export_format):
+        if export_format not in {"markdown", "html"}:
+            raise AgentReportError(
+                "INVALID_EXPORT_FORMAT", "unsupported export format", status_code=422
+            )
+        view = self.get_comparison(user=user, comparison_id=comparison_id)
+        content = render_comparison(view, export_format)
+        self._check_export_size(content)
+        extension = "html" if export_format == "html" else "md"
+        media_type = (
+            "text/html; charset=utf-8"
+            if export_format == "html"
+            else "text/markdown; charset=utf-8"
+        )
+        return content, media_type, f"research-comparison-{comparison_id}.{extension}"
+
     def create_comparison(self, *, user: Any, body: CreateReportComparison) -> ReportComparisonView:
         started = time.monotonic()
         owner_id = _user_id(user)
         request_content = body.model_dump(mode="json", exclude={"request_id"})
+        if body.comparison_mode is None:
+            request_content.pop("comparison_mode", None)
         # AUTO retains the original request hash, allowing historical idempotent replay.
         if body.comparison_intent == "AUTO":
             request_content.pop("comparison_intent")
@@ -264,16 +325,43 @@ class AgentReportApplication:
             raise report_not_found()
         left_snapshot, left_contract = verify_report(left)
         right_snapshot, right_contract = verify_report(right)
-        self._verify_archive(left)
-        self._verify_archive(right)
-        state, reasons, result = compare_report_snapshots(
-            left_snapshot,
-            right_snapshot,
-            max_facts=self.config.max_comparison_facts,
-            left_contract=left_contract,
-            right_contract=right_contract,
-            comparison_intent=body.comparison_intent,
+        deadline = (
+            time.monotonic() + self.settings.agent_config.frozen_contract.verify_timeout_seconds
         )
+        left_frozen = self._verify_archive(left, deadline=deadline)
+        right_frozen = self._verify_archive(right, deadline=deadline)
+        intent = body.comparison_intent
+        if body.comparison_mode is not None and intent == "AUTO":
+            intent = (
+                "TRAIN_VS_OOS"
+                if body.comparison_mode == "WINDOW_DEGRADATION"
+                else "INDEPENDENT_BACKTESTS"
+            )
+        if left.report_version == right.report_version == CONTRACT_REPORT_VERSION and (
+            body.comparison_mode is not None or intent in {"INDEPENDENT_BACKTESTS", "TRAIN_VS_OOS"}
+        ):
+            state, reasons, result = compare_frozen_research(
+                left_snapshot,
+                right_snapshot,
+                left_verification=left_frozen,
+                right_verification=right_frozen,
+                max_facts=self.config.max_comparison_facts,
+                comparison_intent=intent,
+                comparison_mode=body.comparison_mode,
+            )
+            result["source_contract_hashes"] = {
+                "left": contract_signature(left_contract),
+                "right": contract_signature(right_contract),
+            }
+        else:
+            state, reasons, result = compare_report_snapshots(
+                left_snapshot,
+                right_snapshot,
+                max_facts=self.config.max_comparison_facts,
+                left_contract=left_contract,
+                right_contract=right_contract,
+                comparison_intent=intent,
+            )
         frozen = {
             **result,
             "left_report_id": str(left.id),
@@ -289,7 +377,7 @@ class AgentReportApplication:
                 right_report_id=right.id,
                 request_id=body.request_id,
                 request_hash=request_hash,
-                policy_version=REPORT_COMPARISON_POLICY_VERSION,
+                policy_version=result["policy_version"],
                 state=state,
                 reason_codes_json=reasons,
                 result_json=frozen,
@@ -297,8 +385,8 @@ class AgentReportApplication:
                 right_snapshot_hash=right.snapshot_hash,
                 comparison_hash=comparison_hash,
             )
+            result = self._verified_comparison_view(row)
             self.db.commit()
-            self.db.refresh(row)
         except IntegrityError:
             self.db.rollback()
             existing = self.repo.get_comparison_by_request(
@@ -307,7 +395,14 @@ class AgentReportApplication:
             if existing is None:
                 raise
             return self._same_comparison_or_conflict(existing, request_hash)
-        result = self._verified_comparison_view(row)
+        except AgentReportError:
+            self.db.rollback()
+            raise
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise AgentReportError(
+                "REPORT_COMPARISON_CREATE_FAILED", "comparison creation failed", status_code=503
+            ) from exc
         _audit(
             user=user,
             operation="compare_reports",
@@ -328,6 +423,38 @@ class AgentReportApplication:
             raise comparison_not_found()
         return self._verified_comparison_view(row)
 
+    def _report_contracts(self, *, user, report_id):
+        row = self.repo.get_owned_report(owner_user_id=_user_id(user), report_id=report_id)
+        if row is None:
+            raise report_not_found()
+        snapshot, _ = verify_report(row)
+        if snapshot.contract_reference is None:
+            return missing_contracts()
+        return self._verify_archive(row)
+
+    def report_contracts(self, *, user, report_id, limit, offset):
+        verification = self._report_contracts(user=user, report_id=report_id)
+        refs = contract_report_refs(verification)
+        return [ref.model_dump(mode="json") for ref in refs[offset : offset + limit]], {
+            "limit": limit,
+            "offset": offset,
+            "total": len(refs),
+            "check": {key: value for key, value in verification.check.items() if key != "results"},
+        }
+
+    def report_contract(self, *, user, report_id, contract_id):
+        verification = self._report_contracts(user=user, report_id=report_id)
+        row = verification.rows.get(str(contract_id))
+        if row is None:
+            raise AgentReportError("CONTRACT_NOT_FOUND", "contract not found", status_code=404)
+        metadata = next(
+            ref for ref in contract_report_refs(verification) if ref.contract_id == contract_id
+        )
+        return {**metadata.model_dump(mode="json"), "projection": safe_contract_projection(row)}
+
+    def verify_contracts(self, *, user, report_id):
+        return self._report_contracts(user=user, report_id=report_id).check
+
     def _same_report_or_conflict(
         self, row: AgentResearchReport, request_hash: str
     ) -> ResearchReportView:
@@ -335,18 +462,50 @@ class AgentReportApplication:
             raise idempotency_conflict()
         return self._verified_report_view(row)
 
-    def _verify_archive(self, row):
+    def _verify_archive(self, row, *, deadline=None):
         if row.snapshot_json.get("archive_reference") is not None:
             try:
-                AgentArchiveApplication(self.db, self.settings).report_bundle(
+                archive = AgentArchiveApplication(self.db, self.settings)
+                if deadline is not None:
+                    archive._deadline = deadline
+                _, snapshot, bundle = archive.report_bundle(
                     user=type("Owner", (), {"id": row.owner_user_id})(), report_id=row.id
                 )
+                reference = row.snapshot_json.get("contract_reference")
+                if reference is not None:
+                    verification = AgentFrozenContractApplication(
+                        self.db, self.settings
+                    ).check_turn(
+                        owner_id=row.owner_user_id,
+                        turn_id=row.source_turn_id,
+                        expected_reference=reference,
+                        deadline=deadline,
+                        base_bundle=bundle,
+                    )
+                    _, source_contract = verify_report(row)
+                    refs = contract_report_refs(verification)
+                    if (
+                        reference["contract_ids_hash"] != verification.manifest.contract_ids_hash
+                        or canonical_hash([ref.model_dump(mode="json") for ref in refs])
+                        != reference["contract_refs_hash"]
+                        or report_contract_gaps(source_contract, verification)
+                        != source_contract.gap_codes
+                    ):
+                        raise AgentReportError(
+                            "REPORT_CONTRACT_BINDING_MISMATCH",
+                            "frozen contract binding changed",
+                            status_code=409,
+                        )
+                    return verification
             except AgentArchiveError as exc:
                 raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
+        return None
 
     def _verified_report_view(self, row):
         result = _report_view(row)
-        self._verify_archive(row)
+        verification = self._verify_archive(row)
+        if verification is not None:
+            result.contract_check = verification.check
         return result
 
     def _same_comparison_or_conflict(
@@ -364,8 +523,48 @@ class AgentReportApplication:
             owner_user_id=row.owner_user_id, report_id=row.right_report_id
         )
         verify_comparison(row, left, right)
-        self._verify_archive(left)
-        self._verify_archive(right)
+        deadline = (
+            time.monotonic() + self.settings.agent_config.frozen_contract.verify_timeout_seconds
+        )
+        left_frozen = self._verify_archive(left, deadline=deadline)
+        right_frozen = self._verify_archive(right, deadline=deadline)
+        if row.policy_version == CONTRACT_COMPARISON_POLICY_VERSION:
+            left_snapshot, _ = verify_report(left)
+            right_snapshot, _ = verify_report(right)
+            limit = row.result_json.get("max_facts")
+            if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 1000:
+                raise AgentReportError(
+                    "REPORT_COMPARISON_INTEGRITY_ERROR",
+                    "frozen resource limit invalid",
+                    status_code=409,
+                )
+            _, _, expected = compare_frozen_research(
+                left_snapshot,
+                right_snapshot,
+                left_verification=left_frozen,
+                right_verification=right_frozen,
+                max_facts=limit,
+                comparison_intent=row.result_json["comparison_intent"],
+                comparison_mode=row.result_json["comparison_mode"],
+            )
+            actual = {
+                key: value
+                for key, value in row.result_json.items()
+                if key
+                not in {
+                    "left_report_id",
+                    "right_report_id",
+                    "left_snapshot_hash",
+                    "right_snapshot_hash",
+                    "source_contract_hashes",
+                }
+            }
+            if canonical_hash(expected) != canonical_hash(actual):
+                raise AgentReportError(
+                    "REPORT_COMPARISON_INTEGRITY_ERROR",
+                    "frozen comparison contract mismatch",
+                    status_code=409,
+                )
         return _comparison_view(row)
 
 
@@ -444,19 +643,40 @@ def _report_summary(row: AgentResearchReport) -> ResearchReportSummary:
 
 
 def _comparison_view(row: AgentResearchReportComparison) -> ReportComparisonView:
-    legacy = row.policy_version != REPORT_COMPARISON_POLICY_VERSION
+    legacy = row.policy_version not in {
+        REPORT_COMPARISON_POLICY_VERSION,
+        CONTRACT_COMPARISON_POLICY_VERSION,
+    }
+    allowed = (
+        not legacy
+        and row.state == "COMPARABLE"
+        and (
+            row.policy_version != CONTRACT_COMPARISON_POLICY_VERSION
+            or row.result_json.get("comparison_permissions", {}).get("allowed") is True
+        )
+    )
     display_result = {
         **row.result_json,
         "facts": [
             {
                 key: value
                 for key, value in fact.items()
-                if not (legacy and key in {"delta", "delta_semantics"})
+                if not (
+                    key in {"delta", "delta_semantics"}
+                    and (
+                        not allowed
+                        or fact.get("pair_status") != "COMPARABLE"
+                        or (
+                            row.policy_version == CONTRACT_COMPARISON_POLICY_VERSION
+                            and fact.get("comparison_permission", {}).get("allowed") is not True
+                        )
+                    )
+                )
             }
             for fact in row.result_json.get("facts", [])
         ],
     }
-    if legacy:
+    if not allowed:
         display_result["delta_policy"] = "DISABLED"
     return ReportComparisonView(
         comparison_id=row.id,
@@ -472,7 +692,7 @@ def _comparison_view(row: AgentResearchReportComparison) -> ReportComparisonView
         created_at=row.created_at,
         display_safety={
             "legacy_policy": legacy,
-            "delta_allowed": not legacy and row.state == "COMPARABLE",
+            "delta_allowed": allowed,
             "warnings": ["LEGACY_COMPARISON_POLICY_RECREATE_REQUIRED"] if legacy else [],
         },
         display_result=display_result,
