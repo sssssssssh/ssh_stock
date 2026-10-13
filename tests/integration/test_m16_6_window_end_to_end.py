@@ -30,7 +30,7 @@ from test_m16_2_agent_chat import _enabled_settings, _user
 
 def seed_window(db):
     # Synthetic financial fixtures, genuine persisted M14/M15 service identities.
-    dates = tuple(date(2088, 1, 2) + timedelta(days=index) for index in range(14))
+    dates = tuple(date(2088, 1, 2) + timedelta(days=index) for index in range(21))
     db.add_all(TradeCalendar(cal_date=value, is_open=True, exchange="SSE") for value in dates)
     db.flush()
     service = WalkForwardApplicationService(db)
@@ -48,50 +48,54 @@ def seed_window(db):
         train_evaluation_policy=None,
     )
     study = db.get(PortfolioWalkForwardStudy, uuid.UUID(created["id"]))
-    window = db.scalar(
-        sa.select(PortfolioWalkForwardWindow).where(
-            PortfolioWalkForwardWindow.study_id == study.id,
+    windows = list(
+        db.scalars(
+            sa.select(PortfolioWalkForwardWindow).where(
+                PortfolioWalkForwardWindow.study_id == study.id,
+            )
         )
     )
-    train_case, _ = _complete_bundle(
-        db, tuple(date.fromisoformat(d) for d in window.train_trade_dates)
-    )
-    experiment = service._frozen_experiment_service(study).create_from_frozen_base(
-        name="m166-train",
-        start_date=window.train_start_date,
-        end_date=window.train_end_date,
-        grid=study.parameter_space,
-        base_config_snapshot=study.base_config_snapshot,
-        base_identities={key: getattr(study, key) for key in BASE_IDENTITY_FIELDS},
-        commit=False,
-    )
-    window.train_experiment_id = experiment.id
-    trial = db.scalar(
-        sa.select(PortfolioExperimentTrial).where(
-            PortfolioExperimentTrial.experiment_id == experiment.id,
+    assert len(windows) == 2
+    for window in windows:
+        train_case, _ = _complete_bundle(
+            db, tuple(date.fromisoformat(d) for d in window.train_trade_dates)
         )
-    )
-    trial.run_id = train_case.run_id
-    _align_run_snapshot(db, train_case.run_id, experiment, trial)
-    db.commit()
-    evaluation = ExperimentEvaluationApplicationService(db).calculate_now(experiment.id).report
-    service._freeze_selection(window, experiment, evaluation)
-    oos_case, period = _complete_bundle(
-        db, tuple(date.fromisoformat(d) for d in window.test_trade_dates)
-    )
-    _align_run_snapshot(db, oos_case.run_id, experiment, trial)
-    window.oos_run_id = oos_case.run_id
-    db.flush()
-    bundle = service.bundle_resolver.resolve(
-        oos_case.run_id,
-        performance_id=oos_case.performance_id,
-        risk_id=oos_case.risk_id,
-        trade_id=oos_case.trade_id,
-        period_id=period.id,
-        require_period=True,
-    )
-    service._pin_oos_bundle(window, bundle)
-    db.commit()
+        experiment = service._frozen_experiment_service(study).create_from_frozen_base(
+            name=f"m166-train-{window.window_no}",
+            start_date=window.train_start_date,
+            end_date=window.train_end_date,
+            grid=study.parameter_space,
+            base_config_snapshot=study.base_config_snapshot,
+            base_identities={key: getattr(study, key) for key in BASE_IDENTITY_FIELDS},
+            commit=False,
+        )
+        window.train_experiment_id = experiment.id
+        trial = db.scalar(
+            sa.select(PortfolioExperimentTrial).where(
+                PortfolioExperimentTrial.experiment_id == experiment.id,
+            )
+        )
+        trial.run_id = train_case.run_id
+        _align_run_snapshot(db, train_case.run_id, experiment, trial)
+        db.commit()
+        evaluation = ExperimentEvaluationApplicationService(db).calculate_now(experiment.id).report
+        service._freeze_selection(window, experiment, evaluation)
+        oos_case, period = _complete_bundle(
+            db, tuple(date.fromisoformat(d) for d in window.test_trade_dates)
+        )
+        _align_run_snapshot(db, oos_case.run_id, experiment, trial)
+        window.oos_run_id = oos_case.run_id
+        db.flush()
+        bundle = service.bundle_resolver.resolve(
+            oos_case.run_id,
+            performance_id=oos_case.performance_id,
+            risk_id=oos_case.risk_id,
+            trade_id=oos_case.trade_id,
+            period_id=period.id,
+            require_period=True,
+        )
+        service._pin_oos_bundle(window, bundle)
+        db.commit()
     validation, _ = service.calculate_now(study.id)
     persisted = db.get(
         PortfolioWalkForwardWindowValidation, {"validation_id": validation.id, "window_no": 1}

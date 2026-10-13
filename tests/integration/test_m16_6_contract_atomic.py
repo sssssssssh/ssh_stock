@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
@@ -14,14 +13,12 @@ from app.models.agent_frozen_contract import (
     AgentFrozenContractManifest,
     AgentFrozenResearchContract,
 )
-from app.models.portfolio import PortfolioBacktestRun
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.chat.application import AgentChatApplication
 from app.services.agent.contracts.application import AgentFrozenContractApplication
 from app.services.agent.llm.contracts import LLMResponse, ToolCall
 from app.services.agent.llm.fake import FakeLLMProvider
 from app.services.performance.period_application import PerformancePeriodApplicationService
-from app.services.performance.risk_application import PerformanceRiskApplicationService
 from m14_4_support import seed_analytics_case
 from m16_6_support import isolated_contract_database
 from test_m16_2_agent_chat import _enabled_settings, _user
@@ -30,11 +27,6 @@ from test_m16_2_agent_chat import _enabled_settings, _user
 def _case_and_provider(db, *, benchmark_code="000300.SH"):
     dates = tuple(date(2087, 1, 2) + timedelta(days=day) for day in range(7))
     case = seed_analytics_case(db, dates, benchmark_code=benchmark_code)
-    if benchmark_code != "000300.SH":
-        db.get(PortfolioBacktestRun, case.run_id).benchmark_code = benchmark_code
-        db.flush()
-        risk = PerformanceRiskApplicationService(db).calculate_now(case.run_id, case.performance_id)
-        case = replace(case, risk_id=risk.report.id)
     PerformancePeriodApplicationService(db).calculate_now(
         case.run_id,
         performance_id=case.performance_id,

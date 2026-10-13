@@ -5,7 +5,7 @@ import ContractArchivePanel from "./ContractArchivePanel.vue";
 const mocks = vi.hoisted(() => ({ fetchReportContracts: vi.fn(), fetchReportContract: vi.fn(), verifyReportContracts: vi.fn() }));
 vi.mock("../services/agentReports", () => mocks);
 const reference = { manifest_id: "child", manifest_hash: "a".repeat(64), policy_version: "m16.6-contract-manifest-v1",
-  contract_ids_hash: "b".repeat(64), contract_refs_hash: "c".repeat(64), contract_count: 21, contract_scope: ["M14_EXACT_BUNDLE"], gap_codes: [] };
+  contract_ids_hash: "b".repeat(64), contract_refs_hash: "c".repeat(64), contract_count: 21, contract_scope: ["M14_EXACT_BUNDLE"], gap_codes: [], reproduction_level: "FROZEN_CONTRACT_RECHECK" as const };
 const check = { archive_integrity: { status: "VERIFIED" }, frozen_fact_recheck: { status: "VERIFIED" },
   contract_integrity: { status: "VERIFIED" }, contract_semantics: { status: "VERIFIED", reason_codes: [] },
   comparison_permission: { allowed: false }, calculation_reproduced: false, results: [] };

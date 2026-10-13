@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.models.market_data import IndexDaily
+from app.models.portfolio import PortfolioBacktestRun
 from app.services.performance.risk_application import PerformanceRiskApplicationService
 from app.services.performance.trade_application import PerformanceTradeApplicationService
 from m14_3_support import TradeCase, seed_trade_case
@@ -30,6 +31,7 @@ def seed_analytics_case(
     benchmark_code: str = "000300.SH",
 ) -> AnalyticsCase:
     case = seed_trade_case(db, dates)
+    db.get(PortfolioBacktestRun, case.run_id).benchmark_code = benchmark_code
     previous = 100.0
     for index, trade_date in enumerate(dates):
         identity = (trade_date, benchmark_code)
