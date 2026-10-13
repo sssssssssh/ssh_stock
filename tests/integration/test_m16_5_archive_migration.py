@@ -143,6 +143,9 @@ def test_0051_empty_upgrade_downgrade_and_real_archive_owner_constraints():
                 db.rollback()
             db.refresh(row)
             assert row.payload_json == frozen
+            # 0052 downgrade runs DDL before 0051 checks for existing archives.
+            # Release this session's read locks so the downgrade can reach that guard.
+            db.rollback()
             with pytest.raises(RuntimeError, match="archive data exists"):
                 command.downgrade(config, "0050_m16_4_reports")
             assert (
