@@ -24,3 +24,8 @@
 ## 与任务书建议字段的偏差
 
 `PortfolioPerformanceDaily` 的日期归属以实际 `performance_id` 为准；`PortfolioWalkForwardWindow` 已直接保存 Train/Test 有序日期与各自日期 Hash。WindowValidation 已具有联接 Trial、Train/OOS 报告的复合外键，捕获时仍需逐字段核验，不能仅把 FK 存在等同于合同可比。当前用户未提供独立本地测试库；数据库写入型测试只能在 CI 隔离 PostgreSQL 17 中执行，不连接业务库。
+
+## 阶段验收记录
+
+- PR-A：`0a11b49` 建立 0052；`d625edc` 释放旧迁移测试的读取锁后再执行 DDL。[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38340339216) Success；本地 unit 1004 passed、ruff、diff check、Alembic heads 通过。0052 不回填历史；新合同拒绝 UPDATE/DELETE，非空时拒绝降级。
+- PR-B：精确 M14 ID 只 SELECT，复用原比较契约构建器；合同走私有 ToolResultContext，归档仅引用已选 ToolArchive。合同/子 Manifest 与完成回答共用一次 commit。缺 Period/日期/假设仅冻结 Gap。默认关闭。新增独立临时 PG17 数据库中的真实工具/Chat、回滚和幂等用例；结果以本阶段 CI 为准。

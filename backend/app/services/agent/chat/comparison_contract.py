@@ -189,7 +189,7 @@ class BacktestComparisonContractResolver:
                     return ContractDecision(
                         "INCOMPATIBLE", ("PERFORMANCE_DATE_SERIES_INCOMPLETE",)
                     )
-                contracts.append(_contract(bundle, dates))
+                contracts.append(build_comparison_contract(bundle, dates))
         except (AnalyticsBundleError, ValueError, TypeError, KeyError):
             return ContractDecision(
                 "INCOMPATIBLE", ("COMPARISON_CONTRACT_UNVERIFIABLE",)
@@ -200,7 +200,7 @@ class BacktestComparisonContractResolver:
         )
 
 
-def _contract(bundle: Any, dates: tuple[str, ...]) -> ComparisonContract:
+def build_comparison_contract(bundle: Any, dates: tuple[str, ...]) -> ComparisonContract:
     run = bundle.run
     performance = bundle.performance
     risk = bundle.risk

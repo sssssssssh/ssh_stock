@@ -16,6 +16,13 @@ agent:
     max_tool_calls: 8
     max_bindings: 64
     verify_timeout_seconds: 5
+  frozen_contract:
+    enabled: false
+    max_contract_bytes: 131072
+    max_turn_bytes: 1048576
+    max_contracts: 100
+    max_trade_dates: 5000
+    verify_timeout_seconds: 5
   reports:
     max_snapshot_bytes: 262144
     max_claims: 50

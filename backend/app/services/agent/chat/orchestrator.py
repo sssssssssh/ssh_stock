@@ -17,6 +17,7 @@ from app.domain.agent.chat_errors import (
     total_deadline_exceeded,
 )
 from app.domain.agent.errors import AgentError
+from app.domain.agent.frozen_contracts import FrozenContractDraft
 from app.services.agent.llm.contracts import (
     ChatMessage,
     LLMProvider,
@@ -47,15 +48,17 @@ class ToolResultContext:
     arguments: dict[str, Any] = field(default_factory=dict)
     input_schema: dict[str, Any] = field(default_factory=dict)
     source_projections: dict[str, Any] = field(default_factory=dict)
+    frozen_contracts: tuple[FrozenContractDraft, ...] = ()
     cache_origin_call_id: str | None = None
 
 
 class CapturedToolPayload(dict):
     """Internal projections live outside dict keys, hence outside model-visible JSON."""
 
-    def __init__(self, payload, source_projections):
+    def __init__(self, payload, source_projections, frozen_contracts=()):
         super().__init__(payload)
         self.source_projections = source_projections
+        self.frozen_contracts = tuple(frozen_contracts)
 
 
 @dataclass
@@ -211,6 +214,10 @@ class ToolOrchestrator:
                 arguments=deepcopy(call.arguments),
                 input_schema=cached.input_schema,
                 source_projections=cached.source_projections,
+                frozen_contracts=tuple(
+                    item.model_copy(update={"tool_call_id": call.id})
+                    for item in cached.frozen_contracts
+                ),
                 cache_origin_call_id=cached.tool_call_id,
             )
             cached_error = cached.payload.get("error")
@@ -262,6 +269,7 @@ class ToolOrchestrator:
             arguments=deepcopy(call.arguments),
             input_schema=spec.input_model.model_json_schema(),
             source_projections=deepcopy(getattr(payload, "source_projections", {})),
+            frozen_contracts=tuple(deepcopy(getattr(payload, "frozen_contracts", ()))),
         )
         audit = ToolCallAudit(
             tool_call_id=call.id,

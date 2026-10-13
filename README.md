@@ -1304,6 +1304,10 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Validation Job 冻结 Policy snapshot/hash 和 Source hash；排队后仅非验证配置发生变化时仍可继续，Policy 漂移以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 明确失败。
 - Readiness 现在一次返回所有窗口中可识别的 Train/OOS 缺失项，并保持稳定顺序；血缘和日期集合损坏继续 fail closed，不自动触发回测、M14 或修复写入。
 - PostgreSQL 17 升级、冲突预检、备份、人工处置和受限降级步骤见 `docs/m15_3_walk_forward_validation.md` 的 `0045 Upgrade Runbook`。
+## M16.6 开发阶段状态
+
+0052 新增冻结研究合同及子 Manifest，不改写历史归档。`config/agent.yaml` 的 `agent.frozen_contract.enabled` 默认关闭；启用必须同时开启 `agent.archive.enabled`。当前正按 A–F 验收，请保持开关关闭直到最终交付。阶段、迁移与实测见 [设计决策与验收记录](docs/M16_6_design_decisions.md)。
+
 ## Milestone 16.1 只读研究 Agent 工具层（2026-10-10）
 
 - 当前仅启用 `tools_only`，`llm_enabled=false`，不需要填写任何模型 API Key，也不连接云端模型。

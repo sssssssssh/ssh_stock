@@ -30,10 +30,12 @@ from app.domain.agent.chat_errors import (
     total_deadline_exceeded,
     turn_not_found,
 )
+from app.domain.agent.frozen_contracts import FrozenContractDraft
 from app.domain.agent.policy import user_audit_hash
 from app.models.agent_chat import AgentChatSession, AgentChatTurn
 from app.repositories.agent_archive import AgentArchiveRepository
 from app.repositories.agent_chat import AgentChatRepository
+from app.repositories.agent_frozen_contract import AgentFrozenContractRepository
 from app.services.agent.adapters.market_data import MarketDataAgentAdapter
 from app.services.agent.adapters.opportunities import OpportunityAgentAdapter
 from app.services.agent.adapters.research import ResearchAgentAdapter
@@ -53,6 +55,7 @@ from app.services.agent.chat.orchestrator import (
 )
 from app.services.agent.chat.prompt import SYSTEM_PROMPT
 from app.services.agent.chat.request_identity import request_content_hash
+from app.services.agent.contracts.capture import capture_research_contracts
 from app.services.agent.llm.contracts import ChatMessage, LLMProvider
 from app.services.agent.llm.factory import build_llm_provider
 from app.services.agent.registry import AgentToolRegistry, build_registry
@@ -294,6 +297,16 @@ class AgentChatApplication:
                     ),
                     "deadline": deadline,
                 }
+                if self.config.frozen_contract.enabled:
+                    archived_call_ids = {
+                        item.tool_call_id for item in archive_options["archive_draft"].tools
+                    }
+                    archive_options["frozen_contracts"] = [
+                        draft
+                        for context in orchestration.tool_results
+                        if context.tool_call_id in archived_call_ids
+                        for draft in context.frozen_contracts
+                    ]
             self._ensure_deadline(deadline)
             answer = self._complete_turn(
                 chat_id=chat_id,
@@ -419,10 +432,23 @@ class AgentChatApplication:
             remaining_seconds=remaining_seconds,
         ) as db:
             projections = {}
+            contracts: list[FrozenContractDraft] = []
             capture_options = {}
             if self.config.archive.enabled:
+                def capture(result):
+                    projections.update(capture_projections(result))
+                    if self.config.frozen_contract.enabled:
+                        contracts.extend(
+                            capture_research_contracts(
+                                db,
+                                result,
+                                tool_call_id=tool_call_id,
+                                max_trade_dates=self.config.frozen_contract.max_trade_dates,
+                            )
+                        )
+
                 capture_options = {
-                    "capture_result": lambda result: projections.update(capture_projections(result))
+                    "capture_result": capture
                 }
             payload = AgentApplicationService(db, self.settings).execute(
                 tool_name=tool_name,
@@ -433,7 +459,7 @@ class AgentChatApplication:
                 **capture_options,
             )
             return (
-                CapturedToolPayload(payload, projections)
+                CapturedToolPayload(payload, projections, contracts)
                 if self.config.archive.enabled
                 else payload
             )
@@ -468,6 +494,7 @@ class AgentChatApplication:
         tool_calls: list[dict[str, Any]],
         usage: dict[str, Any],
         archive_draft: ArchiveDraft | None = None,
+        frozen_contracts: list[FrozenContractDraft] | None = None,
         deadline: float | None = None,
     ) -> ChatAnswer:
         metadata = {
@@ -514,7 +541,7 @@ class AgentChatApplication:
             self.db.add(chat)
         if archive_draft is not None:
             try:
-                AgentArchiveRepository(self.db).insert_draft(
+                base_manifest = AgentArchiveRepository(self.db).insert_draft(
                     owner_id=chat.owner_user_id,
                     chat_id=chat_id,
                     turn_id=turn_id,
@@ -522,6 +549,12 @@ class AgentChatApplication:
                     draft=archive_draft,
                     max_turn_bytes=self.config.archive.max_turn_bytes,
                 )
+                if frozen_contracts and self.config.frozen_contract.enabled:
+                    AgentFrozenContractRepository(self.db).insert_drafts(
+                        base_manifest=base_manifest,
+                        drafts=frozen_contracts,
+                        config=self.config.frozen_contract,
+                    )
                 self._ensure_deadline(deadline)
                 self.db.commit()
             except AgentArchiveError:
