@@ -87,3 +87,42 @@ def test_cache_identical_contract_or_distinct_endpoint_role_is_not_a_conflict():
     endpoint.contract_json["record"] = {"window_metrics": {"annualized_return": "0.2"}}
     remember_contract_evidence(endpoint, seen)
     assert len(seen) == 2
+
+
+def test_report_base_and_child_contract_reads_share_one_deadline(monkeypatch):
+    from app.domain.agent.report_errors import AgentReportError
+    from app.services.agent.report.application import AgentReportApplication
+
+    clock = SimpleNamespace(value=10)
+    timer = SimpleNamespace(monotonic=lambda: clock.value)
+    monkeypatch.setattr("app.services.agent.report.application.time", timer)
+    monkeypatch.setattr("app.services.agent.contracts.application.time", timer)
+
+    class BaseArchive:
+        def __init__(self, db, settings):
+            pass
+
+        def report_bundle(self, **kwargs):
+            assert self._deadline == 15
+            clock.value = 16
+            return None, None, object()
+
+    monkeypatch.setattr(
+        "app.services.agent.report.application.AgentArchiveApplication", BaseArchive
+    )
+    settings = SimpleNamespace(
+        agent_config=SimpleNamespace(frozen_contract=AgentFrozenContractConfig())
+    )
+    service = object.__new__(AgentReportApplication)
+    service.settings = settings
+    service.db = None
+    row = SimpleNamespace(
+        id=uuid.uuid4(),
+        owner_user_id=uuid.uuid4(),
+        source_turn_id=uuid.uuid4(),
+        snapshot_json={"archive_reference": {}, "contract_reference": {}},
+    )
+    with pytest.raises(AgentReportError) as caught:
+        service._verify_archive(row)
+    assert caught.value.status_code == 504
+    assert caught.value.code == "CONTRACT_VERIFY_TIMEOUT"

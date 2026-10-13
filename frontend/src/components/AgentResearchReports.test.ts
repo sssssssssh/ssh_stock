@@ -163,7 +163,7 @@ it.each(["global-denied", "pair-denied", "bad-formula", "window-allowed"])("enfo
     display_result: { comparison_mode: "WINDOW_DEGRADATION", comparison_permissions: { allowed: kind !== "global-denied" },
       facts: [{ metric_key: "annualized_return", left: "0.2", right: "0.1", delta: "0.123456",
         pair_status: "COMPARABLE", comparison_permission: { allowed: kind !== "pair-denied" },
-        formula: kind === "bad-formula" ? "UNKNOWN_FORMULA" : "TRAIN_MINUS_OOS" }] } });
+        formula: kind === "bad-formula" ? "UNKNOWN_FORMULA" : "TRAIN_MINUS_OOS", left_fact: { metric_identity: { unit: "percent" } } }] } });
   const wrapper = mount(AgentResearchReports);
   await flushPromises();
   const selects = wrapper.findAll(".report-compare select");
@@ -175,6 +175,7 @@ it.each(["global-denied", "pair-denied", "bad-formula", "window-allowed"])("enfo
   expect(wrapper.text().includes("0.123456")).toBe(kind === "window-allowed");
   if (kind === "window-allowed") {
     expect(wrapper.text()).toContain("TRAIN − OOS");
+    expect(wrapper.text()).toContain("百分点");
     expect(wrapper.findAll("th").map(x => x.text())).toContain("窗口退化");
   }
   wrapper.unmount();

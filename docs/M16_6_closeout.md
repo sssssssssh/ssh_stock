@@ -2,7 +2,7 @@
 
 ## 实测状态
 
-当前 A–E 已验收，F 基础全量/容量/Linux 浏览器已通过；收尾审查增加的同 Evidence 合同冲突与写后回滚补丁正在验收，尚未正式封版。
+当前 A–E、F 基础与同 Evidence/写后回滚补丁已验收；共享超时/百分点/安全导出最后补充正在验收，尚未正式封版。
 
 - 规划基线：`07e288c3826618192b4022e8b63d0df06db679ec`，当前分支保持 `master`。
 - A：`d625edc37744584472943eedf3cf9697a7f10920`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38340339216)。
@@ -11,7 +11,8 @@
 - D：`54920b8631589adfff3acb9a51f9150fd25b2a5d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38364353253)。
 - E：`878ba1cae5609bf369e5cbd290928aaff0143874`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728)，1277 pytest passed、后端覆盖率 87%、100 前端测试、前端构建、Ruff、Docker config/build/nginx 和迁移往返通过。
 - F 基础：`974d07b6cd1e2525c5c2d5760fce780b869beffb`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481)，1285 pytest passed、87% 后端覆盖率；current/heads 同为 0052；100 前端测试/81.42% 行覆盖率；Docker 和 1440px/390px Chromium 浏览器通过。最终冲突/写后回滚补丁待最新 CI。
-- 本机完成 `npm ci`、1062 单元测试、Ruff、100 前端测试、81.42% 前端行覆盖率及 build；Node 18 有 engine 警告。浏览器用隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 截图与交互通过；CI 使用 Node 22 和 Chromium。
+- F 审查补丁：`5d88006f904c22005fe30af2d8d14d0c4fb3bf3d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38377760959)，1289 passed、同 Evidence 冲突/写后回滚和其他完整矩阵通过。共享超时/百分点/安全导出补充待最终 CI。
+- 本机完成 `npm ci`、1077 单元测试、Ruff、100 前端测试、81.45% 前端行覆盖率及 build；Node 18 有 engine 警告。浏览器用隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 截图与交互通过；CI 使用 Node 22 和 Chromium。
 - 本机没有可安全运行完整集成测试的数据库和 Docker；完整测试/DDL/容器由隔离 GitHub CI 执行。未对用户业务库写入、迁移或清理。
 
 ## 版本与接口
@@ -57,11 +58,11 @@
 | 24 | 不同样本只授权专用窗口退化 | I/test_m16_6_window_end_to_end.py；U/test_m16_6_window_policy.py |
 | 25 | Study aggregate 不能替代 Window | I/test_m16_2_2_research_integrity.py；U/test_m16_6_contract_canonical.py |
 | 26 | 多窗口分页/顺序变动独立锚点 | I/test_m16_2_2_research_integrity.py；V/ContractArchivePanel.test.ts |
-| 27 | 四类 M15 Decimal 公式与符号 | U/test_m16_6_degradation.py、window_policy.py；I/test_m16_6_window_end_to_end.py |
+| 27 | 四类 M15 Decimal 公式与符号；percent 单位标为百分点 | U/test_m16_6_degradation.py、window_policy.py、exports.py；I/test_m16_6_window_end_to_end.py |
 | 28 | Sharpe NULL 保留、回撤符号不伪造 | U/test_m16_6_window_semantics.py、contract_semantics.py |
 | 29 | 旧报告/比较可读可导出，不自动扩权 | U/test_m16_6_report_binding.py、test_m16_4_1_integrity.py；I/test_m16_5_archived_reports.py |
 | 30 | Report v4 提交前失败不留已提交行 | I/test_m16_6_report_api.py precommit 回滚 |
-| 31 | owner404/非法参数/条数/bytes/timeout | I/test_m16_6_report_api.py、contract_migration.py；U/test_m16_6_resources.py；最大窗口容量测试 |
+| 31 | owner404/非法参数/条数/bytes/timeout；原归档/子合同共享 deadline | I/test_m16_6_report_api.py、contract_migration.py；U/test_m16_6_resources.py；最大窗口容量测试 |
 | 32 | 全局/逐项无许可 UI 隐藏 delta | V/AgentResearchReports.test.ts；scripts/m16_6_browser_smoke.cjs |
 | 33 | 审计 result 不作显示 fallback | V/AgentResearchReports.test.ts；浏览器审计值不显示 |
 | 34 | DATE/IDENTIFIER 上下文不能绕过数值门禁 | U/test_m16_6_contract_policy.py、test_m16_5_context_comparison.py |

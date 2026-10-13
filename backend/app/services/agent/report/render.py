@@ -135,7 +135,13 @@ def _markdown_html(markdown: str, title: str) -> str:
 
 def render_comparison(view, export_format):
     data = view.display_result or {}
-    allowed = view.display_safety is not None and view.display_safety.get("delta_allowed") is True
+    allowed = (
+        view.state == "COMPARABLE"
+        and view.policy_version in {"m16.5-report-comparison-v3", "m16.6-report-comparison-v4"}
+        and view.display_safety is not None
+        and view.display_safety.get("legacy_policy") is False
+        and view.display_safety.get("delta_allowed") is True
+    )
     lines = [
         "# 研究报告比较",
         "",
@@ -165,13 +171,18 @@ def render_comparison(view, export_format):
                 or (
                     data.get("comparison_permissions", {}).get("allowed") is True
                     and fact.get("comparison_permission", {}).get("allowed") is True
+                    and fact.get("formula")
+                    in {"RIGHT_MINUS_LEFT", "TRAIN_MINUS_OOS", "OOS_MINUS_TRAIN"}
                 )
             )
         )
         if pair_allowed and "delta" in fact:
+            unit = fact.get("left_fact", {}).get("metric_identity", {}).get("unit", "未提供")
+            delta_unit = "百分点" if unit == "percent" else unit
+            semantics = fact.get("delta_semantics", "RIGHT_MINUS_LEFT_SAME_UNIT")
             lines.append(
                 f"  授权公式 `{fact.get('formula', 'RIGHT_MINUS_LEFT')}`：`{fact['delta']}`；"
-                f"单位语义 `{fact.get('delta_semantics', 'RIGHT_MINUS_LEFT_SAME_UNIT')}`"
+                f"单位 `{delta_unit}`；语义 `{semantics}`"
             )
         else:
             lines.append("  未授权差值；不提供优劣排序")

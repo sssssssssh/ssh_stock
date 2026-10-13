@@ -117,3 +117,28 @@ def test_two_real_different_windows_cannot_be_paired_by_similar_dates():
     )
     assert state == "INCOMPATIBLE" and "FROZEN_WINDOW_CONTRACT_MISMATCH" in reasons
     assert result["facts"] == [] and not result["comparison_permissions"]["allowed"]
+
+
+def test_window_percent_values_use_percentage_points_not_percentage_change():
+    from decimal import Decimal
+
+    body, endpoints = synthetic_m15()
+    left, right = window_report(body, endpoints, "TRAIN"), window_report(body, endpoints, "OOS")
+    for snapshot, _ in (left, right):
+        for fact in snapshot.claims[0].structured_facts:
+            if fact.path.endswith("annualized_return"):
+                fact.unit = "percent"
+                fact.value = str(Decimal(fact.value) * 100)
+    state, _, result = compare_frozen_research(
+        left[0],
+        right[0],
+        left_verification=left[1],
+        right_verification=right[1],
+        max_facts=100,
+        comparison_intent="TRAIN_VS_OOS",
+        comparison_mode="WINDOW_DEGRADATION",
+    )
+    assert state == "COMPARABLE"
+    fact = next(row for row in result["facts"] if row["metric_key"] == "annualized_return")
+    assert fact["delta"] == "12"
+    assert fact["delta_semantics"] == "PERCENTAGE_POINT_DIFFERENCE"

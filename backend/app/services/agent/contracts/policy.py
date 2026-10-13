@@ -393,7 +393,9 @@ def _window_pairs(result, inventories, left_verification, right_verification):
                 "decision_reason_codes": [],
                 "formula": "TRAIN_MINUS_OOS" if reverse else "OOS_MINUS_TRAIN",
                 "delta": decimal_text(delta),
-                "delta_semantics": "WINDOW_DEGRADATION",
+                "delta_semantics": "PERCENTAGE_POINT_DIFFERENCE"
+                if a.descriptor.unit == "percent"
+                else "WINDOW_DEGRADATION",
             }
         )
     for side, group, inventory in zip(("left", "right"), groups, inventories, strict=True):

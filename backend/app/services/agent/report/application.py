@@ -463,6 +463,11 @@ class AgentReportApplication:
         return self._verified_report_view(row)
 
     def _verify_archive(self, row, *, deadline=None):
+        reference = row.snapshot_json.get("contract_reference")
+        if reference is not None and deadline is None:
+            deadline = (
+                time.monotonic() + self.settings.agent_config.frozen_contract.verify_timeout_seconds
+            )
         if row.snapshot_json.get("archive_reference") is not None:
             try:
                 archive = AgentArchiveApplication(self.db, self.settings)
@@ -471,7 +476,6 @@ class AgentReportApplication:
                 _, snapshot, bundle = archive.report_bundle(
                     user=type("Owner", (), {"id": row.owner_user_id})(), report_id=row.id
                 )
-                reference = row.snapshot_json.get("contract_reference")
                 if reference is not None:
                     verification = AgentFrozenContractApplication(
                         self.db, self.settings

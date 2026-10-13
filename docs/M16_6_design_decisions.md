@@ -10,6 +10,9 @@
 - 基础验收提交 `974d07b6cd1e2525c5c2d5760fce780b869beffb`，[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481) success：1285 passed、Ruff、0052 current/heads、Docker、前端与 Linux 浏览器均通过。1/36 实际窗口捕获均 14 SELECT，0.0255/0.1782 秒；最大档超 count/byte 默认上限，必须分页，不扩大硬限。
 - 审查补充：相同 Evidence + kind/subject/role 的不同合同，在写前与离线读时均拒绝 `CONTRACT_EVIDENCE_CONFLICT`；不同 TRAIN/OOS 角色允许共享窗口 Evidence，缓存相同内容正常。合同和子 Manifest flush 后人为失败必须共同回滚；补丁等待最新全量 CI。
 
+- 同 Evidence/写后回滚补丁 `5d88006f904c22005fe30af2d8d14d0c4fb3bf3d`，[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38377760959) success：1289 passed、Ruff、0052、Docker、前端和双视口浏览器通过。
+- 最后补充共享 deadline（v4 原 Archive 与合同复核不重新计时）、窗口 percent 差值明确为百分点，以及导出与 UI 同等全局/逐项/公式门禁。本机 1077 单元、100 前端测试/81.45% 行覆盖率、build/Ruff 通过；待该补充的最终 CI。
+
 - 增加 1/36 最大窗口真实批量捕获的 SELECT 次数/耗时/字节测量、100 合同默认上限的写前拒绝、离线预检及超时测试；尚待本阶段隔离 CI。
 - CI 增加 Alembic current/heads 输出和 Playwright Linux Chromium 浏览器验收/截图产物；Playwright 在 runner 临时目录安装，不改变应用依赖锁文件。
 - 最终矩阵、P2 依赖风险和上线回滚说明见 `M16_6_closeout.md`，未完成验收前保持功能关闭。
