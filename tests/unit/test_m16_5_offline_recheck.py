@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from app.core.agent_archive_config import AgentArchiveConfig
-from app.domain.agent.archive import ARCHIVE_VERSION, AgentArchiveError
+from app.domain.agent.archive import ARCHIVE_VERSION, AgentArchiveError, ArchiveVerifyView
 from app.repositories.agent_archive import compiled_message_digest
 from app.services.agent.archive.canonical import archive_hash
 from app.services.agent.archive.capture import assemble_archive
@@ -16,14 +16,33 @@ from app.services.agent.chat.evidence_compiler import EvidenceCompiler
 from test_m16_5_archive_capture import claims_for, market_context
 
 
-def bundle():
+def bundle(*, with_inference=False):
     context = market_context()
     claims, _ = claims_for(context)
+    if with_inference:
+        claims.append(
+            {
+                "claim_id": "inference-market",
+                "claim_type": "INFERENCE",
+                "text": "untrusted inference",
+                "evidence_ids": list(claims[0].evidence_ids),
+                "structured_facts": [],
+                "inference": {
+                    "hypothesis": "POSSIBLE_REGIME_SENSITIVITY",
+                    "supporting_claim_ids": [claims[0].claim_id],
+                    "uncertainties": ["CAUSALITY_NOT_ESTABLISHED"],
+                    "limitations": ["HISTORICAL_EVIDENCE_ONLY"],
+                },
+            }
+        )
     compiled = EvidenceCompiler(max_answer_chars=8000).compile(
         final_text=json.dumps(
             {
                 "answer": "verified",
-                "claims": [item.model_dump(mode="json") for item in claims],
+                "claims": [
+                    item.model_dump(mode="json") if hasattr(item, "model_dump") else item
+                    for item in claims
+                ],
                 "evidence_ids": [],
                 "warnings": [],
                 "needs_clarification": False,
@@ -127,6 +146,63 @@ def test_pure_recheck_reuses_frozen_facts_without_any_database_or_llm_dependency
     assert result["verification_level"] == "FACT_REVERIFIED"
     assert result["calculation_reproduced"] is False
     assert value.tools[0].payload_json == before
+
+
+def test_inference_rechecks_support_without_claiming_direct_facts_or_causality():
+    result = recheck(bundle(with_inference=True))
+    rows = {row["claim_id"]: row for row in result["fact_recheck"]["results"]}
+    inference = rows["inference-market"]
+    assert result["integrity"]["status"] == "VERIFIED"
+    assert inference["check_kind"] == "INFERENCE_SUPPORT"
+    assert inference["facts_applicable"] is False
+    assert inference["support_status"] == "VERIFIED"
+    assert inference["status"] == "VERIFIED"
+    assert "INFERENCE_NOT_CAUSAL_PROOF" in inference["reason_codes"]
+    assert result["claim_recheck_summary"]["status"] == "VERIFIED"
+    validated = ArchiveVerifyView.model_validate(result)
+    assert validated.fact_recheck.results[-1].support_status == "VERIFIED"
+
+
+@pytest.mark.parametrize(
+    "fault, expected_status, reason",
+    [
+        ("missing", "UNVERIFIABLE", "INFERENCE_SUPPORT_UNVERIFIABLE"),
+        ("duplicate", "MISMATCH", "INFERENCE_SUPPORT_INVALID"),
+        ("extra_ref", "MISMATCH", "INFERENCE_FIELD_REFS_INVALID"),
+        ("extra_evidence", "MISMATCH", "ARCHIVE_INTEGRITY_MISMATCH"),
+    ],
+)
+def test_resealed_inference_support_faults_do_not_verify(fault, expected_status, reason):
+    value = bundle(with_inference=True)
+    claim = next(
+        item
+        for item in value.assistant.metadata_json["verified_claims"]
+        if item["claim_type"] == "INFERENCE"
+    )
+    if fault == "missing":
+        claim["inference"]["supporting_claim_ids"] = ["missing"]
+    elif fault == "duplicate":
+        claim["inference"]["supporting_claim_ids"] *= 2
+    elif fault == "extra_ref":
+        claim["verified_fact_refs"].append("forged:records.0.market_score")
+    else:
+        claim["evidence_ids"].append("forged-evidence")
+    reseal_message(value)
+    if fault == "extra_evidence":
+        with pytest.raises(AgentArchiveError) as error:
+            recheck(value)
+        assert error.value.code == reason
+        return
+    result = recheck(value)
+    inference = next(
+        item
+        for item in result["fact_recheck"]["results"]
+        if item["claim_id"] == "inference-market"
+    )
+    assert inference["status"] == expected_status
+    assert inference["support_status"] == expected_status
+    assert reason in inference["reason_codes"]
+    assert result["claim_recheck_summary"]["status"] == expected_status
 
 
 @pytest.mark.parametrize(
@@ -264,4 +340,6 @@ def test_frozen_summary_does_not_regrant_database_verified_comparison_permission
     row = result["fact_recheck"]["results"][0]
     assert row["facts_status"] == "VERIFIED" and row["status"] == "UNVERIFIABLE"
     assert row["comparison_state"] == "INCOMPATIBLE" and gap in row["reason_codes"]
+    assert result["fact_recheck"]["status"] == "VERIFIED"
+    assert result["claim_recheck_summary"]["status"] == "UNVERIFIABLE"
     assert "delta" not in str(result) and result["calculation_reproduced"] is False

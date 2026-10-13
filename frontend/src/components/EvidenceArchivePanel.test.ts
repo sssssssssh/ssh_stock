@@ -28,13 +28,13 @@ it("separates complete capture, integrity, unexecuted recheck and never claims a
   await flushPromises();
   expect(wrapper.text()).toContain("归档：COMPLETE");
   expect(wrapper.text()).toContain("完整性：VERIFIED");
-  expect(wrapper.text()).toContain("事实复核：尚未执行");
+  expect(wrapper.text()).toContain("冻结事实字段：尚未执行");
   expect(wrapper.text()).toContain("不是行情重拉");
   mocks.verifyFrozenReport.mockResolvedValue({ ...summary, verification_level: "MISMATCH",
     fact_recheck: { status: "MISMATCH", checked_claim_count: 1, results: [{ claim_id: "c1",
       status: "MISMATCH", reason_codes: ["VALUE_MISMATCH"], failed_fields: [{ path: "records.0.market_score", code: "VALUE_MISMATCH" }] }] } });
   await click(wrapper, "从冻结证据复核");
-  expect(wrapper.text()).toContain("事实复核：MISMATCH");
+  expect(wrapper.text()).toContain("冻结事实字段：MISMATCH");
   expect(wrapper.text()).toContain("VALUE_MISMATCH");
   wrapper.unmount();
 });
@@ -66,7 +66,7 @@ it("network failure clears recheck success and offers retry, never marks new req
   await flushPromises();
   await click(wrapper, "从冻结证据复核");
   expect(wrapper.find('[role="alert"]').text()).toContain("不能标记为已验证");
-  expect(wrapper.text()).toContain("事实复核：尚未执行");
+  expect(wrapper.text()).toContain("冻结事实字段：尚未执行");
   await click(wrapper, "重试读取");
   expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   wrapper.unmount();
@@ -92,5 +92,27 @@ it("chat uses exact request identity; missing historical identity remains unavai
   await wrapper.setProps({ requestId: null });
   await flushPromises();
   expect(wrapper.text()).toContain("归档：UNAVAILABLE");
+  wrapper.unmount();
+});
+
+it("separates direct facts, comparison context and bounded inference support", async () => {
+  mocks.verifyFrozenReport.mockResolvedValue({ ...summary, verification_level: "UNVERIFIABLE",
+    claim_recheck_summary: { status: "UNVERIFIABLE", verified_count: 2, mismatch_count: 0, unverifiable_count: 1 },
+    fact_recheck: { status: "VERIFIED", checked_claim_count: 3, results: [
+      { claim_id: "F1", status: "VERIFIED", facts_status: "VERIFIED", check_kind: "DIRECT_FACT",
+        facts_applicable: true, reason_codes: [], failed_fields: [] },
+      { claim_id: "C1", status: "UNVERIFIABLE", facts_status: "VERIFIED", check_kind: "COMPARISON_CONTEXT",
+        facts_applicable: true, comparison_state: "INCOMPATIBLE", reason_codes: ["EXACT_M14_BUNDLE_NOT_ARCHIVED"], failed_fields: [] },
+      { claim_id: "I1", status: "VERIFIED", facts_status: "UNVERIFIABLE", check_kind: "INFERENCE_SUPPORT",
+        facts_applicable: false, support_status: "VERIFIED", reason_codes: ["INFERENCE_NOT_CAUSAL_PROOF"], failed_fields: [] }
+    ] } });
+  const wrapper = mount(EvidenceArchivePanel, { props: { reportId: "report" } });
+  await flushPromises();
+  await click(wrapper, "从冻结证据复核");
+  expect(wrapper.text()).toContain("冻结事实字段：VERIFIED");
+  expect(wrapper.text()).toContain("结论支持：UNVERIFIABLE");
+  expect(wrapper.text()).toContain("支持关系：VERIFIED（不代表因果被证实）");
+  expect(wrapper.text()).toContain("比较许可：INCOMPATIBLE（不代表收益差值已获授权）");
+  expect(wrapper.text()).not.toContain("因果已验证");
   wrapper.unmount();
 });

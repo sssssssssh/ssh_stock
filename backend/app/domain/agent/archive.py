@@ -144,6 +144,9 @@ class ClaimRecheckView(ArchiveDTO):
     claim_id: str
     status: CheckStatus
     facts_status: CheckStatus
+    facts_applicable: bool = True
+    check_kind: Literal["DIRECT_FACT", "COMPARISON_CONTEXT", "INFERENCE_SUPPORT"] = "DIRECT_FACT"
+    support_status: CheckStatus | None = None
     evidence_ids: list[str]
     reason_codes: list[str]
     failed_fields: list[dict[str, str]]
@@ -158,6 +161,13 @@ class FactRecheckView(ArchiveDTO):
     results: list[ClaimRecheckView]
 
 
+class ClaimRecheckSummary(ArchiveDTO):
+    status: CheckStatus = "UNVERIFIABLE"
+    verified_count: int = 0
+    mismatch_count: int = 0
+    unverifiable_count: int = 0
+
+
 class ArchiveVerifyView(ArchiveSummary):
     report_id: uuid.UUID | None = None
     fact_recheck: FactRecheckView = Field(
@@ -165,6 +175,7 @@ class ArchiveVerifyView(ArchiveSummary):
             status="UNVERIFIABLE", checked_claim_count=0, results=[]
         )
     )
+    claim_recheck_summary: ClaimRecheckSummary = Field(default_factory=ClaimRecheckSummary)
     verification_level: str = "UNVERIFIABLE"
 
 

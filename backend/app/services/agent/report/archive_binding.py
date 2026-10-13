@@ -31,6 +31,55 @@ def frozen_fields(snapshot):
     return sorted({ref for claim in snapshot.claims for ref in claim.verified_fact_refs})
 
 
+class FrozenClaimBindingError(ValueError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
+
+
+def validate_frozen_claim_bindings(snapshot):
+    claims = {claim.claim_id: claim for claim in snapshot.claims}
+    if len(claims) != len(snapshot.claims):
+        raise FrozenClaimBindingError("DUPLICATE_FROZEN_CLAIM_ID")
+    for claim in snapshot.claims:
+        if len(set(claim.evidence_ids)) != len(claim.evidence_ids):
+            raise FrozenClaimBindingError("FROZEN_EVIDENCE_BINDING_INVALID")
+        if claim.claim_type == "INFERENCE":
+            continue
+        if (
+            not claim.structured_facts
+            or len(claim.verified_fact_refs) != len(claim.structured_facts)
+            or len(set(claim.verified_fact_refs)) != len(claim.verified_fact_refs)
+        ):
+            raise FrozenClaimBindingError("FROZEN_FACT_BINDING_INVALID")
+        for fact, ref in zip(claim.structured_facts, claim.verified_fact_refs, strict=True):
+            suffix = f":{fact.path}"
+            evidence_id = ref[: -len(suffix)] if ref.endswith(suffix) else ""
+            if not evidence_id or evidence_id not in claim.evidence_ids:
+                raise FrozenClaimBindingError("FROZEN_FACT_BINDING_INVALID")
+        if claim.claim_type == "COMPARISON" and claim.comparison_state is None:
+            raise FrozenClaimBindingError("FROZEN_COMPARISON_CONTEXT_INVALID")
+    for claim in snapshot.claims:
+        if claim.claim_type != "INFERENCE":
+            continue
+        if claim.structured_facts or claim.inference is None:
+            raise FrozenClaimBindingError("INFERENCE_SUPPORT_UNVERIFIABLE")
+        support_ids = claim.inference.supporting_claim_ids
+        if len(set(support_ids)) != len(support_ids) or claim.claim_id in support_ids:
+            raise FrozenClaimBindingError("INFERENCE_SUPPORT_INVALID")
+        supports = [claims.get(claim_id) for claim_id in support_ids]
+        if any(support is None or support.claim_type == "INFERENCE" for support in supports):
+            raise FrozenClaimBindingError("INFERENCE_SUPPORT_UNVERIFIABLE")
+        supported_evidence = {eid for support in supports for eid in support.evidence_ids}
+        if not claim.evidence_ids or not set(claim.evidence_ids) <= supported_evidence:
+            raise FrozenClaimBindingError("INFERENCE_EVIDENCE_NOT_SUPPORTED")
+        expected_refs = list(
+            dict.fromkeys(ref for support in supports for ref in support.verified_fact_refs)
+        )
+        if claim.verified_fact_refs != expected_refs:
+            raise FrozenClaimBindingError("INFERENCE_FIELD_REFS_INVALID")
+
+
 def bind_archive(snapshot, contract, manifest):
     snapshot.schema_version = ARCHIVED_SNAPSHOT_VERSION
     snapshot.snapshot_level = contract.snapshot_level = "FROZEN_TOOL_EVIDENCE"
@@ -70,10 +119,7 @@ def bind_archive(snapshot, contract, manifest):
 
 
 def verify_archive_contract(snapshot, contract):
-    if any(
-        len(claim.verified_fact_refs) != len(claim.structured_facts) for claim in snapshot.claims
-    ):
-        raise ValueError("frozen field bindings")
+    validate_frozen_claim_bindings(snapshot)
     ref = snapshot.archive_reference
     if (
         ref is None

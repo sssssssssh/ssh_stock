@@ -5,7 +5,7 @@ import uuid
 from typing import Any
 
 from loguru import logger
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -97,19 +97,23 @@ class AgentReportApplication:
             config=self.config,
         )
         archive = AgentArchiveApplication(self.db, self.settings)
-        bundle = archive.load_bundle(owner_id, turn.id)
-        if bundle is not None and bundle.manifest.archive_status == "COMPLETE":
-            try:
+        try:
+            bundle = archive.load_bundle(owner_id, turn.id)
+            if bundle is not None and bundle.manifest.archive_status == "COMPLETE":
                 result = recheck_archive(bundle, config=archive.config)
-                if result["integrity"]["status"] != "VERIFIED" or any(
-                    item["facts_status"] != "VERIFIED" for item in result["fact_recheck"]["results"]
-                ):
+                if not _archive_recheck_allows_report(snapshot, result):
                     raise AgentArchiveError(
                         "REPORT_ARCHIVE_UNVERIFIABLE", "frozen facts unavailable", status_code=409
                     )
                 bind_archive(snapshot, contract, bundle.manifest)
-            except AgentArchiveError as exc:
-                raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
+        except AgentArchiveError as exc:
+            self.db.rollback()
+            raise AgentReportError(exc.code, str(exc), status_code=exc.status_code) from exc
+        except (ValueError, TypeError, KeyError) as exc:
+            self.db.rollback()
+            raise AgentReportError(
+                "REPORT_ARCHIVE_UNVERIFIABLE", "frozen facts unavailable", status_code=409
+            ) from exc
         snapshot_json = snapshot.model_dump(mode="json")
         if len(storage_json_bytes(snapshot_json)) > self.config.max_snapshot_bytes:
             raise invalid_source("REPORT_LIMIT_EXCEEDED", "snapshot size limit exceeded")
@@ -131,15 +135,22 @@ class AgentReportApplication:
                 snapshot_hash=canonical_hash(snapshot_json),
                 source_contract_json=contract.model_dump(mode="json"),
             )
+            result = self._verified_report_view(row)
             self.db.commit()
-            self.db.refresh(row)
         except IntegrityError:
             self.db.rollback()
             existing = self.repo.get_by_request(owner_user_id=owner_id, request_id=body.request_id)
             if existing is None:
                 raise
             return self._same_report_or_conflict(existing, request_hash)
-        result = self._verified_report_view(row)
+        except AgentReportError:
+            self.db.rollback()
+            raise
+        except SQLAlchemyError as exc:
+            self.db.rollback()
+            raise AgentReportError(
+                "REPORT_CREATE_FAILED", "report creation failed", status_code=503
+            ) from exc
         _audit(
             user=user,
             operation="create_report",
@@ -363,6 +374,34 @@ def _user_id(user: Any) -> uuid.UUID:
         return uuid.UUID(str(user.id))
     except (TypeError, ValueError, AttributeError) as exc:
         raise AgentReportError("UNAUTHORIZED", "invalid user identity", status_code=401) from exc
+
+
+def _archive_recheck_allows_report(snapshot, result: dict[str, Any]) -> bool:
+    if result["integrity"]["status"] != "VERIFIED":
+        return False
+    rows = {item["claim_id"]: item for item in result["fact_recheck"]["results"]}
+    if len(rows) != len(snapshot.claims):
+        return False
+    allowed_comparison_gaps = {
+        "EXACT_M14_BUNDLE_NOT_ARCHIVED",
+        "FROZEN_M15_WINDOW_LINEAGE_REQUIRED",
+        "COMPARISON_CONTEXT_REQUIRED",
+    }
+    for claim in snapshot.claims:
+        row = rows.get(claim.claim_id)
+        if row is None or row["status"] == "MISMATCH":
+            return False
+        if claim.claim_type == "INFERENCE":
+            if row["support_status"] != "VERIFIED":
+                return False
+        elif row["facts_status"] != "VERIFIED":
+            return False
+        if claim.claim_type == "COMPARISON" and row["status"] != "VERIFIED":
+            if not set(row["reason_codes"]) & allowed_comparison_gaps:
+                return False
+        elif claim.claim_type != "COMPARISON" and row["status"] != "VERIFIED":
+            return False
+    return True
 
 
 def _report_view(row: AgentResearchReport) -> ResearchReportView:

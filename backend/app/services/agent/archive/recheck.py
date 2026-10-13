@@ -39,30 +39,83 @@ def recheck_archive(
     tools = {row.id: row for row in bundle.tools}
     bindings = {row.evidence_id: row for row in bundle.bindings}
     results = []
-    verified = set()
+    claim_by_id = {claim.claim_id: claim for claim in parsed}
+    direct_status = {}
+    duplicate_claims = len(claim_by_id) != len(parsed)
     # Facts and comparisons precede inferences regardless of input ordering.
     for claim in sorted(parsed, key=lambda item: (item.claim_type == "INFERENCE", item.claim_id)):
         check_deadline()
         reasons = set(unsupported)
         failed_fields = []
-        facts_status = "VERIFIED"
+        facts_applicable = claim.claim_type != "INFERENCE"
+        facts_status = "VERIFIED" if facts_applicable else "UNVERIFIABLE"
+        check_kind = (
+            "INFERENCE_SUPPORT"
+            if claim.claim_type == "INFERENCE"
+            else "COMPARISON_CONTEXT"
+            if claim.claim_type == "COMPARISON"
+            else "DIRECT_FACT"
+        )
+        support_status = None
         comparison_state = None
-        if unsupported:
+        if duplicate_claims:
+            reasons.add("DUPLICATE_FROZEN_CLAIM_ID")
+            status = "MISMATCH"
+            facts_status = "MISMATCH" if facts_applicable else "UNVERIFIABLE"
+        elif unsupported:
             facts_status = "UNVERIFIABLE"
             status = "UNVERIFIABLE"
         elif claim.claim_type == "INFERENCE":
             supports = claim.inference.supporting_claim_ids if claim.inference else []
-            if not supports or not set(supports) <= verified:
+            supporters = [claim_by_id.get(claim_id) for claim_id in supports]
+            if claim.structured_facts:
+                reasons.add("INFERENCE_DIRECT_FACTS_UNSUPPORTED")
+                status = "MISMATCH"
+            elif claim.inference is None:
+                reasons.add("LEGACY_BOUNDED_INFERENCE")
+                status = "UNVERIFIABLE"
+            elif len(supports) != len(set(supports)) or claim.claim_id in supports:
+                reasons.add("INFERENCE_SUPPORT_INVALID")
+                status = "MISMATCH"
+            elif any(
+                support is None or support.claim_type == "INFERENCE" for support in supporters
+            ):
                 reasons.add("INFERENCE_SUPPORT_UNVERIFIABLE")
                 status = "UNVERIFIABLE"
             else:
-                reasons.add("INFERENCE_NOT_CAUSAL_PROOF")
-                status = "VERIFIED"
+                allowed_evidence = {eid for support in supporters for eid in support.evidence_ids}
+                expected_refs = list(
+                    dict.fromkeys(
+                        ref for support in supporters for ref in support.verified_fact_refs
+                    )
+                )
+                if (
+                    not claim.evidence_ids
+                    or len(set(claim.evidence_ids)) != len(claim.evidence_ids)
+                    or not set(claim.evidence_ids) <= allowed_evidence
+                ):
+                    reasons.add("INFERENCE_EVIDENCE_NOT_SUPPORTED")
+                    status = "MISMATCH"
+                elif claim.verified_fact_refs != expected_refs:
+                    reasons.add("INFERENCE_FIELD_REFS_INVALID")
+                    status = "MISMATCH"
+                elif any(direct_status.get(item) != "VERIFIED" for item in supports):
+                    reasons.add("INFERENCE_SUPPORT_UNVERIFIABLE")
+                    status = "UNVERIFIABLE"
+                else:
+                    reasons.add("INFERENCE_NOT_CAUSAL_PROOF")
+                    status = "VERIFIED"
+            support_status = status
         else:
             status = "VERIFIED"
-            if len(claim.verified_fact_refs) != len(claim.structured_facts):
-                reasons.add("UNRESOLVED_EVIDENCE_BINDING")
-                status = facts_status = "UNVERIFIABLE"
+            if (
+                not claim.structured_facts
+                or len(claim.verified_fact_refs) != len(claim.structured_facts)
+                or len(set(claim.verified_fact_refs)) != len(claim.verified_fact_refs)
+                or len(set(claim.evidence_ids)) != len(claim.evidence_ids)
+            ):
+                reasons.add("FROZEN_FACT_BINDING_INVALID")
+                status = facts_status = "MISMATCH"
             else:
                 contexts = []
                 for fact, fact_ref in zip(
@@ -71,8 +124,12 @@ def recheck_archive(
                     check_deadline()
                     suffix = f":{fact.path}"
                     eid = fact_ref[: -len(suffix)] if fact_ref.endswith(suffix) else None
+                    if not eid or eid not in claim.evidence_ids:
+                        reasons.add("FROZEN_FACT_BINDING_INVALID")
+                        status = facts_status = "MISMATCH"
+                        continue
                     binding = bindings.get(eid)
-                    if binding is None or eid not in claim.evidence_ids:
+                    if binding is None:
                         reasons.add("ARCHIVE_EVIDENCE_MISSING")
                         if status != "MISMATCH":
                             status = facts_status = "UNVERIFIABLE"
@@ -128,13 +185,18 @@ def recheck_archive(
                         ):
                             status = "MISMATCH"
                             reasons.add("FROZEN_COMPARISON_DECISION_MISMATCH")
-        if status == "VERIFIED" and claim.claim_type != "INFERENCE":
-            verified.add(claim.claim_id)
+                        elif decision.state == "CONTEXT_REQUIRED":
+                            status = "UNVERIFIABLE"
+                            reasons.add("COMPARISON_CONTEXT_REQUIRED")
+            direct_status[claim.claim_id] = status
         results.append(
             {
                 "claim_id": claim.claim_id,
                 "status": status,
                 "facts_status": facts_status,
+                "facts_applicable": facts_applicable,
+                "check_kind": check_kind,
+                "support_status": support_status,
                 "evidence_ids": sorted(claim.evidence_ids),
                 "reason_codes": sorted(reasons),
                 "failed_fields": failed_fields,
@@ -150,6 +212,14 @@ def recheck_archive(
         if ("UNVERIFIABLE" in states or not results)
         else "VERIFIED"
     )
+    fact_states = {row["facts_status"] for row in results if row["facts_applicable"]}
+    fact_state = (
+        "MISMATCH"
+        if "MISMATCH" in fact_states
+        else "UNVERIFIABLE"
+        if "UNVERIFIABLE" in fact_states or not fact_states
+        else "VERIFIED"
+    )
     check_deadline()
     return {
         "archive_status": bundle.manifest.archive_status,
@@ -158,10 +228,16 @@ def recheck_archive(
             "policy_version": INTEGRITY_VERSION,
         },
         "fact_recheck": {
-            "status": state,
+            "status": fact_state,
             "policy_version": RECHECK_VERSION,
             "checked_claim_count": len(results),
             "results": results,
+        },
+        "claim_recheck_summary": {
+            "status": state,
+            "verified_count": sum(row["status"] == "VERIFIED" for row in results),
+            "mismatch_count": sum(row["status"] == "MISMATCH" for row in results),
+            "unverifiable_count": sum(row["status"] == "UNVERIFIABLE" for row in results),
         },
         "reproduction_level": "FROZEN_FACT_RECHECK" if not unsupported else "SNAPSHOT_ONLY",
         "verification_level": "FACT_REVERIFIED" if state == "VERIFIED" else state,

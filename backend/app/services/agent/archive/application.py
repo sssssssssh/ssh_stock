@@ -135,7 +135,8 @@ class AgentArchiveApplication:
             != manifest.claim_digest
         ):
             raise archive_error("REPORT_ARCHIVE_BINDING_MISMATCH")
-        self._integrity(bundle)
+        if self._integrity(bundle):
+            raise archive_error("REPORT_ARCHIVE_UNVERIFIABLE")
         return row, snapshot, bundle
 
     @bounded_read

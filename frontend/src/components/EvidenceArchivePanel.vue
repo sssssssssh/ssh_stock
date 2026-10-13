@@ -88,7 +88,8 @@ onBeforeUnmount(() => { generation++; controller.abort(); });
       <div class="archive-states">
         <span>归档：{{ summary.archive_status }}</span>
         <span>完整性：{{ verification?.integrity.status || summary.integrity.status }}</span>
-        <span>事实复核：{{ verification?.fact_recheck.status || '尚未执行' }}</span>
+        <span>冻结事实字段：{{ verification?.fact_recheck.status || '尚未执行' }}</span>
+        <span v-if="verification?.claim_recheck_summary">结论支持：{{ verification.claim_recheck_summary.status }}</span>
       </div>
       <p>复核等级：{{ verification?.reproduction_level || summary.reproduction_level }} · {{ summary.archived_evidence_count }}/{{ summary.required_evidence_count }} 条证据</p>
       <p>冻结事实核对不是行情重拉或原回测算法重跑，也不代表比较已获差值授权。</p>
@@ -112,8 +113,15 @@ onBeforeUnmount(() => { generation++; controller.abort(); });
         <p v-if="!detail.frozen_facts.length">没有可安全发布的已验证字段。</p>
       </div>
       <div v-if="verification" class="archive-verification" role="status">
-        <strong>{{ verification.verification_level }} · {{ verification.fact_recheck.checked_claim_count }} 项</strong>
-        <p v-for="row in verification.fact_recheck.results" :key="row.claim_id">{{ row.claim_id }} · {{ row.status }}<span v-if="row.comparison_state"> · 比较：{{ row.comparison_state }}</span> · {{ row.reason_codes.join(' / ') }}<span v-for="field in row.failed_fields" :key="field.path"> · {{ field.path }}：{{ field.code }}</span></p>
+        <strong>冻结事实复核：{{ verification.verification_level }} · {{ verification.fact_recheck.checked_claim_count }} 项</strong>
+        <p v-for="row in verification.fact_recheck.results" :key="row.claim_id">
+          {{ row.claim_id }} · {{ row.check_kind === 'INFERENCE_SUPPORT' ? '有限推断支持' : row.check_kind === 'COMPARISON_CONTEXT' ? '策略比较' : '直接事实' }}：{{ row.status }}
+          <span v-if="row.facts_applicable !== false"> · 原数值：{{ row.facts_status || row.status }}</span>
+          <span v-if="row.check_kind === 'INFERENCE_SUPPORT'"> · 支持关系：{{ row.support_status || 'UNVERIFIABLE' }}（不代表因果被证实）</span>
+          <span v-if="row.comparison_state"> · 比较许可：{{ row.comparison_state }}（不代表收益差值已获授权）</span>
+          <span v-if="row.reason_codes.length"> · {{ row.reason_codes.join(' / ') }}</span>
+          <span v-for="field in row.failed_fields" :key="field.path"> · {{ field.path }}：{{ field.code }}</span>
+        </p>
         <p v-for="warning in verification.warnings" :key="warning"><code>{{ warning }}</code></p>
       </div>
     </template>

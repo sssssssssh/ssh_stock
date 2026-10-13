@@ -11,6 +11,7 @@ from app.domain.agent.report_errors import AgentReportError
 from app.services.agent.report.archive_binding import (
     ARCHIVED_REPORT_VERSION,
     ARCHIVED_SNAPSHOT_VERSION,
+    FrozenClaimBindingError,
     archive_gaps,
     verify_archive_contract,
 )
@@ -75,6 +76,8 @@ def verify_report(row: Any) -> tuple[ResearchReportSnapshot, ReportSourceContrac
             raise ValueError("source contract digest")
         verify_source_contract(snapshot, contract)
         return snapshot, contract
+    except FrozenClaimBindingError as exc:
+        raise _failure(exc.code) from exc
     except (ValueError, TypeError, AttributeError, KeyError) as exc:
         raise _failure("REPORT_SNAPSHOT_INTEGRITY_ERROR") from exc
 

@@ -42,8 +42,13 @@ export interface ArchiveDetail extends ArchiveSummary, Partial<ArchiveEvidence> 
 }
 export interface ArchiveVerification extends ArchiveSummary {
   verification_level: string;
+  claim_recheck_summary?: { status: CheckStatus; verified_count: number;
+    mismatch_count: number; unverifiable_count: number };
   fact_recheck: { status: CheckStatus; checked_claim_count: number; policy_version: string;
     results: Array<{ claim_id: string; status: CheckStatus; reason_codes: string[];
+      facts_status?: CheckStatus; facts_applicable?: boolean;
+      check_kind?: "DIRECT_FACT" | "COMPARISON_CONTEXT" | "INFERENCE_SUPPORT";
+      support_status?: CheckStatus | null;
       comparison_state?: "COMPARABLE" | "CONTEXT_REQUIRED" | "INCOMPATIBLE" | null;
       verified_fact_refs: string[]; failed_fields: Array<{ path: string; code: string }> }> };
 }
