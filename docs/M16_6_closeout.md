@@ -1,0 +1,106 @@
+# M16.6 冻结研究合同交付与验收
+
+## 实测状态
+
+当前 A–E 已验收；F 容量、全量 CI、Linux 浏览器正在验收，尚未正式封版。
+
+- 规划基线：`07e288c3826618192b4022e8b63d0df06db679ec`，当前分支保持 `master`。
+- A：`d625edc37744584472943eedf3cf9697a7f10920`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38340339216)。
+- B：`c048b84`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38356151219)。
+- C：`ec49593bb1957c1137a3c8633be905685efb5f2d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38358271783)。
+- D：`54920b8631589adfff3acb9a51f9150fd25b2a5d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38364353253)。
+- E：`878ba1cae5609bf369e5cbd290928aaff0143874`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728)，1277 pytest passed、后端覆盖率 87%、100 前端测试、前端构建、Ruff、Docker config/build/nginx 和迁移往返通过。
+- 本机完成 `npm ci`、1062 单元测试、Ruff、100 前端测试、81.42% 前端行覆盖率及 build；Node 18 有 engine 警告。浏览器用隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 截图与交互通过；CI 使用 Node 22 和 Chromium。
+- 本机没有可安全运行完整集成测试的数据库和 Docker；完整测试/DDL/容器由隔离 GitHub CI 执行。未对用户业务库写入、迁移或清理。
+
+## 版本与接口
+
+- Alembic 新 head：`0052_m16_6_frozen_research_contracts`，父版本 `0051_m16_5_evidence_archive`；旧迁移不改内容。
+- 新表 `agent_frozen_research_contract`、`agent_frozen_contract_manifest` 仅追加；保留 0051 内容/hash/trigger，仅为复合 FK 增加原 Manifest 复合唯一键。
+- M14/M15/aggregate/子 Manifest：`m16.6-m14-bundle-v1`、`m16.6-m15-window-v1`、`m16.6-m15-aggregate-v1`、`m16.6-contract-manifest-v1`。
+- Report：`m16.6-report-v1` + `m16.6-report-snapshot-v4`；Comparison：`m16.6-report-comparison-v4`。旧 v1/v2/v3 和 AUTO 请求哈希形状不变，旧档案不补历史、不自动升级。
+- `GET /api/v1/agent/reports/{id}/contracts?limit=20&offset=0`（limit 最大 50）、`GET .../contracts/{contract_id}`、`POST .../verify-contracts`（空严格 DTO）。
+- 原 comparison POST 可选 `STRICT_SAME_SAMPLE` / `DIFFERENT_ASSUMPTIONS` / `WINDOW_DEGRADATION`；intent/mode 组合校验；新增 `GET /api/v1/agent/report-comparisons/{id}/export?format=markdown|html`。
+- 所有新路径使用原 Cookie/owner 404；明细仅安全白名单投影，无原 Tool payload、订单、密钥或全量交易日；导出 HTML escape + CSP/nosniff/no-store。
+- 算法未重跑，固定 `calculation_reproduced=false`；SHA 不声称抵抗可同时改数据、hash 和触发器的数据库超级用户。
+
+## 36 类验收映射
+
+以下均是仓库内可执行测试路径，不使用生产数据库。U=tests/unit，I=tests/integration，V=frontend/src/components；F 新增项须等待最新 CI。
+
+| 编号 | 场景与核心断言 | 测试证据 |
+|---|---|---|
+| 01 | 精确 M14 四包冻结 | I/test_m16_6_m14_capture.py、test_m16_6_contract_atomic.py |
+| 02 | 混装不同 Run/Period 拒绝 | U/test_m16_6_contract_semantics.py 参数负例 |
+| 03 | Period 缺失 Gap；非法/失败包不得完整冻结 | U/test_m16_6_contract_semantics.py Gap/关系负例；原 analytics_bundle 集成测试 |
+| 04 | source/config/hash 篡改失败 | U/test_m16_6_contract_integrity.py、test_m16_6_contract_semantics.py |
+| 05 | 日期缺失/重复/逆序/count 不符拒绝 | U/test_m16_6_contract_semantics.py |
+| 06 | 明确选定报告后新增最新报告，保持原 ID/值 | I/test_m16_6_m14_capture.py |
+| 07 | 不同 Benchmark 隐藏 delta | I/test_m16_6_report_api.py |
+| 08 | 非支持 currency/frequency 拒绝，不假设相同 | U/test_m16_6_contract_semantics.py |
+| 09 | execution/cost/assumptions 差异不授权 | U/test_m16_6_contract_policy.py、contract_semantics.py |
+| 10 | 同口径精确 Decimal right-left | U/test_m16_6_contract_policy.py；I/test_m16_6_report_api.py |
+| 11 | 同起止日期但交易日集合不同不授权 | U/test_m16_6_contract_policy.py |
+| 12 | 样本/假设敏感性只上下文 | U/test_m16_6_contract_policy.py；I/test_m16_6_report_api.py |
+| 13 | 相同 Evidence ID 内容冲突不能覆盖 | U/test_m16_5_archive_capture.py 同 ID 负例；M16.6 复用该归档前置门禁 |
+| 14 | canonical/历史 SHA 和 JSON 不变 | U/test_m16_6_contract_canonical.py、test_m16_5_report_binding.py；I/test_m16_5_closeout.py |
+| 15 | 合同写入失败原子回滚回答/Turn/原 Archive | I/test_m16_6_contract_atomic.py fail_insert=True |
+| 16 | 同 request_id 恢复无重复合同/调用 | I/test_m16_6_contract_atomic.py；原 test_m16_5_chat_archive.py 网络响应丢失用例 |
+| 17 | cache_origin 保留，不发给 LLM | U/test_m16_6_private_capture.py |
+| 18 | JSON/hash/owner/FK 篡改 409；未知版本不可核验 | U/test_m16_6_contract_integrity.py；I/test_m16_6_contract_migration.py |
+| 19 | 最新业务数据变化不漂移 | I/test_m16_6_report_api.py；test_m16_2_2_research_integrity.py |
+| 20 | 真实 Study/Validation/Window | I/test_m16_6_window_end_to_end.py；test_m16_2_2_research_integrity.py |
+| 21 | Trial/Evaluation/Run 错配拒绝 | U/test_m16_6_window_semantics.py；I/test_m16_2_2_research_integrity.py |
+| 22 | 其他窗口 OOS/包拒绝 | U/test_m16_6_window_semantics.py、test_m16_6_window_policy.py |
+| 23 | Train/OOS 与窗口日期不一致拒绝 | U/test_m16_6_window_semantics.py |
+| 24 | 不同样本只授权专用窗口退化 | I/test_m16_6_window_end_to_end.py；U/test_m16_6_window_policy.py |
+| 25 | Study aggregate 不能替代 Window | I/test_m16_2_2_research_integrity.py；U/test_m16_6_contract_canonical.py |
+| 26 | 多窗口分页/顺序变动独立锚点 | I/test_m16_2_2_research_integrity.py；V/ContractArchivePanel.test.ts |
+| 27 | 四类 M15 Decimal 公式与符号 | U/test_m16_6_degradation.py、window_policy.py；I/test_m16_6_window_end_to_end.py |
+| 28 | Sharpe NULL 保留、回撤符号不伪造 | U/test_m16_6_window_semantics.py、contract_semantics.py |
+| 29 | 旧报告/比较可读可导出，不自动扩权 | U/test_m16_6_report_binding.py、test_m16_4_1_integrity.py；I/test_m16_5_archived_reports.py |
+| 30 | Report v4 提交前失败不留已提交行 | I/test_m16_6_report_api.py precommit 回滚 |
+| 31 | owner404/非法参数/条数/bytes/timeout | I/test_m16_6_report_api.py、contract_migration.py；U/test_m16_6_resources.py；最大窗口容量测试 |
+| 32 | 全局/逐项无许可 UI 隐藏 delta | V/AgentResearchReports.test.ts；scripts/m16_6_browser_smoke.cjs |
+| 33 | 审计 result 不作显示 fallback | V/AgentResearchReports.test.ts；浏览器审计值不显示 |
+| 34 | DATE/IDENTIFIER 上下文不能绕过数值门禁 | U/test_m16_6_contract_policy.py、test_m16_5_context_comparison.py |
+| 35 | 未知历史/合同版本不静默解释 | U/test_m16_6_contract_integrity.py、test_m16_6_report_binding.py、test_m16_5_offline_recheck.py |
+| 36 | PG17 实际 Adapter→只读捕获→原子 Archive→Report/Comparison API；CI/DDL 回滚 | I/test_m16_6_contract_atomic.py、report_api.py、window_end_to_end.py、contract_migration.py；最新 CI |
+
+差异说明：失败的已有 Period 包由既有精确 Bundle validator 直接拒绝；缺失 Period 冻结明确 Gap。非支持币种/频率在合同语义复核阶段直接拒绝；不制造可以比较的虚假合同。
+
+## 容量与重现
+
+- 单合同 128KiB、单 Turn 1MiB、默认 100 合同、最多 5000 交易日/源报告、离线 5 秒；开关和预算实际位于 `config/agent.yaml`，不是 `.env` 或策略 YAML。
+- 最大 36 窗口（现行 planner 上限）的批量读取测量使用真实 PG17/服务产物。每窗口 3 合同，36 窗口共 108：默认 100 上限必须写前拒绝，用户应按窗口分页查询，不应盲目放大硬限。实际测量等待 F CI 记录。
+- SQL 批量读取、不按窗口 N+1；离线读取前先统计实际 JSONB bytes/count，超限/超时不伪造成功。
+- 本机后端安全命令：`python -m pytest tests/unit`、`python -m ruff check backend tests migrations scripts`。
+- 全量测试须显式将 `DATABASE_URL` 指向允许测试的 PG17；M16.6 临时库 helper 另要求 `TEST_DATABASE_URL` 或隔离 CI。不可直接对 `.env` 业务库运行完整测试；helper 不跳过失败。
+- 浏览器：安装 Playwright 1.64.0 到独立临时工具目录，设置 `PLAYWRIGHT_MODULE` 为该模块路径，再运行 `node scripts/m16_6_browser_smoke.cjs`。本机可设置 `PLAYWRIGHT_CHANNEL=msedge`；CI 默认 Chromium，自动使用空闲 loopback 端口，结束关闭服务器。合成截图保存在被 Git 忽略的 `frontend/coverage/browser`。
+
+## 依赖风险（独立 P2）
+
+2026-10-13 实际官方 npm registry 审计：11 项（4 critical、3 high、4 moderate），不是 11 个新漏洞。镜像 registry 的 audit 返回 404，不能据此宣称安全；用命令 `npm audit --json --registry=https://registry.npmjs.org` 复查。未执行 `audit fix --force`，未改变应用 lockfile。
+
+| 依赖 | 直接/传递 | 本轮风险判断与后续验证 |
+|---|---|---|
+| echarts | 直接运行时 | audit 报 XSS，所有图表输入/Tooltip 均须升级评估；新合同 UI 使用 Vue 文本插值/escape 并通过 XSS 测试，不等于旧图表漏洞已修复 |
+| vite | 直接开发期 | dev server 路径/文件读取；只绑定 loopback，禁止生产运行 dev server；升级后重测 Vue/代理/build |
+| vitest、@vitest/coverage-v8、happy-dom | 直接开发/测试期 | UI server/执行隔离等 critical；只运行可信测试，不对外开放测试服务器；升级后覆盖率/DOM 回归全量执行 |
+| @vitest/mocker、vite-node、tinypool、esbuild | 传递开发/测试期 | 分别经 Vitest/Vite 引入；随上游升级，检查 worker/mock、文件访问与测试语义 |
+| brace-expansion、source-map-js | 传递 | 拒绝不可信编译/源码输入，升级锁文件后核对实际依赖路径与生产 bundle，不能只看顶级包版本 |
+
+本机默认 Node 18 触发依赖 engine 警告；CI 的 Node 22 与本机隔离 Node 22.23.3 成功执行。本项目工具链至少使用满足依赖 engine 的 Node 22.22.2+（或满足对应 engine 的 24.15+），后续安全升级需单独验证 Node/Vite/Vitest/ECharts 的目标版本，不以本轮测试代替升级验收。
+
+## 上线与回滚
+
+1. 先备份和核对生产目标，隔离 staging 演练 0051→0052；本轮 CI 还验证空库降级再升级、已有合同拒绝降级。生产没有自动迁移或历史回填。
+2. 已具备 Python/PG 环境无需重新创建环境；拉新代码并安装锁定依赖后，对核对过的部署库执行 `python -m alembic upgrade head`，再 `current`/`heads` 核对 0052。该命令只变表结构，不拉数据、补因子或重跑研究。
+3. 在 `config/agent.yaml` 开启 `agent.archive.enabled` 与 `agent.frozen_contract.enabled`，默认都遵守既有配置，本轮 frozen_contract 默认 false。重启 API 后仅新 Turn 捕获合同；旧报告保持原权限。该能力不要求重拉 Raw 或补算因子。
+4. 新报告在“研究报告”页显示合同与独立复核状态；显式选同样本/敏感性/窗口模式。TRAIN/OOS 必须先让工具选择同一个精确窗口，而非 Study aggregate。
+5. 回滚优先关闭 frozen_contract 捕获，保留 0052 表、已有 v4 兼容读取；若退到不认识 v4 的后端，先隔离该报告入口。已有合同禁止强行 downgrade/DELETE；不删除用户报告、不复写 hash。前端需要和兼容后端一起部署。
+6. 监测合同缺口/冲突/超时/字节/数目、比较授权与页面耗时。当前日志禁止源 payload/凭据；档案无隐式 TTL，容量接近上限时采用分页/明确资源拒绝，不能在线“修复”历史档案。
+
+## Definition of Done
+
+设计与 A–E 实测已覆盖：执行时冻结、M14 精确来源与日期、M15 真血缘、共同提交/回滚、历史不变、双重许可、专用 Decimal 公式、明确状态/原因/API/UI。F 的最大档测量、全量最新 CI、current/heads 与 Linux 浏览器完成后才标记最终全部通过。

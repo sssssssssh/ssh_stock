@@ -1,10 +1,14 @@
 import json
+import time
 import uuid
 from datetime import date, timedelta
 
+import pytest
 import sqlalchemy as sa
 from app.api.v1.agent import require_agent_user
 from app.api.v1.agent_reports import get_report_application
+from app.core.agent_frozen_contract_config import AgentFrozenContractConfig
+from app.domain.agent.archive import AgentArchiveError
 from app.domain.agent.contracts import WalkForwardWindowLineageInput
 from app.main import app
 from app.models.experiment import PortfolioExperimentTrial
@@ -14,8 +18,10 @@ from app.models.walk_forward import (
     PortfolioWalkForwardWindow,
     PortfolioWalkForwardWindowValidation,
 )
+from app.repositories.agent_frozen_contract import AgentFrozenContractRepository
 from app.services.agent.adapters.research import ResearchAgentAdapter
 from app.services.agent.chat.application import AgentChatApplication
+from app.services.agent.contracts.capture import capture_research_contracts
 from app.services.agent.contracts.m15 import BASE_IDENTITY_FIELDS
 from app.services.agent.llm.contracts import LLMResponse, ToolCall
 from app.services.agent.llm.fake import FakeLLMProvider
@@ -28,9 +34,11 @@ from test_m16_2_2_research_integrity import _align_run_snapshot, _complete_bundl
 from test_m16_2_agent_chat import _enabled_settings, _user
 
 
-def seed_window(db):
+def seed_window(db, window_count=2):
     # Synthetic financial fixtures, genuine persisted M14/M15 service identities.
-    dates = tuple(date(2088, 1, 2) + timedelta(days=index) for index in range(21))
+    dates = tuple(
+        date(2088, 1, 2) + timedelta(days=index) for index in range(7 * (window_count + 1))
+    )
     db.add_all(TradeCalendar(cal_date=value, is_open=True, exchange="SSE") for value in dates)
     db.flush()
     service = WalkForwardApplicationService(db)
@@ -55,7 +63,7 @@ def seed_window(db):
             )
         )
     )
-    assert len(windows) == 2
+    assert len(windows) == window_count
     for window in windows:
         train_case, _ = _complete_bundle(
             db, tuple(date.fromisoformat(d) for d in window.train_trade_dates)
@@ -222,3 +230,59 @@ def test_real_window_chat_archive_report_comparison_uses_original_m15_formula(mo
                 )
             finally:
                 app.dependency_overrides.clear()
+
+
+def test_real_minimum_and_maximum_windows_capture_has_bounded_selects_and_fails_closed(monkeypatch):
+    with isolated_contract_database(monkeypatch) as (factory, engine):
+        with factory() as db:
+            study_id, validation_id, _ = seed_window(db, window_count=36)
+            counts, timings, sizes = [], [], []
+            for limit in (1, 36):
+                result = ResearchAgentAdapter(db).walk_forward_window_lineage(
+                    WalkForwardWindowLineageInput(
+                        study_id=study_id, validation_id=validation_id, limit=limit
+                    )
+                )
+                assert len(result.records) == limit
+                db.expire_all()
+                statements = []
+
+                def capture_sql(
+                    connection,
+                    cursor,
+                    statement,
+                    parameters,
+                    context,
+                    executemany,
+                    collected=statements,
+                ):
+                    if statement.lstrip().startswith("SELECT"):
+                        collected.append(statement)
+
+                sa.event.listen(engine, "before_cursor_execute", capture_sql)
+                started = time.monotonic()
+                try:
+                    drafts = capture_research_contracts(
+                        db, result, tool_call_id=f"capacity-{limit}", max_trade_dates=5000
+                    )
+                finally:
+                    sa.event.remove(engine, "before_cursor_execute", capture_sql)
+                elapsed = time.monotonic() - started
+                from app.services.agent.contracts.canonical import contract_storage_size
+
+                counts.append(len(statements))
+                timings.append(round(elapsed, 4))
+                sizes.append(sum(contract_storage_size(item.contract_json) for item in drafts))
+                assert len(drafts) == limit * 3
+                assert elapsed < 5
+                assert all(item.contract_json["status"] == "COMPLETE" for item in drafts)
+            assert counts[0] == counts[1]
+            assert counts[0] <= 16
+            # 36 windows have 108 contracts: the default 100-row turn cap refuses BEFORE SQL/write.
+            repo = AgentFrozenContractRepository(object())
+            with pytest.raises(AgentArchiveError) as caught:
+                repo.insert_drafts(
+                    base_manifest=None, drafts=drafts, config=AgentFrozenContractConfig()
+                )
+            assert caught.value.code == "CONTRACT_LIMIT_EXCEEDED"
+            print(f"M16.6 windows=[1,36] SELECTs={counts} seconds={timings} JSONB_bytes={sizes}")

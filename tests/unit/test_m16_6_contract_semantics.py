@@ -2,8 +2,9 @@ import uuid
 from copy import deepcopy
 
 import pytest
-from app.services.agent.contracts.semantics import verify_m14
-from app.services.performance.analytics_bundle import AnalyticsBundleError
+from app.services.agent.contracts.m14 import m14_contract_body
+from app.services.agent.contracts.semantics import _decode, verify_m14
+from app.services.performance.analytics_bundle import AnalyticsArtifactBundle, AnalyticsBundleError
 from m16_6_fixtures import synthetic_m14
 
 
@@ -36,3 +37,36 @@ def test_m14_offline_rejects_relations_dates_values_unknown_assumptions_and_sign
     change(body)
     with pytest.raises((ValueError, AnalyticsBundleError)):
         verify_m14(body)
+
+
+@pytest.mark.parametrize(
+    "fault,code",
+    [
+        ("period", "PERIOD_REPORT_MISSING"),
+        ("dates", "PERFORMANCE_DATE_SERIES_INCOMPLETE"),
+        ("assumptions", "EXECUTION_ACCOUNTING_SNAPSHOT_INCOMPLETE"),
+    ],
+)
+def test_capture_missing_proof_is_explicit_gap_not_complete(fault, code):
+    source = synthetic_m14()
+    rows = {name: _decode(values) for name, values in source["bundle_rows"].items()}
+    rows["run"].config_snapshot = {
+        "execution": source["execution_snapshot"],
+        "accounting": source["accounting_snapshot"],
+    }
+    dates = tuple(source["comparison_contract"]["trade_dates"])
+    if fault == "period":
+        rows["period"] = None
+    elif fault == "dates":
+        dates = ()
+    else:
+        rows["run"].config_snapshot = {}
+    body = m14_contract_body(
+        AnalyticsArtifactBundle(**rows),
+        dates,
+        evidence=source["evidence"],
+        record=source["record"],
+        limitations=[],
+    )
+    assert body["status"] == "GAP" and body["reason_codes"] == [code]
+    assert "comparison_contract" not in body

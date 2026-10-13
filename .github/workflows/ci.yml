@@ -37,6 +37,10 @@ jobs:
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
       - run: python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
+      - name: M16.6 capture capacity measurements
+        run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
+      - run: python -m alembic current
+      - run: python -m alembic heads
       - run: python -m ruff check backend tests migrations scripts
       - run: cp .env.example .env
       - run: docker compose config
@@ -53,3 +57,14 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      - name: M16.6 browser acceptance (isolated runner tooling)
+        run: |
+          npm install --prefix "$RUNNER_TEMP/m166-browser" --no-save --package-lock=false playwright@1.64.0
+          node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m16_6_browser_smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m16-6-synthetic-browser
+          path: frontend/coverage/browser
+          if-no-files-found: ignore

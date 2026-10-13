@@ -349,5 +349,5 @@ th, td { border-bottom: 1px solid #e2e8f0; padding: 7px; text-align: left; white
 .comparison-actions, .comparison-checks { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .comparison-result code { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
 @media (max-width: 1100px) { .report-create { grid-template-columns: repeat(2, minmax(0, 1fr)); } .report-create > div { grid-column: 1 / -1; } .report-compare { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 720px) { .report-create, .report-compare, .report-layout { grid-template-columns: 1fr; } .report-list { max-height: 260px; overflow-y: auto; } .evidence-grid { grid-template-columns: 1fr; } .detail-title { display: grid; } .snapshot-meta { display: grid; } }
+@media (max-width: 720px) { .report-header { flex-wrap: wrap; } .report-create, .report-compare, .report-layout { grid-template-columns: 1fr; } .report-list { max-height: 260px; overflow-y: auto; } .evidence-grid { grid-template-columns: 1fr; } .detail-title { display: grid; } .snapshot-meta { display: grid; } }
 </style>

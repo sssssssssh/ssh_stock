@@ -46,7 +46,7 @@ UI 不消费旧审计 result。归档存在不授予金融可比性，完整 M14
 不授予原计算重跑或完整 M14/M15 比较契约等级。远端 CI 记录见 M16_5_evidence_archive_closeout.md。
 M16.5.1 对 Report v3 新增按 Claim 类型的冻结字段/支持图校验，并将完整读取侧校验前移到创建事务提交前；事实字段、比较口径、推断支持状态独立，旧快照与 0050/0051 不改写。验收见 `docs/M16_5_1_archive_report_consistency_closeout.md`。
 
-M16.6 按 A–F 增量开发，A–D 已通过独立 PostgreSQL 17 CI；E 的 Report v4/API/UI 正在验收。新合同默认关闭；只从本次工具精确来源捕获，与 Assistant/Turn/原 Archive 原子提交。历史 Archive/Report/Comparison 不回填、不升级权限；四层复核与双重比较门禁须完整验收后才能开放。
+M16.6 按 A–F 增量开发，A–E 已通过独立 PostgreSQL 17 CI 和浏览器验收；F 正在全量收尾。新合同默认关闭；只从本次工具精确来源捕获，与 Assistant/Turn/原 Archive 原子提交。历史 Archive/Report/Comparison 不回填、不升级权限；四层复核与双重比较门禁须完整验收后才能开放。
 
 - 工程骨架
 - 数据库与迁移

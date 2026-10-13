@@ -1,6 +1,15 @@
 # M16.6 路径映射与设计决策
 
-## PR-E 验收中
+## PR-E 验收通过
+
+- 提交 `878ba1cae5609bf369e5cbd290928aaff0143874`，CI https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728 成功；真实独立 PG17：1277 passed，后端覆盖率 87%，前端 100 passed，迁移/容器/构建通过。
+- 本机隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 浏览器与截图验证：合同分页、键盘、错误恢复、XSS、窗口专用公式、无许可隐藏差值、旧报告无修复入口均通过。截图使用明确标注的合成 API 数据；不冒充金融源端到端，源端到端由 PG 集成测试覆盖。
+
+## PR-F 验收中
+
+- 增加 1/36 最大窗口真实批量捕获的 SELECT 次数/耗时/字节测量、100 合同默认上限的写前拒绝、离线预检及超时测试；尚待本阶段隔离 CI。
+- CI 增加 Alembic current/heads 输出和 Playwright Linux Chromium 浏览器验收/截图产物；Playwright 在 runner 临时目录安装，不改变应用依赖锁文件。
+- 最终矩阵、P2 依赖风险和上线回滚说明见 `M16_6_closeout.md`，未完成验收前保持功能关闭。
 
 - 双锚点绑定：`contracts/report_binding.py`；读取同时核验原 Manifest 与子 Manifest，旧 v1/v2/v3 的序列化及 AUTO 请求哈希不变。
 - `report/application.py` 新增 v4 分派、提交前完整复核、冻结政策重检、分页安全投影和比较导出；不查询最新业务表。

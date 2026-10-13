@@ -40,6 +40,9 @@ def test_performance_tool_captures_selected_bundle_and_trade_dates_in_same_trans
                     value.isoformat() for value in dates
                 ]
                 frozen = body["record"]["performance"]["annualized_return"]
+                newer = seed_analytics_case(db, dates)
+                assert newer.performance_id != case.performance_id
+                assert body["selected"]["performance_id"] == str(case.performance_id)
                 db.execute(
                     sa.update(PortfolioPerformanceDaily)
                     .where(PortfolioPerformanceDaily.performance_id == case.performance_id)

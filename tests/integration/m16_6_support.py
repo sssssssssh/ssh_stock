@@ -1,3 +1,4 @@
+import os
 import uuid
 from contextlib import contextmanager
 
@@ -13,7 +14,10 @@ from sqlalchemy.orm import sessionmaker
 def isolated_contract_database(monkeypatch):
     """Create and destroy only a uniquely named synthetic integration-test database."""
     database_name = "m166_test_" + uuid.uuid4().hex
-    base_url = make_url(get_settings().database_url)
+    test_url = os.environ.get("TEST_DATABASE_URL")
+    if not test_url and os.environ.get("CI") != "true":
+        raise RuntimeError("M16.6 integration requires explicit TEST_DATABASE_URL or isolated CI")
+    base_url = make_url(test_url or get_settings().database_url)
     admin = sa.create_engine(base_url, isolation_level="AUTOCOMMIT")
     engine = None
     try:
