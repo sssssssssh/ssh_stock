@@ -10,7 +10,8 @@
 ## 验证
 
 - 修复前新增 FACT + INFERENCE 冻结报告单测稳定失败于 `frozen field bindings`；修复后通过。
-- 本地 `python -m pytest tests/unit -q`：1002 passed；`python -m ruff check backend tests migrations scripts`、`git diff --check` 通过。`npm run test:coverage`：91 passed，语句覆盖率 81.42%；`npm run build` 通过。当前公网 `stock_db` 是业务库，不在其中运行写入/清理型集成测试；PG17 专项及全量覆盖率用例在 CI 的隔离 PostgreSQL 服务中执行。
+- 本地 `python -m pytest tests/unit -q`：1002 passed；`python -m ruff check backend tests migrations scripts`、`git diff --check` 通过。`npm run test:coverage`：91 passed，语句覆盖率 81.42%；`npm run build` 通过。当前公网 `stock_db` 是业务库，没有在其中运行写入/清理型集成测试。
+- 功能提交 `a69fb8952db3f40a57a0ef796075d9b972017f13` 的 [GitHub CI #79](https://github.com/sssssssssh/ssh_stock/actions/runs/38334164706) Success：隔离 PostgreSQL 17 完成 Alembic upgrade/downgrade/upgrade、`python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70`（1214 passed，86.74% 覆盖率）、ruff、Docker Compose config/build、Nginx 配置检查、前端 91 项与 build。
 - 新集成用例使用真实 Chat Compiler、Archive Assembler 与 Repository，覆盖混合 Claim 创建/读取/导出/归档/回放及预提交校验失败回滚与同 Request ID 重试。
 
 ## npm 依赖风险分类
@@ -26,4 +27,4 @@
 
 上线前备份 PostgreSQL；应用后端与前端作为一组版本部署，0050/0051 无结构变更。观察 `REPORT_SNAPSHOT_INTEGRITY_ERROR`、`REPORT_ARCHIVE_UNVERIFIABLE`、创建后重试冲突率。若预验误拒绝，回退应用并暂停新报告创建；既有归档、报告和 Hash 不修改、不删除。关闭 `agent.archive.enabled` 只停止新归档捕获，不改变历史报告身份。
 
-最终功能提交 SHA、CI URL 与测试计数以本轮最终验收记录补充；在最终 SHA 的隔离 PG17 CI 成功前，不宣称 M16.5.1 封版。
+功能提交及 CI 已通过。本文档补录提交仅追加验收记录，不改变功能代码；其最终 SHA 与 CI 状态在交付回复中核对。M16.5.1 可按本文范围封版，仍保留上述 M14/M15 冻结口径及 npm 依赖告警限制。
