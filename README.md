@@ -20,6 +20,8 @@
 此阶段尚无 PAPER API、Worker 或 Scheduler 接入，修改开关不会启动模拟交易。
 迁移有 M17 历史数据时拒绝降级，应关闭功能保留证据，不得清空流水以强行回滚。
 阶段设计和逐项剩余验收见 `docs/M17_design_decisions.md`、`docs/M17_release_acceptance.md`。
+A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移及前端历史回归；
+[CI 记录](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)。B 决策快照为下一阶段。
 
 2026-09-15 开始按全量优化规划分 Phase 推进。Phase 1 已将因子、市场、行业、状态和信号范围重算改为 authoritative replace-slice：重算范围内不再成立的旧结果会删除，仍成立的信号保留原 `signal_id`，删除信号时级联清理后验评价。
 
