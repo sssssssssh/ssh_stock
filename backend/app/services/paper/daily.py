@@ -1,4 +1,5 @@
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 
@@ -214,6 +215,9 @@ class PaperDailyApplication:
                         data={
                             "market_data_mode": config.policy.market_data_mode,
                             "previous_snapshot_hash": previous_hash,
+                            "execution_mode": "PAPER_FORWARD_REPLAY_FROM_ARCHIVED_INPUTS"
+                            if day < now.astimezone(ZoneInfo("Asia/Shanghai")).date()
+                            else "PAPER_FORWARD_EOD",
                         },
                         account_id=account.id,
                         trade_date=day,
@@ -409,7 +413,7 @@ class PaperDailyApplication:
                     source_hash=source_hash,
                 )
             )
-            load_close(self.db, account, day)
+            load_close(self.db, account, day, require_completed=False)
             result_hash = self._bundle(account, day)
             for row in checkpoints:
                 row.status, row.result_hash = "SUCCESS", result_hash

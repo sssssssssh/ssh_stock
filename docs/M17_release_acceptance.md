@@ -55,6 +55,11 @@ legacy compatibility. D implementation adds independent account lifecycle and
 atomic daily replay; its PG gate is not yet accepted. E/F remain unimplemented.
 No user DB migration or full local pytest against business data was performed.
 
+D candidate 6cfe8c0 failed CI 38513408709 at fixture setup: the new test reversed
+the shared helper's (session factory, engine) tuple. No D financial assertion ran;
+this is not an accepted PG gate. Corrected fixture and added sell/limit/AFTER_CLOSE
+regressions before rerun. Local unit suite: 1233 passed; full Ruff passed.
+
 A-PG proofs below passed the accepted CI. Partial is not full M17 completion.
 
 | # | Scenario | Evidence / remaining gate |

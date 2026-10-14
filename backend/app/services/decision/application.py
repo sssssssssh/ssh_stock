@@ -8,7 +8,7 @@ from app.models.paper import DecisionObservation, DecisionProposal, PaperAccount
 from app.repositories.paper import PaperRepository
 from app.services.agent.report.application import AgentReportApplication
 from app.services.decision.source import DecisionSourceReadiness
-from app.services.paper.account_state import account_settings
+from app.services.paper.account_state import account_settings, load_close
 from app.services.paper.records import (
     make_record,
     next_open,
@@ -48,6 +48,8 @@ class DecisionApplication:
                 account = self.repo.owned(PaperAccount, owner_id, body.account_id)
                 if account.state == "CLOSED":
                     raise PaperError("PAPER_ACCOUNT_CLOSED")
+                if body.signal_date >= account.first_trade_date:
+                    load_close(self.db, account, body.signal_date)
                 reader = DecisionSourceReadiness(self.db, account_settings(account, self.settings))
             source = reader.capture(
                 body.signal_date, cutoff=now, include_codes=body.include_codes
@@ -94,6 +96,8 @@ class DecisionApplication:
             frozen = verify_record(observation)
             if frozen.get("account_id") not in (None, str(account.id)):
                 raise PaperError("DECISION_ACCOUNT_MISMATCH")
+            if observation.signal_date >= account.first_trade_date:
+                load_close(self.db, account, observation.signal_date)
             now = self.clock()
             current = DecisionSourceReadiness(
                 self.db, account_settings(account, self.settings)

@@ -39,7 +39,7 @@ SECOND = DAY + timedelta(days=2)
 
 @pytest.fixture
 def paper(monkeypatch):
-    with isolated_contract_database(monkeypatch) as (_, factory):
+    with isolated_contract_database(monkeypatch) as (factory, _):
         with factory() as db:
             owner, other, account_id = seed(db, days=(DAY, FIRST, SECOND))
             PaperAccountApplication(db, settings(), clock=lambda: NOW).transition(
@@ -305,3 +305,56 @@ def test_creation_initial_funding_idempotency_and_state_version(paper):
             application.transition(other, account.id, PaperRequest(request_id="foreign"), "PAUSED")
         assert error.value.status_code == 404
         assert count(db, PaperAccountEvent) >= 2
+
+
+def test_exit_next_open_charges_sell_taxes_and_preserves_realized_history(paper):
+    factory, owner, _, account = paper
+    approve(factory, owner, account)
+    run(factory, owner, account)
+    approve(factory, owner, account, day=FIRST, action="PROPOSE_EXIT", weight="0")
+    run(factory, owner, account, SECOND)
+    with factory() as db:
+        fills = list(db.scalars(select(PaperFill).order_by(PaperFill.trade_date)))
+        assert [fill.side for fill in fills] == ["BUY", "SELL"]
+        assert Decimal(fills[1].fee_json["stamp_tax"]) > 0
+        assert count(db, PaperPositionDaily) == 1  # The old day stays immutable.
+        closing = db.scalar(select(PaperNavDaily).where(PaperNavDaily.trade_date == SECOND))
+        assert closing.position_count == 0 and closing.market_value == 0
+        assert closing.cash == Decimal("1000000") + sum(fill.cash_delta for fill in fills)
+        assert verify_record(fills[1])["realized_delta"] is not None
+
+
+def test_limit_block_is_final_and_does_not_change_capital(paper):
+    factory, owner, _, account = paper
+    approve(factory, owner, account)
+    with factory() as db:
+        db.get(StockDaily, (FIRST, CODES[0])).open = 11
+        db.commit()
+    run(factory, owner, account)
+    run(factory, owner, account)
+    with factory() as db:
+        order = db.scalar(select(PaperOrder))
+        assert order.status == "SKIPPED" and order.reason_code == "LIMIT_UP_BUY_BLOCKED"
+        assert count(db, PaperOrderAttempt) == 1 and count(db, PaperFill) == 0
+        nav = db.scalar(select(PaperNavDaily))
+        assert nav.nav == 1 and nav.cash == Decimal("1000000")
+
+
+def test_new_account_observation_waits_for_its_own_close(paper):
+    factory, owner, _, account = paper
+    with factory() as db:
+        application = DecisionApplication(db, settings(), clock=lambda: NOW + timedelta(days=1))
+        with pytest.raises(PaperError, match="SNAPSHOT_NOT_READY"):
+            application.observe(
+                owner,
+                CreateObservation(request_id="too-early", signal_date=FIRST, account_id=account),
+            )
+    run(factory, owner, account)
+    with factory() as db:
+        observation = DecisionApplication(
+            db, settings(), clock=lambda: NOW + timedelta(days=1)
+        ).observe(
+            owner,
+            CreateObservation(request_id="after-close", signal_date=FIRST, account_id=account),
+        )
+        assert observation.signal_date == FIRST

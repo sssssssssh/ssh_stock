@@ -9,7 +9,7 @@ from app.core.execution_config import ExecutionConfig
 from app.core.paper_config import DecisionConfig, PaperPolicyConfig, PaperRuntimeConfig
 from app.domain.decision.contracts import PaperError, content_hash
 from app.domain.portfolio import DailyPortfolioSnapshot, PositionState
-from app.models.paper import PaperLedgerEntry, PaperNavDaily, PaperPositionDaily
+from app.models.paper import PaperDayRun, PaperLedgerEntry, PaperNavDaily, PaperPositionDaily
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     OPPORTUNITY_CALC_VERSION,
@@ -92,7 +92,7 @@ def initial_entry(db, account):
     return row
 
 
-def load_close(db, account, day):
+def load_close(db, account, day, *, require_completed=True):
     initial = initial_entry(db, account)
     if day < account.first_trade_date:
         return (
@@ -115,6 +115,18 @@ def load_close(db, account, day):
     )
     if nav is None:
         raise PaperError("PAPER_ACCOUNT_SNAPSHOT_NOT_READY")
+    if require_completed:
+        completed = db.scalar(
+            select(PaperDayRun).where(
+                PaperDayRun.account_id == account.id,
+                PaperDayRun.owner_user_id == account.owner_user_id,
+                PaperDayRun.trade_date == day,
+                PaperDayRun.phase == "DAY_COMPLETED",
+            )
+        )
+        if completed is None or completed.status != "SUCCESS":
+            raise PaperError("PAPER_ACCOUNT_SNAPSHOT_NOT_READY")
+        verify_record(completed)
     verify_record(nav)
     rows = list(
         db.scalars(
