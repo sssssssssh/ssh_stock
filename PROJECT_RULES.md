@@ -35,7 +35,7 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 16.5；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 16.6；后续 M13-M16 的冻结规则见本文后续章节：
 
 M16.5 已按 A–F 完成实现、本地与 GitHub CI 验收，默认关闭归档，新增 0051 存储；
 B 原子捕获完成、C 离线复核只加载归档及 Chat/Report，不查询最新业务数据或调用模型。
@@ -46,7 +46,9 @@ UI 不消费旧审计 result。归档存在不授予金融可比性，完整 M14
 不授予原计算重跑或完整 M14/M15 比较契约等级。远端 CI 记录见 M16_5_evidence_archive_closeout.md。
 M16.5.1 对 Report v3 新增按 Claim 类型的冻结字段/支持图校验，并将完整读取侧校验前移到创建事务提交前；事实字段、比较口径、推断支持状态独立，旧快照与 0050/0051 不改写。验收见 `docs/M16_5_1_archive_report_consistency_closeout.md`。
 
-M16.6 按 A–F 增量开发，A–E 已通过独立 PostgreSQL 17 CI 和浏览器验收；F 正在全量收尾。新合同默认关闭；只从本次工具精确来源捕获，与 Assistant/Turn/原 Archive 原子提交。历史 Archive/Report/Comparison 不回填、不升级权限；四层复核与双重比较门禁须完整验收后才能开放。
+M16.6 A–F 已完成并验收封版。功能提交 `4f5f2d453704e73fac8c29c084baf10ffa27082a` 的独立 PostgreSQL 17 CI 全部通过（1298 pytest、Ruff、0052 current/heads、Docker、前端及 1440/390 浏览器），详情见 `docs/M16_6_closeout.md`。新合同捕获默认关闭；只从当次工具精确来源捕获，与 Assistant/Turn/原 Archive 原子提交。历史 Archive/Report/Comparison 不回填、不升级权限。
+
+M16.6 冻结不变量：Report v4 双锚点绑定创建时的原 Manifest/合同子 Manifest，复核只读历史档案且原归档/子合同共享 deadline；同 Evidence/kind/subject/role 的不同合同内容必须拒绝。比较需同时通过完整性、事实、合同语义、全局与逐项许可；TRAIN/OOS 只用精确同窗口的 M15 原公式，percent 差值明确为百分点，不作一般收益排名。`calculation_reproduced` 恒为 false。后续变更合同模型或比较含义必须显式版本化，不重新解释或重写已发布历史。继承 npm 审计告警属独立 P2 升级，不以功能验收声称依赖风险已清零。
 
 - 工程骨架
 - 数据库与迁移

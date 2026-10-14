@@ -5,23 +5,23 @@
 - 提交 `878ba1cae5609bf369e5cbd290928aaff0143874`，CI https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728 成功；真实独立 PG17：1277 passed，后端覆盖率 87%，前端 100 passed，迁移/容器/构建通过。
 - 本机隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 浏览器与截图验证：合同分页、键盘、错误恢复、XSS、窗口专用公式、无许可隐藏差值、旧报告无修复入口均通过。截图使用明确标注的合成 API 数据；不冒充金融源端到端，源端到端由 PG 集成测试覆盖。
 
-## PR-F 验收中
+## PR-F 验收通过
 
 - 基础验收提交 `974d07b6cd1e2525c5c2d5760fce780b869beffb`，[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481) success：1285 passed、Ruff、0052 current/heads、Docker、前端与 Linux 浏览器均通过。1/36 实际窗口捕获均 14 SELECT，0.0255/0.1782 秒；最大档超 count/byte 默认上限，必须分页，不扩大硬限。
-- 审查补充：相同 Evidence + kind/subject/role 的不同合同，在写前与离线读时均拒绝 `CONTRACT_EVIDENCE_CONFLICT`；不同 TRAIN/OOS 角色允许共享窗口 Evidence，缓存相同内容正常。合同和子 Manifest flush 后人为失败必须共同回滚；补丁等待最新全量 CI。
+- 审查补充：相同 Evidence + kind/subject/role 的不同合同，在写前与离线读时均拒绝 `CONTRACT_EVIDENCE_CONFLICT`；不同 TRAIN/OOS 角色允许共享窗口 Evidence，缓存相同内容正常。合同和子 Manifest flush 后人为失败必须共同回滚；已通过全量 CI。
 
 - 同 Evidence/写后回滚补丁 `5d88006f904c22005fe30af2d8d14d0c4fb3bf3d`，[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38377760959) success：1289 passed、Ruff、0052、Docker、前端和双视口浏览器通过。
-- 最后补充共享 deadline（v4 原 Archive 与合同复核不重新计时）、窗口 percent 差值明确为百分点，以及导出与 UI 同等全局/逐项/公式门禁。本机 1077 单元、100 前端测试/81.45% 行覆盖率、build/Ruff 通过；待该补充的最终 CI。
+- 最后补充共享 deadline（v4 原 Archive 与合同复核不重新计时）、窗口 percent 差值明确为百分点，以及导出与 UI 同等全局/逐项/公式门禁。本机 1077 单元、100 前端测试/81.45% 行覆盖率、build/Ruff 通过；功能提交 `4f5f2d453704e73fac8c29c084baf10ffa27082a` 的 [最终 CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38379683263) 全部成功，1298 pytest、87% 后端覆盖率、0052/Docker/前端/双视口 Chromium 通过。
 
-- 增加 1/36 最大窗口真实批量捕获的 SELECT 次数/耗时/字节测量、100 合同默认上限的写前拒绝、离线预检及超时测试；尚待本阶段隔离 CI。
+- 增加 1/36 最大窗口真实批量捕获的 SELECT 次数/耗时/字节测量、100 合同默认上限的写前拒绝、离线预检及超时测试；已通过隔离 CI。最终实测均 14 SELECT，0.0304/0.2204 秒；最大档必须分页，不扩大硬限。
 - CI 增加 Alembic current/heads 输出和 Playwright Linux Chromium 浏览器验收/截图产物；Playwright 在 runner 临时目录安装，不改变应用依赖锁文件。
-- 最终矩阵、P2 依赖风险和上线回滚说明见 `M16_6_closeout.md`，未完成验收前保持功能关闭。
+- A–F 已验收封版，最终矩阵、P2 依赖风险和上线回滚说明见 `M16_6_closeout.md`。捕获仍默认关闭，上线前核对备份、迁移和双开关；本轮未迁移业务库。
 
 - 双锚点绑定：`contracts/report_binding.py`；读取同时核验原 Manifest 与子 Manifest，旧 v1/v2/v3 的序列化及 AUTO 请求哈希不变。
 - `report/application.py` 新增 v4 分派、提交前完整复核、冻结政策重检、分页安全投影和比较导出；不查询最新业务表。
 - API 新增 `/reports/{id}/contracts`、`/contracts/{contract_id}`、`/verify-contracts`，以及 `/report-comparisons/{id}/export`；相同 Cookie/owner 404 与严格 DTO。
 - Vue 复核状态独立、分页/错误恢复/请求取消、专用窗口退化表，全局和逐项许可双门禁；只消费 `display_result`。
-- 本机单元 1058 passed，Ruff passed，前端 100 passed、覆盖率 80.83%、构建 passed。实际 PG 工具捕获→归档→Report API→Comparison API 用例随本阶段提交，由隔离 CI 执行；尚未宣称 PG/浏览器最终通过。
+- E 初始本机单元 1058 passed，Ruff passed，前端 100 passed、覆盖率 80.83%、构建 passed；后续追加测试后的最终结果见上文。实际 PG 工具捕获→归档→Report API→Comparison API 已由隔离 CI 执行，浏览器使用合成安全投影单独验证 UI，不冒充源数据核验。
 
 基线：`07e288c3826618192b4022e8b63d0df06db679ec`。本文件记录实现前核对，不改变既有冻结口径。
 

@@ -1304,11 +1304,13 @@ docker compose logs --tail=200 backend worker scheduler frontend
 - Validation Job 冻结 Policy snapshot/hash 和 Source hash；排队后仅非验证配置发生变化时仍可继续，Policy 漂移以 `WALK_FORWARD_VALIDATION_POLICY_CHANGED` 明确失败。
 - Readiness 现在一次返回所有窗口中可识别的 Train/OOS 缺失项，并保持稳定顺序；血缘和日期集合损坏继续 fail closed，不自动触发回测、M14 或修复写入。
 - PostgreSQL 17 升级、冲突预检、备份、人工处置和受限降级步骤见 `docs/m15_3_walk_forward_validation.md` 的 `0045 Upgrade Runbook`。
-## M16.6 开发阶段状态
+## M16.6 使用与验收
 
-0052 新增冻结研究合同及子 Manifest，不改写历史归档。`config/agent.yaml` 的 `agent.frozen_contract.enabled` 默认关闭；启用必须同时开启 `agent.archive.enabled`。当前正按 A–F 验收，请保持开关关闭直到最终交付。阶段、迁移与实测见 [设计决策与验收记录](docs/M16_6_design_decisions.md)。
+0052 新增冻结研究合同及子 Manifest，不改写历史归档。A–F 已完成验收，阶段与代码映射见 [设计决策与验收记录](docs/M16_6_design_decisions.md)。`config/agent.yaml` 的 `agent.frozen_contract.enabled` 默认关闭；启用必须同时开启 `agent.archive.enabled`，并先对核对过、已备份的部署库升级到 0052。业务库本轮未自动迁移或写入；已有环境不需要重建，不需要重拉 Raw 或补算因子。
 
-A–E 已通过隔离 PostgreSQL 17 CI 和浏览器验收。E 新增研究报告合同列表/明细/离线复核、同样本回测/假设敏感性/窗口 TRAIN/OOS 比较模式及安全导出。仅有合同创建时双锚点的 v4 报告可以请求新比较；旧报告显示“无合同归档”，不提供补历史按钮。当前仍待 F 全量验收，完整矩阵及安全上线说明见 [M16.6 收尾记录](docs/M16_6_closeout.md)。
+研究报告新增合同列表/明细/离线复核、同样本回测/假设敏感性/窗口 TRAIN/OOS 比较及安全导出。只有创建时双锚点的 v4 报告可以请求新比较；旧报告显示“无合同归档”，不提供补历史按钮。内容完整、事实复核、合同复核与比较许可分别显示，算法未重跑。相同口径才授予全局及逐项差值；窗口按原 M15 公式解释退化，percent 差值标为百分点；敏感性默认只展示上下文，不排名。
+
+功能提交 `4f5f2d453704e73fac8c29c084baf10ffa27082a` 的 [最终功能 CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38379683263) 成功：PG17 1298 pytest、Ruff、0052、前端 100 项/81.45% 行覆盖率、build、Docker 和 1440/390 Chromium。36 窗口超过默认 100 合同/1MiB 预算，会拒绝而非假完整，建议按窗口分页查询。36 类矩阵、实测命令、P2 审计风险、开关及无损回滚步骤见 [M16.6 收尾记录](docs/M16_6_closeout.md)。关闭捕获可停止新合同产生，但必须保留 0052 数据和 v4 兼容读取；已有合同禁止强行降级或删除。
 
 ## Milestone 16.1 只读研究 Agent 工具层（2026-10-10）
 

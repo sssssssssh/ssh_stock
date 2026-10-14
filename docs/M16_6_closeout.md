@@ -2,16 +2,17 @@
 
 ## 实测状态
 
-当前 A–E、F 基础与同 Evidence/写后回滚补丁已验收；共享超时/百分点/安全导出最后补充正在验收，尚未正式封版。
+2026-10-14 核对完成：M16.6 A–F 及收尾补丁全部验收通过，功能封版，默认关闭捕获。用户业务库未迁移；继承的独立 P2 依赖升级不是本轮已解决项目。
 
 - 规划基线：`07e288c3826618192b4022e8b63d0df06db679ec`，当前分支保持 `master`。
 - A：`d625edc37744584472943eedf3cf9697a7f10920`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38340339216)。
-- B：`c048b84`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38356151219)。
+- B：`c048b84b771510740b96aca3624e21c09f1556e5`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38356151219)。
 - C：`ec49593bb1957c1137a3c8633be905685efb5f2d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38358271783)。
 - D：`54920b8631589adfff3acb9a51f9150fd25b2a5d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38364353253)。
 - E：`878ba1cae5609bf369e5cbd290928aaff0143874`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38373484728)，1277 pytest passed、后端覆盖率 87%、100 前端测试、前端构建、Ruff、Docker config/build/nginx 和迁移往返通过。
-- F 基础：`974d07b6cd1e2525c5c2d5760fce780b869beffb`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481)，1285 pytest passed、87% 后端覆盖率；current/heads 同为 0052；100 前端测试/81.42% 行覆盖率；Docker 和 1440px/390px Chromium 浏览器通过。最终冲突/写后回滚补丁待最新 CI。
-- F 审查补丁：`5d88006f904c22005fe30af2d8d14d0c4fb3bf3d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38377760959)，1289 passed、同 Evidence 冲突/写后回滚和其他完整矩阵通过。共享超时/百分点/安全导出补充待最终 CI。
+- F 基础：`974d07b6cd1e2525c5c2d5760fce780b869beffb`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38376180481)，1285 pytest passed、87% 后端覆盖率；current/heads 同为 0052；100 前端测试/81.42% 行覆盖率；Docker 和 1440px/390px Chromium 浏览器通过。
+- F 审查补丁：`5d88006f904c22005fe30af2d8d14d0c4fb3bf3d`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38377760959)，1289 passed、同 Evidence 冲突/写后回滚和其他完整矩阵通过。
+- 最终功能：`4f5f2d453704e73fac8c29c084baf10ffa27082a`；[CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38379683263)，1298 pytest passed，后端覆盖率 87%，Ruff、Alembic、100 前端测试/81.45% 行覆盖率、build、Docker config/build/nginx、Linux Chromium 1440/390 全部通过；截图为该 run 的 `m16-6-synthetic-browser` 产物。最后文档提交的 SHA 以 Git HEAD/交付消息为准，不在文件中循环引用自身哈希。
 - 本机完成 `npm ci`、1077 单元测试、Ruff、100 前端测试、81.45% 前端行覆盖率及 build；Node 18 有 engine 警告。浏览器用隔离 Node 22.23.3 + Playwright 1.64.0/Edge，1440px/390px 截图与交互通过；CI 使用 Node 22 和 Chromium。
 - 本机没有可安全运行完整集成测试的数据库和 Docker；完整测试/DDL/容器由隔离 GitHub CI 执行。未对用户业务库写入、迁移或清理。
 
@@ -28,7 +29,7 @@
 
 ## 36 类验收映射
 
-以下均是仓库内可执行测试路径，不使用生产数据库。U=tests/unit，I=tests/integration，V=frontend/src/components；F 新增项须等待最新 CI。
+以下 01–36 全部通过最终功能 CI，均是仓库内可执行测试路径，不使用生产数据库。U=tests/unit，I=tests/integration，V=frontend/src/components。
 
 | 编号 | 场景与核心断言 | 测试证据 |
 |---|---|---|
@@ -74,7 +75,7 @@
 ## 容量与重现
 
 - 单合同 128KiB、单 Turn 1MiB、默认 100 合同、最多 5000 交易日/源报告、离线 5 秒；开关和预算实际位于 `config/agent.yaml`，不是 `.env` 或策略 YAML。
-- 最大 36 窗口（现行 planner 上限）的批量读取测量使用真实 PG17/服务产物。F 基础 CI：1/36 窗口均为 14 次 SELECT，分别 0.0255/0.1782 秒，合同 JSONB 31905/1148661 字节。36 窗口 108 合同同时超过默认 100 和 1MiB 硬限；写前拒绝，用户应分页查询（如每次 10 窗口），不能盲目放大硬限。本次观测值不是生产 SLA。
+- 最大 36 窗口（现行 planner 上限）的批量读取测量使用真实 PG17/服务产物。最终功能 CI：1/36 窗口均为 14 次 SELECT，分别 0.0304/0.2204 秒，合同 JSONB 31905/1148661 字节。36 窗口 108 合同同时超过默认 100 和 1MiB 硬限；写前拒绝，用户应分页查询（如每次 10 窗口），不能盲目放大硬限。本次观测值不是生产 SLA。
 - SQL 批量读取、不按窗口 N+1；离线读取前先统计实际 JSONB bytes/count，超限/超时不伪造成功。
 - 本机后端安全命令：`python -m pytest tests/unit`、`python -m ruff check backend tests migrations scripts`。
 - 全量测试须显式将 `DATABASE_URL` 指向允许测试的 PG17；M16.6 临时库 helper 另要求 `TEST_DATABASE_URL` 或隔离 CI。不可直接对 `.env` 业务库运行完整测试；helper 不跳过失败。
@@ -107,4 +108,15 @@
 
 ## Definition of Done
 
-设计与 A–E 实测已覆盖：执行时冻结、M14 精确来源与日期、M15 真血缘、共同提交/回滚、历史不变、双重许可、专用 Decimal 公式、明确状态/原因/API/UI。F 的最大档测量、全量最新 CI、current/heads 与 Linux 浏览器完成后才标记最终全部通过。
+- [x] 无最新 DB 补历史路径；工具执行当时、同一只读来源事务捕获。
+- [x] M14 四包/日期/基准/执行/会计/版本保存且离线核验。
+- [x] M15 Study/Validation/Window/Trial/Train/OOS/双 M14 包真血缘核验。
+- [x] 合同、子 Manifest、原 Archive、Assistant、Turn 共同提交；写前和写后异常共同回滚。
+- [x] 旧 Manifest/Report/Comparison/Hash 保持；旧报告不静默升级；AUTO 幂等兼容。
+- [x] 全局及逐项双门禁，未经授权无 delta/排名；审计 result 不作 UI/导出 fallback。
+- [x] 同窗口 M15 原 Decimal 公式、正确符号、Sharpe NULL 和百分点语义；缺口安全降级。
+- [x] 明确错误码、独立层级、未知版本拒绝解释、owner404、分页/取消/错误恢复/XSS。
+- [x] 隔离 PG17、全量 pytest/Ruff、前端 coverage/build、Docker、双视口浏览器全部通过；0052 current=heads。
+- [x] 真实功能 SHA/CI、36 类矩阵、开关、容量、无损回滚及 P2 风险已记录。
+
+生产上线仍需用户核对连接目标、备份、staging 演练和开启开关；镜像构建/隔离 CI 成功不等于生产 DB 或 LLM 运行时连接已验证。继承 npm 告警 11 项和默认 Node 18 engine 警告仍是已披露的独立升级风险，不声称“安全问题全部消失”。
