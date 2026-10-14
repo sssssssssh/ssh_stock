@@ -1,7 +1,17 @@
 # M17 Release Acceptance
 
-**In development, not sealed; PAPER is not usable yet.** Current A foundation,
-B-F not implemented. No business database migration/cleanup or automatic trades.
+**In development, not sealed; PAPER is not usable yet.** A accepted; B implemented,
+awaiting isolated PG acceptance; C-F pending. No business DB migration/cleanup/trades.
+
+## B Evidence (Pending PG)
+
+Local `python -m pytest tests/unit -q`: 1185 passed. Ruff passed. Added actual PG
+tests in test_m17_decision_sources.py for T+1 isolation, raw/derived staleness,
+missing/old source identities, dirty range, deterministic ranking, corrected-source
+immutability, owner/security/revision/idempotency and WATCH zero-order behavior.
+M16 exact report binding is tested without giving Agent execution capabilities.
+No migration change (0053 remains head), API or frontend change in B.
+Full CI gate must pass before C. No claim that PAPER execution is ready.
 
 ## A Evidence
 

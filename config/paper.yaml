@@ -22,3 +22,12 @@ paper:
     version: m17-decision-rule-v1
     daily_observation_enabled: false
     top_n: 20
+    min_score: '70'
+    max_source_rows: 20000
+    allowed_stages:
+      - LEFT_WATCH
+      - LEFT_REVERSAL
+      - RIGHT_SIDE_NEW
+      - RIGHT_SIDE
+      - TREND
+      - STRONG_TREND

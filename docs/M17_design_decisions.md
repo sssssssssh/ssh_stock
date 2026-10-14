@@ -3,7 +3,37 @@
 Baseline: b57809ff650cc25712452ff3c2d138de0ec53ef2, master, M16.6 sealed.
 Taskbook: M17 Decision Journal & Paper Portfolio V1.0, 2026-10-14.
 Implement A -> B -> C -> D -> E -> F with independent commits and tests.
-Current delivery is A foundation, not a usable PAPER runtime.
+Current delivery: A accepted, B source/draft implementation under PG acceptance.
+No usable PAPER execution runtime yet.
+
+## B Source And Draft Contract
+
+DecisionSourceReadiness uses an independent REPEATABLE READ / READ ONLY transaction.
+Exact source-integrity and RawCompleteness gates are reused without ingestion,
+recalculation or persistence. Current metadata versions, exact code sets, ST/status,
+successful calculation Job IDs/date scopes and raw-update/factor timestamps are
+verified. Any open/failed/processing dirty range affecting T blocks observation.
+Queries fix trade_date=T, never consume future prices/scores or forward outcomes.
+Source rows are bounded by decision.max_source_rows; selected records are bounded
+by top_n plus <=100 explicit context codes. Hashes bind full source layers and
+selected instrument metadata; profile/name is captured reference metadata, not a
+claim that mutable StockBasic name is PIT history. T status is the risk truth.
+
+Rule v1 sorts full-precision score DESC/code ASC, keeps raw reason codes and separate
+BLOCKED/WATCH risk codes. Paper-only stage/score filters reuse the existing provider;
+M13 production config is unchanged. Draft score is normalized to its NUMERIC scale,
+while original precision is preserved in frozen candidate evidence.
+
+DecisionApplication uses owner/request advisory locks and canonical payload hashes.
+Retry returns the same verified immutable record; changed payload conflicts. New
+requests can freeze repaired T facts without changing old observations. Drafts
+recheck exact source hash, require owner-matched account/observation/security and
+freeze optional M16 owner/hash/date/level references as context, never permission.
+WATCH creates no order and can log old evidence; actionable drafts expire at the
+actual next calendar opening cutoff. Superseding revisions never rewrite content.
+Shared record envelopes bind every immutable typed column, identity, timestamp and
+source JSON; mutable heads are excluded and separately guarded by DB state triggers.
+B has no approval or execution side effects; its service/DTOs precede C/E APIs.
 
 ## A Schema Contract
 
