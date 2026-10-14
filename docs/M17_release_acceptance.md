@@ -10,7 +10,9 @@ Local M17 focused pytest: 97 passed. `python -m pytest tests/unit -q`: 1174 pass
 are pending isolated GitHub CI. First CI run 38500210299 failed on a duplicate
 order CHECK name; source-hash CHECK was renamed and a name-collision regression
 also identified a fill fee-JSON CHECK name collision, now fixed. Retesting is
-required. Cross-owner tests require an actual foreign-key violation on first
+required. Run 38501597460 passed migration roundtrip but test collection found
+unit/integration test module name collision; the unit module is now named
+test_m17_foundation_contracts.py. Cross-owner tests require an actual FK on first
 insert, and financial tests require actual CHECK violations, not duplicate-key
 errors. No local full pytest against the user business DB.
 No frontend, API or worker path yet; no financial formula or M13-M16 identity change.
