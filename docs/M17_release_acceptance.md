@@ -16,6 +16,11 @@ acceptance at 1440/390: manual approval, lost response/reload, pagination,
 SVG series, XSS and outage recovery. Screenshots reviewed for layout and axis fit.
 PG API/source/review/queue tests require the E CI gate. F dispatch/recovery remains
 pending, so queue success does not yet imply job completion.
+E candidate 34c3897 / CI 38527890255: 1542 passed, 3 failed. The new EOD gate
+correctly rejected three synthetic next-day rows whose ORM update timestamp used
+the runner's real current date. Those scenarios now explicitly set a synthetic
+post-close ingestion timestamp before the synthetic derived calculation. Assertions
+remain unchanged; the corrected candidate must rerun the entire PG gate.
 
 ## B Evidence (Accepted)
 

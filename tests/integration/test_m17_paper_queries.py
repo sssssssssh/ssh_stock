@@ -135,7 +135,9 @@ def test_watch_counterfactual_review_is_append_only_and_never_nav(paper):
             ),
         )
         original_proposal_hash = proposal.record_hash
-        db.get(StockDaily, (FIRST, CODES[0])).close = 10.2
+        raw = db.get(StockDaily, (FIRST, CODES[0]))
+        raw.close = 10.2
+        raw.source_updated_at = NOW + timedelta(days=1, seconds=-150)
         db.commit()
     run(factory, owner, account)
     with factory() as db:
@@ -255,7 +257,9 @@ def test_review_detects_corrected_source_but_preserves_prior_artifacts(paper):
         )
         original = db.scalar(select(PaperOutcomeReview.record_hash))
         nav_hash = db.scalar(select(PaperNavDaily.record_hash))
-        db.get(StockDaily, (FIRST, CODES[0])).close = 10.1
+        raw = db.get(StockDaily, (FIRST, CODES[0]))
+        raw.close = 10.1
+        raw.source_updated_at = NOW + timedelta(days=1, seconds=-150)
         db.commit()
         with pytest.raises(PaperError, match="PAPER_SOURCE_DRIFT"):
             service.create(

@@ -328,7 +328,9 @@ def test_limit_block_is_final_and_does_not_change_capital(paper):
     factory, owner, _, account = paper
     approve(factory, owner, account)
     with factory() as db:
-        db.get(StockDaily, (FIRST, CODES[0])).open = 11
+        raw = db.get(StockDaily, (FIRST, CODES[0]))
+        raw.open = 11
+        raw.source_updated_at = NOW + timedelta(days=1, seconds=-150)
         db.commit()
     run(factory, owner, account)
     run(factory, owner, account)
