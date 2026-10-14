@@ -62,6 +62,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/m166-browser" --no-save --package-lock=false playwright@1.64.0
           node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m16_6_browser_smoke.cjs
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m17_browser_smoke.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

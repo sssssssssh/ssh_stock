@@ -153,3 +153,23 @@ Unsupported adj changes, including new-buy intentions, stop the whole day.
 No missing close is silently valued using an old price. Missing benchmark is NULL.
 Financial facts are normalized once to existing ledger precision before hashing.
 Source drift after sealing marks REVIEW_REQUIRED and never replaces financial rows.
+
+## E Frozen Read Models And Workbench
+
+Owner-scoped query projections verify each immutable envelope. List endpoints are
+bounded and paginated, with date/stage/state filters; child detail requires the
+same account as the route. Decimal financial metrics are canonical strings.
+Performance reads only frozen NAV/fills/positions and orders. Missing open days
+produce null gaps and suppress continuous returns/drawdown. Source corrections
+never reprice the financial history. Financial/review hashes use explicit order.
+
+OutcomeReview freezes T-close to true-calendar 1/5/20-day close marks, evaluation
+identity and denominator. WATCH/rejected counterfactual marks are never financial
+ledger entries. Latest review per proposal/window defines observation hit rate;
+stage attribution is explicitly non-causal. Capacity is checked before writes.
+
+The independent Vue workbench has explicit manual approval, separate journal,
+portfolio, ledger and review views, responsive tables, frozen SVG charts and
+retry-stable session request IDs. Read refresh never writes. Advance/review POST
+only creates an owner/account job plus immutable request receipt. F must validate
+that receipt before worker dispatch and complete jobs atomically with results.

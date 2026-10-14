@@ -76,6 +76,19 @@ def source_contract(settings):
     }
 
 
+def mark_day_review(db, account_id, day):
+    for row in db.scalars(
+        select(PaperDayRun)
+        .where(
+            PaperDayRun.account_id == account_id,
+            PaperDayRun.trade_date == day,
+            PaperDayRun.status == "SUCCESS",
+        )
+        .with_for_update()
+    ):
+        row.status, row.error_code = "REVIEW_REQUIRED", "PAPER_SOURCE_DRIFT"
+
+
 def initial_entry(db, account):
     row = db.scalar(
         select(PaperLedgerEntry).where(

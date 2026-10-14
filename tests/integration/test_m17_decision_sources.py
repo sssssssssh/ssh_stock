@@ -6,6 +6,7 @@ from app.domain.agent.report import CreateResearchReport
 from app.domain.decision.contracts import PaperError
 from app.domain.decision.requests import CreateObservation, CreateProposal
 from app.models.auth import AppUser
+from app.models.job import JobRun
 from app.models.market_data import (
     DataDirtyRange,
     StockDaily,
@@ -18,7 +19,7 @@ from app.models.market_data import (
 from app.models.paper import DecisionObservation, DecisionProposal, PaperFill, PaperOrder
 from app.services.agent.report.application import AgentReportApplication
 from app.services.decision.application import DecisionApplication
-from app.services.paper.records import verify_record
+from app.services.paper.records import close_cutoff, verify_record
 from m16_6_support import isolated_contract_database
 from m17_support import CODES, DAY, NOW, seed, settings
 from sqlalchemy import func, select
@@ -130,6 +131,9 @@ def test_t_boundary_ignores_future_price_and_score_then_correction_keeps_old_has
         ("state_mismatch", "SOURCE_STATE_MISMATCH"),
         ("job_missing", "SOURCE_CALC_LINEAGE_UNAVAILABLE"),
         ("raw_stale", "SOURCE_DERIVED_STALE"),
+        ("raw_intraday", "SOURCE_DERIVED_STALE"),
+        ("calc_intraday", "SOURCE_CALC_LINEAGE_UNAVAILABLE"),
+        ("job_intraday", "SOURCE_JOB_NOT_READY"),
         ("dirty", "SOURCE_DIRTY_RANGE"),
     ],
 )
@@ -152,6 +156,17 @@ def test_readiness_failures_make_no_observation(case, change, error):
             db.get(StockFactorDaily, (DAY, CODES[0])).calc_run_id = None
         elif change == "raw_stale":
             db.get(StockDaily, (DAY, CODES[0])).source_updated_at = NOW
+        elif change == "raw_intraday":
+            db.get(StockDaily, (DAY, CODES[0])).source_updated_at = close_cutoff(
+                DAY
+            ) - timedelta(seconds=1)
+        elif change == "calc_intraday":
+            db.get(StockFactorDaily, (DAY, CODES[0])).calculated_at = close_cutoff(
+                DAY
+            ) - timedelta(seconds=1)
+        elif change == "job_intraday":
+            run_id = db.get(StockFactorDaily, (DAY, CODES[0])).calc_run_id
+            db.get(JobRun, run_id).finished_at = close_cutoff(DAY) - timedelta(seconds=1)
         else:
             db.add(
                 DataDirtyRange(

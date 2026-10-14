@@ -27,6 +27,7 @@ import BacktestAnalyticsView from "./components/BacktestAnalyticsView.vue";
 import AgentResearchWorkbench from "./components/AgentResearchWorkbench.vue";
 import AgentResearchReports from "./components/AgentResearchReports.vue";
 import WalkForwardEvidenceView from "./components/WalkForwardEvidenceView.vue";
+import DecisionPaperWorkbench from "./components/DecisionPaperWorkbench.vue";
 import { fetchCurrentUser, logout } from "./services/auth";
 import type { ResearchContext, ResearchNavigationContext } from "./services/agent";
 import type { ReportSourceSelection } from "./services/agentReports";
@@ -71,7 +72,7 @@ import type {
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
 
-type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "reports" | "walk_forward";
+type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "reports" | "walk_forward" | "paper";
 type PoolTab = "right" | "trend";
 type DataPanelKey = "recalc" | "tasks" | "coverage";
 
@@ -157,7 +158,8 @@ const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "short", label: "短线", description: "风险池、信号和短期动量" },
   { key: "analytics", label: "回测分析", description: "收益、风险、交易与周期对比" },
   { key: "agent", label: "智能研究", description: "只读工具、证据与研究会话" },
-  { key: "reports", label: "研究报告", description: "冻结快照、导出与口径比较" }
+  { key: "reports", label: "研究报告", description: "冻结快照、导出与口径比较" },
+  { key: "paper", label: "决策与模拟", description: "人工决策、独立 PAPER 账本" }
 ];
 
 const activeNav = computed(() => navItems.find((item) => item.key === activeView.value) || (
@@ -1430,6 +1432,10 @@ function statusLabel(status: string) {
 
       <section v-show="activeView === 'reports'" class="view-stack">
         <AgentResearchReports :initial-source="reportSource" @navigate="navigateFromAgent" />
+      </section>
+
+      <section v-show="activeView === 'paper'" class="view-stack">
+        <DecisionPaperWorkbench :key="authUser.username" :owner-id="authUser.username" :visible="activeView === 'paper'" />
       </section>
 
       <section v-show="activeView === 'walk_forward'" class="view-stack">

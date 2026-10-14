@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -31,3 +32,8 @@ class CreatePaperAccount(PaperRequest):
 
 class AdvancePaperAccount(PaperRequest):
     trade_date: date
+
+
+class ReviewPaperAccount(PaperRequest):
+    asof_date: date
+    window_days: Literal[1, 5, 20] = 1

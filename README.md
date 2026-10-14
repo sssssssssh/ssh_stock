@@ -13,8 +13,10 @@
 
 ## M17 分阶段开发状态
 
-M17 A/B/C 已通过独立 PostgreSQL 17 CI；C 完整回归 1480 项、覆盖率 87%。
-D 正在验收独立模拟账户和 EOD 执行账本；E 页面与 F 任务尚待完成，整体未封版。
+M17 A/B/C/D 已通过独立 PostgreSQL 17 CI；D 完整回归 1518 项、覆盖率 88%。
+E 新增“决策与模拟”独立页面及 owner 隔离分页查询，正在进行完整 PG 验收；F 任务待接入。
+整体未封版，默认关闭。页面可查看决策证据、账户账本、冻结净值图及后验复盘；
+手动结算/复盘只入队，在 F Worker 验收前不运行这些任务。
 `POST /api/v1/decisions/proposals/{id}/approve` 必须提供 request_id、Decimal 字符串
 target_weight 及 `confirmed: true`；未开启 PAPER 时统一拒绝写入。该操作只生成模拟委托，
 不代表成交，仍需目标日完整 EOD 就绪后事后模拟；当前请勿开启自动推进。
@@ -30,7 +32,8 @@ WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策�
 A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移及前端历史回归；
 [A CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)、
 [B CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)、
-[C CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000)。
+[C CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000)、
+[D CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405)。
 
 2026-09-15 开始按全量优化规划分 Phase 推进。Phase 1 已将因子、市场、行业、状态和信号范围重算改为 authoritative replace-slice：重算范围内不再成立的旧结果会删除，仍成立的信号保留原 `signal_id`，删除信号时级联清理后验评价。
 

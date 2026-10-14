@@ -1,9 +1,23 @@
 # M17 Release Acceptance
 
-**In development, not sealed; PAPER is not usable yet.** A/B accepted; C implemented,
-pending PG acceptance; D-F pending. No business DB migration/cleanup/trades.
+**In development, not sealed.** A/B/C/D accepted; E implemented pending isolated
+PG acceptance, F pending. No business DB migration/cleanup/trades.
 
-## B Evidence (Pending PG)
+## D Accepted And E Candidate
+
+D commit a0f0cd4da8c3533a9fd40fef1c6c6d33bb7be9e6 passed
+[CI 38514217405](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405):
+1518 pytest, 88% backend coverage, Ruff, 0053 current=heads, Docker/Compose,
+frontend coverage/build and legacy browser regression. This resolves the D gate.
+
+E local verification: 1236 unit pytest, full Ruff, npm ci with Node 22,
+121 Vue tests (81.94% statement coverage), production build and actual M17 browser
+acceptance at 1440/390: manual approval, lost response/reload, pagination,
+SVG series, XSS and outage recovery. Screenshots reviewed for layout and axis fit.
+PG API/source/review/queue tests require the E CI gate. F dispatch/recovery remains
+pending, so queue success does not yet imply job completion.
+
+## B Evidence (Accepted)
 
 Local `python -m pytest tests/unit -q`: 1185 passed. Ruff passed. Added actual PG
 tests in test_m17_decision_sources.py for T+1 isolation, raw/derived staleness,
@@ -15,7 +29,7 @@ B gate passed at [CI 38506248886](https://github.com/sssssssssh/ssh_stock/action
 for cd7ec91, with full PG17/migrations/Ruff/container/frontend/legacy browser steps.
 No claim that PAPER execution is ready.
 
-## C Evidence (Pending PG)
+## C Evidence (Accepted)
 
 Added pure risk/Decimal/manual DTO tests, strict authenticated write API tests and
 actual PG atomicity/retry/failed-approval/pending-conflict/race tests. Account snapshot
@@ -45,7 +59,7 @@ No frontend, API or worker path yet; no financial formula or M13-M16 identity ch
 
 ## Taskbook Matrix
 
-### B/C Accepted, D In Progress
+### Historical A-D Gate Tracking
 
 B commit cd7ec918: CI 38506248886 passed, 1443 pytest, 87% coverage.
 C commit dc773ebd: CI 38509773000 passed, 1480 pytest, 87% coverage,

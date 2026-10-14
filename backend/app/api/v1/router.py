@@ -12,6 +12,7 @@ from app.api.v1 import (
     experiments,
     jobs,
     opportunities,
+    paper,
     performance,
     portfolio,
     research,
@@ -30,6 +31,7 @@ api_router.include_router(agent_archive.router, prefix="/agent", tags=["agent-ar
 api_router.include_router(agent_chat.router, prefix="/agent", tags=["agent-chat"])
 api_router.include_router(agent_reports.router, prefix="/agent", tags=["agent-reports"])
 api_router.include_router(decisions.router, prefix="/decisions", tags=["decisions-paper"])
+api_router.include_router(paper.router, prefix="/paper", tags=["paper"])
 protected = APIRouter(dependencies=[Depends(require_authenticated_user)])
 protected.include_router(system.router, prefix="/system", tags=["system"])
 protected.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

@@ -200,6 +200,7 @@ class DecisionSourceReadiness:
                         row.calc_run_id is None
                         or row.calculated_at is None
                         or row.calculated_at > cutoff
+                        or row.calculated_at < close_cutoff(day)
                     ):
                         raise PaperError("SOURCE_CALC_LINEAGE_UNAVAILABLE")
                     calc_ids.add(row.calc_run_id)
@@ -224,6 +225,7 @@ class DecisionSourceReadiness:
                 job.status != "SUCCESS"
                 or job.finished_at is None
                 or job.finished_at > cutoff
+                or job.finished_at < close_cutoff(day)
                 or not covers
                 or job.job_type not in ("daily", "recalculate", "catchup")
             ):
@@ -258,6 +260,7 @@ class DecisionSourceReadiness:
         for code, row in raw.items():
             if (
                 row.source_updated_at > cutoff
+                or row.source_updated_at < close_cutoff(day)
                 or row.source_updated_at > factors[code].calculated_at
             ):
                 raise PaperError("SOURCE_DERIVED_STALE")

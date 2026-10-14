@@ -20,7 +20,12 @@ from app.models.paper import (
 )
 from app.repositories.paper import PaperRepository
 from app.services.decision.source import DecisionSourceReadiness
-from app.services.paper.account_state import account_settings, frozen_config, load_close
+from app.services.paper.account_state import (
+    account_settings,
+    frozen_config,
+    load_close,
+    mark_day_review,
+)
 from app.services.paper.execution import (
     accounting_market,
     actual_risk,
@@ -520,16 +525,7 @@ class PaperDailyApplication:
         return content_hash(hashes)
 
     def _mark_review(self, account_id, day):
-        for row in self.db.scalars(
-            select(PaperDayRun)
-            .where(
-                PaperDayRun.account_id == account_id,
-                PaperDayRun.trade_date == day,
-                PaperDayRun.status == "SUCCESS",
-            )
-            .with_for_update()
-        ):
-            row.status, row.error_code = "REVIEW_REQUIRED", "PAPER_SOURCE_DRIFT"
+        mark_day_review(self.db, account_id, day)
 
     def _blocked(self, owner, account_id, day, code):
         account = self.repo.owned(PaperAccount, owner, account_id, lock=True)

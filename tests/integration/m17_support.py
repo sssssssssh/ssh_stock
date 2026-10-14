@@ -92,13 +92,13 @@ def seed(db, *, days=(DAY,), account=True):
             )
         )
     for index, day in enumerate(days):
-        stamp = NOW - timedelta(minutes=2)
+        stamp = NOW + timedelta(days=(day - DAY).days) - timedelta(minutes=2)
         job = JobRun(
             id=uuid.uuid4(),
             job_type="recalculate",
             target_trade_date=day,
             started_at=stamp - timedelta(minutes=5),
-            finished_at=NOW - timedelta(minutes=1),
+            finished_at=stamp + timedelta(minutes=1),
             status="SUCCESS",
             row_count=2,
             cancel_requested=False,

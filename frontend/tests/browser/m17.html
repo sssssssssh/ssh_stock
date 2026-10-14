@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>M17 Synthetic UI Acceptance</title></head>
+<body><main style="max-width:1200px;margin:0 auto;padding:20px;min-width:0"><header style="margin-bottom:20px;font-weight:700;font-size:22px">空间</header><div id="app"></div></main><script type="module">
+import { createApp } from 'vue';
+import '/src/style.css';
+import Workbench from '/src/components/DecisionPaperWorkbench.vue';
+createApp(Workbench, { ownerId: 'synthetic-owner', visible: true }).mount('#app');
+</script></body>
+</html>
