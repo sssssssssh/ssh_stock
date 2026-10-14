@@ -418,7 +418,7 @@ class PaperFill(AccountRecord, Base):
             "ELSE gross_amount - cash_fee_total END",
         ),
         _check(
-            "ck_paper_fill_json",
+            "ck_paper_fill_fee_json",
             "jsonb_typeof(fee_json) = 'object' AND fee_json ? 'schema_version' "
             "AND octet_length(fee_json::text) <= 4096",
         ),
