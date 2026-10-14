@@ -12,6 +12,7 @@ from app.core.agent_llm_config import AgentLLMConfig
 from app.core.execution_config import ExecutionConfig
 from app.core.experiment_config import ExperimentConfig
 from app.core.experiment_evaluation_config import ExperimentEvaluationConfig
+from app.core.paper_config import PaperRuntimeConfig
 from app.core.performance_config import PerformanceConfig
 from app.core.performance_period_config import PerformancePeriodConfig
 from app.core.performance_risk_config import PerformanceRiskConfig
@@ -82,6 +83,7 @@ class Settings(BaseSettings):
     performance_trade_config: PerformanceTradeConfig | None = None
     app_config: dict[str, Any] = Field(default_factory=dict)
     agent_config: AgentConfig | None = None
+    paper_config: PaperRuntimeConfig = Field(default_factory=PaperRuntimeConfig)
 
     @model_validator(mode="after")
     def validate_runtime_security(self) -> "Settings":
@@ -179,6 +181,9 @@ class Settings(BaseSettings):
             settings.app_timezone = app_section.get("timezone", settings.app_timezone)
         settings.app_config = app_config
         settings.agent_config = agent_config
+        settings.paper_config = PaperRuntimeConfig.model_validate(
+            load_yaml_config(ROOT_DIR / "config" / "paper.yaml").get("paper", {})
+        )
         settings.strategy = strategy
         settings.opportunity_config = opportunity_config
         settings.research_config = research_config

@@ -35,7 +35,13 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 16.6；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 17-A（基础模型开发中，尚未封版）；后续 M13-M16 的冻结规则见本文后续章节：
+
+M17 按 A→B→C→D→E→F 独立提交及验证。A 新增 0053、独立 PAPER/Decision 模型、
+默认关闭配置和数据库不可变/owner 约束；尚无可用 PAPER API、界面或执行任务。
+准确验收状态和剩余清单见 `docs/M17_release_acceptance.md`。不得把模型基础当成模拟功能已完成。
+M17 只能人工确认，禁止 auto_approve、LIVE、Broker 或 Agent 写交易工具。M13 BACKTEST
+入口保护、M14/M15 成果、M16 历史 Hash 不变；不得把 BACKTEST Run 改为 PAPER 冒充持续账户。
 
 M16.5 已按 A–F 完成实现、本地与 GitHub CI 验收，默认关闭归档，新增 0051 存储；
 B 原子捕获完成、C 离线复核只加载归档及 Chat/Report，不查询最新业务数据或调用模型。

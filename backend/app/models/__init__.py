@@ -45,6 +45,21 @@ from app.models.market_data import (
     ThemeMoneyflowDaily,
     TradeCalendar,
 )
+from app.models.paper import (
+    DecisionApprovalEvent,
+    DecisionObservation,
+    DecisionProposal,
+    PaperAccount,
+    PaperAccountEvent,
+    PaperDayRun,
+    PaperFill,
+    PaperLedgerEntry,
+    PaperNavDaily,
+    PaperOrder,
+    PaperOrderAttempt,
+    PaperOutcomeReview,
+    PaperPositionDaily,
+)
 from app.models.performance import PortfolioPerformanceDaily, PortfolioPerformanceReport
 from app.models.performance_period import (
     PortfolioPerformancePeriod,
@@ -78,6 +93,19 @@ from app.models.walk_forward import (
 )
 
 __all__ = [
+    "DecisionApprovalEvent",
+    "DecisionObservation",
+    "DecisionProposal",
+    "PaperAccount",
+    "PaperAccountEvent",
+    "PaperDayRun",
+    "PaperFill",
+    "PaperLedgerEntry",
+    "PaperNavDaily",
+    "PaperOrder",
+    "PaperOrderAttempt",
+    "PaperOutcomeReview",
+    "PaperPositionDaily",
     "Base",
     "AppUser",
     "AgentToolResultArchive",

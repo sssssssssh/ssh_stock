@@ -35,7 +35,7 @@ def test_0051_empty_upgrade_downgrade_and_real_archive_owner_constraints():
     with SessionLocal() as db:
         assert (
             db.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0052_m16_6_frozen_research_contracts"
+            == "0053_m17_decision_paper_foundation"
         )
         owner = _user(db, "archive-migration")
         other = _user(db, "archive-other")
@@ -150,7 +150,7 @@ def test_0051_empty_upgrade_downgrade_and_real_archive_owner_constraints():
                 command.downgrade(config, "0050_m16_4_reports")
             assert (
                 db.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0052_m16_6_frozen_research_contracts"
+                == "0053_m17_decision_paper_foundation"
             )
         finally:
             db.rollback()

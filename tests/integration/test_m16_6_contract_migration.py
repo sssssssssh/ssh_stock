@@ -22,7 +22,7 @@ def test_0052_empty_roundtrip_owner_fks_uniqueness_and_immutability():
     command.upgrade(config, "head")
     with SessionLocal() as db:
         assert db.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
-            "0052_m16_6_frozen_research_contracts"
+            "0053_m17_decision_paper_foundation"
         )
         owner = _user(db, "contract-migration")
         other = _user(db, "contract-other")
