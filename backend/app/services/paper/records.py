@@ -94,11 +94,14 @@ def request_lock(db, owner_id, operation, request_id):
 
 
 def request_hash(owner_id, operation, body):
+    payload = body.model_dump(mode="python", exclude={"request_id"})
+    if operation == "observe" and payload.get("account_id") is None:
+        payload.pop("account_id", None)
     return content_hash(
         {
             "owner": owner_id,
             "operation": operation,
-            "body": body.model_dump(mode="python", exclude={"request_id"}),
+            "body": payload,
         }
     )
 

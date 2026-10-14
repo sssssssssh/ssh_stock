@@ -10,6 +10,14 @@ from app.core.paper_config import DecisionConfig, PaperPolicyConfig, PaperRuntim
 from app.domain.decision.contracts import PaperError, content_hash
 from app.domain.portfolio import DailyPortfolioSnapshot, PositionState
 from app.models.paper import PaperLedgerEntry, PaperNavDaily, PaperPositionDaily
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
+    TRADE_STATUS_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
+from app.services.calc_metadata import config_hash
 from app.services.paper.records import verify_record
 from app.services.portfolio.ledger_precision import money, ratio
 
@@ -43,6 +51,8 @@ def frozen_config(account):
 
 def account_settings(account, settings):
     config = frozen_config(account)
+    if account.config_snapshot_json.get("source_contract") != source_contract(settings):
+        raise PaperError("PAPER_SOURCE_VERSION_DRIFT")
     return settings.model_copy(
         update={
             "paper_config": PaperRuntimeConfig(
@@ -52,6 +62,18 @@ def account_settings(account, settings):
             )
         }
     )
+
+
+def source_contract(settings):
+    return {
+        "algo_version": settings.algo_version,
+        "strategy_hash": analysis_strategy_hash(settings.strategy),
+        "opportunity_hash": config_hash(settings.opportunity_config),
+        "factor_version": FACTOR_CALC_VERSION,
+        "state_version": TREND_CALC_VERSION,
+        "status_version": TRADE_STATUS_CALC_VERSION,
+        "opportunity_version": OPPORTUNITY_CALC_VERSION,
+    }
 
 
 def initial_entry(db, account):
@@ -140,6 +162,7 @@ def load_close(db, account, day):
             select(PaperLedgerEntry.instrument, func.sum(PaperLedgerEntry.quantity_delta))
             .where(
                 PaperLedgerEntry.account_id == account.id,
+                PaperLedgerEntry.owner_user_id == account.owner_user_id,
                 PaperLedgerEntry.trade_date <= day,
                 PaperLedgerEntry.entry_type == "FILL",
             )

@@ -36,6 +36,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.paper.account_state import source_contract
 from app.services.paper.records import make_record
 
 DAY = date(2026, 10, 14)
@@ -247,6 +248,7 @@ def seed(db, *, days=(DAY,), account=True):
             "execution": config.execution_config.model_dump(mode="json"),
             "accounting": config.accounting_config.model_dump(mode="json"),
             "decision": config.paper_config.decision.model_dump(mode="json"),
+            "source_contract": source_contract(config),
         }
         row = make_record(
             PaperAccount,

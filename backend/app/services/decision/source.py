@@ -43,14 +43,66 @@ class DecisionSourceReadiness:
     def __init__(self, db, settings):
         self.db, self.settings = db, settings
 
-    def capture(self, day: date, *, cutoff, include_codes=()):
+    def capture(self, day: date, *, cutoff, include_codes=(), market_codes=(), benchmark_code=None):
         if cutoff.utcoffset() is None or cutoff < close_cutoff(day):
             raise PaperError("SOURCE_EOD_NOT_READY")
         # One repeatable, read-only DB snapshot; no ingestion or network side effects.
         with Session(bind=self.db.get_bind()) as source:
             source.connection(execution_options={"isolation_level": "REPEATABLE READ"})
             source.execute(text("SET TRANSACTION READ ONLY"))
-            return self._capture(source, day, cutoff, include_codes)
+            result = self._capture(source, day, cutoff, include_codes)
+            if benchmark_code is not None:
+                result["execution_input"] = self._execution_input(
+                    source, day, market_codes, benchmark_code
+                )
+            return result
+
+    def _execution_input(self, db, day, codes, benchmark_code):
+        calendar = db.get(TradeCalendar, day)
+        facts = {}
+        for model in (StockDaily, StockAdjFactor, StockLimitDaily, StockTradeStatusDaily):
+            facts[model.__tablename__] = {
+                row.ts_code: source_value(
+                    {c.name: getattr(row, c.name) for c in model.__table__.columns}
+                )
+                for row in db.scalars(
+                    select(model)
+                    .where(model.trade_date == day, model.ts_code.in_(codes))
+                    .order_by(model.ts_code)
+                )
+            }
+        facts["stock_basic"] = {
+            row.ts_code: {"exchange": row.exchange, "market": row.market}
+            for row in db.scalars(select(StockBasic).where(StockBasic.ts_code.in_(codes)))
+        }
+        facts["previous_adj"] = {
+            row.ts_code: source_value(row.adj_factor)
+            for row in db.scalars(
+                select(StockAdjFactor).where(
+                    StockAdjFactor.trade_date == calendar.pretrade_date,
+                    StockAdjFactor.ts_code.in_(codes),
+                )
+            )
+        }
+        benchmark = db.get(IndexDaily, (day, benchmark_code))
+        facts["benchmark"] = (
+            None
+            if benchmark is None
+            else source_value(
+                {
+                    "code": benchmark.ts_code,
+                    "close": benchmark.close,
+                    "pre_close": benchmark.pre_close,
+                }
+            )
+        )
+        facts["calendar"] = {
+            "trade_date": day,
+            "previous_date": calendar.pretrade_date,
+            "exchange": calendar.exchange,
+            "is_open": calendar.is_open,
+        }
+        return facts
 
     def _capture(self, db, day, cutoff, include_codes):
         settings = self.settings

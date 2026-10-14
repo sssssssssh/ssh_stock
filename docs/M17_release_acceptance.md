@@ -45,6 +45,16 @@ No frontend, API or worker path yet; no financial formula or M13-M16 identity ch
 
 ## Taskbook Matrix
 
+### B/C Accepted, D In Progress
+
+B commit cd7ec918: CI 38506248886 passed, 1443 pytest, 87% coverage.
+C commit dc773ebd: CI 38509773000 passed, 1480 pytest, 87% coverage,
+0053 current=heads, Ruff, Compose build and existing frontend/browser regressions.
+Sources/requests/approval/risk API tests cover matrix 07-23, 43/44, plus existing
+legacy compatibility. D implementation adds independent account lifecycle and
+atomic daily replay; its PG gate is not yet accepted. E/F remain unimplemented.
+No user DB migration or full local pytest against business data was performed.
+
 A-PG proofs below passed the accepted CI. Partial is not full M17 completion.
 
 | # | Scenario | Evidence / remaining gate |

@@ -128,3 +128,28 @@ Gates: A schema/PG/config; B readiness/T facts/drift/ranking/idempotency;
 C manual approval/risk/atomic intent/races; D financial replay/retry/locks;
 E frozen reviews/API/1440+390 UI; F jobs/recovery/performance/Runbook/full CI.
 See M17_release_acceptance.md for actual evidence and incomplete items.
+
+## D Atomic Daily Replay
+
+Accounts are forward-only, initially PAUSED, with a single INITIAL_CASH entry.
+The inception is no earlier than the next still-unopened real calendar date.
+Policy, execution, accounting, decision config and upstream version identity are
+frozen. Runtime identity changes require a new account, not reinterpretation.
+Optional account-bound observations use that frozen decision configuration.
+
+Each EOD date is one bounded transaction under the account row lock. All three
+phase heads and financial facts commit together; checkpoints are whole-day, not
+partial intraday checkpoints. A rollback can safely replay the whole day. A
+post-commit response loss returns the original verified bundle. F supplies Job
+failure/lease evidence; readiness failures leave compact account audit events,
+not fabricated hashes or successful day heads. No previous-NAV fallback or gap jump.
+
+Market inputs are captured within the source's repeatable-read snapshot. Existing
+pure AshareExecutionResolver and AccountingEngine are reused without changing the
+BACKTEST guard. Sells precede buys; cash is updated after each fill. Opening-price
+risk checks do not auto-shrink approved quantities. Blocked attempts are immutable
+SKIPPED, no automatic retry. New buys remain unavailable until the next open day.
+Unsupported adj changes, including new-buy intentions, stop the whole day.
+No missing close is silently valued using an old price. Missing benchmark is NULL.
+Financial facts are normalized once to existing ledger precision before hashing.
+Source drift after sealing marks REVIEW_REQUIRED and never replaces financial rows.

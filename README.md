@@ -13,22 +13,24 @@
 
 ## M17 分阶段开发状态
 
-当前为 M17-A 模型基础阶段，未完成 B–F，尚不可使用模拟账户工作台。
-已继续实现 B 日终候选快照与人工草案服务，正在隔离 PG17 验收；C–F 待完成。
- B 已通过 CI；C 增加人工审批/拒绝 API，正在验收，D–F 待完成。
+M17 A/B/C 已通过独立 PostgreSQL 17 CI；C 完整回归 1480 项、覆盖率 87%。
+D 正在验收独立模拟账户和 EOD 执行账本；E 页面与 F 任务尚待完成，整体未封版。
 `POST /api/v1/decisions/proposals/{id}/approve` 必须提供 request_id、Decimal 字符串
 target_weight 及 `confirmed: true`；未开启 PAPER 时统一拒绝写入。该操作只生成模拟委托，
-不代表成交，仍需 D 的 EOD 就绪后结算；当前请勿开启模拟账户推进。
+不代表成交，仍需目标日完整 EOD 就绪后事后模拟；当前请勿开启自动推进。
 源数据或计算身份不完整、存在未修复 dirty range、Raw 更新晚于因子时会拒绝生成草案。
 WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策证据。
 新增迁移 `0053_m17_decision_paper_foundation`，只建独立决策/模拟账本表，不复制回测数据、
 不拉取行情、不计算因子、不自动产生模拟订单。本轮开发未升级你的业务数据库。
 `config/paper.yaml` 所有开关默认关闭；人工确认是唯一批准模式，`auto_approve=true` 被拒绝。
-此阶段尚无 PAPER API、Worker 或 Scheduler 接入，修改开关不会启动模拟交易。
+现有审批 API 不创建成交；PAPER Worker/Scheduler 尚未接入。账户配置创建后冻结，
+初始资金仅入账一次，不支持入出金；历史数据修正标记复核，不删除流水重算。
 迁移有 M17 历史数据时拒绝降级，应关闭功能保留证据，不得清空流水以强行回滚。
 阶段设计和逐项剩余验收见 `docs/M17_design_decisions.md`、`docs/M17_release_acceptance.md`。
 A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移及前端历史回归；
-[CI 记录](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)。B 决策快照为下一阶段。
+[A CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)、
+[B CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)、
+[C CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000)。
 
 2026-09-15 开始按全量优化规划分 Phase 推进。Phase 1 已将因子、市场、行业、状态和信号范围重算改为 authoritative replace-slice：重算范围内不再成立的旧结果会删除，仍成立的信号保留原 `signal_id`，删除信号时级联清理后验评价。
 

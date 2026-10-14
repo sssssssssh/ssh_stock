@@ -35,21 +35,25 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 17-C（实现待验收，M17 整体尚未封版）；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 17-D（实现待验收，M17 整体尚未封版）；后续 M13-M16 的冻结规则见本文后续章节：
 
-B 独立 PG17 CI `38506248886` 已通过。C 人工确认按 request→account→proposal 锁序，
+B 独立 PG17 CI `38506248886`、C CI `38509773000` 已通过（C 完整 1480 pytest，87%）。
+C 人工确认按 request→account→proposal 锁序，
 审批事件、唯一委托和终态同事务；仅 ACTIVE、未过真实下一开盘时窗且冻结风控通过才可批准。
 WATCH/拒绝不成交，失败独立审计不污染草案；D/F 未验收前禁止自动推进。
 
 B 只读一致性快照验证 T 日 Raw/Derived/质量/成功计算来源，冻结规则候选与人工草案。
 重试幂等，修正后旧证据不变；M16 报告只作为 owner/hash/date 绑定的上下文，不授权执行。
-未完成 C 审批和 D 账本前不得启用模拟执行；B 不创建委托/成交，不改生产策略或旧 Hash。
+独立账户初始资金只入账一次，配置/来源身份冻结；只允许连续开放日完整 EOD 后结算。
+D 将三个阶段检查点、Attempt/Fill/Ledger/Position/NAV 在一个有界事务内提交，失败全回滚。
+封账后只许 REVIEW_REQUIRED，不能改账；公司行动失败关闭，暂停保留委托、关闭取消待执行委托。
+D/F 未通过真实 PG 与调度验收前禁止自动推进；不改生产策略或旧 Hash。
 
 M17 按 A→B→C→D→E→F 独立提交及验证。A 新增 0053、独立 PAPER/Decision 模型、
-默认关闭配置和数据库不可变/owner 约束；尚无可用 PAPER API、界面或执行任务。
+默认关闭配置和数据库不可变/owner 约束；已有决策审批 API，界面与任务接入仍待 E/F。
 准确验收状态和剩余清单见 `docs/M17_release_acceptance.md`。不得把模型基础当成模拟功能已完成。
 A 隔离 PG17 CI `38501965762` 通过：1420 pytest、87% 覆盖率、Ruff、0053 迁移往返、
-current/heads、容器及前端历史回归。下一阶段为 B 决策快照，未授权开启自动模拟。
+current/heads、容器及前端历史回归。未授权开启自动模拟。
 M17 只能人工确认，禁止 auto_approve、LIVE、Broker 或 Agent 写交易工具。M13 BACKTEST
 入口保护、M14/M15 成果、M16 历史 Hash 不变；不得把 BACKTEST Run 改为 PAPER 冒充持续账户。
 

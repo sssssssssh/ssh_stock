@@ -17,6 +17,7 @@ class PaperRequest(StrictPaperModel):
 
 class CreateObservation(PaperRequest):
     signal_date: date
+    account_id: uuid.UUID | None = None
     include_codes: tuple[Code, ...] = Field(default=(), max_length=100)
 
     @model_validator(mode="after")

@@ -8,6 +8,7 @@ from app.models.paper import DecisionObservation, DecisionProposal, PaperAccount
 from app.repositories.paper import PaperRepository
 from app.services.agent.report.application import AgentReportApplication
 from app.services.decision.source import DecisionSourceReadiness
+from app.services.paper.account_state import account_settings
 from app.services.paper.records import (
     make_record,
     next_open,
@@ -42,9 +43,17 @@ class DecisionApplication:
                 self.db.commit()
                 return existing
             now = self.clock()
-            source = self.source.capture(
+            reader = self.source
+            if body.account_id:
+                account = self.repo.owned(PaperAccount, owner_id, body.account_id)
+                if account.state == "CLOSED":
+                    raise PaperError("PAPER_ACCOUNT_CLOSED")
+                reader = DecisionSourceReadiness(self.db, account_settings(account, self.settings))
+            source = reader.capture(
                 body.signal_date, cutoff=now, include_codes=body.include_codes
             )
+            if body.account_id:
+                source["account_id"] = str(body.account_id)
             row = make_record(
                 DecisionObservation,
                 owner_id,
@@ -83,8 +92,12 @@ class DecisionApplication:
                 raise PaperError("PAPER_ACCOUNT_CLOSED")
             observation = self.repo.owned(DecisionObservation, owner_id, body.observation_id)
             frozen = verify_record(observation)
+            if frozen.get("account_id") not in (None, str(account.id)):
+                raise PaperError("DECISION_ACCOUNT_MISMATCH")
             now = self.clock()
-            current = self.source.capture(
+            current = DecisionSourceReadiness(
+                self.db, account_settings(account, self.settings)
+            ).capture(
                 observation.signal_date, cutoff=now, include_codes=frozen["include_codes"]
             )
             if any(
