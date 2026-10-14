@@ -450,8 +450,33 @@ def test_financial_and_json_constraints_are_real_postgresql_checks(database):
         ):
             row = rows[model]
             values = {c.name: getattr(row, c.name) for c in model.__table__.columns}
-            with pytest.raises(DBAPIError), db.begin_nested():
+            with pytest.raises(DBAPIError, match="violates check constraint"), db.begin_nested():
                 db.execute(sa.insert(model).values({**values, "id": uuid.uuid4(), field: value}))
+
+
+@pytest.mark.parametrize(
+    "model", [model for model in MODELS if model not in (PaperAccount, DecisionObservation)]
+)
+def test_first_insert_cross_owner_rejected_by_actual_scoped_fk(database, monkeypatch, model):
+    factory, _ = database
+    with factory() as db:
+        original_add = db.add
+
+        def add_with_wrong_owner(row, *args, **kwargs):
+            if isinstance(row, model):
+                other_owner = db.scalar(
+                    sa.select(AppUser.id).where(AppUser.id != row.owner_user_id).limit(1)
+                )
+                assert other_owner is not None
+                row.owner_user_id = other_owner
+                if isinstance(row, DecisionApprovalEvent):
+                    row.actor_user_id = other_owner
+            return original_add(row, *args, **kwargs)
+
+        monkeypatch.setattr(db, "add", add_with_wrong_owner)
+        # First insert, not a conflicting duplicate: the error must be a scoped FK.
+        with pytest.raises(DBAPIError, match="violates foreign key constraint"):
+            graph(db)
 
 
 def test_mutable_heads_only_accept_valid_transitions_and_frozen_identities(database):

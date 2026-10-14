@@ -7,7 +7,9 @@ B-F not implemented. No business database migration/cleanup or automatic trades.
 
 Local focused pytest: 131 passed. `python -m pytest tests/unit -q`: 1173 passed,
 2 inherited warnings. Alembic heads: one 0053. Full pytest/PG17/current/heads/Ruff
-are pending isolated GitHub CI. No local full pytest against the user business DB.
+are pending isolated GitHub CI. First CI run 38500210299 failed on a duplicate
+order CHECK name; source-hash CHECK was renamed and a name-collision regression
+was added. Retesting is required. No local full pytest against the user business DB.
 No frontend, API or worker path yet; no financial formula or M13-M16 identity change.
 
 ## Taskbook Matrix

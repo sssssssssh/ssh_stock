@@ -310,7 +310,7 @@ def upgrade() -> None:
         _check("ck_paper_order_dates", "scheduled_date > signal_date"),
         _check("ck_paper_order_quantity", "quantity > 0"),
         _check("ck_paper_order_weight", _finite("target_weight") + " AND target_weight <= 1"),
-        _check("ck_paper_order_hash", "source_hash ~ '^[0-9a-f]{64}$'"),
+        _check("ck_paper_order_source_hash", "source_hash ~ '^[0-9a-f]{64}$'"),
         _check(
             "ck_paper_order_state",
             "status IN ('ORDER_PENDING','FILLED','SKIPPED','CANCELLED','EXPIRED')",

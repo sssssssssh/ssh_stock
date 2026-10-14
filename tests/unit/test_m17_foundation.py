@@ -17,6 +17,7 @@ from app.domain.decision.contracts import (
     require_transition,
     stable_id,
 )
+from app.models.base import Base
 from app.models.paper import (
     DecisionObservation,
     DecisionProposal,
@@ -187,3 +188,15 @@ def test_paper_models_are_independent_and_numeric_only():
     )
     with pytest.raises(ValueError, match="only supports BACKTEST"):
         PortfolioApplicationService(object(), settings)
+
+
+def test_m17_constraint_names_do_not_collide_with_shared_record_guards():
+    tables = [
+        table
+        for name, table in Base.metadata.tables.items()
+        if name.startswith(("paper_", "decision_"))
+    ]
+    assert len(tables) == 13
+    for table in tables:
+        names = [str(constraint.name) for constraint in table.constraints]
+        assert len(names) == len(set(names)), table.name

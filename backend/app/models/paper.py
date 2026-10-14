@@ -316,7 +316,7 @@ class PaperOrder(AccountRecord, Base):
         _check(
             "ck_paper_order_weight", finite_nonnegative("target_weight") + " AND target_weight <= 1"
         ),
-        _check("ck_paper_order_hash", "source_hash ~ '^[0-9a-f]{64}$'"),
+        _check("ck_paper_order_source_hash", "source_hash ~ '^[0-9a-f]{64}$'"),
         _check(
             "ck_paper_order_state",
             "status IN ('ORDER_PENDING','FILLED','SKIPPED','CANCELLED','EXPIRED')",
