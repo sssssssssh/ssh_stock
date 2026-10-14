@@ -15,6 +15,10 @@
 
 当前为 M17-A 模型基础阶段，未完成 B–F，尚不可使用模拟账户工作台。
 已继续实现 B 日终候选快照与人工草案服务，正在隔离 PG17 验收；C–F 待完成。
+ B 已通过 CI；C 增加人工审批/拒绝 API，正在验收，D–F 待完成。
+`POST /api/v1/decisions/proposals/{id}/approve` 必须提供 request_id、Decimal 字符串
+target_weight 及 `confirmed: true`；未开启 PAPER 时统一拒绝写入。该操作只生成模拟委托，
+不代表成交，仍需 D 的 EOD 就绪后结算；当前请勿开启模拟账户推进。
 源数据或计算身份不完整、存在未修复 dirty range、Raw 更新晚于因子时会拒绝生成草案。
 WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策证据。
 新增迁移 `0053_m17_decision_paper_foundation`，只建独立决策/模拟账本表，不复制回测数据、

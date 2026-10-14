@@ -3,8 +3,32 @@
 Baseline: b57809ff650cc25712452ff3c2d138de0ec53ef2, master, M16.6 sealed.
 Taskbook: M17 Decision Journal & Paper Portfolio V1.0, 2026-10-14.
 Implement A -> B -> C -> D -> E -> F with independent commits and tests.
-Current delivery: A accepted, B source/draft implementation under PG acceptance.
+Current delivery: A/B accepted, C manual approval under PG acceptance.
 No usable PAPER execution runtime yet.
+
+## C Approval Contract
+
+Approval uses request advisory -> account row -> proposal row lock order. Locked
+loads refresh identity-map state so a waiting concurrent approve/reject cannot act
+on a stale PENDING_REVIEW object. Actor is authenticated owner, never body data.
+Explicit confirmed=true and Decimal-string weight required; no Agent tool is added.
+Only ACTIVE account may approve; WATCH never executable. Reject writes no order.
+Proposal/evidence remain frozen; terminal state increments version exactly once.
+
+Approve rechecks frozen source, next real calendar open/cutoff and no started day,
+validates the frozen account config, initial ledger or exact T close and its cash,
+position count, quantities/value/NAV against persisted ledger. Stable sizing uses
+known signal close plus adverse configured slippage estimate and existing market
+quantity rules. Pending intents reserve shared cash, exposures, concentration,
+positions/new buys and turnover; no assumed pending-sale proceeds. D must check
+actual post-EOD prices/risk again. These are simulations, not real execution promises.
+
+ApprovalEvent + unique PaperOrder + terminal Proposal commit together. Faults after
+event flush or before commit roll back all. Same payload retries replay, changed
+payload conflicts. Business blocks append a separate owner-scoped immutable audit;
+they do not change the draft or manufacture a terminal approval. Public POST APIs
+use existing Cookie auth and a separate business DB session, strict DTOs and safe
+error codes. Account creation/lifecycle and final execution remain D/E/F gates.
 
 ## B Source And Draft Contract
 

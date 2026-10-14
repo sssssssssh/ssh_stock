@@ -1,7 +1,7 @@
 # M17 Release Acceptance
 
-**In development, not sealed; PAPER is not usable yet.** A accepted; B implemented,
-awaiting isolated PG acceptance; C-F pending. No business DB migration/cleanup/trades.
+**In development, not sealed; PAPER is not usable yet.** A/B accepted; C implemented,
+pending PG acceptance; D-F pending. No business DB migration/cleanup/trades.
 
 ## B Evidence (Pending PG)
 
@@ -11,7 +11,17 @@ missing/old source identities, dirty range, deterministic ranking, corrected-sou
 immutability, owner/security/revision/idempotency and WATCH zero-order behavior.
 M16 exact report binding is tested without giving Agent execution capabilities.
 No migration change (0053 remains head), API or frontend change in B.
-Full CI gate must pass before C. No claim that PAPER execution is ready.
+B gate passed at [CI 38506248886](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)
+for cd7ec91, with full PG17/migrations/Ruff/container/frontend/legacy browser steps.
+No claim that PAPER execution is ready.
+
+## C Evidence (Pending PG)
+
+Added pure risk/Decimal/manual DTO tests, strict authenticated write API tests and
+actual PG atomicity/retry/failed-approval/pending-conflict/race tests. Account snapshot
+reads are independent from BACKTEST and reconcile with immutable initial/financial
+ledger. Financial execution is still absent; approvals cannot generate fills.
+No migration change (0053), no strategy/hash/Agent permission changes.
 
 ## A Evidence
 

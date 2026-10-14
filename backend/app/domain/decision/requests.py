@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StrictBool, field_validator, model_validator
 
 from app.core.paper_config import StrictPaperModel
 from app.domain.decision.contracts import DecisionAction
@@ -56,3 +56,31 @@ class CreateProposal(PaperRequest):
         if (self.source_report_id is None) != (self.source_report_hash is None):
             raise ValueError("report requires exact id and hash")
         return self
+
+
+class ApproveProposal(PaperRequest):
+    target_weight: Decimal = Field(ge=0, le=1, max_digits=9, decimal_places=8)
+    confirmed: StrictBool
+    note: str = Field(default="", max_length=1000)
+
+    @field_validator("target_weight", mode="before")
+    @classmethod
+    def no_float(cls, value):
+        return CreateProposal.no_float(value)
+
+    @model_validator(mode="after")
+    def manual_confirmation(self):
+        if not self.confirmed:
+            raise ValueError("explicit manual confirmation required")
+        return self
+
+
+class RejectProposal(PaperRequest):
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError("reason must not be blank")
+        return value

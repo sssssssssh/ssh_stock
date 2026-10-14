@@ -25,7 +25,7 @@ from app.models.market_data import (
     StockTradeStatusDaily,
     TradeCalendar,
 )
-from app.models.paper import PaperAccount
+from app.models.paper import PaperAccount, PaperLedgerEntry
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
@@ -246,6 +246,7 @@ def seed(db, *, days=(DAY,), account=True):
             "paper": config.paper_config.policy.model_dump(mode="json"),
             "execution": config.execution_config.model_dump(mode="json"),
             "accounting": config.accounting_config.model_dump(mode="json"),
+            "decision": config.paper_config.decision.model_dump(mode="json"),
         }
         row = make_record(
             PaperAccount,
@@ -266,5 +267,20 @@ def seed(db, *, days=(DAY,), account=True):
             request_hash="a" * 64,
         )
         db.add(row)
+        db.flush()
+        db.add(
+            make_record(
+                PaperLedgerEntry,
+                owner.id,
+                "initial",
+                now=NOW - timedelta(days=1),
+                account_id=row.id,
+                trade_date=row.first_trade_date,
+                business_key="initial",
+                entry_type="INITIAL_CASH",
+                cash_delta=row.initial_cash,
+                quantity_delta=0,
+            )
+        )
     db.commit()
     return owner.id, other.id, row.id if row else None

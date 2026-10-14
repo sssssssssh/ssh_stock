@@ -8,6 +8,7 @@ from app.api.v1 import (
     analytics,
     auth,
     dashboard,
+    decisions,
     experiments,
     jobs,
     opportunities,
@@ -28,6 +29,7 @@ api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
 api_router.include_router(agent_archive.router, prefix="/agent", tags=["agent-archive"])
 api_router.include_router(agent_chat.router, prefix="/agent", tags=["agent-chat"])
 api_router.include_router(agent_reports.router, prefix="/agent", tags=["agent-reports"])
+api_router.include_router(decisions.router, prefix="/decisions", tags=["decisions-paper"])
 protected = APIRouter(dependencies=[Depends(require_authenticated_user)])
 protected.include_router(system.router, prefix="/system", tags=["system"])
 protected.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

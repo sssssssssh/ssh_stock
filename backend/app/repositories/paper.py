@@ -9,7 +9,8 @@ class PaperRepository:
 
     def owned(self, model, owner_id, row_id, *, lock=False):
         query = select(model).where(model.id == row_id, model.owner_user_id == owner_id)
-        row = self.db.scalar(query.with_for_update() if lock else query)
+        query = query.with_for_update() if lock else query
+        row = self.db.scalar(query.execution_options(populate_existing=True))
         if row is None:
             raise PaperError("PAPER_NOT_FOUND", status_code=404)
         return row
