@@ -127,11 +127,12 @@ def test_retention_only_targets_operational_tables(monkeypatch) -> None:
                 return _Result(rowcount={
                     "provider_api_log": 1, "auth_session": 4, "service_heartbeat": 5,
                 }[name])
-            if list(statement.selected_columns.keys()) == ["current_setting"]:
+            columns = list(getattr(statement, "selected_columns", {}).keys())
+            if columns == ["current_setting"]:
                 return _Result(scalar="read committed")
-            if list(statement.selected_columns.keys()) == ["id"]:
+            if columns == ["id"]:
                 return _Result(rows=[row.id for row in self.candidates])
-            if list(statement.selected_columns.keys()) == ["id", "status"]:
+            if columns == ["id", "status"]:
                 import uuid
 
                 self.candidates = [SimpleNamespace(id=uuid.uuid4(), status=status)

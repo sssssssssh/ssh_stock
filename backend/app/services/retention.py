@@ -12,6 +12,7 @@ from app.models import Base
 from app.models.auth import AuthSession
 from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 from app.services.paper.queue import PAPER_JOB_TYPES
+from app.services.retention_frozen import FROZEN_ISSUES
 from app.services.retention_lineage import (
     JOB_REFERENCES,
     RetentionBlocked,
@@ -74,6 +75,22 @@ def missing_provenance(policy, execute):
                         "table": name, "column": field, "job_id": str(row.job_id),
                         "trade_date": str(row.trade_date) if day is not None else None,
                     })
+    frozen = execute(FROZEN_ISSUES.bindparams(limit=policy.max_missing_references + 1)).all()
+    if any(row.issue == "INVALID" for row in frozen):
+        raise RetentionBlocked("RETENTION_INVALID_FROZEN_PROVENANCE")
+    total += len(frozen)
+    if total > policy.max_missing_references:
+        raise RetentionBlocked("RETENTION_MISSING_REFERENCE_BUDGET_EXCEEDED")
+    if frozen:
+        diagnostics.append({
+            "table": "decision_observation", "column": "data.candidates[].calc_run_id",
+            "missing_rows": len(frozen),
+            "first_date": str(min(row.signal_date for row in frozen)),
+            "last_date": str(max(row.signal_date for row in frozen)),
+        })
+        samples.extend({"table": "decision_observation", "column": "data.candidates[].calc_run_id",
+                        "job_id": row.job_text, "trade_date": str(row.signal_date)}
+                       for row in frozen[:max(0, policy.diagnostic_limit - len(samples))])
     return total, diagnostics, samples
 
 
@@ -100,7 +117,9 @@ def run_retention(
         "candidate_capacity_warning": None,
         "error_code": None, "dry_run": dry_run,
         "job_deletion_enabled": policy.job_deletion_enabled,
+        "commit_outcome_unknown": False,
     })
+    commit_attempted = False
 
     def execute(statement):
         remaining = int(policy.max_duration_ms - (perf_counter() - started) * 1000)
@@ -123,7 +142,7 @@ def run_retention(
             raise RetentionBlocked("RETENTION_REQUIRES_READ_COMMITTED")
         execute(select(1))
         assert_reference_schema(db)
-        result["sql_count"] += 1
+        result["sql_count"] += 2
         rows = execute(select(JobRun.id, JobRun.status).where(*eligible_jobs(current)).order_by(
             JobRun.finished_at, JobRun.id,
         ).limit(policy.max_candidate_rows + 1)).all()
@@ -182,6 +201,7 @@ def run_retention(
                 result[key] = int(execute(statement).rowcount or 0)
             if (perf_counter() - started) * 1000 >= policy.max_duration_ms:
                 raise RetentionBlocked("RETENTION_DURATION_BUDGET_EXCEEDED")
+            commit_attempted = True
             db.commit()
     except (RetentionBlocked, DBAPIError) as exc:
         db.rollback()
@@ -196,6 +216,13 @@ def run_retention(
                 "RETENTION_RETRY_REQUIRED" if state in ("55P03", "57014", "23503", "40P01")
                 else "RETENTION_DATABASE_ERROR"
             )
+            if commit_attempted:
+                # A lost COMMIT response is not proof of rollback. Do not report
+                # a confirmed zero or retry an old unprotected delete statement.
+                result["commit_outcome_unknown"] = True
+                result["error_code"] = "RETENTION_COMMIT_OUTCOME_UNKNOWN"
+                result.update(dict.fromkeys((*OPERATIONAL_KEYS, "deleted_success_jobs",
+                                             "deleted_failed_jobs"), None))
     except Exception:
         db.rollback()
         raise

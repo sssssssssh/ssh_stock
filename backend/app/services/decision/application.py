@@ -2,6 +2,8 @@ from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from types import SimpleNamespace
 
+from sqlalchemy.exc import IntegrityError
+
 from app.domain.agent.report_errors import AgentReportError
 from app.domain.decision.contracts import DecisionAction, PaperError
 from app.models.paper import DecisionObservation, DecisionProposal, PaperAccount
@@ -77,8 +79,12 @@ class DecisionApplication:
             self.commit_guard(row)
             self.db.commit()
             return row
-        except Exception:
+        except Exception as exc:
             self.db.rollback()
+            if isinstance(exc, IntegrityError) and getattr(
+                getattr(exc.orig, "diag", None), "constraint_name", None,
+            ) == "observation_source_job_reference":
+                raise PaperError("SOURCE_CALC_LINEAGE_UNAVAILABLE") from None
             raise
 
     def propose(self, owner_id, body):

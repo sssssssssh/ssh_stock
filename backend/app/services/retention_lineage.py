@@ -1,9 +1,10 @@
-"""Typed, exhaustive JobRun references; never materialize the referenced UUID universe."""
+"""Typed and canonical frozen Job references, without materializing the UUID universe."""
 
 from sqlalchemy import func, or_, select, text
 
 from app.models import Base
 from app.models.job import JobRun
+from app.services.retention_frozen import FROZEN_ISSUES, FROZEN_SCHEMA, frozen_job_reference
 
 JOB_REFERENCES = (
     ("data_dirty_range", "source_job_id"),
@@ -70,15 +71,18 @@ def assert_reference_schema(db):
         raise RetentionBlocked("RETENTION_REFERENCE_SCHEMA_MISMATCH")
     if any(not r.has_fk or not r.has_index for r in rows):
         raise RetentionBlocked("RETENTION_REFERENCE_PROTECTION_UNAVAILABLE")
+    if not db.scalar(FROZEN_SCHEMA):
+        raise RetentionBlocked("RETENTION_FROZEN_PROTECTION_UNAVAILABLE")
 
 
 def referenced_job():
-    return or_(*(
+    typed = [
         select(Base.metadata.tables[table].c[column]).where(
             Base.metadata.tables[table].c[column] == JobRun.id,
         ).exists()
         for table, column in JOB_REFERENCES
-    ))
+    ]
+    return or_(*typed, frozen_job_reference())
 
 
 def reference_inventory(db, *, max_rows=10000):
@@ -110,6 +114,12 @@ def reference_inventory(db, *, max_rows=10000):
         FROM pg_constraint c WHERE c.contype = 'f' AND c.confrelid = 'job_run'::regclass
         ORDER BY source_table, c.conname
     """)).mappings().all()
+    frozen_issues = db.execute(FROZEN_ISSUES, {"limit": max_rows + 1}).all()
+    frozen = {"table": "decision_observation", "path": "data.candidates[].calc_run_id",
+              "missing_observed": sum(row.issue == "MISSING" for row in frozen_issues),
+              "invalid_observed": sum(row.issue == "INVALID" for row in frozen_issues),
+              "truncated": len(frozen_issues) > max_rows,
+              "protection_ready": db.scalar(FROZEN_SCHEMA)}
     indexes = db.execute(text("""
         SELECT p.tablename, p.indexname, p.indexdef, i.indisvalid, i.indisready
         FROM pg_indexes p JOIN pg_namespace n ON n.nspname = p.schemaname
@@ -117,6 +127,7 @@ def reference_inventory(db, *, max_rows=10000):
         JOIN pg_index i ON i.indexrelid = c.oid
         WHERE p.schemaname = current_schema() AND p.tablename = ANY(:tables)
         ORDER BY p.tablename, p.indexname
-    """), {"tables": sorted({table for table, _ in JOB_REFERENCES} | {"job_run"})}).mappings()
+    """), {"tables": sorted({table for table, _ in JOB_REFERENCES}
+                             | {"job_run", "decision_observation"})}).mappings()
     return {"references": rows, "foreign_keys": [dict(row) for row in fks],
-            "indexes": [dict(row) for row in indexes]}
+            "frozen_references": frozen, "indexes": [dict(row) for row in indexes]}

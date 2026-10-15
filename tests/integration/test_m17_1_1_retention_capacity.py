@@ -66,23 +66,32 @@ def test_million_row_provenance_explain_and_actual_cleanup_are_bounded(retention
         assert db.scalar(sa.select(sa.func.count()).select_from(StockFactorDaily)) == 1000000
         db.commit()
         statements = []
+        returned_types = []
 
         def capture(conn, cursor, statement, parameters, context, executemany):
             statements.append(statement)
 
+        def capture_types(conn, cursor, statement, parameters, context, executemany):
+            if cursor.description:
+                returned_types.extend(column.type_code for column in cursor.description)
+
         sa.event.listen(engine, "before_cursor_execute", capture)
+        sa.event.listen(engine, "after_cursor_execute", capture_types)
         started = perf_counter()
         try:
             result = run_retention(db, now=NOW, policy=ENABLED)
         finally:
             elapsed = perf_counter() - started
             sa.event.remove(engine, "before_cursor_execute", capture)
+            sa.event.remove(engine, "after_cursor_execute", capture_types)
         assert not result["blocked"], result
         assert result["candidate_scan_rows"] == 10 and result["protected_referenced_jobs"] == 1
         assert result["successful_jobs"] == 9 and result["missing_provenance_references"] == 0
         assert result["sql_count"] == len(statements) <= 60
         assert elapsed < 15
-        assert not any("record_json" in sql or "job_metadata" in sql for sql in statements)
+        assert not any("SELECT decision_observation.record_json" in sql
+                       or "job_metadata" in sql for sql in statements)
+        assert not {114, 3802}.intersection(returned_types)  # PG json/jsonb never cross the wire.
         assert db.get(JobRun, ids[0]) is not None
         assert db.scalar(sa.select(sa.func.count()).select_from(StockFactorDaily)) == 1000000
         emit({"kind": "million_row_retention", "derived_rows": 1000000,

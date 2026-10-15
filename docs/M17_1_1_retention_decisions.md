@@ -25,11 +25,16 @@
 | data_quality_daily | job_id | 无 | 无 | Raw/Derived 质量检查来源 |
 | paper_day_run | job_id | RESTRICT | 无 | 不可变金融阶段的真实任务 |
 | portfolio_backtest_run | job_id | SET NULL | UNIQUE(job_id) | 防止清理改写旧回测身份 |
+| decision_observation | record_json.data.candidates[].calc_run_id | 无（JSON） | 无 | 计算行替换后仍有冻结来源引用 |
 
+前 12 行是实施前只读物理盘点，第 13 行在终验追踪候选副本时补充；不能把物理字段盘点冒充
+全部语义引用。0055 单独追加，避免重写 A/B 已提交的 0054 结构；不新增平行归档或重建旧证据。
 研究/实验 FK 目标是 PortfolioBacktestRun 等独立 Artifact，不是 JobRun；保留其 Job 由
 portfolio_backtest_run.job_id 覆盖。Agent 冻结投影中的 calc_run_id 来自 research adapter 的
-PortfolioBacktestRun.id，不应误认成 Job UUID。PAPER 审计 JSON 的任务引用由三个 PAPER 类型
-永久排除保留；本轮不修改、解析重写或重新哈希任何旧 JSON。
+PortfolioBacktestRun.id，不应误认成 Job UUID。PAPER 派发审计的任务由三个 PAPER 类型永久排除；
+候选快照却引用普通计算 Job，必须另行保护，不能因不是物理 FK 就忽略。
+其他提案/委托/持仓的候选副本来自不可变观察的 RESTRICT 关系链；不扫描任意 JSON 中的 UUID。
+本轮不修改、解析重写或重新哈希任何旧 JSON，只在 DB 端有界验证并投影小标量诊断。
 
 可复核 SQL 的完整版本见 retention_lineage.py::SCHEMA_REFERENCES；引用缺失 SQL 模式为：
 
@@ -63,6 +68,9 @@ FK 的父行 KEY SHARE 与删除锁互斥：写入先赢则清理跳过或重新
 新引用在锁查询快照后、实际取锁前提交时，删除语句必须看见并保留；不是依赖同一条 CTE 的
 NOT EXISTS。真实 PG 测试用仅测试的 advisory barrier 定位该时序，验证 Backtest.job_id 不变。
 实现不引入全局 advisory 锁；其他隔离级别拒绝清理。
+观察候选使用专用 GIN containment 查询，INSERT Trigger 对真实父 Job 持有 KEY SHARE；
+父任务在 capture 后消失则写入失败并映射原 SOURCE_CALC_LINEAGE_UNAVAILABLE。
+保留旧快照引用不授予业务合法性。缺失/非法旧引用保留原文，只读告警或保守停删，不补 Job。
 
 直接计算服务没有真实任务参数时，过去会生成无 Job 的随机 UUID。现在保留 nullable 的
 未知来源（calc_run_id=None），不新增伪任务或伪造 SUCCESS；Trend 两个输出仍共用调用身份。

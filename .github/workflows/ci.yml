@@ -46,7 +46,8 @@ jobs:
           python -m pytest tests/integration/test_m17_1_1_retention.py
           tests/integration/test_m17_1_1_retention_paper.py
           tests/integration/test_m17_1_1_retention_capacity.py
-          tests/integration/test_m17_1_1_retention_migration.py -q
+          tests/integration/test_m17_1_1_retention_migration.py
+          tests/integration/test_m17_1_1_retention_frozen.py -q
       - name: M17.1 isolated PAPER continuity regressions
         run: |
           python -m pytest tests/integration/test_m17_decision_sources.py -q
@@ -84,6 +85,46 @@ jobs:
           node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m16_6_browser_smoke.cjs
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m17_browser_smoke.cjs
+      - name: M17.1.1 exact HEAD and migration receipt
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from datetime import UTC, datetime
+          from pathlib import Path
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          from sqlalchemy import create_engine, text
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert head == os.environ["GITHUB_SHA"], "CI_HEAD_MISMATCH"
+          engine = create_engine(os.environ["DATABASE_URL"])
+          try:
+              with engine.connect() as connection:
+                  current = connection.scalar(text("SELECT version_num FROM alembic_version"))
+                  pg_version = connection.scalar(text("SHOW server_version_num"))
+          finally:
+              engine.dispose()
+          heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
+          assert heads == [current] == ["0055_retention_frozen_refs"], "CI_MIGRATION_HEAD_MISMATCH"
+          assert pg_version.startswith("17"), "CI_POSTGRES_MAJOR_MISMATCH"
+          run_url = (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                     f"{os.environ['GITHUB_RUN_ID']}")
+          receipt = {
+              "schema_version": "m17.1.1-ci-receipt-v1", "head_sha": head,
+              "run_url": run_url, "alembic_current": current, "alembic_heads": heads,
+              "postgres_version_num": pg_version,
+              "created_at": datetime.now(UTC).isoformat(),
+              "scope": "All preceding blocking steps passed; final Actions conclusion is authoritative",
+          }
+          output = Path(".codex_tmp/m17_1_1-release.json")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write(f"## M17.1.1\n\nHEAD: `{head}`\n\nCI: {run_url}\n\n"
+                           f"Alembic current=heads: `{current}`\n")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -106,5 +147,7 @@ jobs:
         if: always()
         with:
           name: m17-1-1-retention-evidence
-          path: .codex_tmp/m17_1_1-retention.jsonl
+          path: |
+            .codex_tmp/m17_1_1-retention.jsonl
+            .codex_tmp/m17_1_1-release.json
           if-no-files-found: ignore

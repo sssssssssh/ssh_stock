@@ -11,13 +11,16 @@
 
 当前网页显示名称为“空间”。
 
-## M17.1.1 历史任务血缘保护（整改中）
+## M17.1.1 历史任务血缘保护与验收
 
-修复通用清理误删仍被衍生结果引用的 Job。0054 为来源引用增加保守约束和索引，
+修复通用清理误删仍被衍生结果或冻结观察引用的 Job。0054 为类型化来源增加约束和索引，
+0055 增补冻结候选的 GIN 引用检查及写入锁，不重写旧快照；已在 0054 的库仍需 upgrade head。
 不补造旧任务或改写财务记录。`config/app.yaml` 的 `retention.job_deletion_enabled`
-默认 false；未单独审批前不要开启。A 批 `44578b7` 完整 CI `38679638700` 已通过；
+默认 false；未单独审批前不要开启。A 批 `44578b7` / CI `38679638700`、
+B 批 `4cbb86d` / CI `38682664315` 均完整通过；
 引用、并发决策见 `docs/M17_1_1_retention_decisions.md`。B 批新增只读预检、失证诊断、
-百万行 EXPLAIN/预算与恢复流程；最终整套验收仍需同 HEAD CI，不代表已部署到业务库。
+百万行 EXPLAIN/预算与恢复流程。最终验收、36 项对照及同 HEAD 自动回执见
+`docs/M17_1_1_closeout.md`，必须核对最终整套 CI SUCCESS，不代表已部署到业务库。
 操作见 `docs/M17_1_1_retention_runbook.md`：先 retention-inventory / retention-indexes，
 线上经审批预建并发索引再 upgrade head；升级后 retention-check 默认只读，--details 仅运维查看。
 首次 Job 删除必须同时开启配置并执行 retention-run --confirm；不要复制旧无保护删除 SQL。
@@ -67,7 +70,7 @@ A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移�
 
 先确认当前发布的完整 CI 已通过，并备份业务库（备份保存在仓库外）。按本文现有部署流程
 升级到 Alembic head；`python -m alembic upgrade head` 只升级结构，0053 不生成任何模拟数据。
-执行 `python -m alembic current` 和 `python -m alembic heads`，应同为当前 HEAD；M17.1.1 为 0054。
+执行 `python -m alembic current` 和 `python -m alembic heads`，应同为当前 HEAD；M17.1.1 为 0055。
 开发过程没有替你迁移、清空或补算业务数据库。
 
 修改 `config/paper.yaml`；首次只开启主功能，保留人工操作：

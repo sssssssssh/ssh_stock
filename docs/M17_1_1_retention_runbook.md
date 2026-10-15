@@ -1,6 +1,7 @@
 # M17.1.1 Retention 运维与恢复
 
-适用 PostgreSQL 17、0054_retention_lineage；不修改策略、人工审批、T+1 或旧 Hash。
+适用 PostgreSQL 17；0054 类型化引用 + 0055_retention_frozen_refs 冻结引用保护。
+不修改策略、人工审批、T+1 或旧 Hash；已在 0054 的环境仍需升级到 0055。
 本次交付不授权生产清理、升级、重算或恢复。写入步骤须先备份、核对目标并单独审批。
 密码、连接串、Cookie、备份和业务诊断附件不得提交仓库或聊天。
 
@@ -10,6 +11,9 @@
 不必因此停止行情、EOD 或整个 Scheduler。PAPER 自动开关保持默认关闭。
 先记录审批、备份位置、迁移 HEAD、旧 retention 最近执行时间和 Job 类型/状态分布。
 统一升级 API/Worker/Scheduler，避免旧 Scheduler 继续执行无保护 Job 删除。
+旧版不识别新开关：升级前须经审批暂停旧 daily_retention，无法单独暂停时短暂停旧 Scheduler，
+API/Worker 已入队的行情和 EOD 不必停止。等活跃任务安全结束后统一切换；新 Scheduler 在删除
+关闭状态恢复其他定时工作。不要在旧 Scheduler 运行时仅修改新配置就认为已经停删。
 
 已有 Python 环境和依赖时，从项目根目录执行；已有 PYTHONPATH 时不必重设：
 
@@ -23,7 +27,7 @@ python -m app.cli retention-indexes
 observed 是已观察行数；truncated=true 表示超过上限的下界，不能当成总数。
 命令仅面向持有部署凭据的运维终端，没有新增跨用户 API 或 Agent 工具。
 
-## 0054 在线索引与迁移
+## 在线索引与迁移
 
 先在预发布演练并评估磁盘、WAL、活跃长事务；大表先预建同名 CONCURRENTLY 索引。
 以下两条会写结构，须在目标核对、备份及人工审批后执行：
@@ -39,7 +43,8 @@ python -m alembic heads
 失败已成功的索引保留，重试验证 READY 后复用，不删除业务行。0054 在新库事务内建索引，
 在线复用预建的有效同名索引；INVALID、错误表/列/部分索引明确拒绝，不用 IF NOT EXISTS 掩盖。
 迁移锁等待 2 秒、语句 30 秒；10 个新 FK 使用 NOT VALID，不扫描或修补旧 orphan。
-current/heads 均应为 0054_retention_lineage；0050–0053 不改写。
+额外的观察 GIN 索引同样预建并发索引；0055 新增 INSERT 保护，不改已发布 0054 结构。
+current/heads 均应为 0055_retention_frozen_refs；0050–0053 不改写。
 
 失败并发索引可能留 INVALID。先查 pg_index.indisvalid/indisready、pg_get_indexdef，核对
 具体名称、定义和占用情况。经审批后只对指定失败的新索引独立执行 DROP INDEX CONCURRENTLY，
@@ -70,6 +75,7 @@ provider_api_log、successful_jobs、failed_jobs、auth_sessions、service_heart
 | skipped_locked_or_changed_jobs | 实执行因锁/并发变化未删除的其余候选，未尝试时 null |
 | sql_count/duration_ms | 显式应用 SQL 数和调用耗时，不含驱动隐式事务命令 |
 | blocked/error_code/error_count | 资源/结构/数据库异常整批回滚；未知统计 null，不伪报 0 |
+| commit_outcome_unknown | 提交响应丢失无法确认结果，删除统计 null；不谎称回滚或删除 0 条 |
 
 默认上限：候选 10000、失证事实行 1000、样例 20、SQL 3 秒、锁等待 1 秒、总调用 15 秒。
 数据库 anti-join + LIMIT，不把全部 calc UUID/JSON 载入 Python。超限整批拒绝（含运营删除），
@@ -85,6 +91,13 @@ python -m app.cli retention-run --confirm
 清理要求干净 Session、READ COMMITTED；按 finished_at/id 锁 Job、SKIP LOCKED，再用新语句
 快照复核引用并删。这对旧 BACKTEST SET NULL FK 也必要，不能用旧快照清空新提交引用。
 FK KEY SHARE 阻止锁后的引用提交；任何异常回滚 Job 与已经删除的日志/Session/心跳。
+冻结观察的 candidates[].calc_run_id 也受同样保护，即使后来重算替换所有类型化结果仍不删旧 Job。
+提案/委托/持仓的候选副本由不可变观察及其 RESTRICT 链根保留；不把报告的 BACKTEST ID 当 Job。
+非规范/错误形状的旧冻结引用只读报 RETENTION_INVALID_FROZEN_PROVENANCE，不改 Hash 或把私有
+错误文本输出日志。旧缺失冻结 Job 在 --details 报告，不能以新当前结果取代原证据。
+上述回滚指提交前数据库失败。COMMIT 响应丢失时数据库仍然保持整笔原子性，但客户端不能断言
+事务是否已完成：返回 RETENTION_COMMIT_OUTCOME_UNKNOWN，保留证据并只读重新盘点，再决定
+是否重试。真实 PG 提交后注入响应故障的测试覆盖此分支，不用确认的 0 掩盖未知结果。
 
 ## 失证、错误与恢复
 
@@ -95,6 +108,7 @@ FK KEY SHARE 阻止锁后的引用提交；任何异常回滚 Job 与已经删�
 - RETENTION_*_BUDGET_EXCEEDED/RETRY_REQUIRED：未提交，排查规模、慢查询、锁/FK 并发及事务。
   原因消失后重新预检/审批，不退回无保护删除。
 - REFERENCE_*_MISMATCH/PROTECTION_UNAVAILABLE：核对代码、0054、全部 FK/索引，保持删除关闭。
+- FROZEN_PROTECTION_UNAVAILABLE：核对 0055、观察 GIN 与 INSERT Trigger，不能绕过冻结引用。
 
 获准补算时，起点至少为失证最早日与最早相关 Dirty 日的较早者，终点 latest_raw_trade_date。
 先核对 Raw/日历完整，等已有上游结束，再提交新范围任务；开始时间晚于修正及相关上游完成。
@@ -114,6 +128,8 @@ Invoke-RestMethod -Method Post -Uri "$BaseUrl/api/v1/jobs/recalculate" -WebSessi
 calculated_at/started_at/finished_at 和上下游先后。重新观察，失效提案须重新人工审批。
 不 INSERT 假 Job、不把旧 calc_run_id 指向别的任务、不改时间戳/删 Dirty/重新标 NAV。
 封账漂移继续 REVIEW_REQUIRED，旧 Fill/Ledger/NAV、报告、Hash 不改。
+新补算只能重建当前计算来源，不会补造旧 Dirty/source_job_id 或 Raw 质量审计的丢失 Job；
+这些历史失证需保留诊断，必要时从可信一致备份恢复，不强改审计 UUID。
 直接单层计算没有真实任务参数时为空血缘，不再生成悬空 UUID，不因此取得 PAPER READY 资格。
 
 ## 留证与回退
@@ -122,6 +138,6 @@ calculated_at/started_at/finished_at 和上下游先后。重新观察，失效�
 定义和测量。CI 百万行 EXPLAIN/BUFFERS、计数、引用矩阵只有合成数据，不代替生产容量评估，
 不证明原数值算法重跑。异常先设 job_deletion_enabled=false、重启新 Scheduler，其他日更可继续。
 优先停删除/前滚修复；不得恢复旧无保护清理。模块故障默认不删 Job。
-生产不建议降级 0054：会丢失 FK 保护。若获准回退结构，先停所有 Job 删除，保留全部任务、
+生产不建议降级 0054/0055：会丢失 FK/冻结来源保护。若获准回退结构，先停所有 Job 删除，保留全部任务、
 事实、财务和备份；0053 有 PAPER 历史时拒绝降级仍有效，不能清表硬降。
 摘要归档、版本继承、容量 UI、上游 CVE 升级仍为独立 P2 延期。

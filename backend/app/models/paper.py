@@ -171,6 +171,8 @@ class DecisionObservation(PaperRecord, Base):
             "ready_at <= asof_cutoff AND asof_cutoff <= created_at",
         ),
         Index("idx_decision_observation_date", "owner_user_id", "signal_date"),
+        Index("ix_decision_observation_source_jobs", "record_json", postgresql_using="gin",
+              postgresql_ops={"record_json": "jsonb_path_ops"}),
     )
     signal_date: Mapped[date] = mapped_column(Date, nullable=False)
     source_status: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -35,8 +35,9 @@ def test_new_orm_reference_without_manifest_change_blocks_before_sql(monkeypatch
 def test_protection_sql_uses_indexable_exists_without_record_json_or_uuid_materialization():
     query = sa.select(sa.literal(1)).where(referenced_job())
     sql = str(query.compile(dialect=postgresql.dialect()))
-    assert sql.count("EXISTS") == len(JOB_REFERENCES)
-    assert "record_json" not in sql and "job_metadata" not in sql
+    assert sql.count("EXISTS") == len(JOB_REFERENCES) + 1
+    assert "SELECT decision_observation.record_json" not in sql and "job_metadata" not in sql
+    assert "decision_observation.record_json @>" in sql
     for table, column in JOB_REFERENCES:
         assert f"{table}.{column} = job_run.id" in sql
 

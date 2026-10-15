@@ -35,12 +35,17 @@
 
 ## 当前阶段
 
-正在执行 M17.1.1，A 批 44578b7 完整 CI 38679638700 已通过，完整最终验收尚未关闭。
+M17.1.1 A 批 44578b7 / CI 38679638700、B 批 4cbb86d / CI 38682664315 均完整通过。
+最终以同 HEAD 的完整 CI 与精确回执关闭，36 项及剩余边界见 docs/M17_1_1_closeout.md。
 来源 Job 保留与有效性是两件事；FAILED/遗留缺证仍保守拒绝。默认关闭 Job 删除。
 任意持久化 calc_run_id/source_job_id/job_id 或新增 Job FK 必须更新引用清单和覆盖测试。
 不允许以清理、补录假 Job、改时间戳、重算 NAV 或删除 Dirty 绕过 M17.1。
 清理按 Job 行锁后用 READ COMMITTED 新语句复核引用，旧 SET NULL BACKTEST FK 也不得改写。
 0054 在线大表先并发预建有效索引；默认不开 Job 删除，预检超限/结构不符整批回滚。
+0055 保护不可变观察 data.candidates[].calc_run_id 的规范 Job 引用，后续 Typed 结果替换不能丢证。
+提案/委托/持仓副本依托不可变观察链；Agent 的 BACKTEST Run UUID 不误当 Job。
+任何新增冻结 Job 引用路径也必须登记/测试；保留不是验证通过，不允许重写旧 Hash 来补证。
+不确定的 COMMIT 响应明确标 UNKNOWN、删除计数 null，不以 0 或虚假回滚掩盖结果未知。
 
 上阶段 M17.1 的 P1 第一批 CI `38669794915`、连续运行 CI `38671738207` 均通过。
 正式关闭须最终 HEAD 的完整 CI SUCCESS，不以旧提交绿灯替代；证据和 36 项对照见 `docs/M17_1_closeout.md`。

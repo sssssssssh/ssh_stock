@@ -14,7 +14,7 @@ from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 from app.models.market_data import Sector, StockFactorDaily, Theme
 from app.services.retention import run_retention
 from app.services.retention_lineage import JOB_REFERENCES, assert_reference_schema
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from tests.integration.m16_6_support import isolated_contract_database
 from tests.integration.test_m13_3_2_consistency import _run
@@ -211,6 +211,7 @@ def test_writer_first_parent_key_share_prevents_delete_and_orphan(retention_db, 
 
 @pytest.mark.parametrize("name,field", [
     ("stock_factor_daily", "calc_run_id"), ("portfolio_backtest_run", "job_id"),
+    ("decision_observation", "data.candidates[].calc_run_id"),
 ])
 def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_db, name, field):
     factory, engine = retention_db
@@ -233,7 +234,12 @@ def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_d
             db.execute(sa.text("SET LOCAL lock_timeout = '5s'"))
             writing.set()
             try:
-                reference(db, name, field, job_id)
+                if name == "decision_observation":
+                    from tests.integration.test_m17_1_1_retention_frozen import snapshot
+
+                    snapshot(db, job_id)
+                else:
+                    reference(db, name, field, job_id)
                 db.commit()
                 return "UNEXPECTED_WRITE"
             except IntegrityError as exc:
@@ -310,7 +316,8 @@ def test_database_failure_rolls_back_jobs_and_all_log_deletes(retention_db):
         assert db.get(ServiceHeartbeat, heartbeat_id) is not None
 
 
-def test_reference_committed_after_lock_query_snapshot_cannot_be_set_null(retention_db):
+@pytest.mark.parametrize("kind", ["backtest", "frozen"])
+def test_reference_committed_after_lock_query_snapshot_cannot_be_set_null(retention_db, kind):
     factory, engine = retention_db
     with factory() as db:
         job_id = old_job(db)
@@ -348,7 +355,12 @@ def test_reference_committed_after_lock_query_snapshot_cannot_be_set_null(retent
                         sleep(0.01)
                     with factory() as writer:
                         writer.execute(sa.text("SET LOCAL lock_timeout = '1s'"))
-                        reference(writer, "portfolio_backtest_run", "job_id", job_id)
+                        if kind == "backtest":
+                            reference(writer, "portfolio_backtest_run", "job_id", job_id)
+                        else:
+                            from tests.integration.test_m17_1_1_retention_frozen import snapshot
+
+                            snapshot(writer, job_id)
                         writer.commit()
                 finally:
                     gate.execute(sa.text("SELECT pg_advisory_unlock(:key)"), {"key": gate_key})
@@ -359,5 +371,32 @@ def test_reference_committed_after_lock_query_snapshot_cannot_be_set_null(retent
     assert result["protected_referenced_jobs"] == 1
     with factory() as db:
         assert db.get(JobRun, job_id) is not None
-        column = Base.metadata.tables["portfolio_backtest_run"].c.job_id
-        assert db.scalar(sa.select(column)) == job_id
+        if kind == "backtest":
+            column = Base.metadata.tables["portfolio_backtest_run"].c.job_id
+            assert db.scalar(sa.select(column)) == job_id
+        else:
+            table = Base.metadata.tables["decision_observation"]
+            assert db.scalar(sa.select(sa.func.count()).select_from(table)) == 1
+
+
+def test_lost_commit_response_does_not_misreport_a_real_commit_as_zero_deletions(
+    retention_db, monkeypatch,
+):
+    factory, _ = retention_db
+    with factory() as db:
+        identity = old_job(db)
+        original_commit = db.commit
+
+        def lose_response():
+            original_commit()
+            raise OperationalError("synthetic lost commit response", {}, OSError(),
+                                   connection_invalidated=True)
+
+        monkeypatch.setattr(db, "commit", lose_response)
+        result = run_retention(db, now=NOW, policy=ENABLED)
+        assert result["blocked"] and result["commit_outcome_unknown"]
+        assert result["error_code"] == "RETENTION_COMMIT_OUTCOME_UNKNOWN"
+        assert result["successful_jobs"] is None and result["deleted_success_jobs"] is None
+    with factory() as db:
+        # The server really committed; only the response was fault-injected.
+        assert db.get(JobRun, identity) is None
