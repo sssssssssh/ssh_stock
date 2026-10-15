@@ -127,7 +127,9 @@ def test_new_d_row_cannot_hide_unrepaired_historical_inputs(dirty_paper, layer):
 
 
 @pytest.mark.parametrize("warmup", [False, True])
-def test_historical_repair_restores_readiness_without_rewriting_old_observation(dirty_paper, warmup):
+def test_historical_repair_restores_readiness_without_rewriting_old_observation(
+    dirty_paper, warmup
+):
     factory, _, owner, _, _ = dirty_paper
     with factory() as db:
         service = DecisionApplication(db, settings(), clock=lambda: NOW)
@@ -141,11 +143,13 @@ def test_historical_repair_restores_readiness_without_rewriting_old_observation(
         db.commit()
         with pytest.raises(PaperError, match="SOURCE_DERIVED_STALE"):
             service.observe(owner, CreateObservation(request_id="blocked", signal_date=DAY))
+        metadata = {"start": DAY.isoformat() if warmup else HIST.isoformat(),
+                    "end": DAY.isoformat()}
+        if warmup:
+            metadata["analysis_warmup_start"] = HIST.isoformat()
         job = JobRun(job_type="recalculate", status="SUCCESS", target_trade_date=DAY,
                      started_at=NOW - timedelta(minutes=15), finished_at=NOW - timedelta(seconds=5),
-                     job_metadata={"start": DAY.isoformat() if warmup else HIST.isoformat(),
-                                   "end": DAY.isoformat(),
-                                   **({"analysis_warmup_start": HIST.isoformat()} if warmup else {})})
+                     job_metadata=metadata)
         db.add(job)
         db.flush()
         for model in (StockFactorDaily, StockStateDaily, StockTradeStatusDaily,

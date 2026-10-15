@@ -56,8 +56,7 @@ Job scopes are grouped and bounded before metadata projection; no per-day/per-co
 SQL loop and no historical record_json loading. Normal no-dirty operation takes a
 constant fast path. Job start, calculation time, job finish, source-update time and
 the capture cutoff are all checked; target date or validated ISO range must cover
-the actual rows associated with a job. A newly calculated D cannot conceal an old
-intermediate input. Existing `analysis_warmup_start` explicitly extends a range
+the actual rows associated with a job. Existing `analysis_warmup_start` extends a range
 job's foundation coverage before its requested start; it must be a valid ISO date
 not later than that start. D opportunity still requires the existing requested
 target/range validation. This preserves legitimate warmup work without inventing
