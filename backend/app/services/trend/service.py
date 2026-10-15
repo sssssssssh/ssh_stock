@@ -47,7 +47,7 @@ class TrendService:
         calc_run_id: uuid.UUID | None = None,
     ) -> dict[str, int]:
         version = algo_version or self.settings.algo_version
-        run_id = calc_run_id or uuid.uuid4()
+        run_id = calc_run_id
         lookback_start = start - timedelta(days=180)
         factors = self._read_factors(lookback_start, end)
         market = self._read_market(lookback_start, end)

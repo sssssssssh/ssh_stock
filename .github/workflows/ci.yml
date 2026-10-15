@@ -38,7 +38,10 @@ jobs:
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
       - name: M17.1 targeted dirty dependency regressions
+        # All retention writes/concurrency tests use disposable PG17 databases.
         run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
+      - name: M17.1.1 reference-aware retention regressions
+        run: python -m pytest tests/integration/test_m17_1_1_retention.py -q
       - name: M17.1 isolated PAPER continuity regressions
         run: |
           python -m pytest tests/integration/test_m17_decision_sources.py -q

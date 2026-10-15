@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 from app.api.v1.system import _service_payload, runtime
+from app.core.retention_config import RetentionPolicy
 from app.models.job import ServiceHeartbeat
 from app.services.retention import run_retention
 from app.services.service_heartbeat import touch_service_heartbeat
@@ -20,7 +21,13 @@ class _Result:
     def scalar_one_or_none(self):
         return self._scalar
 
+    def scalar_one(self):
+        return self._scalar
+
     def scalars(self):
+        return self
+
+    def __iter__(self):
         return iter(self._rows)
 
 
@@ -96,27 +103,48 @@ def test_service_heartbeat_upsert_and_stale_status(monkeypatch) -> None:
     assert _service_payload(row, started.replace(minute=3), 120)["status"] == "STALE"
 
 
-def test_retention_only_targets_operational_tables() -> None:
+def test_retention_only_targets_operational_tables(monkeypatch) -> None:
+    from sqlalchemy.sql.dml import Delete
+
+    monkeypatch.setattr("app.services.retention.assert_reference_schema", lambda db: None)
+
     class Db:
+        new, dirty, deleted = (), (), ()
+
         def __init__(self):
             self.statements = []
             self.commits = 0
 
         def execute(self, statement):
             self.statements.append(statement)
-            return _Result(rowcount=len(self.statements))
+            if isinstance(statement, Delete):
+                name = statement.table.name
+                if name == "job_run":
+                    return _Result(rows=["SUCCESS"] * 2 + ["FAILED"] * 3)
+                return _Result(rowcount={
+                    "provider_api_log": 1, "auth_session": 4, "service_heartbeat": 5,
+                }[name])
+            if list(statement.selected_columns.keys()) == ["id", "status"]:
+                import uuid
+
+                return _Result(rows=[SimpleNamespace(id=uuid.uuid4(), status=status)
+                                     for status in ["SUCCESS"] * 2 + ["FAILED"] * 3])
+            return _Result(scalar=0)
 
         def commit(self):
             self.commits += 1
 
     db = Db()
-    result = run_retention(db, now=datetime(2026, 9, 24, tzinfo=UTC))
+    result = run_retention(db, now=datetime(2026, 9, 24, tzinfo=UTC),
+                           policy=RetentionPolicy(job_deletion_enabled=True))
     sql = "\n".join(
         str(statement.compile(dialect=postgresql.dialect()))
         for statement in db.statements
     )
 
-    assert result == {
+    assert {key: result[key] for key in (
+        "provider_api_log", "successful_jobs", "failed_jobs", "auth_sessions", "service_heartbeat",
+    )} == {
         "provider_api_log": 1,
         "successful_jobs": 2,
         "failed_jobs": 3,
@@ -128,10 +156,12 @@ def test_retention_only_targets_operational_tables() -> None:
     assert "job_run" in sql
     assert "auth_session" in sql
     assert "service_heartbeat" in sql
+    delete_tables = {s.table.name for s in db.statements if isinstance(s, Delete)}
+    assert delete_tables == {"provider_api_log", "job_run", "auth_session", "service_heartbeat"}
     for protected_table in (
         "stock_daily",
         "stock_factor_daily",
         "data_quality_daily",
         "opportunity_forward_eval",
     ):
-        assert protected_table not in sql
+        assert protected_table not in delete_tables

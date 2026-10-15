@@ -290,6 +290,7 @@ class PaperDayRun(AccountRecord, Base):
     job_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("job_run.id", ondelete="RESTRICT"),
+        index=True,
     )
     error_code: Mapped[str | None] = mapped_column(String(64))
 

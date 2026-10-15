@@ -19,6 +19,6 @@ def calculation_metadata(
     return {
         "calc_version": calc_version,
         "config_hash": config_hash(config),
-        "calc_run_id": calc_run_id or uuid.uuid4(),
+        "calc_run_id": calc_run_id,
         "calculated_at": datetime.now(UTC),
     }

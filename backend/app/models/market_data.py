@@ -236,7 +236,9 @@ class StockFactorDaily(Base):
     exclusion_reason: Mapped[str | None] = mapped_column(String(128))
     calc_version: Mapped[str | None] = mapped_column(String(32))
     config_hash: Mapped[str | None] = mapped_column(String(64))
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -265,7 +267,9 @@ class MarketDaily(Base):
     liquidity_score: Mapped[float | None] = mapped_column(Float)
     calc_version: Mapped[str | None] = mapped_column(String(32))
     config_hash: Mapped[str | None] = mapped_column(String(64))
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -332,7 +336,9 @@ class SectorFactorDaily(Base):
     lifecycle: Mapped[str | None] = mapped_column(String(32))
     calc_version: Mapped[str | None] = mapped_column(String(32))
     config_hash: Mapped[str | None] = mapped_column(String(64))
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -357,7 +363,9 @@ class DataQualityDaily(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     issue_codes: Mapped[dict | None] = mapped_column(JSONB)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
 
 
 class DataDirtyRange(Base):
@@ -369,7 +377,9 @@ class DataDirtyRange(Base):
     dirty_start_date: Mapped[date] = mapped_column(Date, nullable=False)
     dirty_end_date: Mapped[date] = mapped_column(Date, nullable=False)
     reason: Mapped[str | None] = mapped_column(String(256))
-    source_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    source_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="OPEN")
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
@@ -402,7 +412,9 @@ class StockTradeStatusDaily(Base):
     status_reason: Mapped[str | None] = mapped_column(String(256))
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -431,7 +443,9 @@ class StockStateDaily(Base):
     reason_codes: Mapped[dict | None] = mapped_column(JSONB)
     calc_version: Mapped[str | None] = mapped_column(String(32))
     config_hash: Mapped[str | None] = mapped_column(String(64))
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -459,7 +473,9 @@ class StrategySignal(Base):
     algo_version: Mapped[str] = mapped_column(String(32), nullable=False)
     calc_version: Mapped[str | None] = mapped_column(String(32))
     config_hash: Mapped[str | None] = mapped_column(String(64))
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -674,7 +690,9 @@ class ThemeFactorDaily(Base):
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     source_strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -719,7 +737,9 @@ class StockOpportunityDaily(Base):
     calc_version: Mapped[str] = mapped_column(String(32), nullable=False)
     config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     source_strategy_config_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    calc_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"), index=True,
+    )
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 

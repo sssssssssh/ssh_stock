@@ -19,6 +19,15 @@ app:
     eod_retry_cron: "10,30,50 18-19 * * 1-5"
     eod_retry_final_cron: "10,30 20 * * 1-5"
 
+retention:
+  job_deletion_enabled: false
+  max_candidate_rows: 10000
+  max_missing_references: 1000
+  diagnostic_limit: 20
+  lock_timeout_ms: 1000
+  statement_timeout_ms: 3000
+  max_duration_ms: 15000
+
 provider:
   tushare:
     safe_limits:

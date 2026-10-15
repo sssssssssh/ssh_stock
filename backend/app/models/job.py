@@ -13,6 +13,7 @@ class JobRun(Base):
     __tablename__ = "job_run"
     __table_args__ = (
         Index("idx_job_run_type_date_status", "job_type", "target_trade_date", "status"),
+        Index("idx_job_run_retention", "status", "finished_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
