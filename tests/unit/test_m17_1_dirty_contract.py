@@ -56,6 +56,18 @@ def test_no_dirty_dependency_fast_path_does_not_read_history():
     assert len(db.sql) == 1 and "min(data_dirty_range.dirty_start_date)" in db.sql[0]
 
 
+@pytest.mark.parametrize("budget", ["calendar", "jobs"])
+def test_historical_capacity_refuses_before_job_metadata_or_row_load(budget):
+    config = SimpleNamespace(algo_version="test", paper_config=SimpleNamespace(
+        decision=SimpleNamespace(max_source_rows=100),
+    ))
+    db = ScalarDb(D - timedelta(days=101) if budget == "calendar" else D - timedelta(days=1),
+                  2, 101)
+    with pytest.raises(PaperError, match="DECISION_SOURCE_CAPACITY_EXCEEDED"):
+        check_dirty_dependencies(db, D, NOW, config, {}, "hash")
+    assert not any("job_metadata" in sql or "record_json" in sql for sql in db.sql)
+
+
 def test_historical_dependency_queries_compile_with_explicit_correlation():
     from app.models.market_data import (
         MarketDaily,

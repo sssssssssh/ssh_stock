@@ -37,6 +37,7 @@ from app.models.paper import (
     PaperOutcomeReview,
     PaperPositionDaily,
 )
+from app.models.portfolio import PortfolioBacktestRun, PortfolioNavDaily
 from app.services.decision.application import DecisionApplication
 from app.services.decision.approval import ApprovalApplication
 from app.services.paper.account_state import account_settings
@@ -50,6 +51,7 @@ from sqlalchemy import func, select
 from tests.integration.m17_1_support import AFTER_HOLIDAY, FIRST, SECOND, add_dirty
 from tests.integration.m17_1_support import dirty_paper as dirty_paper
 from tests.integration.m17_support import CODES, DAY, NOW, settings
+from tests.integration.test_m13_3_2_consistency import _nav, _run
 from tests.integration.test_m17_paper_daily import approve, run
 
 FROZEN = (PaperAccount, PaperAccountEvent, DecisionObservation, DecisionProposal,
@@ -72,6 +74,10 @@ def assert_preserved(db, previous):
 
 def financial_counts(db):
     return tuple(db.scalar(select(func.count()).select_from(model)) for model in FINANCE)
+
+
+def typed_facts(row):
+    return {column.name: getattr(row, column.name) for column in row.__table__.columns}
 
 
 def draft(db, owner, account):
@@ -142,6 +148,14 @@ def test_unrelated_historical_failed_range_allows_manual_chain_replay_and_eod(di
     factory, _, owner, _, account = dirty_paper
     with factory() as db:
         add_dirty(db)
+        legacy = _run(DAY)
+        db.add(legacy)
+        db.flush()
+        legacy_nav = _nav(legacy.id, DAY)
+        db.add(legacy_nav)
+        db.commit()
+        legacy_id, legacy_nav_id = legacy.id, (legacy.id, DAY)
+        legacy_facts, legacy_nav_facts = typed_facts(legacy), typed_facts(legacy_nav)
         app, observed, body = draft(db, owner, account)
         proposal = app.propose(owner, body)
         assert app.propose(owner, body).id == proposal.id
@@ -161,6 +175,9 @@ def test_unrelated_historical_failed_range_allows_manual_chain_replay_and_eod(di
         assert nav.total_assets == nav.cash + position.market_value
         assert position.quantity == fill.quantity and position.available_quantity == 0
         assert nav.trading_cost == fill.total_cost
+        assert typed_facts(db.get(PortfolioBacktestRun, legacy_id)) == legacy_facts
+        assert typed_facts(db.get(PortfolioNavDaily, legacy_nav_id)) == legacy_nav_facts
+        assert db.scalar(select(func.count()).select_from(PortfolioBacktestRun)) == 1
         assert_preserved(db, frozen)
 
 
@@ -354,8 +371,9 @@ def test_scheduler_and_review_use_the_same_dirty_contract(dirty_paper, blocked):
         assert_preserved(db, frozen)
 
 
+@pytest.mark.parametrize("change", ["algo", "strategy", "opportunity_version"])
 def test_owner_boundaries_precede_dirty_facts_and_legacy_version_cannot_silently_upgrade(
-    dirty_paper,
+    dirty_paper, monkeypatch, change,
 ):
     factory, _, owner, other, account = dirty_paper
     with factory() as db:
@@ -367,7 +385,14 @@ def test_owner_boundaries_precede_dirty_facts_and_legacy_version_cannot_silently
             )
         assert error.value.status_code == 404
         row = db.get(PaperAccount, account)
-        changed = settings().model_copy(update={"algo_version": "m17.1-incompatible"})
+        changed = settings().model_copy(deep=True)
+        if change == "algo":
+            changed.algo_version = "m17.1-incompatible"
+        elif change == "strategy":
+            changed.strategy["universe"]["min_listed_trading_days"] += 1
+        else:
+            monkeypatch.setattr("app.services.paper.account_state.OPPORTUNITY_CALC_VERSION",
+                                "m17.1-incompatible")
         with pytest.raises(PaperError, match="PAPER_SOURCE_VERSION_DRIFT"):
             account_settings(row, changed)
         assert financial_counts(db) == before

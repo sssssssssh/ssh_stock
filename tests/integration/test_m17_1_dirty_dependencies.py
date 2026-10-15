@@ -16,10 +16,11 @@ from app.models.market_data import (
     TradeCalendar,
 )
 from app.models.paper import DecisionObservation, PaperFill, PaperLedgerEntry, PaperNavDaily
+from app.services.decision import source as source_module
 from app.services.decision.application import DecisionApplication
 from app.services.decision.source import DecisionSourceReadiness
 from app.services.dirty import blocking_dirty_range_id, record_dirty_range
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.exc import IntegrityError
 
 from tests.integration.m17_1_support import BRIDGE, HIST, add_dirty
@@ -219,3 +220,61 @@ def test_multiple_nonintersections_and_datasets_do_not_change_frozen_source_hash
                   dataset="theme_daily", status="OPEN")
         after = reader.capture(DAY, cutoff=NOW)
         assert after == before
+
+
+def test_legacy_single_sided_sql_reproduces_false_rejection_on_same_pg_facts(
+    dirty_paper, monkeypatch
+):
+    factory, _, _, _, _ = dirty_paper
+    with factory() as db:
+        before = counts(db)
+        reader = DecisionSourceReadiness(db, settings())
+        expected = reader.capture(DAY, cutoff=NOW)
+        add_dirty(db)
+
+        def legacy_gate(session, day):
+            return session.scalar(select(DataDirtyRange.id).where(
+                DataDirtyRange.dirty_start_date <= day,
+                DataDirtyRange.status.in_(("OPEN", "PROCESSING", "FAILED")),
+            ).limit(1))
+
+        with monkeypatch.context() as patch:
+            patch.setattr(source_module, "blocking_dirty_range_id", legacy_gate)
+            with pytest.raises(PaperError, match="SOURCE_DIRTY_RANGE$"):
+                reader.capture(DAY, cutoff=NOW)
+        assert reader.capture(DAY, cutoff=NOW) == expected
+        assert counts(db) == before
+
+
+def test_actual_pg_job_capacity_is_checked_before_historical_metadata_projection(dirty_paper):
+    factory, engine, _, _, _ = dirty_paper
+    with factory() as db:
+        before = counts(db)
+        add_dirty(db)
+        for number in range(101):
+            job = JobRun(job_type="recalculate", status="SUCCESS", target_trade_date=HIST,
+                         started_at=NOW - timedelta(days=21),
+                         finished_at=NOW - timedelta(days=20), job_metadata={})
+            db.add(job)
+            db.flush()
+            db.add(StockFactorDaily(trade_date=HIST, ts_code=f"X171{number:03}.SZ",
+                                    calc_run_id=job.id, calculated_at=job.finished_at))
+        db.commit()
+        config = settings()
+        config = config.model_copy(update={"paper_config": config.paper_config.model_copy(update={
+            "decision": config.paper_config.decision.model_copy(update={"max_source_rows": 100}),
+        })})
+        statements = []
+
+        def capture(connection, cursor, sql, params, context, executemany):
+            statements.append(sql)
+
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            with pytest.raises(PaperError, match="DECISION_SOURCE_CAPACITY_EXCEEDED"):
+                DecisionSourceReadiness(db, config).capture(DAY, cutoff=NOW)
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+        assert any("count(" in sql and "UNION ALL" in sql for sql in statements)
+        assert not any("AS analysis_start" in sql or "record_json" in sql for sql in statements)
+        assert counts(db) == before
