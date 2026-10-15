@@ -19,7 +19,7 @@ from app.domain.decision.requests import (
 )
 from app.models.auth import AppUser
 from app.models.job import JobRun
-from app.models.market_data import TradeCalendar
+from app.models.market_data import DataDirtyRange, TradeCalendar
 from app.models.paper import (
     DecisionApprovalEvent,
     DecisionObservation,
@@ -652,12 +652,25 @@ def measured_daily_job(factory, engine, owner, account_id, day, config):
 
 
 @pytest.mark.parametrize("trade_days", [1, 30, 250])
+@pytest.mark.parametrize("with_dirty_history", [False, True])
 def test_real_daily_queue_claim_source_and_settlement_are_bounded(
-    daily_capacity_database, trade_days
+    daily_capacity_database, trade_days, with_dirty_history
 ):
     factory, engine = daily_capacity_database
     days, config = forward_weekdays(trade_days), settings()
     owner, account_id, initial_cash = prepare_daily_account(factory, days, config)
+    if with_dirty_history:
+        with factory() as db:
+            day = days[0]
+            while day <= days[-1]:
+                if db.get(TradeCalendar, day) is None:
+                    db.add(TradeCalendar(cal_date=day, exchange="SSE", is_open=False))
+                day += timedelta(days=1)
+            db.add(DataDirtyRange(
+                dataset="stock_daily", dirty_start_date=DAY, dirty_end_date=DAY,
+                status="RESOLVED", created_at=NOW - timedelta(days=1),
+            ))
+            db.commit()
     measurements, job_ids = [], []
     frozen_fill_hash, buy_quantity, cash_delta, buy_cost = None, None, None, None
     for index, day in enumerate(days[1:]):
@@ -772,7 +785,8 @@ def test_real_daily_queue_claim_source_and_settlement_are_bounded(
     assert elapsed < trade_days * DAILY_SECONDS_BUDGET
     emit_measurement(
         {
-            "kind": "daily_advance",
+            "kind": "daily_advance_dirty_history" if with_dirty_history else "daily_advance",
+            "historical_dirty_status": "RESOLVED" if with_dirty_history else None,
             "operation": "paper_queue_claim_source_atomic_settlement",
             "trade_days": trade_days,
             "sql_count": total_sql,
