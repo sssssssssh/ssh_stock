@@ -57,6 +57,11 @@ SQL loop and no historical record_json loading. Normal no-dirty operation takes 
 constant fast path. Job start, calculation time, job finish, source-update time and
 the capture cutoff are all checked; target date or validated ISO range must cover
 the actual rows associated with a job. A newly calculated D cannot conceal an old
+intermediate input. Existing `analysis_warmup_start` explicitly extends a range
+job's foundation coverage before its requested start; it must be a valid ISO date
+not later than that start. D opportunity still requires the existing requested
+target/range validation. This preserves legitimate warmup work without inventing
+coverage from timestamps. A newly calculated D cannot conceal an old
 intermediate factor/state/market input. Calculations in the same job must follow
 upstream/downstream timestamp order. Across jobs, the
 upstream job must finish before its consumer starts. Later repair of a historical

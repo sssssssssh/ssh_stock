@@ -112,3 +112,15 @@ def test_real_target_or_validated_full_iso_range_are_required():
     assert not job_covers_scope(job, D - timedelta(days=1), D, NOW)
     job.start, job.end = "2026-10-01", "2026-10-15"
     assert job_covers_scope(job, D - timedelta(days=10), D, NOW)
+
+
+def test_existing_recalculation_warmup_is_an_explicit_foundation_date_scope():
+    job = SimpleNamespace(
+        status="SUCCESS", job_type="recalculate", target_trade_date=D,
+        started_at=NOW - timedelta(minutes=3), finished_at=NOW,
+        start="2026-10-15", end="2026-10-15", analysis_start="2026-10-01",
+    )
+    assert job_covers_scope(job, D - timedelta(days=10), D, NOW)
+    for invalid in ("2026-10-16", "2026-02-30", "20261001"):
+        job.analysis_start = invalid
+        assert not job_covers_scope(job, D - timedelta(days=10), D, NOW)

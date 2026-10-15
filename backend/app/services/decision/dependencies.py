@@ -31,10 +31,16 @@ def job_covers_scope(job, first, last, cutoff):
         return True
     try:
         start, end = date.fromisoformat(job.start), date.fromisoformat(job.end)
-        return (
-            start.isoformat() == job.start and end.isoformat() == job.end
-            and start <= first <= last <= end
-        )
+        if start.isoformat() != job.start or end.isoformat() != job.end or start > end:
+            return False
+        warmup = getattr(job, "analysis_start", None)
+        if warmup is not None:
+            effective_start = date.fromisoformat(warmup)
+            if effective_start.isoformat() != warmup or effective_start > start:
+                return False
+        else:
+            effective_start = start
+        return effective_start <= first <= last <= end
     except (TypeError, ValueError):
         return False
 
@@ -84,6 +90,7 @@ def check_dirty_dependencies(db, day, cutoff, settings, versions, strategy_hash)
         JobRun.started_at, JobRun.finished_at,
         JobRun.job_metadata["start"].astext.label("start"),
         JobRun.job_metadata["end"].astext.label("end"), grouped.c.first, grouped.c.last,
+        JobRun.job_metadata["analysis_warmup_start"].astext.label("analysis_start"),
     ).select_from(JobRun).join(grouped, JobRun.id == grouped.c.job_id)).all()
     valid_ids = [job.id for job in jobs if job_covers_scope(job, job.first, job.last, cutoff)]
 
