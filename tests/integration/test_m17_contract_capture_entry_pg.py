@@ -19,12 +19,13 @@ from test_m16_6_contract_atomic import _case_and_provider
 from test_m16_6_window_end_to_end import seed_window
 
 
-def test_real_chat_37_windows_refuses_before_bulk_contract_collection_and_archive_write(
+def test_real_chat_36_windows_refuses_before_bulk_contract_collection_and_archive_write(
     monkeypatch,
 ):
     with isolated_contract_database(monkeypatch) as (factory, _):
         with factory() as db:
-            study_id, validation_id, _ = seed_window(db, window_count=37)
+            # The frozen walk-forward policy permits 36 windows: 108 contracts exceed 100.
+            study_id, validation_id, _ = seed_window(db, window_count=36)
             settings = _enabled_settings()
             settings.agent_config.archive.enabled = True
             settings.agent_config.frozen_contract.enabled = True
@@ -32,7 +33,7 @@ def test_real_chat_37_windows_refuses_before_bulk_contract_collection_and_archiv
             provider = FakeLLMProvider([LLMResponse(tool_calls=[ToolCall(
                 id="windows", name="walk_forward.window_lineage",
                 arguments={"study_id": str(study_id), "validation_id": str(validation_id),
-                           "limit": 37},
+                           "limit": 36},
             )])])
             service = AgentChatApplication(db, settings, provider=provider)
             chat = service.create_chat(user=user, title="Synthetic capacity acceptance")
@@ -44,7 +45,7 @@ def test_real_chat_37_windows_refuses_before_bulk_contract_collection_and_archiv
             with pytest.raises(AgentArchiveError) as caught:
                 service.send_message(
                     user=user, chat_id=chat.chat_id, content="Synthetic windows",
-                    request_id="37-windows",
+                    request_id="36-windows",
                 )
             assert caught.value.code == "CONTRACT_LIMIT_EXCEEDED"
             for model in (

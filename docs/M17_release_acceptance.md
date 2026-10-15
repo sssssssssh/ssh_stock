@@ -20,7 +20,7 @@ roundtrip and current=heads, Compose/container build, frontend coverage/build an
 legacy browser regression. E adds actual M17 browser acceptance at 1440/390.
 Migration head stays `0053_m17_decision_paper_foundation`; no F migration.
 
-F local commands: `python -m pytest tests/unit -q` (1298 passed, two inherited
+F local commands: `python -m pytest tests/unit -q` (1299 passed, two inherited
 deprecation warnings); `npm run test:coverage` with Node 22 (122 passed, 82.22%
 statement coverage). Full Ruff, production build and actual Edge browser acceptance
 at 1440/390 passed, including the complete PAPER/non-live/no-return-promise badge.
@@ -151,3 +151,7 @@ F candidate bcf4ea7 / CI 38661921595 was cancelled while blocked: independent
 progress used UPDATE against the JobRun FK KEY SHARE held by its financial
 transaction. Progress and cancellation now use NO KEY UPDATE; a SQL lock-mode
 regression and ten-second lock-wait bounds in new PG tests prevent silent hangs.
+The capacity fixture uses the existing 36-window maximum (108 contracts against
+the unchanged 100-contract limit), not an impossible 37-window study. M16 report
+creation timestamps are fixed on initial insert to the simulated clock; both a
+valid prior report and a future report rejection are exercised regardless of CI date.

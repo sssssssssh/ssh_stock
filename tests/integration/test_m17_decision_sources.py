@@ -206,12 +206,23 @@ def test_owner_security_watch_risks_and_revision(case):
         assert db.scalar(select(func.count()).select_from(PaperOrder)) == 0
 
 
-def test_m16_report_reference_is_owned_hash_bound_and_only_context(case):
+@pytest.mark.parametrize("report_offset", [-1, 1])
+def test_m16_report_reference_is_owned_hash_bound_and_only_context(
+    case, monkeypatch, report_offset
+):
     factory, _, (owner, other, account) = case
     with factory() as db:
         user = db.get(AppUser, owner)
         chat, message = _source(db, user, value="0.2")
-        report = AgentReportApplication(db, settings()).create_report(
+        reports = AgentReportApplication(db, settings())
+        add_report = reports.repo.add_report
+        monkeypatch.setattr(
+            reports.repo, "add_report",
+            lambda **values: add_report(
+                **values, created_at=NOW + timedelta(minutes=report_offset)
+            ),
+        )
+        report = reports.create_report(
             user=user,
             body=CreateResearchReport(
                 source_chat_id=chat,
@@ -229,6 +240,11 @@ def test_m16_report_reference_is_owned_hash_bound_and_only_context(case):
             source_report_id=report.report_id,
             source_report_hash=report.snapshot_hash,
         )
+        if report_offset > 0:
+            with pytest.raises(PaperError, match="DECISION_REPORT_DATE_UNAVAILABLE"):
+                app.propose(owner, body)
+            assert db.scalar(select(func.count()).select_from(PaperOrder)) == 0
+            return
         draft = app.propose(owner, body)
         ref = verify_record(draft)["source_report"]
         assert (
