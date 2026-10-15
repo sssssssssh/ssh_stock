@@ -5,21 +5,24 @@
 - `docs/股票机会发现系统_PRD_V1.0.md`
 - `docs/股票机会发现系统_系统设计_V1.0.md`
 
-当前实现范围：Milestone 0 到 Milestone 16.5。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署、智能研究工作台、不可变研究报告与冻结证据离线复核。
+当前实现范围：Milestone 0 到 Milestone 17。包括数据可靠性、PIT 可交易性、题材与机会池、Research 验证层、Portfolio Backtest、Performance、Experiment、Walk-forward/OOS、管理员 Session 鉴权、Vue/Nginx/Compose 部署、智能研究工作台、不可变研究报告与冻结证据离线复核，以及人工确认的独立决策与 PAPER 模拟账本。
 
 已在 2026-09-01 增加 Milestone 8 数据可靠性改造：历史股票池 Point-in-Time、动态日线覆盖率检查、行业历史成分有效期、原始表 NULL upsert 保护、dirty range 向后重算、因子/市场/行业计算版本追踪。2026-09-02 追加数据拉取链路优化：Raw 数据按数据集完整性恢复、基础信息前置校验、Provider 日志独立事务、Tushare 进程级限流和指数区间拉取。
 
 当前网页显示名称为“空间”。
 
-## M17 分阶段开发状态
+## M17 验收与启用
 
-M17 A/B/C/D/E 已通过独立 PostgreSQL 17 CI；E 完整回归通过。
-F 已实现任务执行、可选调度、取消、恢复、保留保护及容量验证，正在进行最终完整验收。
-整体未封版，默认关闭。页面可查看决策证据、账户账本、冻结净值图及后验复盘；
+M17 A→F 已依次完成并于 2026-10-15 验收封版，默认关闭。最终功能提交 `ad38b7e` 的
+[完整 CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38663846267) 已通过：
+隔离 PostgreSQL 17 完整 1641 项 pytest（88% 覆盖率）、Ruff、0053 迁移、Docker、
+122 项前端测试及 1440/390 浏览器。
+F 包含任务执行、可选调度、取消、恢复、保留保护及真实 1/30/250 日逐日推进性能验证。
+页面可查看决策证据、账户账本、冻结净值图及后验复盘；
 手动结算/复盘只入队，必须有独立 Worker 才会执行。
 `POST /api/v1/decisions/proposals/{id}/approve` 必须提供 request_id、Decimal 字符串
 target_weight 及 `confirmed: true`；未开启 PAPER 时统一拒绝写入。该操作只生成模拟委托，
-不代表成交，仍需目标日完整 EOD 就绪后事后模拟；当前请勿开启自动推进。
+不代表成交，仍需目标日完整 EOD 就绪后事后模拟；自动推进须按下方灰度顺序显式开启。
 源数据或计算身份不完整、存在未修复 dirty range、Raw 更新晚于因子时会拒绝生成草案。
 WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策证据。
 新增迁移 `0053_m17_decision_paper_foundation`，只建独立决策/模拟账本表，不复制回测数据、
@@ -28,7 +31,7 @@ WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策�
 现有审批 API 不创建成交；PAPER Worker/Scheduler 已接入，默认不启用自动推进。账户配置创建后冻结，
 初始资金仅入账一次，不支持入出金；历史数据修正标记复核，不删除流水重算。
 迁移有 M17 历史数据时拒绝降级，应关闭功能保留证据，不得清空流水以强行回滚。
-阶段设计和逐项剩余验收见 `docs/M17_design_decisions.md`、`docs/M17_release_acceptance.md`。
+阶段设计、52 项验收与遗留依赖安全风险见 `docs/M17_design_decisions.md`、`docs/M17_release_acceptance.md`。
 A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移及前端历史回归；
 [A CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)、
 [B CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)、

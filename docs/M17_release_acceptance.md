@@ -2,8 +2,13 @@
 
 ## Release Gate
 
-A-E accepted. F implemented and locally verified; final isolated PG17 CI pending.
-M17 is not yet sealed. No migration, cleanup, test writes or PAPER transactions
+A-F accepted and sealed on 2026-10-15. Final functional commit:
+`ad38b7e5a4dab785090148b2e23c29f49c0dfe2e`.
+[Full CI 38663846267](https://github.com/sssssssssh/ssh_stock/actions/runs/38663846267)
+passed: 1641 pytest (142 warnings, 88% backend coverage), full Ruff, PostgreSQL 17
+migration roundtrip and 0053 current=heads, Docker Compose/config/build/Nginx,
+122 Vue tests (82.22% statement coverage), production build and actual Chromium
+acceptance at 1440/390. No migration, cleanup, test writes or PAPER transactions
 were run against the user's business database. All automatic flags remain false.
 
 | Phase | Accepted commit | Full CI | pytest |
@@ -13,7 +18,7 @@ were run against the user's business database. All automatic flags remain false.
 | C | dc773eb | [38509773000](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000) | 1480 |
 | D | a0f0cd4 | [38514217405](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405) | 1518 |
 | E | e920652 | [38528878133](https://github.com/sssssssssh/ssh_stock/actions/runs/38528878133) | 1545 |
-| F | pending | pending | pending |
+| F | ad38b7e | [38663846267](https://github.com/sssssssssh/ssh_stock/actions/runs/38663846267) | 1641 |
 
 Each accepted phase includes full pytest/Ruff, isolated PostgreSQL 17 migration
 roundtrip and current=heads, Compose/container build, frontend coverage/build and
@@ -35,6 +40,13 @@ Owner-scoped API adds job cancellation and account-wide active-job count. Legacy
 shared job/runtime endpoints do not expose private PAPER jobs. No new table/API
 permits LIVE, broker execution, Agent writes or automatic approval.
 
+Changed areas: backend API, paper services/repository, decision metrics, existing
+Worker/Scheduler/retention dispatch, M16 contract/report resource paths, Vue
+workbench/service, CI and regression tests. F adds no schema/table/column. The new
+write API is `POST /api/v1/paper/accounts/{account_id}/jobs/{job_id}/cancel`;
+own jobs GET now returns `meta.active_count`. For the exact F file list, run
+`git diff --name-only e920652..ad38b7e`; A's 0053/13-table delivery is unchanged.
+
 Financial formulas remain Decimal. Partial sales retain the remaining position's
 last-buy stage; completed EOD expires unapproved drafts without changing frozen
 evidence. Approval/execution/attribution metrics expose versions, dates,
@@ -46,8 +58,9 @@ subsequent HTTP requests still reverify. Existing frozen report bytes are tested
 
 ## Checklist Mapping
 
-All paths below are relative to `tests/` unless specified. A-E evidence passed
-their gates; F-dependent rows require the final full CI before acceptance.
+All paths below are relative to `tests/` unless specified. Every item 01-52 passed
+its mapped acceptance in the final full CI. Item 51 is a risk review and input
+regression, not a claim that inherited dependency advisories have been repaired.
 
 | # | Taskbook assertion | Test / evidence |
 |---|---|---|
@@ -117,7 +130,23 @@ Synthetic two-symbol calendar is not a claim of full-market production throughpu
 Separate frozen-summary measurements use 1/30/250 fee-paying synthetic ledger
 dates, <=14 SQL/read and <30 seconds. They are not a substitute for daily replay.
 History row/byte overflow refuses before loading historical JSON. Final measured
-values and CI artifact link will be recorded after the gate passes.
+values are retained in the
+[JSONL artifact](https://github.com/sssssssssh/ssh_stock/actions/runs/38663846267/artifacts/11940377655).
+
+| Operation | Days | SQL total | Maximum daily SQL | Seconds total | Maximum daily seconds |
+|---|---|---|---|---|---|
+| Actual daily advance | 1 | 203 | 203 | 0.309 | 0.309 |
+| Actual daily advance | 30 | 6148 | 205 | 7.329 | 0.305 |
+| Actual daily advance | 250 | 51248 | 205 | 60.981 | 0.309 |
+| Frozen summary | 1 | 12 | n/a | 0.056 | n/a |
+| Frozen summary | 30 | 12 | n/a | 0.097 | n/a |
+| Frozen summary | 250 | 12 | n/a | 0.608 | n/a |
+
+The independent M16.6 1/36-window capacity rerun also passed: 14 SELECTs each,
+0.0322/0.2315 seconds and 31905/1148661 JSONB bytes. This larger explicit repository
+budget exercise is separate from the default chat turn's 100-contract refusal.
+Browser screenshots are retained in the CI `m16-6-synthetic-browser` artifact,
+including the M17 subdirectory. Local Edge screenshots were also inspected.
 
 ## Security And Remaining Operational Work
 
@@ -155,3 +184,8 @@ The capacity fixture uses the existing 36-window maximum (108 contracts against
 the unchanged 100-contract limit), not an impossible 37-window study. M16 report
 creation timestamps are fixed on initial insert to the simulated clock; both a
 valid prior report and a future report rejection are exercised regardless of CI date.
+CI 38662750607 then completed with 1637 passed/3 failed; after those two fixture
+fixes, CI 38663317402 had 1640 passed/1 failed. The remaining partial-sale fixture
+used a target weight that became a non-lot after fees. It now derives a legal
+whole-lot target and asserts actual sold/remaining quantities and the original buy
+stage. No lot rule was relaxed. All cases passed final CI 38663846267.

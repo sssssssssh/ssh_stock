@@ -3,8 +3,8 @@
 Baseline: b57809ff650cc25712452ff3c2d138de0ec53ef2, master, M16.6 sealed.
 Taskbook: M17 Decision Journal & Paper Portfolio V1.0, 2026-10-14.
 Implement A -> B -> C -> D -> E -> F with independent commits and tests.
-Current delivery: A/B accepted, C manual approval under PG acceptance.
-No usable PAPER execution runtime yet.
+Current delivery: A-F accepted, functional commit ad38b7e, CI 38663846267.
+Independent PAPER execution is available but all runtime flags remain disabled by default.
 
 ## C Approval Contract
 
@@ -20,7 +20,7 @@ validates the frozen account config, initial ledger or exact T close and its cas
 position count, quantities/value/NAV against persisted ledger. Stable sizing uses
 known signal close plus adverse configured slippage estimate and existing market
 quantity rules. Pending intents reserve shared cash, exposures, concentration,
-positions/new buys and turnover; no assumed pending-sale proceeds. D must check
+positions/new buys and turnover; no assumed pending-sale proceeds. D checks
 actual post-EOD prices/risk again. These are simulations, not real execution promises.
 
 ApprovalEvent + unique PaperOrder + terminal Proposal commit together. Faults after
@@ -28,7 +28,7 @@ event flush or before commit roll back all. Same payload retries replay, changed
 payload conflicts. Business blocks append a separate owner-scoped immutable audit;
 they do not change the draft or manufacture a terminal approval. Public POST APIs
 use existing Cookie auth and a separate business DB session, strict DTOs and safe
-error codes. Account creation/lifecycle and final execution remain D/E/F gates.
+error codes. Account creation/lifecycle and execution passed the D/E/F gates.
 
 ## B Source And Draft Contract
 
@@ -171,8 +171,8 @@ stage attribution is explicitly non-causal. Capacity is checked before writes.
 The independent Vue workbench has explicit manual approval, separate journal,
 portfolio, ledger and review views, responsive tables, frozen SVG charts and
 retry-stable session request IDs. Read refresh never writes. Advance/review POST
-only creates an owner/account job plus immutable request receipt. F must validate
-that receipt before worker dispatch and complete jobs atomically with results.
+only creates an owner/account job plus immutable request receipt. F validates
+that receipt before worker dispatch and completes jobs atomically with results.
 
 ## F Jobs, Cancellation And Recovery
 
@@ -218,3 +218,8 @@ count before bulk collection, prepares dependencies/manifest and verifies all
 byte budgets before any add/flush. Existing hash and export byte conventions stay
 unchanged. Node 22 and controlled ECharts options/richText are accepted inputs;
 dependency advisories remain separately recorded rather than treated as cleared.
+
+A-F were accepted on 2026-10-15 at functional commit ad38b7e / CI 38663846267.
+The exact 52-item mapping, rejected candidate history, real daily advancement
+measurements and operational residual risks are in M17_release_acceptance.md.
+No user database migration or automatic feature enablement was performed.
