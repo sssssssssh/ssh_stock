@@ -25,6 +25,7 @@ jobs:
       DATABASE_URL: postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
       DOCKER_DATABASE_URL: postgresql+psycopg://stock:stock@postgres:5432/stock_db
       TUSHARE_TOKEN: test-token
+      M17_MEASUREMENT_PATH: .codex_tmp/m17_capacity.jsonl
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,4 +69,10 @@ jobs:
         with:
           name: m16-6-synthetic-browser
           path: frontend/coverage/browser
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m17-capacity-measurements
+          path: .codex_tmp/m17_capacity.jsonl
           if-no-files-found: ignore

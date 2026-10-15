@@ -240,10 +240,12 @@ class AgentReportApplication:
     def export_report(
         self, *, user: Any, report_id: uuid.UUID, export_format: str
     ) -> tuple[str, str, str]:
-        report = self.get_report(user=user, report_id=report_id)
+        row = self.repo.get_owned_report(owner_user_id=_user_id(user), report_id=report_id)
+        if row is None:
+            raise report_not_found()
+        report, verification = self._verified_report(row)
         contracts = None
         if report.snapshot.contract_reference is not None:
-            verification = self._report_contracts(user=user, report_id=report_id)
             contracts = [
                 {
                     "metadata": ref.model_dump(mode="json"),
@@ -506,11 +508,14 @@ class AgentReportApplication:
         return None
 
     def _verified_report_view(self, row):
+        return self._verified_report(row)[0]
+
+    def _verified_report(self, row):
         result = _report_view(row)
         verification = self._verify_archive(row)
         if verification is not None:
             result.contract_check = verification.check
-        return result
+        return result, verification
 
     def _same_comparison_or_conflict(
         self, row: AgentResearchReportComparison, request_hash: str

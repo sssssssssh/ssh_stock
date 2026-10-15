@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from uuid import uuid4
 
 from sqlalchemy import Text, cast, func, select
 from sqlalchemy.orm import Session
@@ -114,6 +115,7 @@ class AgentFrozenContractRepository:
                 raise archive_error("CONTRACT_LIMIT_EXCEEDED")
             total_bytes += size
             row = AgentFrozenResearchContract(
+                id=uuid4(),
                 owner_user_id=base_manifest.owner_user_id,
                 chat_id=base_manifest.chat_id,
                 turn_id=base_manifest.turn_id,
@@ -127,8 +129,6 @@ class AgentFrozenContractRepository:
                 contract_hash=contract_hash(body),
                 size_bytes=size,
             )
-            self.db.add(row)
-            self.db.flush()
             rows.append((draft.tool_call_id, row))
         refs = [
             {
@@ -204,6 +204,10 @@ class AgentFrozenContractRepository:
             manifest_json=body,
             manifest_hash=contract_hash(body),
         )
+        # Build exact dependency IDs and the complete byte budget before any contract writes.
+        for _, row in rows:
+            self.db.add(row)
+        self.db.flush()
         self.db.add(manifest)
         self.db.flush()
         return manifest

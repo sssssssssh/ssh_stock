@@ -20,6 +20,7 @@ from app.domain.decision.requests import PaperRequest
 from app.models.job import JobRun
 from app.models.market_data import StockDaily
 from app.services.paper.accounts import PaperAccountApplication
+from app.services.paper.job_contracts import verify_dispatch
 from app.services.paper.performance import PaperPerformance
 from app.services.paper.queries import PaperQueries, schema_ready
 from app.services.paper.queue import PAPER_JOB_TYPES, PaperQueue, job_projection
@@ -176,6 +177,23 @@ def performance(account_id: uuid.UUID, user=Depends(require_agent_user), db=Depe
     )
 
 
+@router.post("/accounts/{account_id}/jobs/{job_id}/cancel")
+def cancel(
+    account_id: uuid.UUID,
+    job_id: uuid.UUID,
+    body: PaperRequest,
+    user=Depends(require_agent_user),
+    db=Depends(get_paper_db),
+):
+    return envelope(
+        job_projection(
+            guarded(
+                lambda: PaperQueue(db, get_settings()).cancel(user.id, account_id, job_id, body)
+            )
+        )
+    )
+
+
 @router.get("/accounts/{account_id}/jobs")
 def jobs(
     account_id: uuid.UUID,
@@ -201,8 +219,21 @@ def jobs(
         )
     )
     total = db.scalar(select(func.count()).select_from(JobRun).where(*filters))
+    for row in rows:
+        dispatch_owner, dispatch_account = guarded(lambda row=row: verify_dispatch(db, row))
+        if dispatch_owner != user.id or dispatch_account != account_id:
+            raise HTTPException(status_code=404, detail={"code": "PAPER_NOT_FOUND"})
+    active = db.scalar(
+        select(func.count())
+        .select_from(JobRun)
+        .where(
+            *filters,
+            JobRun.status.in_(("QUEUED", "RUNNING")),
+        )
+    )
     return envelope(
-        [job_projection(row) for row in rows], {"total": total, "limit": limit, "offset": offset}
+        [job_projection(row) for row in rows],
+        {"total": total, "limit": limit, "offset": offset, "active_count": active},
     )
 
 

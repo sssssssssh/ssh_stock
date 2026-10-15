@@ -3,6 +3,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.domain.agent.archive import archive_error
 from app.domain.agent.errors import identity_mismatch
 from app.domain.agent.frozen_contracts import (
     M14_CONTRACT_VERSION,
@@ -63,7 +64,10 @@ def _rows(db, model, ids):
     return {row.id: row for row in db.scalars(select(model).where(model.id.in_(ids)))}
 
 
-def capture_m15_contracts(db, result, *, tool_call_id, max_trade_dates):
+def capture_m15_contracts(db, result, *, tool_call_id, max_trade_dates, max_contracts=None):
+    requested = 1 if result.tool_name == "walk_forward.summary" else 3 * len(result.records)
+    if max_contracts is not None and requested > max_contracts:
+        raise archive_error("CONTRACT_LIMIT_EXCEEDED")
     study_id = UUID(str(result.identity["study_id"]))
     validation_id = UUID(str(result.identity["validation_id"]))
     study = db.get(PortfolioWalkForwardStudy, study_id)

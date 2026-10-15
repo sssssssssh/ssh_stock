@@ -1,10 +1,15 @@
 import json
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import Text, cast, func, select
 
 from app.domain.decision.contracts import PaperError, canonical_json, content_hash
-from app.domain.decision.performance import frozen_performance
+from app.domain.decision.performance import (
+    decision_metrics,
+    execution_metrics,
+    frozen_performance,
+    metric_range,
+)
 from app.models.market_data import TradeCalendar
 from app.models.paper import (
     DecisionProposal,
@@ -26,16 +31,55 @@ class PaperPerformance:
     def __init__(self, db, settings):
         self.db, self.settings = db, settings
 
+    def _preflight(self, owner, account):
+        models = (
+            PaperNavDaily,
+            PaperDayRun,
+            PaperFill,
+            PaperPositionDaily,
+            PaperOrder,
+            DecisionProposal,
+            PaperOutcomeReview,
+        )
+        counts, sizes = [], []
+        for model in models:
+            scope = (model.account_id == account.id, model.owner_user_id == owner)
+            counts.append(select(func.count()).select_from(model).where(*scope).scalar_subquery())
+            sizes.append(
+                select(func.coalesce(func.sum(func.octet_length(cast(model.record_json, Text))), 0))
+                .where(*scope)
+                .scalar_subquery()
+            )
+        cap = self.settings.paper_config.decision.max_source_rows
+        if sum(self.db.execute(select(*counts)).one()) > cap:
+            raise PaperError("PAPER_HISTORY_CAPACITY_EXCEEDED")
+        if (
+            sum(self.db.execute(select(*sizes)).one())
+            > self.settings.paper_config.max_history_bytes
+        ):
+            raise PaperError("PAPER_HISTORY_CAPACITY_EXCEEDED")
+        last = (
+            select(func.max(PaperNavDaily.trade_date))
+            .where(PaperNavDaily.account_id == account.id, PaperNavDaily.owner_user_id == owner)
+            .scalar_subquery()
+        )
+        calendar_count = self.db.scalar(
+            select(func.count())
+            .select_from(TradeCalendar)
+            .where(
+                TradeCalendar.is_open.is_(True),
+                TradeCalendar.exchange.in_(("SSE", "SZSE")),
+                TradeCalendar.cal_date >= account.first_trade_date,
+                TradeCalendar.cal_date <= last,
+            )
+        )
+        if calendar_count > cap:
+            raise PaperError("PAPER_HISTORY_CAPACITY_EXCEEDED")
+
     def summary(self, owner, account_id):
         account = PaperRepository(self.db).owned(PaperAccount, owner, account_id)
         verify_record(account)
-        count = self.db.scalar(
-            select(func.count())
-            .select_from(PaperNavDaily)
-            .where(PaperNavDaily.account_id == account.id, PaperNavDaily.owner_user_id == owner)
-        )
-        if count > self.settings.paper_config.decision.max_source_rows:
-            raise PaperError("PAPER_HISTORY_CAPACITY_EXCEEDED")
+        self._preflight(owner, account)
         rows = list(
             self.db.scalars(
                 select(PaperNavDaily)
@@ -50,6 +94,7 @@ class PaperPerformance:
                     select(TradeCalendar.cal_date)
                     .where(
                         TradeCalendar.is_open.is_(True),
+                        TradeCalendar.exchange.in_(("SSE", "SZSE")),
                         TradeCalendar.cal_date >= account.first_trade_date,
                         TradeCalendar.cal_date <= rows[-1].trade_date,
                     )
@@ -61,13 +106,17 @@ class PaperPerformance:
         )
         heads = list(
             self.db.scalars(
-                select(PaperDayRun).where(
+                select(PaperDayRun)
+                .where(
                     PaperDayRun.account_id == account.id,
                     PaperDayRun.owner_user_id == owner,
                     PaperDayRun.phase == "DAY_COMPLETED",
                 )
+                .order_by(PaperDayRun.trade_date, PaperDayRun.id)
             )
         )
+        for head in heads:
+            verify_record(head)
         completed = {head.trade_date for head in heads if head.status == "SUCCESS"}
         invalid = {row.trade_date.isoformat() for row in rows if row.trade_date not in completed}
         result = frozen_performance(
@@ -75,6 +124,7 @@ class PaperPerformance:
             expected_dates=[d.isoformat() for d in expected],
             initial_cash=account.initial_cash,
             invalid_dates=invalid,
+            completion_heads=[{"record_hash": h.record_hash, "status": h.status} for h in heads],
         )
         fills = list(
             self.db.scalars(
@@ -89,11 +139,13 @@ class PaperPerformance:
         positions = (
             list(
                 self.db.scalars(
-                    select(PaperPositionDaily).where(
+                    select(PaperPositionDaily)
+                    .where(
                         PaperPositionDaily.account_id == account.id,
                         PaperPositionDaily.owner_user_id == owner,
                         PaperPositionDaily.trade_date == rows[-1].trade_date,
-                    ).order_by(PaperPositionDaily.ts_code)
+                    )
+                    .order_by(PaperPositionDaily.ts_code)
                 )
             )
             if rows
@@ -108,16 +160,35 @@ class PaperPerformance:
             + [fill.record_hash for fill in fills]
             + [p.record_hash for p in positions]
         )
-        result["decisions"] = dict(
-            self.db.execute(
-                select(DecisionProposal.state, func.count())
+        result["source_hash"] = content_hash(
+            {
+                "financial_source_hash": result["financial_source_hash"],
+                "nav_evaluation_hash": result["source_hash"],
+            }
+        )
+        proposals = list(
+            self.db.scalars(
+                select(DecisionProposal)
                 .where(
                     DecisionProposal.account_id == account.id,
                     DecisionProposal.owner_user_id == owner,
                 )
-                .group_by(DecisionProposal.state)
-            ).all()
+                .order_by(DecisionProposal.id)
+            )
         )
+        result["decision_metrics"] = decision_metrics(
+            [
+                {
+                    "record_hash": proposal.record_hash,
+                    "state": proposal.state,
+                    "version": proposal.version,
+                    "action": proposal.action,
+                    "signal_date": verify_record(proposal)["candidate"]["trade_date"],
+                }
+                for proposal in proposals
+            ]
+        )
+        result["decisions"] = result["decision_metrics"]["counts"]
         orders = list(
             self.db.execute(
                 select(PaperOrder, DecisionProposal.stage)
@@ -125,29 +196,27 @@ class PaperPerformance:
                 .where(
                     PaperOrder.account_id == account.id,
                     PaperOrder.owner_user_id == owner,
-                    PaperOrder.status.in_(("FILLED", "SKIPPED", "EXPIRED")),
                 )
+                .order_by(PaperOrder.scheduled_date, PaperOrder.id)
             )
         )
-        stages, blocked = {}, {}
         order_stages = {}
+        order_facts = []
         for order, stage in orders:
-            verify_record(order)
-            counts = stages.setdefault(stage, {"orders": 0, "filled": 0})
-            counts["orders"] += 1
-            counts["filled"] += order.status == "FILLED"
+            plan = verify_record(order)
             order_stages[order.id] = stage
-            if order.reason_code:
-                blocked[order.reason_code] = blocked.get(order.reason_code, 0) + 1
-        reached, filled = len(orders), sum(order.status == "FILLED" for order, _ in orders)
-        result["execution"] = {
-            "reached_orders": reached,
-            "filled_orders": filled,
-            "hypothetical_fill_rate": ratio(Decimal(filled) / reached) if reached else None,
-            "blocked_reasons": blocked,
-            "stages": stages,
-            "interpretation": "POST_EOD_SIMULATION_NON_CAUSAL",
-        }
+            order_facts.append(
+                {
+                    "record_hash": order.record_hash,
+                    "status": order.status,
+                    "version": order.version,
+                    "reason_code": order.reason_code,
+                    "scheduled_date": order.scheduled_date.isoformat(),
+                    "stage": stage,
+                    "estimated_gross": plan.get("estimated_gross"),
+                }
+            )
+        result["execution"] = execution_metrics(order_facts)
         attribution = {}
         for fill in fills:
             stage = order_stages.get(fill.order_id)
@@ -181,7 +250,13 @@ class PaperPerformance:
             "eval_version": "m17-stage-attribution-v1",
             "allocation_policy": "REALIZED_BY_EXIT_PROPOSAL_UNREALIZED_BY_LAST_BUY_CONTEXT",
             "interpretation": "NON_CAUSAL",
-            "denominator": {"fills": len(fills)},
+            "date_range": result["date_range"],
+            "source_hash": content_hash(
+                [[str(f.order_id), f.record_hash, order_stages[f.order_id]] for f in fills]
+                + [p.record_hash for p in positions]
+            ),
+            "denominator": {"fills": len(fills), "latest_positions": len(positions)},
+            "sample_status": "LIMITED_OBSERVATIONAL_SAMPLE",
             "groups": {
                 stage: {key: str(value) for key, value in totals.items()}
                 for stage, totals in sorted(attribution.items())
@@ -247,7 +322,18 @@ class PaperPerformance:
             "deduplication": "LATEST_REVIEW_PER_PROPOSAL_WINDOW",
             "included_in_nav": False,
             "review_required": bool(invalid),
+            "date_range": metric_range(r.asof_date.isoformat() for r in review_rows),
+            "denominator": {
+                "latest_reviews": len(review_rows),
+                "counterfactual_reviews": sum(g["reviewed"] for g in observations.values()),
+                "valid_marks": sum(g["valid_marks"] for g in observations.values()),
+            },
             "windows": observations,
-            "source_hash": content_hash([review.record_hash for review in review_rows]),
+            "source_hash": content_hash(
+                {
+                    "reviews": [review.record_hash for review in review_rows],
+                    "invalid_financial_dates": sorted(invalid),
+                }
+            ),
         }
         return json.loads(canonical_json(result))

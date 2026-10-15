@@ -173,3 +173,45 @@ portfolio, ledger and review views, responsive tables, frozen SVG charts and
 retry-stable session request IDs. Read refresh never writes. Advance/review POST
 only creates an owner/account job plus immutable request receipt. F must validate
 that receipt before worker dispatch and complete jobs atomically with results.
+
+## F Jobs, Cancellation And Recovery
+
+JobRun dispatch identity is frozen inside an append-only owner/account request
+receipt. Type/date/config/mode/source/window and receipt scope must match before
+work and at commit. Only the claimed RUNNING worker can commit; cancellation or
+worker identity loss rolls back the financial transaction. Successful daily,
+review and observation results commit with Job SUCCESS. Response loss after commit
+cannot downgrade SUCCESS or append a second fill/fee. Progress/heartbeat use small
+independent transactions and do not imply partial financial checkpoints.
+
+Account locks are FOR NO KEY UPDATE: still exclusive against account changes and
+other executors, compatible with FK KEY SHARE for cancellation audit insertion.
+Recovery uses account then job row locks and skips locked accounts. Stale jobs
+become FAILED with immutable audit and require an explicit new request. Jobs and
+account states are distinct. PAPER jobs survive generic retention and are hidden
+from legacy shared job/runtime read/cancel endpoints; owner-scoped pages verify
+receipt identity and count active jobs across every history page.
+
+Optional scheduling is installed only when enabled and an automatic flag is on.
+It checks today's EOD and archived latest input, never skips gaps or approves.
+Account-bound observations wait for their own successful close (except before
+inception). Drift marks REVIEW_REQUIRED and retains financial history. Successful
+EOD expires pending drafts with append-only evidence; partial sales retain the
+remaining position's last-buy context for non-causal attribution.
+
+Financial summary preflights history row counts and UTF-8 record bytes. Default
+runtime max_history_bytes is 32 MiB (maximum 64 MiB), separately from frozen
+financial policy. Risk ratios have eight decimal places, counts are strict ints.
+All metric hashes include the legal mutable state they summarize; frozen finance
+hashes remain distinct from decision/review state. Capacity acceptance measures
+real 1/30/250-day queue/claim/source/settlement on isolated PG17, including one
+manually approved buy, T+1 sellability, single fee and daily cash reconciliation.
+Limits are fixed at 400 SQL and 15 seconds per day. Separate frozen-summary read
+measurements have a 14-SQL/30-second budget; they are not daily execution evidence.
+
+M16 export reuses one verified archive/contract result within one request and one
+deadline; subsequent requests verify again. Contract capture checks aggregate
+count before bulk collection, prepares dependencies/manifest and verifies all
+byte budgets before any add/flush. Existing hash and export byte conventions stay
+unchanged. Node 22 and controlled ECharts options/richText are accepted inputs;
+dependency advisories remain separately recorded rather than treated as cleared.

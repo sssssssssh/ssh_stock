@@ -13,10 +13,10 @@
 
 ## M17 分阶段开发状态
 
-M17 A/B/C/D 已通过独立 PostgreSQL 17 CI；D 完整回归 1518 项、覆盖率 88%。
-E 新增“决策与模拟”独立页面及 owner 隔离分页查询，正在进行完整 PG 验收；F 任务待接入。
+M17 A/B/C/D/E 已通过独立 PostgreSQL 17 CI；E 完整回归通过。
+F 已实现任务执行、可选调度、取消、恢复、保留保护及容量验证，正在进行最终完整验收。
 整体未封版，默认关闭。页面可查看决策证据、账户账本、冻结净值图及后验复盘；
-手动结算/复盘只入队，在 F Worker 验收前不运行这些任务。
+手动结算/复盘只入队，必须有独立 Worker 才会执行。
 `POST /api/v1/decisions/proposals/{id}/approve` 必须提供 request_id、Decimal 字符串
 target_weight 及 `confirmed: true`；未开启 PAPER 时统一拒绝写入。该操作只生成模拟委托，
 不代表成交，仍需目标日完整 EOD 就绪后事后模拟；当前请勿开启自动推进。
@@ -25,7 +25,7 @@ WATCH 和草案本身不产生订单；修正历史数据不会覆写旧决策�
 新增迁移 `0053_m17_decision_paper_foundation`，只建独立决策/模拟账本表，不复制回测数据、
 不拉取行情、不计算因子、不自动产生模拟订单。本轮开发未升级你的业务数据库。
 `config/paper.yaml` 所有开关默认关闭；人工确认是唯一批准模式，`auto_approve=true` 被拒绝。
-现有审批 API 不创建成交；PAPER Worker/Scheduler 尚未接入。账户配置创建后冻结，
+现有审批 API 不创建成交；PAPER Worker/Scheduler 已接入，默认不启用自动推进。账户配置创建后冻结，
 初始资金仅入账一次，不支持入出金；历史数据修正标记复核，不删除流水重算。
 迁移有 M17 历史数据时拒绝降级，应关闭功能保留证据，不得清空流水以强行回滚。
 阶段设计和逐项剩余验收见 `docs/M17_design_decisions.md`、`docs/M17_release_acceptance.md`。
@@ -33,7 +33,81 @@ A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移�
 [A CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)、
 [B CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)、
 [C CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000)、
-[D CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405)。
+[D CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405)、
+[E CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38528878133)。
+
+### 决策与模拟的启用顺序
+
+先确认当前发布的完整 CI 已通过，并备份业务库（备份保存在仓库外）。按本文现有部署流程
+升级到 Alembic head；`python -m alembic upgrade head` 只升级结构，0053 不生成任何模拟数据。
+执行 `python -m alembic current` 和 `python -m alembic heads`，应同为 0053。
+开发过程没有替你迁移、清空或补算业务数据库。
+
+修改 `config/paper.yaml`；首次只开启主功能，保留人工操作：
+
+```yaml
+paper:
+  enabled: true
+  auto_advance: false
+  auto_approve: false
+  scheduler_interval_seconds: 300
+  max_history_bytes: 33554432
+  # 保留文件原有 policy 与 decision；decision.daily_observation_enabled 仍为 false。
+```
+
+这是需要修改的字段示例，不应删除原文件的策略/风控配置。完成后重启 API 和 Worker。
+已配置 Python 环境和依赖时，按原启动章节启动 API；另开终端，在项目根目录执行：
+
+```powershell
+$env:PYTHONPATH = 'backend'
+python -m app.cli worker
+```
+
+API 只入队；终端看到任务已接受，不代表已完成。前端“决策与模拟”中可查看阶段、
+运行耗时、完成总耗时、错误码、取消状态和分页历史。关闭浏览器不停止 Worker。
+Worker 被异常中止时，重启后按既有心跳超时恢复为 FAILED；正在持有账户锁的任务不会误恢复。
+
+1. 先同步基础信息和未来交易日历，拉取当前所需 Raw，再完成 Derived/机会池补算。
+2. 登录“空间”，创建独立 PAPER 账户，填写资金/基准/风控；默认 PAUSED，需人工激活。
+3. 收盘后为 T 日生成观察，选股票保存 WATCH/拟买入/拟减仓/拟退出草案；可选择本人冻结报告。
+4. 拟交易须人工勾选确认，且必须在实际下一交易日开盘前批准。审批仅产生模拟委托。
+5. 目标日完整盘后数据就绪后，点击“结算下一交易日”。Worker 事后回放开盘并冻结日终账本。
+6. 在“执行与账本”查看审批、委托、阻断、成交、可卖数量及结算复核状态；复盘选择 1/5/20 个真实交易日窗口。
+
+账户从下一尚未开盘的真实交易日开始；历史日期不能补填审批。WATCH/拒绝的后验观察收益
+不进入 NAV。暂停后需恢复并显式逐日补齐，或关闭旧账户新建；不能直接跳到最新日期。
+同一个任务的重复请求不会重复扣费。FAILED/CANCELLED 后，确认原因已解决，再点击结算提交
+新请求；原任务及其审计保留。取消正在执行的任务会在提交前回滚整天账本，已成功任务不能取消。
+
+单账户人工结算验收后，才可显式设置 `auto_advance: true`，然后运行/重启 Scheduler：
+
+```powershell
+$env:PYTHONPATH = 'backend'
+python -m app.cli scheduler
+```
+
+Scheduler 每 300 秒检查当天盘后就绪和账户连续性，只为 ACTIVE 账户入队；不会批准草案。
+可单独开启 `decision.daily_observation_enabled: true`，仅生成只读规则观察。首次日终结算尚未
+完成时，当日观察等待下一个调度周期；暂停账户不自动推进。
+Docker 部署继续使用本文 Compose 的 migration/backend/worker/scheduler/frontend 五服务；
+修改配置后重建并重启相应服务，正式网页由 Nginx 提供，Node 22 用于前端构建与验收。
+
+### 模拟任务故障处理
+
+- `SOURCE_*`：补齐数据、版本和计算质量后手动重试；不会用旧价格或空结果假装完成。
+- `PAPER_DAY_GAP`：先补最早未结算的开放日，按界面“下一结算”顺序逐日推进。
+- `PAPER_SOURCE_DRIFT` / `REVIEW_REQUIRED`：查看来源和审计，保留已冻结 Fill/Ledger/NAV。
+  不删除旧账重跑；确认旧账户影响后关闭并新建账户。手动结算、复盘和调度会检测历史补录漂移。
+- `CORPORATE_ACTION_UNSUPPORTED`：当前政策失败关闭；核对复权变化，保留旧账，停止该账户继续推进。
+- `PAPER_WORKER_HEARTBEAT_TIMEOUT`：重启 Worker、确认旧进程已退出，再手动提交新任务。
+  失败路径没有半天账本；丢失提交响应时，已提交的 SUCCESS 不会被改为 FAILED。
+- `PAPER_HISTORY_CAPACITY_EXCEEDED`：先检查账户历史规模，再按内存条件调整字节预算和
+  `decision.max_source_rows`；前端超过 2000 点停止绘图，原冻结明细仍可分页读取。
+
+关闭 `paper.enabled` 和两个自动开关并重启服务，可安全停止功能、保留历史只读。已有 M17 历史
+时迁移拒绝降级，不能通过清空历史强行回滚。恢复数据库必须使用事先核对的整库备份，保留
+账户/事件/订单/成交/账本/持仓/NAV/复盘及 PAPER JobRun 的一致集合；不要拼接不同日期的备份。
+详细验收、容量测量和依赖风险记录见 `docs/M17_release_acceptance.md`。
 
 2026-09-15 开始按全量优化规划分 Phase 推进。Phase 1 已将因子、市场、行业、状态和信号范围重算改为 authoritative replace-slice：重算范围内不再成立的旧结果会删除，仍成立的信号保留原 `signal_id`，删除信号时级联清理后验评价。
 

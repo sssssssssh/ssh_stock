@@ -29,9 +29,10 @@ from app.services.portfolio.ledger_precision import ratio
 
 
 class PaperReviews:
-    def __init__(self, db, settings, *, clock=utc_now):
+    def __init__(self, db, settings, *, clock=utc_now, commit_guard=None):
         self.db, self.settings, self.clock = db, settings, clock
         self.repo = PaperRepository(db)
+        self.commit_guard = commit_guard or (lambda result: None)
 
     def create(self, owner, account_id, body):
         if not self.settings.paper_config.enabled:
@@ -44,6 +45,7 @@ class PaperReviews:
                 self.repo.by_request(PaperAccountEvent, owner, body.request_id), digest
             )
             if existing:
+                self.commit_guard(existing)
                 self.db.commit()
                 return existing
             account = self.repo.owned(PaperAccount, owner, account_id, lock=True)
@@ -221,6 +223,7 @@ class PaperReviews:
                     request_hash=digest,
                 )
             )
+            self.commit_guard(event)
             self.db.commit()
             return event
         except Exception as exc:

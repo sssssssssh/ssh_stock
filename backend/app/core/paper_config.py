@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 from app.core.portfolio_config import AllowedOpportunityStage
 
@@ -11,13 +11,33 @@ class StrictPaperModel(BaseModel):
 
 
 class PaperRiskConfig(StrictPaperModel):
-    max_positions: int = Field(default=10, ge=1, le=100)
-    max_single_position_weight: Decimal = Field(default=Decimal("0.10"), gt=0, le=1)
-    min_cash_ratio: Decimal = Field(default=Decimal("0.02"), ge=0, lt=1)
-    max_new_positions_per_day: int = Field(default=2, ge=1, le=100)
-    max_sector_weight: Decimal = Field(default=Decimal("0.30"), gt=0, le=1)
-    max_theme_weight: Decimal = Field(default=Decimal("0.30"), gt=0, le=1)
-    max_daily_turnover: Decimal = Field(default=Decimal("0.50"), gt=0, le=2)
+    max_positions: int = Field(default=10, ge=1, le=100, strict=True)
+    max_single_position_weight: Decimal = Field(
+        default=Decimal("0.10"), gt=0, le=1, max_digits=12, decimal_places=8
+    )
+    min_cash_ratio: Decimal = Field(
+        default=Decimal("0.02"), ge=0, lt=1, max_digits=12, decimal_places=8
+    )
+    max_new_positions_per_day: int = Field(default=2, ge=1, le=100, strict=True)
+    max_sector_weight: Decimal = Field(
+        default=Decimal("0.30"), gt=0, le=1, max_digits=12, decimal_places=8
+    )
+    max_theme_weight: Decimal = Field(
+        default=Decimal("0.30"), gt=0, le=1, max_digits=12, decimal_places=8
+    )
+    max_daily_turnover: Decimal = Field(
+        default=Decimal("0.50"), gt=0, le=2, max_digits=12, decimal_places=8
+    )
+
+    @field_validator(
+        "max_single_position_weight", "min_cash_ratio", "max_sector_weight",
+        "max_theme_weight", "max_daily_turnover",
+    )
+    @classmethod
+    def bounded_decimal_scale(cls, value):
+        if value.as_tuple().exponent < -8:
+            raise ValueError("risk limits support at most eight decimal places")
+        return value
 
     @model_validator(mode="after")
     def consistent_limits(self):
@@ -65,6 +85,8 @@ class PaperRuntimeConfig(StrictPaperModel):
     enabled: StrictBool = False
     auto_advance: StrictBool = False
     auto_approve: Literal[False] = False
+    scheduler_interval_seconds: int = Field(default=300, ge=60, le=3600)
+    max_history_bytes: int = Field(default=32 * 1024 * 1024, ge=1024, le=64 * 1024 * 1024)
     policy: PaperPolicyConfig = Field(default_factory=PaperPolicyConfig)
     decision: DecisionConfig = Field(default_factory=DecisionConfig)
 

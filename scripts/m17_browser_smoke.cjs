@@ -78,6 +78,7 @@ async function main() {
         await route.fulfill({ json: { code: 0, message: 'ok', data, meta } });
       });
       await page.goto(url);
+      assert.match(await page.locator('.paper-badge').textContent(), /PAPER.*事后模拟.*非实盘.*非收益承诺/);
       await page.getByRole('button', { name: '人工审批', exact: true }).first().waitFor();
       assert.equal(requests.length, 0);
       assert.equal(await page.locator('img').count(), 0);

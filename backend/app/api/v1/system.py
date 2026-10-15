@@ -40,6 +40,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.paper.queue import PAPER_JOB_TYPES
 
 router = APIRouter()
 
@@ -54,14 +55,16 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
     settings = get_settings()
     active = db.scalar(
         select(JobRun)
-        .where(JobRun.status == "RUNNING")
+        .where(JobRun.status == "RUNNING", JobRun.job_type.not_in(PAPER_JOB_TYPES))
         .order_by(JobRun.started_at)
         .limit(1)
     )
     counts = dict(
         db.execute(
             select(JobRun.status, func.count())
-            .where(JobRun.status.in_(("QUEUED", "RUNNING")))
+            .where(
+                JobRun.status.in_(("QUEUED", "RUNNING")), JobRun.job_type.not_in(PAPER_JOB_TYPES)
+            )
             .group_by(JobRun.status)
         ).all()
     )

@@ -243,19 +243,42 @@ class AgentChatApplication:
 
             provider = self._provider or build_llm_provider(self.settings)
             registry = self._schema_registry()
-            orchestrator = ToolOrchestrator(
-                provider=provider,
-                registry=registry,
-                config=self.config.llm,
-                execute_tool=lambda name, args, call_id, remaining: self._execute_tool(
+            contract_count = 0
+            captured_counts: dict[str, int] = {}
+            cached_counts: dict[str, int] = {}
+
+            def execute_tool(name, args, call_id, remaining):
+                payload = self._execute_tool(
                     user=user,
                     request_id=request_id,
                     tool_call_id=call_id,
                     tool_name=name,
                     arguments=args,
                     remaining_seconds=remaining,
-                ),
-                audit_tool_call=lambda audit: self._persist_tool_call(turn.id, audit),
+                    existing_contract_count=contract_count,
+                )
+                captured_counts[call_id] = len(getattr(payload, "frozen_contracts", ()))
+                return payload
+
+            def audit_tool_call(audit):
+                nonlocal contract_count
+                # Cached calls also freeze their own copies; count them across every tool round.
+                count = (
+                    cached_counts[audit.args_hash]
+                    if audit.cache_reused else captured_counts.pop(audit.tool_call_id, 0)
+                )
+                if contract_count + count > self.config.frozen_contract.max_contracts:
+                    raise archive_error("CONTRACT_LIMIT_EXCEEDED")
+                contract_count += count
+                cached_counts[audit.args_hash] = count
+                self._persist_tool_call(turn.id, audit)
+
+            orchestrator = ToolOrchestrator(
+                provider=provider,
+                registry=registry,
+                config=self.config.llm,
+                execute_tool=execute_tool,
+                audit_tool_call=audit_tool_call,
                 monotonic=self._monotonic,
             )
             orchestration = orchestrator.run(
@@ -424,6 +447,7 @@ class AgentChatApplication:
         tool_name: str,
         arguments: dict[str, Any],
         remaining_seconds: float,
+        existing_contract_count: int = 0,
     ) -> dict[str, Any]:
         if remaining_seconds < 0.001:
             raise total_deadline_exceeded()
@@ -444,6 +468,8 @@ class AgentChatApplication:
                                 result,
                                 tool_call_id=tool_call_id,
                                 max_trade_dates=self.config.frozen_contract.max_trade_dates,
+                                max_contracts=self.config.frozen_contract.max_contracts,
+                                existing_contract_count=existing_contract_count + len(contracts),
                             )
                         )
 

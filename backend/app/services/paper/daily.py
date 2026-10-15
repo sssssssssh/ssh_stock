@@ -58,11 +58,12 @@ ZERO = Decimal("0")
 class PaperDailyApplication:
     """One bounded, atomic EOD replay; no backtest run or external execution calls."""
 
-    def __init__(self, db, settings, *, clock=utc_now, fault_hook=None):
+    def __init__(self, db, settings, *, clock=utc_now, fault_hook=None, commit_guard=None):
         self.db, self.settings, self.clock = db, settings, clock
         self.repo = PaperRepository(db)
         self.engine = AccountingEngine()
         self.fault_hook = fault_hook or (lambda phase: None)
+        self.commit_guard = commit_guard or (lambda result: None)
 
     def run(self, owner, account_id, day, *, job_id=None):
         account, checkpoints, committed = None, [], False
@@ -169,6 +170,7 @@ class PaperDailyApplication:
                     raise PaperError("PAPER_SOURCE_DRIFT")
                 if sealed.status != "SUCCESS" or sealed.result_hash != self._bundle(account, day):
                     raise PaperError("PAPER_LEDGER_INCONSISTENT")
+                self.commit_guard(sealed)
                 self.db.commit()
                 return sealed
             if any(order.status != "ORDER_PENDING" for order in orders):
@@ -240,7 +242,9 @@ class PaperDailyApplication:
             for order in orders:
                 plan = verify_record(order)
                 context = plan["candidate"]
-                prospective_contexts = {**contexts, order.ts_code: context}
+                prospective_contexts = (
+                    {**contexts, order.ts_code: context} if order.side == "BUY" else dict(contexts)
+                )
                 decision, blocked = resolve_order(order, facts, working, config.execution)
                 prospective = None
                 if decision:
@@ -419,11 +423,15 @@ class PaperDailyApplication:
                 )
             )
             load_close(self.db, account, day, require_completed=False)
+            self._expire_proposals(
+                account, now, reader.settings.paper_config.decision.max_source_rows
+            )
             result_hash = self._bundle(account, day)
             for row in checkpoints:
                 row.status, row.result_hash = "SUCCESS", result_hash
             self.db.flush()
             self.fault_hook("before_commit")
+            self.commit_guard(completed)
             self.db.commit()
             committed = True
             self.fault_hook("after_commit")
@@ -524,12 +532,60 @@ class PaperDailyApplication:
             hashes.append([model.__tablename__, [row.record_hash for row in rows]])
         return content_hash(hashes)
 
+    def _expire_proposals(self, account, now, max_rows):
+        proposals = list(
+            self.db.scalars(
+                select(DecisionProposal)
+                .where(
+                    DecisionProposal.account_id == account.id,
+                    DecisionProposal.owner_user_id == account.owner_user_id,
+                    DecisionProposal.state.in_(("DRAFT", "PENDING_REVIEW")),
+                    DecisionProposal.expires_at <= now,
+                )
+                .order_by(DecisionProposal.id)
+                .limit(max_rows + 1)
+                .with_for_update()
+            )
+        )
+        if len(proposals) > max_rows:
+            raise PaperError("PAPER_PROPOSAL_CAPACITY_EXCEEDED")
+        for proposal in proposals:
+            verify_record(proposal)
+            proposal.state, proposal.version = "EXPIRED", proposal.version + 1
+            key = f"proposal-expired:{proposal.id}"
+            self.repo.add(
+                make_record(
+                    PaperAccountEvent,
+                    account.owner_user_id,
+                    key,
+                    now=now,
+                    data={
+                        "kind": "DECISION_EXPIRED",
+                        "proposal_id": str(proposal.id),
+                        "proposal_hash": proposal.record_hash,
+                        "expires_at": proposal.expires_at,
+                    },
+                    account_id=account.id,
+                    from_state=account.state,
+                    to_state=account.state,
+                    request_id=key,
+                    request_hash=content_hash([str(proposal.id), proposal.expires_at]),
+                )
+            )
+
     def _mark_review(self, account_id, day):
         mark_day_review(self.db, account_id, day)
 
     def _blocked(self, owner, account_id, day, code):
         account = self.repo.owned(PaperAccount, owner, account_id, lock=True)
-        if code not in {"PAPER_DISABLED", "SOURCE_EOD_NOT_READY", "PAPER_ACCOUNT_NOT_ACTIVE"}:
+        if code not in {
+            "PAPER_DISABLED",
+            "SOURCE_EOD_NOT_READY",
+            "PAPER_ACCOUNT_NOT_ACTIVE",
+            "PAPER_JOB_CANCELLED",
+            "PAPER_JOB_LEASE_LOST",
+            "PAPER_JOB_IDENTITY_INVALID",
+        }:
             self._mark_review(account.id, day)
         request = "day-blocked:" + content_hash([str(account.id), day, code])
         request_lock(self.db, owner, "day-blocked", request)

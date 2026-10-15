@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { Plus, RefreshCw } from "@lucide/vue";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw, Square } from "@lucide/vue";
 import { ApiError } from "../services/api";
 import { fetchResearchReports, type ResearchReportSummary } from "../services/agentReports";
 import { clearPaperRequest, paperAccount, paperAccounts, paperJobs, paperPage, paperPerformance,
@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{ ownerId: string; visible?: boolean }>()
 const status = ref<PaperStatus | null>(null), accounts = ref<PaperAccount[]>([]), account = ref<PaperAccount | null>(null);
 const accountId = ref(""), accountOffset = ref(0), accountTotal = ref(0);
 const performance = ref<PaperPerformance | null>(null), jobs = ref<PaperJob[]>([]);
+const jobOffset = ref(0), jobTotal = ref(0), activeJobCount = ref(0);
 const observations = ref<PaperFacts[]>([]), selectedObservation = ref<PaperFacts | null>(null);
 const observationOffset = ref(0), observationTotal = ref(0);
 const proposals = ref<PaperFacts[]>([]), rows = ref<PaperFacts[]>([]), total = ref(0), offset = ref(0);
@@ -29,7 +30,6 @@ let generation = 0, controller = new AbortController(), timer: ReturnType<typeof
 
 const enabled = computed(() => status.value?.enabled && status.value?.schema_ready);
 const candidates = computed(() => (selectedObservation.value?.data.candidates || []) as PaperCandidate[]);
-const activeJobs = computed(() => jobs.value.filter(job => ["QUEUED", "RUNNING"].includes(job.status)));
 const columnSets: Record<string, { key: string; title: string }[]> = {
   orders: [{ key: "ts_code", title: "证券" }, { key: "side", title: "方向" }, { key: "quantity", title: "计划股数" }, { key: "scheduled_date", title: "模拟日期" }, { key: "status", title: "状态" }, { key: "reason_code", title: "阻断原因" }],
   fills: [{ key: "trade_date", title: "交易日" }, { key: "ts_code", title: "证券" }, { key: "side", title: "方向" }, { key: "quantity", title: "股数" }, { key: "simulated_price", title: "模拟价格" }, { key: "total_cost", title: "成本" }, { key: "cash_delta", title: "现金变化" }],
@@ -38,6 +38,8 @@ const columnSets: Record<string, { key: string; title: string }[]> = {
   reviews: [{ key: "asof_date", title: "复盘日" }, { key: "window_days", title: "交易日窗口" }, { key: "data.stage", title: "冻结阶段" }, { key: "data.action", title: "原动作" }, { key: "data.counterfactual", title: "反事实观察" }, { key: "data.forward_mark_return", title: "标记收益（非 NAV）" }, { key: "status", title: "评价状态" }],
   events: [{ key: "created_at", title: "时间" }, { key: "data.kind", title: "事件" }, { key: "data.trade_date", title: "交易日" }, { key: "data.reason_code", title: "原因" }, { key: "to_state", title: "账户状态" }],
   attempts: [{ key: "trade_date", title: "交易日" }, { key: "outcome", title: "结果" }, { key: "reason_code", title: "原因" }, { key: "execution_policy_version", title: "执行版本" }],
+  approvals: [{ key: "event_at", title: "审批时间" }, { key: "decision", title: "人工动作" }, { key: "approved_target_weight", title: "批准权重" }, { key: "data.note", title: "备注" }, { key: "proposal_id", title: "决策编号" }],
+  runs: [{ key: "trade_date", title: "交易日" }, { key: "phase", title: "结算阶段" }, { key: "status", title: "复核状态" }, { key: "error_code", title: "原因" }, { key: "source_hash", title: "冻结来源" }],
   days: [{ key: "trade_date", title: "交易日" }, { key: "cash", title: "现金" }, { key: "market_value", title: "持仓市值" }, { key: "total_assets", title: "资产" }, { key: "nav", title: "净值" }, { key: "benchmark_nav", title: "基准" }],
 };
 const columns = computed(() => columnSets[tab.value === "review" ? "reviews" : collection.value]);
@@ -76,10 +78,12 @@ async function load() {
     const selectedId = accountId.value;
     const [selected, summary, jobPage] = await Promise.all([
       paperAccount(selectedId, controller.signal), paperPerformance(selectedId, controller.signal),
-      paperJobs(selectedId, controller.signal),
+      paperJobs(selectedId, controller.signal, jobOffset.value),
     ]);
     if (current !== generation || selectedId !== accountId.value) return;
     account.value = selected; performance.value = summary; jobs.value = jobPage.data;
+    jobTotal.value = jobPage.meta.total;
+    activeJobCount.value = jobPage.meta.active_count ?? jobPage.data.filter(job => ['QUEUED', 'RUNNING'].includes(job.status)).length;
     valuationDate.value ||= selected.latest_trade_date || "";
     if (tab.value === "journal") {
       const [snapshotPage, proposalPage] = await Promise.all([
@@ -102,7 +106,7 @@ async function load() {
   finally {
     if (current === generation) {
       loading.value = false;
-      if (props.visible && activeJobs.value.length) timer = setTimeout(() => { if (!busy.value) void load(); }, 5000);
+      if (props.visible && activeJobCount.value) timer = setTimeout(() => { if (!busy.value) void load(); }, 5000);
     }
   }
 }
@@ -125,6 +129,7 @@ async function perform(operation: string, path: string, payload: Record<string, 
 async function selectAccount() {
   offset.value = 0; selectedObservation.value = null; performance.value = null;
   observationOffset.value = 0;
+  jobOffset.value = 0; jobTotal.value = 0; activeJobCount.value = 0;
   account.value = null; proposals.value = []; observations.value = []; rows.value = []; jobs.value = [];
   modal.value = null; selectedProposal.value = null;
   valuationDate.value = ""; error.value = ""; await load();
@@ -166,7 +171,7 @@ onBeforeUnmount(() => { generation++; controller.abort(); if (timer) clearTimeou
 
 <template>
   <div class="paper-workbench" :aria-busy="loading || busy">
-    <header class="paper-heading"><div><h2>决策与模拟组合</h2><span class="paper-badge">PAPER · 事后模拟 · 非实盘</span></div>
+    <header class="paper-heading"><div><h2>决策与模拟组合</h2><span class="paper-badge">PAPER · 事后模拟 · 非实盘 · 非收益承诺</span></div>
       <div class="paper-controls"><button aria-label="刷新" title="刷新" :disabled="busy || loading" @click="error = ''; load()"><RefreshCw :size="16" /></button><button class="paper-primary" :disabled="!enabled || busy" @click="modal = 'create'"><Plus :size="16" />新建账户</button></div></header>
     <p v-if="status && !status.schema_ready" class="paper-warning" role="status">PAPER 表结构尚未部署，需升级至 0053。</p>
     <p v-else-if="status && !status.enabled" class="paper-warning" role="status">PAPER 功能未启用，历史记录只读。</p>
@@ -187,11 +192,19 @@ onBeforeUnmount(() => { generation++; controller.abort(); if (timer) clearTimeou
           <div class="paper-proposals"><article v-for="row in proposals" :key="row.id" class="paper-proposal"><div><strong>{{ row.ts_code }}</strong><span>{{ row.stage }} · {{ row.action }}</span><span>{{ row.state }} · 权重 {{ row.target_weight }}</span><small>截止 {{ row.expires_at }}</small></div><div class="paper-controls"><button :disabled="!enabled || busy || loading || row.state !== 'PENDING_REVIEW' || row.action === 'WATCH' || account.state !== 'ACTIVE'" @click="openDecision(row, 'approve')">人工审批</button><button :disabled="!enabled || busy || loading || row.state !== 'PENDING_REVIEW' || account.state === 'CLOSED'" @click="openDecision(row, 'reject')">驳回</button><details><summary>决策证据</summary><pre>{{ JSON.stringify(row, null, 2) }}</pre></details></div></article><p v-if="!proposals.length" class="paper-empty">暂无决策记录</p></div>
         </template>
         <template v-if="tab === 'portfolio' && performance"><div class="paper-metrics"><div v-for="metric in [{ label: '现金', value: performance.latest?.cash ?? account.initial_cash }, { label: '持仓市值', value: performance.latest?.market_value ?? '--' }, { label: '模拟资产', value: performance.latest?.total_assets ?? account.initial_cash }, { label: '模拟净值', value: performance.latest?.nav ?? '--' }, { label: '已实现盈亏', value: performance.realized_pnl }, { label: '未实现盈亏', value: performance.unrealized_pnl }, { label: '累计模拟收益', value: percent(performance.cumulative_return) }, { label: '最大回撤', value: percent(performance.maximum_drawdown) }, { label: '累计模拟成本', value: performance.cumulative_cost }]" :key="metric.label"><span>{{ metric.label }}</span><strong>{{ metric.value }}</strong></div></div><PaperPerformanceCharts :performance="performance" /><details><summary>冻结配置与金融摘要</summary><pre>{{ JSON.stringify({ configuration: account.config_snapshot_json, source_hash: performance.financial_source_hash }, null, 2) }}</pre></details></template>
-        <template v-if="tab === 'ledger'"><div class="paper-controls paper-filters"><label>明细<select v-model="collection" @change="offset = 0; load()"><option value="orders">模拟委托</option><option value="attempts">执行尝试</option><option value="fills">模拟成交</option><option value="ledger">资金与股数流水</option><option value="positions">日终持仓</option><option value="days">日终净值</option><option value="events">账户审计</option></select></label><label v-if="collection === 'positions'">估值日<input v-model="valuationDate" type="date" @change="offset = 0; load()" /></label><label>开始<input v-model="start" type="date" /></label><label>结束<input v-model="end" type="date" /></label><button :disabled="loading || busy" @click="offset = 0; load()">筛选</button></div><PaperFactsTable :rows="loading || error ? [] : rows" :columns="columns" :loading="loading" :failed="Boolean(error)" /></template>
+        <template v-if="tab === 'ledger'">
+          <div class="paper-controls paper-filters"><label>明细<select v-model="collection" @change="offset = 0; load()"><option value="orders">模拟委托</option><option value="approvals">人工审批</option><option value="attempts">执行尝试</option><option value="fills">模拟成交</option><option value="ledger">资金与股数流水</option><option value="positions">日终持仓</option><option value="days">日终净值</option><option value="runs">结算与复核状态</option><option value="events">账户审计</option></select></label><label v-if="collection === 'positions'">估值日<input v-model="valuationDate" type="date" @change="offset = 0; load()" /></label><label>开始<input v-model="start" type="date" /></label><label>结束<input v-model="end" type="date" /></label><button :disabled="loading || busy" @click="offset = 0; load()">筛选</button></div>
+          <PaperFactsTable :rows="loading || error ? [] : rows" :columns="columns" :loading="loading" :failed="Boolean(error)" />
+        </template>
+        <div v-if="tab === 'review' && performance?.decision_metrics" class="paper-attribution"><span>合法草案（含观察） {{ performance.decision_metrics.denominator.legal_proposals }} · 人工批准率 {{ percent(performance.decision_metrics.approval_rate) }}</span><span v-for="(value, state) in performance.decision_metrics.counts" :key="state">{{ state }} · {{ value }}</span><span>累计换手 {{ percent(performance.cumulative_turnover) }}</span></div>
         <template v-if="tab === 'review'"><div class="paper-controls paper-filters"><label>复盘日<input v-model="valuationDate" type="date" /></label><label>窗口<select v-model.number="reviewWindow"><option :value="1">1 个交易日</option><option :value="5">5 个交易日</option><option :value="20">20 个交易日</option></select></label><button :disabled="!enabled || busy || !valuationDate" @click="perform('review', `/paper/accounts/${accountId}/review-day`, { asof_date: valuationDate, window_days: reviewWindow }, `${accountId}:${valuationDate}:${reviewWindow}`)">生成后验复盘</button></div><p class="paper-warning-text">后验标记收益不计入 NAV；观察与驳回为反事实样本，不代表可成交或因果结论。</p><template v-if="performance"><div class="paper-attribution"><span>事后模拟成交 {{ performance.execution.filled_orders }}/{{ performance.execution.reached_orders }}</span><span>假设成交率 {{ percent(performance.execution.hypothetical_fill_rate) }}</span><span v-for="(value, reason) in performance.execution.blocked_reasons" :key="reason">{{ reason }} · {{ value }}</span><span v-for="(value, sourceStage) in performance.execution.stages" :key="sourceStage">{{ sourceStage }} · 成交 {{ value.filled }}/委托 {{ value.orders }}</span></div><div class="paper-attribution"><span v-for="(value, window) in performance.observation_metrics?.windows || {}" :key="window">观察 {{ window }} 日 · 有效 {{ value.valid_marks }}/{{ value.reviewed }} · 正收益 {{ value.positive_marks }} · 命中率 {{ percent(value.hit_rate) }}</span><span v-for="(value, sourceStage) in performance.stage_attribution?.groups || {}" :key="sourceStage">{{ sourceStage }} · 已实现 {{ value.realized_pnl }} · 未实现 {{ value.unrealized_pnl }} · 成本 {{ value.trading_cost }}</span></div></template><PaperFactsTable :rows="loading || error ? [] : rows" :columns="columns" :loading="loading" :failed="Boolean(error)" /></template>
         <footer v-if="tab !== 'portfolio'" class="paper-pagination"><span>{{ loading ? '加载中' : total ? `${total} 条 · ${offset + 1}–${Math.min(offset + 20, total)}` : '0 条' }}</span><button :disabled="busy || loading || offset === 0" @click="changePage(-1)">上一页</button><button :disabled="busy || loading || offset + 20 >= total" @click="changePage(1)">下一页</button></footer>
       </section>
-      <section class="paper-section paper-run-section"><div class="paper-section-heading"><h3>模拟任务</h3><div class="paper-controls"><span>下一结算 {{ account.next_trade_date || '--' }}</span><button :disabled="!enabled || busy || account.state !== 'ACTIVE' || !account.next_trade_date || activeJobs.length > 0" @click="perform('advance', `/paper/accounts/${accountId}/advance`, { trade_date: account.next_trade_date }, `${accountId}:${account.next_trade_date}`)">结算下一交易日</button></div></div><div class="paper-job-list"><article v-for="job in jobs" :key="job.id"><div><strong>{{ job.job_type }} · {{ job.trade_date }}</strong><span>{{ job.status }} · {{ elapsed(job) }}</span></div><progress v-if="['QUEUED','RUNNING'].includes(job.status)" :value="job.progress_pct" max="100" /><span>{{ job.step }}</span><p v-if="job.error_code" class="paper-error">{{ job.error_code }}</p></article><p v-if="!jobs.length" class="paper-empty">暂无模拟任务</p></div></section>
+      <section class="paper-section paper-run-section">
+        <div class="paper-section-heading"><h3>模拟任务</h3><div class="paper-controls"><span>下一结算 {{ account.next_trade_date || '--' }}</span><button :disabled="!enabled || busy || account.state !== 'ACTIVE' || !account.next_trade_date || activeJobCount > 0" @click="perform('advance', `/paper/accounts/${accountId}/advance`, { trade_date: account.next_trade_date }, `${accountId}:${account.next_trade_date}`)">结算下一交易日</button></div></div>
+        <div class="paper-job-list"><article v-for="job in jobs" :key="job.id"><div><strong>{{ ({ PAPER_DAILY: '日终结算', PAPER_REVIEW: '后验复盘', PAPER_OBSERVATION: '规则观察' } as Record<string, string>)[job.job_type] || '模拟任务' }} · {{ job.trade_date }}</strong><div class="paper-controls"><span>{{ job.status }} · {{ elapsed(job) }}</span><button v-if="['QUEUED','RUNNING'].includes(job.status)" aria-label="取消任务" :title="job.cancel_requested ? '取消处理中' : '取消模拟任务'" :disabled="!enabled || busy || job.cancel_requested" @click="perform('cancel-job', `/paper/accounts/${accountId}/jobs/${job.id}/cancel`, {}, job.id)"><Square :size="14" /></button></div></div><progress v-if="['QUEUED','RUNNING'].includes(job.status)" :value="job.progress_pct" max="100" /><span>{{ ({ queued: '等待执行', source: '核验盘后数据', execution: '模拟执行与记账', close: '日终估值与对账', committing: '提交完整日账', success: '任务完成', failed: '任务失败，需手动重试', cancelled: '任务已取消' } as Record<string, string>)[job.stage || ''] || job.step }}</span><p v-if="job.error_code" class="paper-error">{{ job.error_code }}</p></article><p v-if="!jobs.length" class="paper-empty">暂无模拟任务</p></div>
+        <footer class="paper-pagination"><span>{{ jobTotal }} 条 · 运行中 {{ activeJobCount }}</span><button aria-label="任务上一页" title="任务上一页" :disabled="busy || loading || jobOffset === 0" @click="jobOffset = Math.max(0, jobOffset - 20); load()"><ChevronLeft :size="16" /></button><button aria-label="任务下一页" title="任务下一页" :disabled="busy || loading || jobOffset + 20 >= jobTotal" @click="jobOffset += 20; load()"><ChevronRight :size="16" /></button></footer>
+      </section>
     </template>
 
     <div v-if="modal" class="paper-modal-backdrop" @click.self="closeModal"><section class="paper-modal" role="dialog" aria-modal="true" :aria-label="modal === 'create' ? '新建模拟账户' : modal === 'proposal' ? '记录决策' : modal === 'approve' ? '人工审批' : modal === 'reject' ? '驳回决策' : '关闭账户'">

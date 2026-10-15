@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.auth import AuthSession
 from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
+from app.services.paper.queue import PAPER_JOB_TYPES
 
 
 def run_retention(db: Session, *, now: datetime | None = None) -> dict[str, int]:
@@ -16,12 +17,14 @@ def run_retention(db: Session, *, now: datetime | None = None) -> dict[str, int]
     ).rowcount
     successful = db.execute(
         delete(JobRun).where(
+            JobRun.job_type.not_in(PAPER_JOB_TYPES),
             JobRun.status.in_(("SUCCESS", "PARTIAL", "CANCELLED")),
             JobRun.finished_at < current - timedelta(days=180),
         )
     ).rowcount
     failed = db.execute(
         delete(JobRun).where(
+            JobRun.job_type.not_in(PAPER_JOB_TYPES),
             JobRun.status == "FAILED",
             JobRun.finished_at < current - timedelta(days=365),
         )

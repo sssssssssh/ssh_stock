@@ -23,6 +23,7 @@ from app.services.job_guard import (
     create_queued_ingestion_job,
     scheduler_setting,
 )
+from app.services.paper.queue import PAPER_JOB_TYPES
 from app.services.portfolio.backtest_application import (
     BACKTEST_JOB_TYPE,
     BacktestApplicationService,
@@ -69,7 +70,7 @@ def list_jobs(
 ) -> dict:
     row_limit = clamp_limit(limit, default=20, maximum=100)
     row_offset = clamp_offset(offset)
-    filters = []
+    filters = [JobRun.job_type.not_in(PAPER_JOB_TYPES)]
     if status:
         filters.append(JobRun.status == status)
     if job_type:
@@ -225,7 +226,7 @@ def enqueue_validate_data_job(
 @router.post("/{job_id}/cancel")
 def cancel_job(job_id: UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
     job = db.get(JobRun, job_id)
-    if job is None:
+    if job is None or job.job_type in PAPER_JOB_TYPES:
         raise HTTPException(status_code=404, detail="job not found")
     if job.job_type == BACKTEST_JOB_TYPE:
         raw_run_id = dict(job.job_metadata or {}).get("portfolio_run_id")

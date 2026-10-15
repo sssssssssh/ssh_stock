@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.agent.archive import archive_error
 from app.domain.agent.contracts import AgentToolResult
 from app.domain.agent.errors import identity_mismatch, resource_limit_exceeded
 from app.domain.agent.frozen_contracts import M14_CONTRACT_VERSION, FrozenContractDraft
@@ -21,14 +22,30 @@ def capture_research_contracts(
     *,
     tool_call_id: str,
     max_trade_dates: int,
+    max_contracts: int | None = None,
+    existing_contract_count: int = 0,
 ) -> list[FrozenContractDraft]:
     if result.status != "READY":
         return []
+    if result.tool_name == "walk_forward.window_lineage":
+        requested = 3 * len(result.records)
+    elif result.tool_name in {"walk_forward.summary", "performance.summary"}:
+        requested = 1
+    else:
+        return []
+    if max_contracts is not None and existing_contract_count + requested > max_contracts:
+        raise archive_error("CONTRACT_LIMIT_EXCEEDED")
     if result.tool_name in {"walk_forward.summary", "walk_forward.window_lineage"}:
         from app.services.agent.contracts.m15 import capture_m15_contracts
 
         return capture_m15_contracts(
-            db, result, tool_call_id=tool_call_id, max_trade_dates=max_trade_dates
+            db,
+            result,
+            tool_call_id=tool_call_id,
+            max_trade_dates=max_trade_dates,
+            max_contracts=(
+                None if max_contracts is None else max_contracts - existing_contract_count
+            ),
         )
     if result.tool_name != "performance.summary":
         return []

@@ -22,10 +22,11 @@ from app.services.paper.records import (
 
 
 class DecisionApplication:
-    def __init__(self, db, settings, *, clock=utc_now):
+    def __init__(self, db, settings, *, clock=utc_now, commit_guard=None):
         self.db, self.settings, self.clock = db, settings, clock
         self.repo = PaperRepository(db)
         self.source = DecisionSourceReadiness(db, settings)
+        self.commit_guard = commit_guard or (lambda result: None)
 
     def enabled(self):
         if not self.settings.paper_config.enabled:
@@ -40,6 +41,7 @@ class DecisionApplication:
                 self.repo.by_request(DecisionObservation, owner_id, body.request_id), digest
             )
             if existing:
+                self.commit_guard(existing)
                 self.db.commit()
                 return existing
             now = self.clock()
@@ -72,6 +74,7 @@ class DecisionApplication:
             )
             self.repo.add(row)
             verify_record(row)
+            self.commit_guard(row)
             self.db.commit()
             return row
         except Exception:

@@ -1,145 +1,149 @@
 # M17 Release Acceptance
 
-**In development, not sealed.** A/B/C/D accepted; E implemented pending isolated
-PG acceptance, F pending. No business DB migration/cleanup/trades.
+## Release Gate
 
-## D Accepted And E Candidate
+A-E accepted. F implemented and locally verified; final isolated PG17 CI pending.
+M17 is not yet sealed. No migration, cleanup, test writes or PAPER transactions
+were run against the user's business database. All automatic flags remain false.
 
-D commit a0f0cd4da8c3533a9fd40fef1c6c6d33bb7be9e6 passed
-[CI 38514217405](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405):
-1518 pytest, 88% backend coverage, Ruff, 0053 current=heads, Docker/Compose,
-frontend coverage/build and legacy browser regression. This resolves the D gate.
+| Phase | Accepted commit | Full CI | pytest |
+|---|---|---|---|
+| A | 219120b | [38501965762](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762) | 1420 |
+| B | cd7ec91 | [38506248886](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886) | 1443 |
+| C | dc773eb | [38509773000](https://github.com/sssssssssh/ssh_stock/actions/runs/38509773000) | 1480 |
+| D | a0f0cd4 | [38514217405](https://github.com/sssssssssh/ssh_stock/actions/runs/38514217405) | 1518 |
+| E | e920652 | [38528878133](https://github.com/sssssssssh/ssh_stock/actions/runs/38528878133) | 1545 |
+| F | pending | pending | pending |
 
-E local verification: 1236 unit pytest, full Ruff, npm ci with Node 22,
-121 Vue tests (81.94% statement coverage), production build and actual M17 browser
-acceptance at 1440/390: manual approval, lost response/reload, pagination,
-SVG series, XSS and outage recovery. Screenshots reviewed for layout and axis fit.
-PG API/source/review/queue tests require the E CI gate. F dispatch/recovery remains
-pending, so queue success does not yet imply job completion.
-E candidate 34c3897 / CI 38527890255: 1542 passed, 3 failed. The new EOD gate
-correctly rejected three synthetic next-day rows whose ORM update timestamp used
-the runner's real current date. Those scenarios now explicitly set a synthetic
-post-close ingestion timestamp before the synthetic derived calculation. Assertions
-remain unchanged; the corrected candidate must rerun the entire PG gate.
+Each accepted phase includes full pytest/Ruff, isolated PostgreSQL 17 migration
+roundtrip and current=heads, Compose/container build, frontend coverage/build and
+legacy browser regression. E adds actual M17 browser acceptance at 1440/390.
+Migration head stays `0053_m17_decision_paper_foundation`; no F migration.
 
-## B Evidence (Accepted)
+F local commands: `python -m pytest tests/unit -q` (1298 passed, two inherited
+deprecation warnings); `npm run test:coverage` with Node 22 (122 passed, 82.22%
+statement coverage). Full Ruff, production build and actual Edge browser acceptance
+at 1440/390 passed, including the complete PAPER/non-live/no-return-promise badge.
+Full `python -m pytest` runs only on CI's disposable PostgreSQL 17, not stock_db.
 
-Local `python -m pytest tests/unit -q`: 1185 passed. Ruff passed. Added actual PG
-tests in test_m17_decision_sources.py for T+1 isolation, raw/derived staleness,
-missing/old source identities, dirty range, deterministic ranking, corrected-source
-immutability, owner/security/revision/idempotency and WATCH zero-order behavior.
-M16 exact report binding is tested without giving Agent execution capabilities.
-No migration change (0053 remains head), API or frontend change in B.
-B gate passed at [CI 38506248886](https://github.com/sssssssssh/ssh_stock/actions/runs/38506248886)
-for cd7ec91, with full PG17/migrations/Ruff/container/frontend/legacy browser steps.
-No claim that PAPER execution is ready.
+## Scope And Contracts
 
-## C Evidence (Accepted)
+F adds worker dispatch for PAPER_DAILY/REVIEW/OBSERVATION, immutable dispatch
+receipts, commit-time worker/cancellation fencing, atomic job/result completion,
+stale-job audit, explicit retry, optional EOD scheduling and retention protection.
+Owner-scoped API adds job cancellation and account-wide active-job count. Legacy
+shared job/runtime endpoints do not expose private PAPER jobs. No new table/API
+permits LIVE, broker execution, Agent writes or automatic approval.
 
-Added pure risk/Decimal/manual DTO tests, strict authenticated write API tests and
-actual PG atomicity/retry/failed-approval/pending-conflict/race tests. Account snapshot
-reads are independent from BACKTEST and reconcile with immutable initial/financial
-ledger. Financial execution is still absent; approvals cannot generate fills.
-No migration change (0053), no strategy/hash/Agent permission changes.
+Financial formulas remain Decimal. Partial sales retain the remaining position's
+last-buy stage; completed EOD expires unapproved drafts without changing frozen
+evidence. Approval/execution/attribution metrics expose versions, dates,
+denominators and input hashes. Financial and counterfactual results remain separate.
 
-## A Evidence
+M13-M16 identities, hashes and BACKTEST guards remain unchanged. M16 P2 changes
+only request-local verification reuse and pre-collection/pre-write capacity checks;
+subsequent HTTP requests still reverify. Existing frozen report bytes are tested.
 
-Local M17 focused pytest: 97 passed. `python -m pytest tests/unit -q`: 1174 passed,
-2 inherited warnings. Full-suite collection: 1420 tests, no name collisions.
-Accepted code: `219120bb73a1da273f9076955bccad8f4cb63b65`.
-[Isolated CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38501965762)
-passed: PostgreSQL 17; 1420 pytest, 87% backend coverage; Ruff; empty migration
-roundtrip; 0053 current=heads; Docker/Compose/nginx; Vue tests/build;
-existing M16 browser acceptance at 1440/390. These are legacy browser regressions,
-not acceptance of a new M17 UI (which is still pending E).
-First CI run 38500210299 failed on a duplicate
-order CHECK name; source-hash CHECK was renamed and a name-collision regression
-also identified a fill fee-JSON CHECK name collision, now fixed. Retesting is
-completed in the accepted CI. Run 38501597460 passed migration roundtrip but collection found
-unit/integration test module name collision; the unit module is now named
-test_m17_foundation_contracts.py. Cross-owner tests require an actual FK on first
-insert, and financial tests require actual CHECK violations, not duplicate-key
-errors. No local full pytest against the user business DB.
-No frontend, API or worker path yet; no financial formula or M13-M16 identity change.
+## Checklist Mapping
 
-## Taskbook Matrix
+All paths below are relative to `tests/` unless specified. A-E evidence passed
+their gates; F-dependent rows require the final full CI before acceptance.
 
-### Historical A-D Gate Tracking
-
-B commit cd7ec918: CI 38506248886 passed, 1443 pytest, 87% coverage.
-C commit dc773ebd: CI 38509773000 passed, 1480 pytest, 87% coverage,
-0053 current=heads, Ruff, Compose build and existing frontend/browser regressions.
-Sources/requests/approval/risk API tests cover matrix 07-23, 43/44, plus existing
-legacy compatibility. D implementation adds independent account lifecycle and
-atomic daily replay; its PG gate is not yet accepted. E/F remain unimplemented.
-No user DB migration or full local pytest against business data was performed.
-
-D candidate 6cfe8c0 failed CI 38513408709 at fixture setup: the new test reversed
-the shared helper's (session factory, engine) tuple. No D financial assertion ran;
-this is not an accepted PG gate. Corrected fixture and added sell/limit/AFTER_CLOSE
-regressions before rerun. Local unit suite: 1233 passed; full Ruff passed.
-
-A-PG proofs below passed the accepted CI. Partial is not full M17 completion.
-
-| # | Scenario | Evidence / remaining gate |
+| # | Taskbook assertion | Test / evidence |
 |---|---|---|
-| 01 | migration/old hashes | A-PG passed: roundtrip, actual legacy rows, metadata comparison |
-| 02 | nonempty downgrade | A-PG passed: refusal with preserved ledger |
-| 03 | account states | A unit/PG head/terminal tests passed; application lifecycle D pending |
-| 04 | not BACKTEST | A independence/guard unit passed; D write path pending |
-| 05 | cross-owner 404 | A scoped FKs passed for all 11 child types; B-E HTTP pending |
-| 06 | default disabled | A unit passed; F scheduler pending |
-| 07 | closed-day observation | B pending |
-| 08 | source/version/coverage | B pending |
-| 09 | T excludes future | B pending |
-| 10 | corrections preserve old hash | A-PG immutable passed; B workflow pending |
-| 11 | stable ranking | B pending |
-| 12 | risk/watch reasons | B pending |
-| 13 | manual/LLM boundary | C/E pending; registry unchanged |
-| 14 | WATCH/reject no order | C pending |
-| 15 | atomic approval/order | C pending |
-| 16 | approval rollback | C pending |
-| 17 | same-payload replay | B/C pending |
-| 18 | changed-payload 409 | B/C pending |
-| 19 | approval/reject races | C pending |
-| 20 | expired window | C pending |
-| 21 | paused/closed | C/D pending |
-| 22 | risk limits | A config validation passed; C/D pending |
-| 23 | pending conflict | A-PG unique index passed; C audit pending |
-| 24 | true next open | C/D pending |
-| 25 | EOD gate | D pending |
-| 26 | bad price/zero volume | D pending |
-| 27 | suspension/ST/limits | D pending |
-| 28 | legal quantities | D pending |
-| 29 | T+1 sellable | A-PG bounds passed; D timing pending |
-| 30 | Decimal fees | D pending |
-| 31 | cash competition | D pending |
-| 32 | unique execution keys | A-PG keys passed; D retries pending |
-| 33 | crash/lost response | D/F pending |
-| 34 | concurrent workers | D/F pending |
-| 35 | sealed source drift | A-PG sealed result passed; D source checks pending |
-| 36 | corporate actions | D pending |
-| 37 | finance conservation | A-PG structural checks passed; D full replay pending |
-| 38 | no skipped open days | D pending |
-| 39 | pause/resume gaps | D/F pending |
-| 40 | benchmark unavailable | A-PG NULL/status passed; E workflow pending |
-| 41 | counterfactual not NAV | E pending |
-| 42 | no reverse rewrite | A-PG immutable passed; E path pending |
-| 43 | M16 owner/hash binding | B pending |
-| 44 | no LIVE/broker | A PAPER-only config passed; C/E API pending |
-| 45 | M13-M16 regression | A isolated full CI passed; rerun each phase |
-| 46 | 1/30/250 performance | F pending |
-| 47 | desktop/mobile | E/F pending |
-| 48 | errors/doubleclick/refresh | C/E/F pending |
-| 49 | account/job separation | A separate schemas; F recovery pending |
-| 50 | safe API/log/export | E/F pending |
-| 51 | Node/npm/ECharts | P2 F pending; inherited alerts not cleared |
-| 52 | M16 verification budgets | P2 F pending; M16 unchanged |
+| 01 | 0052/0053 roundtrip; legacy rows/hashes unchanged | integration/test_m17_foundation.py, roundtrip test |
+| 02 | Nonempty PAPER downgrade refused | same, any_paper_history_blocks_downgrade |
+| 03 | Account create/pause/activate/close, illegal transitions | integration/test_m17_paper_daily.py; unit/test_m17_foundation_contracts.py |
+| 04 | Independent PAPER, not BACKTEST | foundation contracts; real daily write path; full M13 regressions |
+| 05 | Cross-owner child reads/writes return 404 | integration/test_m17_paper_queries.py; manual_approval; paper_jobs |
+| 06 | Default disabled, no autonomous fills | unit/test_m17_job_contracts.py; integration/test_m17_paper_jobs.py |
+| 07 | Closed-day observation refused | integration/test_m17_decision_sources.py, readiness cases |
+| 08 | Missing/stale/partial source fails closed | same, readiness_failures_make_no_observation |
+| 09 | T capture excludes T+1 facts | same, t_boundary_ignores_future_price_and_score |
+| 10 | Corrections cannot overwrite prior hashes | same; foundation immutable guards |
+| 11 | Stable score/code TopN sorting | same, frozen deterministic observation |
+| 12 | Risk/WATCH reasons retained | same, owner_security_watch_risks_and_revision |
+| 13 | Explicit manual gesture; Agent read-only | unit/test_m17_decision_api.py; frontend workbench; browser script; old Registry tests |
+| 14 | WATCH/reject creates no execution | integration/test_m17_manual_approval.py |
+| 15 | Approval and order atomic | same, approval_event_and_intent_atomic_idempotent_and_frozen |
+| 16 | Precommit approval fault rolls back | same, fault_before_commit cases |
+| 17 | Same request/payload replays | sources; manual_approval; paper_queries; paper_jobs |
+| 18 | Request payload mismatch gives conflict | sources; manual_approval; paper_queries |
+| 19 | Concurrent approve/reject has one outcome | integration/test_m17_manual_approval.py, real_concurrent test |
+| 20 | Cannot backfill expired approval window | same, failed_approval cases |
+| 21 | Paused/closed cannot approve execution | same; integration/test_m17_paper_daily.py |
+| 22 | Position/cash/count/weight limits | unit/test_m17_approval_contracts.py; real approval and daily tests |
+| 23 | Conflicting pending symbol rejected/audited | integration/test_m17_manual_approval.py |
+| 24 | SSE/SZSE true next open, not natural day | approval; daily; source fixtures and calendar assertions |
+| 25 | Full next-day EOD gate | integration/test_m17_paper_daily.py; paper_jobs; EOD source timestamp tests |
+| 26 | Bad price/zero volume cannot fill | unit/test_m17_paper_execution.py, conservative_market_blocks |
+| 27 | Suspension/ST/limits fail conservatively | same; PG limit_block_is_final |
+| 28 | Lots/odd lots/side/quantity bounds | unit/test_execution_resolver.py; test_m17_approval_contracts.py |
+| 29 | T+1 sellability | unit/test_m17_paper_execution.py; PG daily and real 250-day assertions |
+| 30 | Exact Decimal fees/taxes/slippage | pure execution/accounting tests; PG exit_next_open and capacity |
+| 31 | Shared cash, sell-before-buy, no negatives | risk reservations; execution resolver/accounting; PG daily conservation |
+| 32 | Unique order/attempt/fill/ledger keys | foundation PG constraints; daily idempotent replay; jobs retries |
+| 33 | Faults before order/after fill/before NAV/commit; lost reply | integration/test_m17_paper_jobs.py, crash and postcommit cases |
+| 34 | Concurrent workers commit once | same, two_executions; daily concurrent_workers |
+| 35 | Source drift marks review, never reprices | PG daily/queries/jobs source correction tests |
+| 36 | Unsupported corporate action fails closed | PG company_action_stops_before_first_fill; pure market cases |
+| 37 | Cash/qty/fee/assets/NAV conservation | PG daily and capacity, committed ledger reconciliation |
+| 38 | Cannot skip an open day | PG daily missing_day; jobs scheduler_blocks_gap |
+| 39 | Pause/resume sequential; no phantom backfill | PG pause_resume_is_sequential; job/scheduler gap checks |
+| 40 | Missing benchmark is NULL, not zero | PG daily and queries benchmark tests |
+| 41 | Counterfactual return never enters NAV | PG queries WATCH review; capacity counterfactual_returns |
+| 42 | Reviews do not rewrite original decisions | same, append-only/hash assertions; foundation guards |
+| 43 | M16 report owner/hash/date binding, no authority | PG decision_sources exact report reference |
+| 44 | No LIVE/broker endpoint or parameter | unit/test_m17_decision_api.py and paper execution DTO tests |
+| 45 | M13-M16 full compatibility | full pytest in every phase CI, immutable report bytes and hashes |
+| 46 | Real 1/30/250-day advance SQL/time bounded | integration/test_m17_paper_capacity.py, real_daily_queue_claim_source_and_settlement_are_bounded |
+| 47 | 1440/390 layout, filters, confirmation, warnings | scripts/m17_browser_smoke.cjs; Vue workbench/chart tests; screenshots |
+| 48 | Outage/double-click/reload safe | same browser; workbench retry tests; PG idempotence/lost response |
+| 49 | Account/job separate; traceable recovery | PG paper_jobs recovery/cancel/worker-fencing and immutable audit |
+| 50 | Safe APIs/logs/export, no sensitive execution payload | unit/test_m17_job_contracts.py; own jobs/hidden legacy runtime; report exports |
+| 51 | Node/npm/ECharts risk reviewed | Node 22 CI; audit and controlled-input browser XSS checks, residual risks below |
+| 52 | Export verification budget and large-window preflight | unit/test_m17_report_export_budget.py; test_m17_contract_capture_entry.py; PG contract_capture_entry_pg |
 
-## Rollback And Next Entry
+## Performance Evidence
 
-Keep paper.enabled=false. A introduces no production auto-migration or job.
-Apply Alembic only through reviewed deployment; never delete historical data to
-force downgrade. With history, disable configuration and retain immutable evidence.
-The A PG17 gate passed; B is the next implementation phase. Full monitoring/pause/disaster/recovery
-Runbook is a required F deliverable, not yet implemented.
+CI publishes `m17-capacity-measurements` JSONL. Real 1/30/250-day runs use actual
+queue/claim/source-read/financial-job commit, one explicit manually approved buy,
+then carried holdings. No financial/source mocks. Every day verifies three SUCCESS
+heads, Job completion, immutable fill, single charged fee, cash conservation and
+T+1 sellability. Setup/assertion queries are excluded from measured work.
+Predeclared limits: <=400 SQL/day and <15 seconds/day; total linear budget.
+Synthetic two-symbol calendar is not a claim of full-market production throughput.
+
+Separate frozen-summary measurements use 1/30/250 fee-paying synthetic ledger
+dates, <=14 SQL/read and <30 seconds. They are not a substitute for daily replay.
+History row/byte overflow refuses before loading historical JSON. Final measured
+values and CI artifact link will be recorded after the gate passes.
+
+## Security And Remaining Operational Work
+
+Official npm audit reviewed on 2026-10-14: 11 advisories overall (4 critical,
+3 high, 4 moderate); omit-dev 4 (2 high, 2 moderate, no critical). Runtime-declared
+dependencies include ECharts XSS, source-map-js and Vite/esbuild dev-server issues;
+dev tooling has additional critical advisories. These are not claimed fixed.
+The final Nginx image serves static dist, not a Vite development server. ECharts
+accepts bounded typed dates/Decimal strings, controlled series and richText tooltip,
+not user HTML/options. XSS probes run in a real browser. Taskbook section 16 calls
+for a separate dependency-upgrade PR with regression, not a forced major upgrade here.
+
+No live market, broker, real LLM or production-account exercise is claimed. Synthetic
+browser API tests are paired with actual PG HTTP/transaction tests. User staging
+backup, reviewed migration and deliberate feature enablement remain deployment work.
+No production auto-migration or changes to trading strategy weights were made.
+
+## Operations And Recovery
+
+See README's M17 Runbook for backup/migration, manual-first rollout, separate
+API/Worker/Scheduler restart, EOD readiness, sequential gap repair, cancellation,
+explicit retry, drift review, monitoring and disaster restore. Disable automatic
+flags to stop scheduling; pause accounts to prevent new executable approvals.
+Rollback by disabling features while retaining 0053 and immutable financial
+history. Never delete history or force downgrade to make an older app start.
+
+Earlier rejected candidates remain visible in Git/CI: A duplicate CHECK names and
+test filename collision; D reversed fixture tuple; E three synthetic source update
+timestamps. Each was corrected and rerun without weakening financial assertions.

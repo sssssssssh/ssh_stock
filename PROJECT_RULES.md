@@ -35,12 +35,18 @@
 
 ## 当前阶段
 
-当前实现推进至 Milestone 17-E（实现待验收，M17 整体尚未封版）；后续 M13-M16 的冻结规则见本文后续章节：
+当前实现推进至 Milestone 17-F（实现待验收，M17 整体尚未封版）；后续 M13-M16 的冻结规则见本文后续章节：
 
 D 隔离 PG17 CI `38514217405` 通过：1518 pytest、88% 覆盖率、Ruff、0053 current=heads、
 容器与前端历史回归。E 新增 owner 隔离分页 API、冻结金融汇总、独立模拟界面及后验复盘。
 图表只读取冻结 NAV，缺口断线；Decimal 以字符串传输。二次来源校验拒绝盘中采集/计算记录。
-E 请求只入队；F Worker/Scheduler 接入及恢复尚待完成。
+E 提交 `e920652` / CI `38528878133` 已通过全部 PG17、Ruff、迁移、容器和浏览器验收。
+F 接入 PAPER_DAILY/REVIEW/OBSERVATION，入队凭据不可变，账户锁与 Job worker identity
+共同防止重复执行。账本/复盘/观察结果与 Job SUCCESS 同事务，取消与失去归属在提交前校验。
+账户使用 NO KEY UPDATE 串行锁，允许取消审计 FK 校验；恢复跳过正在执行的账户。
+清理不删除 PAPER 任务及账本；默认关闭自动推进/观察，自动批准恒禁止。
+资金/权重保持 Decimal；风险计数严格整数、比例最多八位小数。历史汇总先验行数及字节预算，
+默认 `max_history_bytes=33554432`；资源预算变更不改冻结财务身份。
 
 B 独立 PG17 CI `38506248886`、C CI `38509773000` 已通过（C 完整 1480 pytest，87%）。
 C 人工确认按 request→account→proposal 锁序，
@@ -55,7 +61,7 @@ D 将三个阶段检查点、Attempt/Fill/Ledger/Position/NAV 在一个有界事
 D/F 未通过真实 PG 与调度验收前禁止自动推进；不改生产策略或旧 Hash。
 
 M17 按 A→B→C→D→E→F 独立提交及验证。A 新增 0053、独立 PAPER/Decision 模型、
-默认关闭配置和数据库不可变/owner 约束；已有决策审批 API 与独立界面，任务接入仍待 F。
+默认关闭配置和数据库不可变/owner 约束；已有决策审批 API、独立界面与任务接入，F 待完整验收。
 准确验收状态和剩余清单见 `docs/M17_release_acceptance.md`。不得把模型基础当成模拟功能已完成。
 A 隔离 PG17 CI `38501965762` 通过：1420 pytest、87% 覆盖率、Ruff、0053 迁移往返、
 current/heads、容器及前端历史回归。未授权开启自动模拟。

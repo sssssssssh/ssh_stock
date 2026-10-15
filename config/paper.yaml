@@ -1,4 +1,6 @@
 paper:
+  scheduler_interval_seconds: 300
+  max_history_bytes: 33554432
   enabled: false
   auto_advance: false
   auto_approve: false

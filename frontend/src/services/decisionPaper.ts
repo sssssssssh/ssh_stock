@@ -23,7 +23,7 @@ export type PaperCandidate = { ts_code: string; name: string; opportunity_stage:
   rule_status: string; [key: string]: unknown };
 export type PaperJob = { id: string; status: string; job_type: string; trade_date: string;
   started_at: string; finished_at: string | null; error_code: string | null; step: string;
-  progress_pct: number; account_id: string };
+  progress_pct: number; account_id: string; stage?: string; cancel_requested?: boolean };
 export type PaperSeries = { trade_date: string; nav: string | null; benchmark_nav: string | null;
   cash: string | null; market_value: string | null; daily_return: string | null; drawdown: string | null;
   cumulative_cost: string | null; valid: boolean };
@@ -31,6 +31,7 @@ export type PaperPerformance = { continuous: boolean; series: PaperSeries[];
   latest: PaperFacts | null; cumulative_return: string | null; maximum_drawdown: string | null;
   cumulative_cost: string; cumulative_turnover: string; realized_pnl: string; unrealized_pnl: string;
   benchmark_status: string; financial_source_hash: string; reason_codes: string[];
+  decision_metrics?: { approval_rate: string | null; denominator: { legal_proposals: number }; counts: Record<string, number> };
   stage_attribution?: { groups: Record<string, { realized_pnl: string; unrealized_pnl: string; trading_cost: string; gross_amount: string }> };
   observation_metrics?: { windows: Record<string, { reviewed: number; valid_marks: number; positive_marks: number; hit_rate: string | null }> };
   execution: { reached_orders: number; filled_orders: number; hypothetical_fill_rate: string | null;
@@ -57,9 +58,9 @@ export function paperPage(kind: string, accountId: string, filters: Record<strin
   if (["observations", "proposals"].includes(kind)) query.set("account_id", accountId);
   return requestPage<PaperFacts[], { total: number; offset: number; limit: number }>(`${path}?${query}`, { signal });
 }
-export function paperJobs(accountId: string, signal?: AbortSignal) {
-  return requestPage<PaperJob[], { total: number; offset: number; limit: number }>(
-    `/paper/accounts/${encodeURIComponent(accountId)}/jobs?limit=20`, { signal });
+export function paperJobs(accountId: string, signal?: AbortSignal, offset = 0) {
+  return requestPage<PaperJob[], { total: number; offset: number; limit: number; active_count?: number }>(
+    `/paper/accounts/${encodeURIComponent(accountId)}/jobs?limit=20&offset=${offset}`, { signal });
 }
 export function paperWrite<T = PaperFacts>(path: string, payload: Record<string, unknown>) {
   return request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" },

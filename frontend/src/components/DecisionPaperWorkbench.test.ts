@@ -117,3 +117,17 @@ it("pagination and error recovery do not trigger trading POSTs", async () => {
   await button(wrapper, "刷新").trigger("click"); await flushPromises();
   expect(mocks.paperWrite).not.toHaveBeenCalled();
 });
+
+it("job pagination retains account-wide active state and cancellation is explicit", async () => {
+  const job = { id: "job", job_type: "PAPER_DAILY", status: "RUNNING", trade_date: "2026-10-15",
+    started_at: "2026-10-15T10:00:00Z", finished_at: null, progress_pct: 40, step: "paper execution" };
+  mocks.paperJobs.mockResolvedValue({ data: [job], meta: { total: 25, active_count: 1 } });
+  const wrapper = await open();
+  expect(button(wrapper, "结算下一交易日").attributes("disabled")).toBeDefined();
+  expect(mocks.paperWrite).not.toHaveBeenCalled();
+  await button(wrapper, "任务下一页").trigger("click"); await flushPromises();
+  expect(mocks.paperJobs).toHaveBeenCalledWith("account", expect.anything(), 20);
+  await button(wrapper, "取消任务").trigger("click"); await flushPromises();
+  expect(mocks.paperWrite).toHaveBeenCalledWith("/paper/accounts/account/jobs/job/cancel",
+    expect.objectContaining({ request_id: expect.any(String) }));
+});

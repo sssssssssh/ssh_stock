@@ -28,6 +28,7 @@ from app.services.job_guard import (
     recover_stale_research_jobs,
     research_can_run,
 )
+from app.services.paper.scheduling import run_scheduled_paper
 from app.services.quality.analysis_readiness import analysis_complete_dates
 from app.services.retention import run_retention
 from app.services.service_heartbeat import new_instance_id, touch_service_heartbeat
@@ -100,6 +101,21 @@ def run_scheduler() -> None:
         id="weekly_basic_refresh",
         **cron_trigger_kwargs(basic_cron),
     )
+    if settings.paper_config.enabled and (
+        settings.paper_config.auto_advance
+        or settings.paper_config.decision.daily_observation_enabled
+    ):
+        def run_paper() -> None:
+            with SessionLocal() as db:
+                result = run_scheduled_paper(db, _scheduler_today(timezone), settings=settings)
+                logger.info(
+                    "paper scheduler queued={} blocked={}", result["queued"], result["blocked"]
+                )
+
+        scheduler.add_job(
+            run_paper, "interval", seconds=settings.paper_config.scheduler_interval_seconds,
+            id="paper_daily_forward", max_instances=1, coalesce=True,
+        )
 
     def cleanup_retention() -> None:
         with SessionLocal() as db:

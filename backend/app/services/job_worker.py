@@ -39,6 +39,9 @@ from app.services.job_guard import (
     research_can_run,
     scheduler_setting,
 )
+from app.services.paper.job_application import PaperJobApplication, safe_error_code
+from app.services.paper.queue import PAPER_JOB_TYPES
+from app.services.paper.recovery import recover_stale_paper_jobs
 from app.services.performance.application import (
     PERFORMANCE_JOB_TYPE,
     PerformanceApplicationService,
@@ -97,6 +100,7 @@ WORKER_JOB_TYPES = (
     PERFORMANCE_PERIOD_JOB_TYPE,
     EXPERIMENT_EVALUATION_JOB_TYPE,
     WALK_FORWARD_VALIDATION_JOB_TYPE,
+    *PAPER_JOB_TYPES,
 )
 
 
@@ -107,6 +111,8 @@ def worker_identity() -> str:
 def claim_next_job(db: Session, worker_id: str) -> uuid.UUID | None:
     _acquire_ingestion_advisory_lock(db)
     allowed = list(WORKER_JOB_TYPES)
+    if not get_settings().paper_config.enabled:
+        allowed = [kind for kind in allowed if kind not in PAPER_JOB_TYPES]
     if not research_can_run(db):
         allowed.remove(RESEARCH_JOB_TYPE)
     if not production_can_run(db):
@@ -156,7 +162,9 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
         )
         heartbeat_thread.start()
     try:
-        if job.job_type == "daily":
+        if job.job_type in PAPER_JOB_TYPES:
+            PaperJobApplication(db, get_settings()).run_job(job.id)
+        elif job.job_type == "daily":
             provider = _provider(db)
             target = job.target_trade_date or _metadata_date(metadata, "trade_date")
             DailyJob(db, provider).run(target, job=job)
@@ -225,6 +233,17 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
     except Exception as exc:
         db.rollback()
         failed = db.get(JobRun, job_id)
+        if job.job_type in PAPER_JOB_TYPES:
+            code = safe_error_code(exc)
+            if failed is not None and failed.status == "RUNNING" and failed.worker_id == worker_id:
+                update_job(
+                    db, failed, status="FAILED", step="paper failed; explicit retry required",
+                    error_message=code,
+                    metadata={**dict(failed.job_metadata or {}), "stage": "failed",
+                              "error_code": code},
+                )
+            logger.warning("paper worker failure job_id={} code={}", job_id, code)
+            return
         if (
             failed is not None
             and job.job_type != BACKTEST_JOB_TYPE
@@ -292,6 +311,13 @@ def run_worker() -> None:
             with SessionLocal() as db:
                 now = time.monotonic()
                 if now - last_recovery >= recovery_interval:
+                    recovered_paper = recover_stale_paper_jobs(
+                        db, timeout_minutes=float(
+                            scheduler_setting("running_heartbeat_timeout_minutes", 15)
+                        ),
+                    )
+                    if recovered_paper:
+                        logger.warning("paper jobs recovered count={}", recovered_paper)
                     recovered_jobs = recover_stale_ingestion_jobs(db)
                     recovered_research = recover_stale_research_jobs(db)
                     recovered_backtests = recover_stale_backtest_jobs(
