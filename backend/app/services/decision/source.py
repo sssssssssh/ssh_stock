@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.domain.decision.contracts import PaperError, content_hash
 from app.models.job import JobRun
 from app.models.market_data import (
-    DataDirtyRange,
     DataQualityDaily,
     IndexDaily,
     MarketDaily,
@@ -33,6 +32,8 @@ from app.services.analysis_identity import (
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
+from app.services.decision.dependencies import check_dirty_dependencies
+from app.services.dirty import blocking_dirty_range_id, invalid_dirty_range_id
 from app.services.paper.records import close_cutoff, source_value
 from app.services.portfolio.candidates import OpportunityCandidateProvider
 from app.services.portfolio.source_integrity import check_portfolio_source_integrity
@@ -112,15 +113,9 @@ class DecisionSourceReadiness:
             raise PaperError("PAPER_CALENDAR_UNAVAILABLE")
         if not calendar.is_open:
             raise PaperError("DECISION_NON_TRADING_DAY", status_code=422)
-        dirty = db.scalar(
-            select(DataDirtyRange.id)
-            .where(
-                DataDirtyRange.dirty_start_date <= day,
-                DataDirtyRange.status.in_(("OPEN", "PROCESSING", "FAILED")),
-            )
-            .limit(1)
-        )
-        if dirty:
+        if invalid_dirty_range_id(db) is not None:
+            raise PaperError("SOURCE_DIRTY_RANGE_INVALID")
+        if blocking_dirty_range_id(db, day) is not None:
             raise PaperError("SOURCE_DIRTY_RANGE")
         count = db.scalar(
             select(func.count()).select_from(StockDaily).where(StockDaily.trade_date == day)
@@ -236,6 +231,7 @@ class DecisionSourceReadiness:
             if model in identity_versions or model == StockOpportunityDaily:
                 if any(row.calculated_at > finished[row.calc_run_id] for row in rows):
                     raise PaperError("SOURCE_JOB_NOT_READY")
+        check_dirty_dependencies(db, day, cutoff, settings, identity_versions, strategy)
         layers["jobs"] = content_hash(
             sorted(
                 [

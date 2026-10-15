@@ -2,10 +2,41 @@ import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.market_data import DataDirtyRange, StockDaily
+
+DIRTY_BLOCKING_STATES = ("OPEN", "PROCESSING", "FAILED")
+DIRTY_KNOWN_STATES = (*DIRTY_BLOCKING_STATES, "RESOLVED")
+
+
+def invalid_dirty_range_id(db: Session) -> int | None:
+    return db.scalar(
+        select(DataDirtyRange.id)
+        .where(or_(
+            DataDirtyRange.dirty_start_date.is_(None),
+            DataDirtyRange.dirty_end_date.is_(None),
+            DataDirtyRange.dirty_start_date > DataDirtyRange.dirty_end_date,
+            DataDirtyRange.status.is_(None),
+            DataDirtyRange.status.not_in(DIRTY_KNOWN_STATES),
+        ))
+        .order_by(DataDirtyRange.id)
+        .limit(1)
+    )
+
+
+def blocking_dirty_range_id(db: Session, day: date) -> int | None:
+    return db.scalar(
+        select(DataDirtyRange.id)
+        .where(
+            DataDirtyRange.dirty_start_date <= day,
+            DataDirtyRange.dirty_end_date >= day,
+            DataDirtyRange.status.in_(DIRTY_BLOCKING_STATES),
+        )
+        .order_by(DataDirtyRange.dirty_start_date, DataDirtyRange.id)
+        .limit(1)
+    )
 
 
 def changed_trade_dates(

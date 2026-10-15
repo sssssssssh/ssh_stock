@@ -37,6 +37,8 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
+      - name: M17.1 targeted dirty dependency regressions
+        run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
       - run: python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
       - name: M16.6 capture capacity measurements
         run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
