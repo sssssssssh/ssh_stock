@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -394,13 +395,30 @@ def test_partial_sale_preserves_remaining_positions_frozen_buy_stage(paper):
         db.commit()
     approve(factory, owner, account)
     run(factory, owner, account)
-    approve(factory, owner, account, day=FIRST, action="PROPOSE_REDUCE", weight="0.04")
+    with factory() as db:
+        bought = db.scalar(select(PaperPositionDaily).where(
+            PaperPositionDaily.account_id == account, PaperPositionDaily.trade_date == FIRST,
+        ))
+        nav = db.scalar(select(PaperNavDaily).where(
+            PaperNavDaily.account_id == account, PaperNavDaily.trade_date == FIRST,
+        ))
+        target_quantity = bought.quantity // 200 * 100
+        # Midpoint of this share's weight interval survives eight-place input precision.
+        weight = ((Decimal(target_quantity) + Decimal("0.5")) * bought.close_price
+                  / nav.total_assets).quantize(Decimal("0.00000001"))
+        sold_quantity = bought.quantity - target_quantity
+        assert target_quantity > 0 and sold_quantity > 0 and sold_quantity % 100 == 0
+    approve(factory, owner, account, day=FIRST, action="PROPOSE_REDUCE", weight=str(weight))
     run(factory, owner, account, SECOND)
     with factory() as db:
         remaining = db.scalar(select(PaperPositionDaily).where(
             PaperPositionDaily.account_id == account, PaperPositionDaily.trade_date == SECOND,
         ))
-        assert remaining.quantity > 0
+        assert remaining.quantity == target_quantity
+        sold = db.scalar(select(PaperFill).where(
+            PaperFill.account_id == account, PaperFill.trade_date == SECOND,
+        ))
+        assert sold.side == "SELL" and sold.quantity == sold_quantity
         assert remaining.record_json["data"]["context"]["opportunity_stage"] == "TREND"
 
 
