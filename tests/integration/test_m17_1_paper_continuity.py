@@ -13,7 +13,15 @@ from app.domain.decision.requests import (
     PaperRequest,
 )
 from app.models.job import JobRun
-from app.models.market_data import StockDaily
+from app.models.market_data import (
+    MarketDaily,
+    SectorFactorDaily,
+    StockDaily,
+    StockFactorDaily,
+    StockOpportunityDaily,
+    StockStateDaily,
+    StockTradeStatusDaily,
+)
 from app.models.paper import (
     DecisionApprovalEvent,
     DecisionObservation,
@@ -77,6 +85,22 @@ def draft(db, owner, account):
     return app, observed, body
 
 
+def corrected_and_recomputed_source(db, day):
+    stamp = NOW + timedelta(days=(day - DAY).days)
+    raw = db.get(StockDaily, (day, CODES[0]))
+    raw.close, raw.source_updated_at = 10.5, stamp - timedelta(seconds=100)
+    job = JobRun(job_type="recalculate", status="SUCCESS", target_trade_date=day,
+                 started_at=stamp - timedelta(seconds=90),
+                 finished_at=stamp - timedelta(seconds=10), job_metadata={})
+    db.add(job)
+    db.flush()
+    for model in (StockFactorDaily, StockStateDaily, StockTradeStatusDaily,
+                  StockOpportunityDaily, MarketDaily, SectorFactorDaily):
+        for row in db.scalars(select(model).where(model.trade_date == day)):
+            row.calc_run_id, row.calculated_at = job.id, stamp - timedelta(seconds=30)
+    db.commit()
+
+
 @pytest.mark.parametrize("entry", ["observe", "propose", "approve"])
 @pytest.mark.parametrize("problem", ["intersecting", "historical_stale", "source_drift"])
 def test_decision_chain_rejects_without_order_or_financial_write(dirty_paper, entry, problem):
@@ -92,8 +116,7 @@ def test_decision_chain_rejects_without_order_or_financial_write(dirty_paper, en
             add_dirty(db, created_at=NOW - timedelta(days=10))
             code = "SOURCE_DERIVED_STALE"
         else:
-            db.get(StockDaily, (DAY, CODES[0])).close = 10.5
-            db.commit()
+            corrected_and_recomputed_source(db, DAY)
             code = "DECISION_SOURCE_DRIFT"
         if entry == "observe" and problem == "source_drift":
             # A fresh observation may freeze a new valid source; drift is against an old snapshot.
@@ -169,9 +192,7 @@ def test_correction_after_success_marks_review_and_never_reprices(dirty_paper):
     run(factory, owner, account)
     with factory() as db:
         before, frozen = financial_counts(db), frozen_records(db)
-        raw = db.get(StockDaily, (FIRST, CODES[0]))
-        raw.close = 10.5
-        db.commit()
+        corrected_and_recomputed_source(db, FIRST)
     with pytest.raises(PaperError, match="PAPER_SOURCE_DRIFT"):
         run(factory, owner, account, SECOND)
     with factory() as db:
