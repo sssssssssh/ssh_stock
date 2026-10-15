@@ -1,6 +1,6 @@
 """Typed, exhaustive JobRun references; never materialize the referenced UUID universe."""
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 
 from app.models import Base
 from app.models.job import JobRun
@@ -19,6 +19,11 @@ JOB_REFERENCES = (
     ("strategy_signal", "calc_run_id"),
     ("theme_factor_daily", "calc_run_id"),
 )
+
+INDEX_SPECS = tuple(
+    (f"ix_{table}_{column}", table, (column,))
+    for table, column in JOB_REFERENCES if table != "portfolio_backtest_run"
+) + (("idx_job_run_retention", "job_run", ("status", "finished_at", "id")),)
 
 SCHEMA_REFERENCES = text("""
 SELECT c.relname AS table_name, a.attname AS column_name,
@@ -74,3 +79,44 @@ def referenced_job():
         ).exists()
         for table, column in JOB_REFERENCES
     ))
+
+
+def reference_inventory(db, *, max_rows=10000):
+    if not 1 <= max_rows <= 100000:
+        raise ValueError("RETENTION_INVENTORY_INVALID_LIMIT")
+    db.execute(text("SET TRANSACTION READ ONLY"))
+    db.execute(text("SET LOCAL statement_timeout = '3s'"))
+    db.execute(text("SET LOCAL lock_timeout = '1s'"))
+    rows = [dict(row._mapping) for row in db.execute(SCHEMA_REFERENCES)]
+    for row in rows:
+        key = (row["table_name"], row["column_name"])
+        if key not in JOB_REFERENCES:
+            row["supported"] = False
+            continue
+        table = Base.metadata.tables[key[0]]
+        column = table.c[key[1]]
+        bounded = select(column).where(column.is_not(None)).limit(max_rows + 1).subquery()
+        count = db.scalar(select(func.count()).select_from(bounded))
+        missing = select(column).where(
+            column.is_not(None), ~select(JobRun.id).where(JobRun.id == column).exists(),
+        ).limit(max_rows + 1).subquery()
+        lost = db.scalar(select(func.count()).select_from(missing))
+        row.update(supported=True, reference_rows_observed=count,
+                   reference_rows_truncated=count > max_rows,
+                   missing_rows_observed=lost, missing_rows_truncated=lost > max_rows)
+    fks = db.execute(text("""
+        SELECT c.conrelid::regclass::text AS source_table, c.conname,
+               c.convalidated, pg_get_constraintdef(c.oid) AS definition
+        FROM pg_constraint c WHERE c.contype = 'f' AND c.confrelid = 'job_run'::regclass
+        ORDER BY source_table, c.conname
+    """)).mappings().all()
+    indexes = db.execute(text("""
+        SELECT p.tablename, p.indexname, p.indexdef, i.indisvalid, i.indisready
+        FROM pg_indexes p JOIN pg_namespace n ON n.nspname = p.schemaname
+        JOIN pg_class c ON c.relnamespace = n.oid AND c.relname = p.indexname
+        JOIN pg_index i ON i.indexrelid = c.oid
+        WHERE p.schemaname = current_schema() AND p.tablename = ANY(:tables)
+        ORDER BY p.tablename, p.indexname
+    """), {"tables": sorted({table for table, _ in JOB_REFERENCES} | {"job_run"})}).mappings()
+    return {"references": rows, "foreign_keys": [dict(row) for row in fks],
+            "indexes": [dict(row) for row in indexes]}

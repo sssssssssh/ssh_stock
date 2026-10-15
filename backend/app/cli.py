@@ -2,6 +2,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 import typer
+from sqlalchemy.exc import DBAPIError
 
 from app.core.config import ROOT_DIR, get_settings
 from app.core.db import SessionLocal
@@ -24,6 +25,78 @@ from app.services.sector import SectorService
 from app.services.trend import TrendService
 
 cli = typer.Typer(no_args_is_help=True)
+
+
+@cli.command("retention-inventory")
+def retention_inventory() -> None:
+    import json
+
+    from app.services.retention_lineage import reference_inventory
+
+    try:
+        with SessionLocal() as db:
+            typer.echo(json.dumps(reference_inventory(db), default=str, ensure_ascii=False))
+    except DBAPIError:
+        typer.echo("RETENTION_DATABASE_ERROR", err=True)
+        raise typer.Exit(code=1) from None
+
+
+@cli.command("retention-check")
+def retention_check(details: bool = typer.Option(False, "--details")) -> None:
+    import json
+
+    from app.services.retention import run_retention
+
+    with SessionLocal() as db:
+        result = run_retention(db, dry_run=True, include_diagnostics=details)
+        typer.echo(json.dumps(result, default=str, ensure_ascii=False))
+        if result["blocked"]:
+            raise typer.Exit(code=1)
+
+
+@cli.command("retention-run")
+def retention_run(confirm: bool = typer.Option(False, "--confirm")) -> None:
+    import json
+
+    from app.core.retention_config import RetentionPolicy
+    from app.services.retention import run_retention
+
+    policy = RetentionPolicy.model_validate(get_settings().app_config.get("retention", {}))
+    if not confirm or not policy.job_deletion_enabled:
+        raise typer.BadParameter("requires --confirm and retention.job_deletion_enabled=true")
+    with SessionLocal() as db:
+        result = run_retention(db, policy=policy)
+        typer.echo(json.dumps(result, default=str, ensure_ascii=False))
+        if result["blocked"]:
+            raise typer.Exit(code=1)
+
+
+@cli.command("retention-indexes")
+def retention_indexes(
+    apply: bool = typer.Option(False, "--apply"),
+    confirm: bool = typer.Option(False, "--confirm"),
+) -> None:
+    import json
+
+    from sqlalchemy import create_engine
+
+    from app.services.retention_indexes import prepare_retention_indexes
+    from app.services.retention_lineage import RetentionBlocked
+
+    if apply and not confirm:
+        raise typer.BadParameter("online index DDL requires --apply --confirm")
+    engine = create_engine(get_settings().database_url, isolation_level="AUTOCOMMIT")
+    try:
+        with engine.connect() as connection:
+            # Make the safety contract explicit to the index helper as well as the engine.
+            connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+            typer.echo(json.dumps(prepare_retention_indexes(connection, apply=apply)))
+    except (DBAPIError, RetentionBlocked) as exc:
+        code = str(exc) if isinstance(exc, RetentionBlocked) else "RETENTION_INDEX_DATABASE_ERROR"
+        typer.echo(code, err=True)
+        raise typer.Exit(code=1) from None
+    finally:
+        engine.dispose()
 
 
 @cli.command("reset-admin-password")

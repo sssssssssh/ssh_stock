@@ -33,17 +33,22 @@ def upgrade():
         name = f"ix_{table}_{column}" if table != "job_run" else "idx_job_run_retention"
         columns = [column] if table != "job_run" else ["status", "finished_at", "id"]
         existing = bind.execute(sa.text("""
-            SELECT i.indisvalid, i.indisready,
-                   pg_get_indexdef(i.indexrelid) AS definition
-            FROM pg_index i WHERE i.indexrelid = to_regclass(:name)
-        """), {"name": name}).first()
+            SELECT i.indisvalid, i.indisready, i.indisunique,
+                   i.indrelid = to_regclass(:table_name) AS right_table,
+                   i.indpred IS NULL AND i.indexprs IS NULL AS plain,
+                   am.amname, i.indnkeyatts, i.indnatts,
+                   ARRAY(SELECT a.attname FROM unnest(i.indkey)
+                         WITH ORDINALITY AS k(attnum, position)
+                         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = k.attnum
+                         ORDER BY k.position) AS column_names
+            FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+            JOIN pg_am am ON am.oid = c.relam WHERE i.indexrelid = to_regclass(:name)
+        """), {"name": name, "table_name": table}).first()
         if existing is not None:
-            definition = f"({', '.join(columns)})"
-            if not existing.indisvalid or not existing.indisready or (
-                definition not in existing.definition
-                or f" ON public.{table} USING btree " not in existing.definition
-                or " WHERE " in existing.definition
-            ):
+            if not (existing.indisvalid and existing.indisready and not existing.indisunique
+                    and existing.right_table and existing.plain and existing.amname == "btree"
+                    and existing.indnkeyatts == existing.indnatts == len(columns)
+                    and list(existing.column_names) == columns):
                 raise RuntimeError("RETENTION_INDEX_REQUIRES_OPERATOR_REPAIR")
         else:
             op.create_index(name, table, columns)

@@ -52,12 +52,21 @@ def missing_provenance(policy, execute):
         if day is not None:
             query = query.add_columns(day.label("trade_date"))
         bounded = query.where(*condition).limit(policy.max_missing_references + 1).subquery()
-        count = execute(select(func.count()).select_from(bounded)).scalar_one()
+        aggregate = select(func.count().label("count")).select_from(bounded)
+        if day is not None:
+            aggregate = aggregate.add_columns(func.min(bounded.c.trade_date).label("first_date"),
+                                              func.max(bounded.c.trade_date).label("last_date"))
+        summary = execute(aggregate).one()
+        count = summary._mapping["count"]
         total += count
         if total > policy.max_missing_references:
             raise RetentionBlocked("RETENTION_MISSING_REFERENCE_BUDGET_EXCEEDED")
         if count:
-            diagnostics.append({"table": name, "column": field, "missing_rows": count})
+            diagnostics.append({
+                "table": name, "column": field, "missing_rows": count,
+                "first_date": str(summary.first_date) if day is not None else None,
+                "last_date": str(summary.last_date) if day is not None else None,
+            })
             remaining = policy.diagnostic_limit - len(samples)
             if remaining > 0:
                 for row in execute(query.where(*condition).order_by(column).limit(remaining)):
@@ -87,6 +96,8 @@ def run_retention(
         "protected_referenced_jobs": None, "deleted_success_jobs": 0,
         "deleted_failed_jobs": 0, "missing_provenance_references": None,
         "candidate_scan_rows": 0, "sql_count": 0, "blocked": False,
+        "skipped_locked_or_changed_jobs": None,
+        "candidate_capacity_warning": None,
         "error_code": None, "dry_run": dry_run,
         "job_deletion_enabled": policy.job_deletion_enabled,
     })
@@ -106,6 +117,10 @@ def run_retention(
             db.execute(text("SET TRANSACTION READ ONLY"))
         db.execute(select(func.set_config("lock_timeout", str(policy.lock_timeout_ms), True)))
         result["sql_count"] += 1 + int(dry_run)
+        if not dry_run and execute(select(func.current_setting(
+            "transaction_isolation",
+        ))).scalar_one() != "read committed":
+            raise RetentionBlocked("RETENTION_REQUIRES_READ_COMMITTED")
         execute(select(1))
         assert_reference_schema(db)
         result["sql_count"] += 1
@@ -113,6 +128,9 @@ def run_retention(
             JobRun.finished_at, JobRun.id,
         ).limit(policy.max_candidate_rows + 1)).all()
         result["candidate_scan_rows"] = len(rows)
+        result["candidate_capacity_warning"] = (
+            len(rows) * 100 >= policy.max_candidate_rows * policy.candidate_warning_percent
+        )
         if len(rows) > policy.max_candidate_rows:
             raise RetentionBlocked("RETENTION_CANDIDATE_BUDGET_EXCEEDED")
         ids = [row.id for row in rows]
@@ -133,16 +151,24 @@ def run_retention(
             if policy.job_deletion_enabled and ids:
                 locked = select(JobRun.id).where(
                     JobRun.id.in_(ids), *eligible_jobs(current), ~referenced_job(),
-                ).order_by(JobRun.finished_at, JobRun.id).with_for_update(skip_locked=True).cte(
-                    "retention_candidates",
-                )
+                ).order_by(JobRun.finished_at, JobRun.id).with_for_update(skip_locked=True)
+                locked_ids = execute(locked).scalars().all()
+                result["protected_referenced_jobs"] = execute(select(func.count()).select_from(
+                    JobRun,
+                ).where(JobRun.id.in_(ids), referenced_job())).scalar_one()
+                # A second READ COMMITTED statement sees refs committed just before
+                # the parent lock. This also protects the legacy SET NULL backtest FK.
+                # Later FK writers wait behind our parent locks, then fail if deleted.
                 deleted = execute(delete(JobRun).where(
-                    JobRun.id.in_(select(locked.c.id)),
-                ).returning(JobRun.status)).scalars().all()
+                    JobRun.id.in_(locked_ids), ~referenced_job(), *eligible_jobs(current),
+                ).returning(JobRun.status)).scalars().all() if locked_ids else []
                 result["deleted_failed_jobs"] = deleted.count("FAILED")
                 result["deleted_success_jobs"] = len(deleted) - result["deleted_failed_jobs"]
                 result["successful_jobs"] = result["deleted_success_jobs"]
                 result["failed_jobs"] = result["deleted_failed_jobs"]
+                result["skipped_locked_or_changed_jobs"] = max(
+                    0, len(ids) - result["protected_referenced_jobs"] - len(deleted),
+                )
             operations = (
                 ("provider_api_log", delete(ProviderApiLog).where(
                     ProviderApiLog.created_at < current - timedelta(days=90))),
@@ -174,7 +200,11 @@ def run_retention(
         db.rollback()
         raise
     result["duration_ms"] = round((perf_counter() - started) * 1000, 3)
-    logger.info("retention cleanup {}", {
+    result["error_count"] = int(result["blocked"])
+    warning = result["blocked"] or result["candidate_capacity_warning"] or (
+        (result["missing_provenance_references"] or 0) > 0
+    )
+    logger.log("WARNING" if warning else "INFO", "retention cleanup {}", {
         key: value for key, value in result.items() if not key.startswith("missing_reference_")
     })
     return result

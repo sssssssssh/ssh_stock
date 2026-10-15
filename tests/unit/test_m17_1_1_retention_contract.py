@@ -57,6 +57,7 @@ def test_age_predicate_keeps_original_statuses_and_strict_cutoffs():
     {"max_candidate_rows": 0}, {"max_candidate_rows": 100001},
     {"statement_timeout_ms": 0}, {"max_duration_ms": 0}, {"lock_timeout_ms": 0},
     {"diagnostic_limit": 101}, {"job_deletion_enabled": "true"}, {"unknown": 1},
+    {"candidate_warning_percent": 0}, {"candidate_warning_percent": 101},
 ])
 def test_policy_is_bounded_strict_and_job_deletion_defaults_off(update):
     assert not RetentionPolicy().job_deletion_enabled

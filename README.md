@@ -15,8 +15,12 @@
 
 修复通用清理误删仍被衍生结果引用的 Job。0054 为来源引用增加保守约束和索引，
 不补造旧任务或改写财务记录。`config/app.yaml` 的 `retention.job_deletion_enabled`
-默认 false；未单独审批前不要开启。A 批引用/并发验证见 `docs/M17_1_1_retention_decisions.md`；
-完整验收、百万行预算和发布操作仍须最终 CI 与 Runbook，不代表已部署到业务库。
+默认 false；未单独审批前不要开启。A 批 `44578b7` 完整 CI `38679638700` 已通过；
+引用、并发决策见 `docs/M17_1_1_retention_decisions.md`。B 批新增只读预检、失证诊断、
+百万行 EXPLAIN/预算与恢复流程；最终整套验收仍需同 HEAD CI，不代表已部署到业务库。
+操作见 `docs/M17_1_1_retention_runbook.md`：先 retention-inventory / retention-indexes，
+线上经审批预建并发索引再 upgrade head；升级后 retention-check 默认只读，--details 仅运维查看。
+首次 Job 删除必须同时开启配置并执行 retention-run --confirm；不要复制旧无保护删除 SQL。
 
 ## M17.1 数据就绪整改与验收
 
@@ -63,7 +67,7 @@ A 已通过隔离 PostgreSQL 17 的 1420 项完整后端测试、Ruff、迁移�
 
 先确认当前发布的完整 CI 已通过，并备份业务库（备份保存在仓库外）。按本文现有部署流程
 升级到 Alembic head；`python -m alembic upgrade head` 只升级结构，0053 不生成任何模拟数据。
-执行 `python -m alembic current` 和 `python -m alembic heads`，应同为 0053。
+执行 `python -m alembic current` 和 `python -m alembic heads`，应同为当前 HEAD；M17.1.1 为 0054。
 开发过程没有替你迁移、清空或补算业务数据库。
 
 修改 `config/paper.yaml`；首次只开启主功能，保留人工操作：

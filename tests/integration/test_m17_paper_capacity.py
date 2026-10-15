@@ -9,6 +9,7 @@ from pathlib import Path
 from time import perf_counter
 
 import pytest
+from app.core.retention_config import RetentionPolicy
 from app.domain.decision.account_requests import AdvancePaperAccount
 from app.domain.decision.contracts import PaperError, content_hash
 from app.domain.decision.requests import (
@@ -42,10 +43,12 @@ from app.services.paper.performance import PaperPerformance
 from app.services.paper.queue import PAPER_DAILY, PaperQueue
 from app.services.paper.records import make_record, open_cutoff, verify_record
 from app.services.portfolio.ledger_precision import ratio
+from app.services.retention import run_retention
 from sqlalchemy import event, func, select
 
 from tests.integration.m16_6_support import isolated_contract_database
 from tests.integration.m17_support import CODES, DAY, NOW, seed, settings
+from tests.integration.test_m17_1_paper_continuity import frozen_records
 
 # Two-symbol fixtures exercise full source checks, queue/claim and atomic job settlement.
 # Fix these budgets before running CI; history length must not introduce per-day SQL growth.
@@ -674,6 +677,24 @@ def test_real_daily_queue_claim_source_and_settlement_are_bounded(
     measurements, job_ids = [], []
     frozen_fill_hash, buy_quantity, cash_delta, buy_cost = None, None, None, None
     for index, day in enumerate(days[1:]):
+        if with_dirty_history and index == trade_days - 1:
+            clock = datetime.combine(day, time(10), UTC)
+            with factory() as db:
+                unused = JobRun(job_type="provider_smoke", status="SUCCESS",
+                                started_at=clock - timedelta(days=181, minutes=1),
+                                finished_at=clock - timedelta(days=181))
+                db.add(unused)
+                db.commit()
+                unused_id, before = unused.id, frozen_records(db)
+                result = run_retention(db, now=clock, policy=RetentionPolicy(
+                    job_deletion_enabled=True,
+                ))
+                assert not result["blocked"] and result["successful_jobs"] == 1, result
+                assert db.get(JobRun, unused_id) is None and frozen_records(db) == before
+                if trade_days == 250:
+                    assert result["protected_referenced_jobs"] > 0
+                emit_measurement({"kind": "retention_during_daily_advance",
+                                  "trade_days": trade_days, "retention": result})
         job_id, measurement = measured_daily_job(factory, engine, owner, account_id, day, config)
         measurements.append(measurement)
         job_ids.append(job_id)

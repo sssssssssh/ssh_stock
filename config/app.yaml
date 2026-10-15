@@ -22,6 +22,7 @@ app:
 retention:
   job_deletion_enabled: false
   max_candidate_rows: 10000
+  candidate_warning_percent: 80
   max_missing_references: 1000
   diagnostic_limit: 20
   lock_timeout_ms: 1000

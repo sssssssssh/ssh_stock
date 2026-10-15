@@ -2,6 +2,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from threading import Barrier, Event
+from time import monotonic, sleep
 
 import pytest
 import sqlalchemy as sa
@@ -9,7 +10,7 @@ from alembic import command
 from alembic.config import Config
 from app.core.retention_config import RetentionPolicy
 from app.models import Base
-from app.models.job import JobRun, ProviderApiLog
+from app.models.job import JobRun, ProviderApiLog, ServiceHeartbeat
 from app.models.market_data import Sector, StockFactorDaily, Theme
 from app.services.retention import run_retention
 from app.services.retention_lineage import JOB_REFERENCES, assert_reference_schema
@@ -187,12 +188,15 @@ def test_legacy_orphan_survives_migration_and_is_diagnosed_not_fabricated(retent
         db.rollback()
 
 
-def test_writer_first_parent_key_share_prevents_delete_and_orphan(retention_db):
+@pytest.mark.parametrize("name,field", [
+    ("stock_factor_daily", "calc_run_id"), ("portfolio_backtest_run", "job_id"),
+])
+def test_writer_first_parent_key_share_prevents_delete_and_orphan(retention_db, name, field):
     factory, _ = retention_db
     with factory() as db:
         job_id = old_job(db)
     with factory() as writer:
-        reference(writer, "stock_factor_daily", "calc_run_id", job_id)
+        reference(writer, name, field, job_id)
         with ThreadPoolExecutor(max_workers=1) as pool:
             def cleanup():
                 with factory() as cleaner:
@@ -202,17 +206,20 @@ def test_writer_first_parent_key_share_prevents_delete_and_orphan(retention_db):
         writer.commit()
     with factory() as db:
         assert db.get(JobRun, job_id) is not None
-        assert db.scalar(sa.select(StockFactorDaily.calc_run_id)) == job_id
+        assert db.scalar(sa.select(Base.metadata.tables[name].c[field])) == job_id
 
 
-def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_db):
+@pytest.mark.parametrize("name,field", [
+    ("stock_factor_daily", "calc_run_id"), ("portfolio_backtest_run", "job_id"),
+])
+def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_db, name, field):
     factory, engine = retention_db
     with factory() as db:
         job_id = old_job(db)
     deleted, release, writing = Event(), Event(), Event()
 
     def after_delete(conn, cursor, statement, parameters, context, executemany):
-        if statement.startswith("WITH retention_candidates") and "DELETE FROM job_run" in statement:
+        if statement.startswith("DELETE FROM job_run"):
             deleted.set()
             assert release.wait(10)
 
@@ -226,7 +233,7 @@ def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_d
             db.execute(sa.text("SET LOCAL lock_timeout = '5s'"))
             writing.set()
             try:
-                reference(db, "stock_factor_daily", "calc_run_id", job_id)
+                reference(db, name, field, job_id)
                 db.commit()
                 return "UNEXPECTED_WRITE"
             except IntegrityError as exc:
@@ -248,7 +255,7 @@ def test_cleaner_first_new_reference_is_rejected_after_parent_commit(retention_d
     assert not result["blocked"] and result["successful_jobs"] == 1 and state == "23503"
     with factory() as db:
         assert db.get(JobRun, job_id) is None
-        assert db.scalar(sa.select(sa.func.count()).select_from(StockFactorDaily)) == 0
+        assert db.scalar(sa.select(sa.func.count()).select_from(Base.metadata.tables[name])) == 0
 
 
 def test_two_cleaners_do_not_double_count_or_deadlock(retention_db):
@@ -258,7 +265,7 @@ def test_two_cleaners_do_not_double_count_or_deadlock(retention_db):
     barrier = Barrier(2, timeout=10)
 
     def before_delete(conn, cursor, statement, parameters, context, executemany):
-        if statement.startswith("WITH retention_candidates") and "DELETE FROM job_run" in statement:
+        if statement.startswith("SELECT job_run.id") and "FOR UPDATE" in statement:
             barrier.wait()
 
     def cleanup():
@@ -284,16 +291,73 @@ def test_database_failure_rolls_back_jobs_and_all_log_deletes(retention_db):
         job_id = old_job(db)
         log = ProviderApiLog(provider="synthetic", api_name="daily", status="SUCCESS",
                              created_at=NOW - timedelta(days=400))
-        db.add(log)
+        heartbeat = ServiceHeartbeat(service_name="worker", instance_id="synthetic-worker",
+                                     started_at=NOW - timedelta(days=401),
+                                     heartbeat_at=NOW - timedelta(days=400), version="synthetic")
+        db.add_all([log, heartbeat])
         db.commit()
-        log_id = log.id
+        log_id, heartbeat_id = log.id, heartbeat.id
     with engine.begin() as conn:
         conn.execute(sa.text("""CREATE FUNCTION retention_test_failure() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected failure'; END $$"""))
         conn.execute(sa.text("""CREATE TRIGGER retention_test_failure BEFORE DELETE
-            ON provider_api_log FOR EACH ROW EXECUTE FUNCTION retention_test_failure()"""))
+            ON service_heartbeat FOR EACH ROW EXECUTE FUNCTION retention_test_failure()"""))
     with factory() as db:
         result = run_retention(db, now=NOW, policy=ENABLED)
         assert result["blocked"] and result["error_code"] == "RETENTION_DATABASE_ERROR"
         assert result["successful_jobs"] == result["provider_api_log"] == 0
         assert db.get(JobRun, job_id) is not None and db.get(ProviderApiLog, log_id) is not None
+        assert db.get(ServiceHeartbeat, heartbeat_id) is not None
+
+
+def test_reference_committed_after_lock_query_snapshot_cannot_be_set_null(retention_db):
+    factory, engine = retention_db
+    with factory() as db:
+        job_id = old_job(db)
+    gate_key = uuid.uuid4().int % (2**62)
+    injected = Event()
+
+    def pause_lock_query(conn, cursor, statement, parameters, context, executemany):
+        if statement.startswith("SELECT job_run.id") and "FOR UPDATE" in statement:
+            # Only a test barrier: the statement snapshot exists before LockRows can run.
+            statement = statement.replace(
+                "FROM job_run \n",
+                "FROM job_run CROSS JOIN (SELECT pg_advisory_xact_lock("
+                f"{gate_key})) AS retention_test_barrier \n", 1,
+            )
+            injected.set()
+        return statement, parameters
+
+    def cleanup():
+        with factory() as db:
+            return run_retention(db, now=NOW, policy=ENABLED)
+
+    sa.event.listen(engine, "before_cursor_execute", pause_lock_query, retval=True)
+    try:
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as gate:
+            gate.execute(sa.text("SELECT pg_advisory_lock(:key)"), {"key": gate_key})
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(cleanup)
+                try:
+                    assert injected.wait(10)
+                    deadline = monotonic() + 5
+                    while not gate.scalar(sa.text("""SELECT EXISTS (
+                        SELECT 1 FROM pg_stat_activity WHERE wait_event = 'advisory'
+                        AND query LIKE '%retention_test_barrier%')""")):
+                        assert monotonic() < deadline
+                        sleep(0.01)
+                    with factory() as writer:
+                        writer.execute(sa.text("SET LOCAL lock_timeout = '1s'"))
+                        reference(writer, "portfolio_backtest_run", "job_id", job_id)
+                        writer.commit()
+                finally:
+                    gate.execute(sa.text("SELECT pg_advisory_unlock(:key)"), {"key": gate_key})
+                result = future.result(timeout=20)
+    finally:
+        sa.event.remove(engine, "before_cursor_execute", pause_lock_query)
+    assert not result["blocked"] and result["successful_jobs"] == 0
+    assert result["protected_referenced_jobs"] == 1
+    with factory() as db:
+        assert db.get(JobRun, job_id) is not None
+        column = Base.metadata.tables["portfolio_backtest_run"].c.job_id
+        assert db.scalar(sa.select(column)) == job_id

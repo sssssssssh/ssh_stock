@@ -26,6 +26,7 @@ jobs:
       DOCKER_DATABASE_URL: postgresql+psycopg://stock:stock@postgres:5432/stock_db
       TUSHARE_TOKEN: test-token
       M17_MEASUREMENT_PATH: .codex_tmp/m17_capacity.jsonl
+      M17_1_1_MEASUREMENT_PATH: .codex_tmp/m17_1_1-retention.jsonl
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,7 +42,11 @@ jobs:
         # All retention writes/concurrency tests use disposable PG17 databases.
         run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
       - name: M17.1.1 reference-aware retention regressions
-        run: python -m pytest tests/integration/test_m17_1_1_retention.py -q
+        run: >-
+          python -m pytest tests/integration/test_m17_1_1_retention.py
+          tests/integration/test_m17_1_1_retention_paper.py
+          tests/integration/test_m17_1_1_retention_capacity.py
+          tests/integration/test_m17_1_1_retention_migration.py -q
       - name: M17.1 isolated PAPER continuity regressions
         run: |
           python -m pytest tests/integration/test_m17_decision_sources.py -q
@@ -96,4 +101,10 @@ jobs:
         with:
           name: m17-1-dependency-audit
           path: .codex_tmp/m17_1-dependency-audit.json
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m17-1-1-retention-evidence
+          path: .codex_tmp/m17_1_1-retention.jsonl
           if-no-files-found: ignore

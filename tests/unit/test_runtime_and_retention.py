@@ -24,6 +24,9 @@ class _Result:
     def scalar_one(self):
         return self._scalar
 
+    def one(self):
+        return SimpleNamespace(_mapping={"count": self._scalar})
+
     def scalars(self):
         return self
 
@@ -124,11 +127,16 @@ def test_retention_only_targets_operational_tables(monkeypatch) -> None:
                 return _Result(rowcount={
                     "provider_api_log": 1, "auth_session": 4, "service_heartbeat": 5,
                 }[name])
+            if list(statement.selected_columns.keys()) == ["current_setting"]:
+                return _Result(scalar="read committed")
+            if list(statement.selected_columns.keys()) == ["id"]:
+                return _Result(rows=[row.id for row in self.candidates])
             if list(statement.selected_columns.keys()) == ["id", "status"]:
                 import uuid
 
-                return _Result(rows=[SimpleNamespace(id=uuid.uuid4(), status=status)
-                                     for status in ["SUCCESS"] * 2 + ["FAILED"] * 3])
+                self.candidates = [SimpleNamespace(id=uuid.uuid4(), status=status)
+                                   for status in ["SUCCESS"] * 2 + ["FAILED"] * 3]
+                return _Result(rows=self.candidates)
             return _Result(scalar=0)
 
         def commit(self):
