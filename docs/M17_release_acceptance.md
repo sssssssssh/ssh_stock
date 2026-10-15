@@ -147,3 +147,7 @@ history. Never delete history or force downgrade to make an older app start.
 Earlier rejected candidates remain visible in Git/CI: A duplicate CHECK names and
 test filename collision; D reversed fixture tuple; E three synthetic source update
 timestamps. Each was corrected and rerun without weakening financial assertions.
+F candidate bcf4ea7 / CI 38661921595 was cancelled while blocked: independent
+progress used UPDATE against the JobRun FK KEY SHARE held by its financial
+transaction. Progress and cancellation now use NO KEY UPDATE; a SQL lock-mode
+regression and ten-second lock-wait bounds in new PG tests prevent silent hangs.

@@ -317,7 +317,7 @@ class PaperQueue:
                 select(JobRun)
                 .where(JobRun.id == job.id)
                 .execution_options(populate_existing=True)
-                .with_for_update()
+                .with_for_update(key_share=True)
             )
             if verify_dispatch(self.db, job) != (owner, account.id):
                 raise PaperError("PAPER_NOT_FOUND", status_code=404)

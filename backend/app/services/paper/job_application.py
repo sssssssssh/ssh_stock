@@ -116,7 +116,10 @@ class PaperJobApplication:
     def _progress(self, stage, percent):
         # Progress commits separately; financial state stays in the account transaction.
         with Session(bind=self.db.get_bind()) as progress:
-            job = progress.scalar(select(JobRun).where(JobRun.id == self.job_id).with_for_update())
+            # Financial day heads hold FK KEY SHARE on JobRun until the day commits.
+            job = progress.scalar(
+                select(JobRun).where(JobRun.id == self.job_id).with_for_update(key_share=True)
+            )
             self._assert_claim(progress, job)
             job.step = f"paper {stage}"
             job.heartbeat_at = self.clock()

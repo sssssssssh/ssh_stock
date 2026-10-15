@@ -556,7 +556,16 @@ def forward_weekdays(count):
 def daily_capacity_database(monkeypatch):
     # Each case owns its full Raw/Derived fixture; do not share source rows across cases.
     with isolated_contract_database(monkeypatch) as database:
-        yield database
+        _, engine = database
+
+        def bound(connection):
+            connection.exec_driver_sql("SET LOCAL lock_timeout = '10s'")
+
+        event.listen(engine, "begin", bound)
+        try:
+            yield database
+        finally:
+            event.remove(engine, "begin", bound)
 
 
 def prepare_daily_account(factory, days, config):

@@ -35,11 +35,26 @@ from app.services.retention import run_retention
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from m17_support import CODES, DAY, NOW, settings
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from test_m17_paper_daily import FIRST, SECOND, approve, run
 from test_m17_paper_daily import paper as paper
 
 AT = NOW + timedelta(days=1)
+
+
+@pytest.fixture(autouse=True)
+def bounded_lock_waits(paper):
+    factory, _, _, _ = paper
+    engine = factory.kw["bind"]
+
+    def bound(connection):
+        connection.exec_driver_sql("SET LOCAL lock_timeout = '10s'")
+
+    event.listen(engine, "begin", bound)
+    try:
+        yield
+    finally:
+        event.remove(engine, "begin", bound)
 
 
 def count(db, model):

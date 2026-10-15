@@ -6,7 +6,7 @@ from app.api.v1 import jobs
 from app.core.paper_config import PaperRiskConfig
 from app.models.paper import PaperAccount
 from app.repositories.paper import PaperRepository
-from app.services.paper.job_application import safe_error_code
+from app.services.paper.job_application import PaperJobApplication, safe_error_code
 from app.services.paper.recovery import recover_stale_paper_jobs
 from app.services.paper.scheduling import run_scheduled_paper
 from fastapi import HTTPException
@@ -34,6 +34,33 @@ def test_account_lock_serializes_state_and_allows_cancellation_fk_receipts():
     db = Db()
     PaperRepository(db).owned(PaperAccount, uuid4(), uuid4(), lock=True)
     assert "FOR NO KEY UPDATE" in str(db.statement.compile(dialect=postgresql.dialect()))
+
+
+def test_progress_lock_allows_financial_day_head_foreign_key_share(monkeypatch):
+    job = SimpleNamespace(job_metadata={})
+
+    class Progress:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def scalar(self, statement):
+            self.statement = statement
+            return job
+
+        def commit(self):
+            self.committed = True
+
+    progress = Progress()
+    monkeypatch.setattr("app.services.paper.job_application.Session", lambda **_: progress)
+    app = PaperJobApplication(SimpleNamespace(get_bind=lambda: None), None, clock=lambda: None)
+    app.job_id = uuid4()
+    app._assert_claim = lambda *_: None
+    app._progress("close", 70)
+    assert "FOR NO KEY UPDATE" in str(progress.statement.compile(dialect=postgresql.dialect()))
+    assert progress.committed and job.job_metadata["progress_pct"] == 70
 
 
 def test_paper_exception_does_not_export_sql_or_private_payload():

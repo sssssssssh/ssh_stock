@@ -186,6 +186,9 @@ independent transactions and do not imply partial financial checkpoints.
 
 Account locks are FOR NO KEY UPDATE: still exclusive against account changes and
 other executors, compatible with FK KEY SHARE for cancellation audit insertion.
+Independent progress/cancel JobRun locks also use NO KEY UPDATE, compatible with
+the financial day heads' JobRun FK KEY SHARE. UPDATE would self-block across
+sessions while the executor waits for its progress transaction.
 Recovery uses account then job row locks and skips locked accounts. Stale jobs
 become FAILED with immutable audit and require an explicit new request. Jobs and
 account states are distinct. PAPER jobs survive generic retention and are hidden
