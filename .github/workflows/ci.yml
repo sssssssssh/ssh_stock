@@ -38,6 +38,12 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head
+      - name: M17.1.2 suspension schema and ingestion regressions
+        run: >-
+          python -m pytest tests/unit/test_suspend_normalization.py
+          tests/integration/test_suspend_timing_schema.py
+          tests/integration/test_ingestion_suspend.py -q
+          --junitxml=.codex_tmp/m17_1_2-targeted.xml
       - name: M17.1 targeted dirty dependency regressions
         # All retention writes/concurrency tests use disposable PG17 databases.
         run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
@@ -85,7 +91,7 @@ jobs:
           node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m16_6_browser_smoke.cjs
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m17_browser_smoke.cjs
-      - name: M17.1.1 exact HEAD and migration receipt
+      - name: M17.1.1 and M17.1.2 exact HEAD and migration receipts
         run: |
           python - <<'PY'
           import json
@@ -104,11 +110,19 @@ jobs:
               with engine.connect() as connection:
                   current = connection.scalar(text("SELECT version_num FROM alembic_version"))
                   pg_version = connection.scalar(text("SHOW server_version_num"))
+                  timing_column = dict(connection.execute(text(
+                      "SELECT data_type, character_maximum_length, is_nullable "
+                      "FROM information_schema.columns WHERE table_schema='public' "
+                      "AND table_name='stock_suspend_daily' AND column_name='suspend_timing'"
+                  )).mappings().one())
           finally:
               engine.dispose()
           heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
           assert heads == [current] == ["0056_suspend_timing_text"], "CI_MIGRATION_HEAD_MISMATCH"
           assert pg_version.startswith("17"), "CI_POSTGRES_MAJOR_MISMATCH"
+          assert timing_column == {
+              "data_type": "text", "character_maximum_length": None, "is_nullable": "YES",
+          }, "CI_SUSPEND_TIMING_SCHEMA_MISMATCH"
           run_url = (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
                      f"{os.environ['GITHUB_RUN_ID']}")
           receipt = {
@@ -121,9 +135,20 @@ jobs:
           output = Path(".codex_tmp/m17_1_1-release.json")
           output.parent.mkdir(parents=True, exist_ok=True)
           output.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+          suspend_receipt = {
+              **receipt, "schema_version": "m17.1.2-ci-receipt-v1",
+              "suspend_timing_column": timing_column,
+              "targeted_junit": "m17_1_2-targeted.xml",
+              "production_validation": "PENDING_APPROVAL", "production_job_id": None,
+          }
+          Path(".codex_tmp/m17_1_2-release.json").write_text(
+              json.dumps(suspend_receipt, indent=2) + "\n", encoding="utf-8",
+          )
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
               stream.write(f"## M17.1.1\n\nHEAD: `{head}`\n\nCI: {run_url}\n\n"
                            f"Alembic current=heads: `{current}`\n")
+              stream.write(f"\n## M17.1.2\n\nHEAD: `{head}`\n\nCI: {run_url}\n\n"
+                           "suspend_timing: nullable TEXT; G1 real backfill pending approval.\n")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -150,4 +175,12 @@ jobs:
           path: |
             .codex_tmp/m17_1_1-retention.jsonl
             .codex_tmp/m17_1_1-release.json
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m17-1-2-suspend-evidence
+          path: |
+            .codex_tmp/m17_1_2-targeted.xml
+            .codex_tmp/m17_1_2-release.json
           if-no-files-found: ignore

@@ -16,6 +16,8 @@
 0056 将 `stock_suspend_daily.suspend_timing` 从 VARCHAR(32) 无损扩大为可空 TEXT；
 2024-09-13 真实只读取证确认存在 35 字符描述，见 `docs/acceptance/M17_1_2_suspend_audit.md`。
 本轮分批交付中；不代表业务库已升级或真实回填验收已完成。生产操作须单独批准。
+部署与单日回填步骤见 `docs/acceptance/M17_1_2_suspend_runbook.md`，
+逐项测试与精确 CI 身份见 `docs/acceptance/M17_1_2_closeout.md`；最终结论以同 HEAD 完整 CI 为准。
 降级遇到超过 32 字符的描述会拒绝，不应删除或截断历史数据来强行回退。
 停牌描述空值/NaN/空白统一为 NULL，合法长文本原样保存；非法类型、主键和错日快照
 会记录质量 ERROR 并拒绝，不能当成无停牌的成功空响应。其他 Raw/策略/账本口径不变。

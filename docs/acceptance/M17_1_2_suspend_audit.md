@@ -63,3 +63,12 @@ A 提交为 `0f6b4c766ff2c73bba96ef4ba517382fd443e96c`，
 - 在真实 UPSERT 第一行后注入数据库除零错误：本日删除、部分写入、PASS 质量和 Dirty 整笔回滚，
   已成功提交的前一日保持不变。非法清洗则按既有设计保留 ERROR 质量，Raw/Dirty 不变。
 - 真实 TradeStatusService 验证长描述或 NULL 均不改变 S 停牌、R 复牌的现有分类。
+
+## C 批真实响应隔离写入与发布证据
+
+再次读取当天真实接口响应，仅在随机临时 PostgreSQL 17.6 库走真实 IngestionService 两次：
+13 行、12 个 SQL NULL、最长 35 字符，质量 PASS；所有描述逐字段与源相等，二次同步幂等，
+Dirty 仅首次创建。临时库随后移除，没有保存源 payload，也没有生产任务或业务写入。
+
+最终全量、精确 SHA/CI 回执和逐项映射见 `M17_1_2_closeout.md`，
+部署/恢复/单日实际回填见 `M17_1_2_suspend_runbook.md`。生产列扩容与 G1 任务尚未审批执行。

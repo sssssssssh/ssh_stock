@@ -7,6 +7,8 @@ S/R、自然键、质量证据和 Dirty 语义保持不变；仅结构扩容不�
 当前分批交付，真实源取证与验收状态见 `acceptance/M17_1_2_suspend_audit.md`。
 描述的标准空值、缺字段和纯空白为 NULL；合法文字不裁剪。无效 S/R、代码、日期或复杂值
 必须整批拒绝并可查看 ERROR，不得伪装当日无停牌；交易状态不以描述长度或 NULL 判停牌。
+G1 需经审批部署 0056、单日 2024-09-13 backfill/validate-data 真实成功及源值核对，
+代码/隔离库/CI 验证不能代替该业务验收；完整 Checklist 见 acceptance/M17_1_2_closeout.md。
 
 ## M17.1.1 长期血缘保留
 
