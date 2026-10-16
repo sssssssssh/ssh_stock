@@ -60,7 +60,9 @@ jobs:
           python -m pytest tests/integration/test_m17_paper_daily.py -q
           python -m pytest tests/integration/test_m17_paper_jobs.py -q
           python -m pytest tests/integration/test_m17_1_paper_continuity.py -q
-      - run: python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
+      - run: >-
+          python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
+          --junitxml=.codex_tmp/m17_1_2-full.xml
       - name: M16.6 capture capacity measurements
         run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
       - run: python -m alembic current
@@ -139,6 +141,7 @@ jobs:
               **receipt, "schema_version": "m17.1.2-ci-receipt-v1",
               "suspend_timing_column": timing_column,
               "targeted_junit": "m17_1_2-targeted.xml",
+              "full_junit": "m17_1_2-full.xml",
               "production_validation": "PENDING_APPROVAL", "production_job_id": None,
           }
           Path(".codex_tmp/m17_1_2-release.json").write_text(
@@ -182,5 +185,6 @@ jobs:
           name: m17-1-2-suspend-evidence
           path: |
             .codex_tmp/m17_1_2-targeted.xml
+            .codex_tmp/m17_1_2-full.xml
             .codex_tmp/m17_1_2-release.json
           if-no-files-found: ignore

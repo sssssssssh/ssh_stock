@@ -12,7 +12,8 @@
 
 本文件无法写入包含自身内容的 SHA。最终 Actions 的 `m17-1-2-suspend-evidence` 附件
 提供 `m17_1_2-release.json`（40 位 SHA、CI URL、PG 主版本、current=heads、实际 nullable TEXT）
-及 `m17_1_2-targeted.xml`。以同次完整 Actions conclusion 为准，早期批次绿灯不能替代最终提交。
+及 `m17_1_2-targeted.xml`、全量 `m17_1_2-full.xml`。以同次完整 Actions conclusion 为准，
+早期批次绿灯不能替代最终提交。
 当前没有生产迁移授权、生产回填 Job ID 或 G1 SUCCESS；这些字段不得使用合成 ID 冒充。
 
 ## 实际范围
@@ -84,6 +85,17 @@ I = tests/integration/test_ingestion_suspend.py。下表给出具体场景与断
 本机已完成 33 项迁移联测、88 项定向联测、1405 项全 unit 和 Ruff；
 本机全量及最终 CI 必须记录实际结果，不把 collected 1901 当成 passed 1901。
 既有弃用警告与依赖安全告警不在本补丁中伪装解决。
+
+### 本机容量限制与基线对照
+
+本机重复全量出现既有百万行 Retention 容量失败；不能记为本机全量通过。
+该用例在 `run_retention` 的第 11 条 SQL 处触发 PostgreSQL 3 秒 statement_timeout，
+返回 RETENTION_RETRY_REQUIRED 并整笔回滚，独立复查耗时 3060.775ms。
+另从未修改的基线 `2979be9` 导出独立快照，在同一本机临时 PG17、同等负载下重复该用例，
+同一断言失败、同为第 11 条 SQL 超时回滚，耗时 3060.325ms（基线 schema 为 0055）。
+原断言、3 秒预算、Retention 实现和策略配置都未修改，不用跳过/放宽来换绿灯。
+此对照证明该现象在基线也存在，不将其误报为本次 TEXT/清洗修复引入的功能问题；
+不等于已完成本机平台容量优化，也不豁免最终同 SHA 完整 CI 的容量门禁。
 
 ## DoD 与 G1
 
