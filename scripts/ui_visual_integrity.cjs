@@ -17,7 +17,7 @@ const allowed = file => file === 'frontend/src/style.css'
 function check() {
   const inventory = JSON.parse(fs.readFileSync(path.join(root, 'docs/ui-upgrade/UI-0_source_inventory.json')));
   assert.equal(inventory.baseline_commit, baseline);
-  const files = git(['ls-tree', '-r', '--name-only', baseline, 'frontend']).toString().trim().split('\n');
+  const files = git(['ls-tree', '-r', '-z', '--name-only', baseline, 'frontend']).toString().split('\0').filter(Boolean);
   assert.deepEqual(inventory.sources.map(row => row.file), files, 'Frozen inventory must cover the exact Git tree');
   let protectedFiles = 0;
   for (const row of inventory.sources) {
@@ -29,8 +29,8 @@ function check() {
       protectedFiles++;
     }
   }
-  const changed = git(['diff', '--name-only', baseline]).toString().trim().split('\n').filter(Boolean);
-  const untracked = git(['ls-files', '--others', '--exclude-standard']).toString().trim().split('\n').filter(Boolean);
+  const changed = git(['diff', '-z', '--name-only', baseline]).toString().split('\0').filter(Boolean);
+  const untracked = git(['ls-files', '-z', '--others', '--exclude-standard']).toString().split('\0').filter(Boolean);
   for (const file of [...changed, ...untracked]) assert(allowed(file), `Outside UI-only delivery scope: ${file}`);
   const additions = git(['diff', '--unified=0', baseline, '--', 'frontend/src/style.css']).toString()
     .split('\n').filter(line => line.startsWith('+') && !line.startsWith('+++')).join('\n');

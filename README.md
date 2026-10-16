@@ -11,6 +11,18 @@
 
 当前网页显示名称为“空间”。
 
+## UI 视觉升级 V1（业务基线不变）
+
+视觉以独立原型为参考，生产改动仅位于 `frontend/src/style.css`：深蓝导航、浅色卡片、
+统一表单/表格与窄屏排版。八个主导航、全部次级页面、按钮/文案/条件、接口与图表数据不变；
+没有新增搜索、通知、快捷键或任何交易功能，也不启用 PAPER/LLM，不需要数据库迁移。
+功能冻结 SHA、逐控件清单与验收记录见 [UI 交付记录](docs/ui-upgrade/UI-2_delivery.md)。
+`node scripts/ui_visual_integrity.cjs` 校验本轮 74 个受保护前端文件与冻结提交逐字节一致；
+该门禁用于本轮 UI-only 分支，不是未来业务功能变更的通用许可。
+额外浏览器对照使用测试合成 API，不访问业务库：安装可用 Playwright/Chrome 后执行
+`PLAYWRIGHT_CHANNEL=chrome node scripts/ui_visual_browser.cjs`；可通过 `PLAYWRIGHT_MODULE`
+指定已有模块。结果与截图生成在 `frontend/coverage/ui-visual/`，不提交构建/覆盖率产物。
+
 ## M17.1.2 停复牌描述兼容修复
 
 0056 将 `stock_suspend_daily.suspend_timing` 从 VARCHAR(32) 无损扩大为可空 TEXT；

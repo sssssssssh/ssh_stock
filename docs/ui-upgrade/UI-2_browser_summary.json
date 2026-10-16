@@ -1,0 +1,37 @@
+{
+  "schema_version": "ui-visual-acceptance-v1",
+  "verified_on": "2026-10-17",
+  "baseline": "0136ee9e03727314102cc041d52dd488cca50def",
+  "style_sha256": "26a0793244a02687f9f9f6b2d88798b18992a0d961b6813c136412d01166da35",
+  "production_change_scope": ["frontend/src/style.css"],
+  "unchanged_frontend_files": 74,
+  "unchanged_vue_files": 29,
+  "frozen_control_declarations": 216,
+  "frozen_service_call_sites": 81,
+  "existing_unit_tests": {"files": 20, "passed": 122, "modified": 0},
+  "viewports": [
+    {"width": 1440, "before_after_checkpoints": 94, "passed": true},
+    {"width": 1280, "before_after_checkpoints": 94, "passed": true},
+    {"width": 1024, "before_after_checkpoints": 94, "passed": true},
+    {"width": 768, "before_after_checkpoints": 94, "passed": true},
+    {"width": 390, "before_after_checkpoints": 94, "passed": true}
+  ],
+  "short_screen": {"width": 1280, "height": 720, "checkpoints": 10, "passed": true},
+  "existing_browser_suites": {
+    "m16_6": {"widths": [1440, 390], "passed": true},
+    "m17": {"widths": [1440, 390], "passed": true}
+  },
+  "assertions": [
+    "identical visible control text, values, disabled/required and aria semantics",
+    "identical table header order and cell values",
+    "identical per-step API method, URL, query, body and call count; opaque request IDs normalized",
+    "new layout has no document horizontal overflow; dense tables scroll internally",
+    "sorting uses native keyboard activation in both variants; new layout also verifies pointer activation"
+  ],
+  "scope_notes": [
+    "synthetic intercepted API fixtures, not a production database end-to-end test",
+    "fixed scenarios are not an exhaustive Cartesian product of all user/data/state combinations",
+    "ECharts options, business scripts, templates, services, dependencies and backend unchanged",
+    "existing dependency audit and bundle-size warnings remain; no automatic master merge or deployment"
+  ]
+}
