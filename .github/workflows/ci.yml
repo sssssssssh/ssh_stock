@@ -107,7 +107,7 @@ jobs:
           finally:
               engine.dispose()
           heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-          assert heads == [current] == ["0055_retention_frozen_refs"], "CI_MIGRATION_HEAD_MISMATCH"
+          assert heads == [current] == ["0056_suspend_timing_text"], "CI_MIGRATION_HEAD_MISMATCH"
           assert pg_version.startswith("17"), "CI_POSTGRES_MAJOR_MISMATCH"
           run_url = (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
                      f"{os.environ['GITHUB_RUN_ID']}")

@@ -152,7 +152,7 @@ class StockSuspendDaily(Base):
     trade_date: Mapped[date] = mapped_column(Date)
     ts_code: Mapped[str] = mapped_column(String(16))
     suspend_type: Mapped[str] = mapped_column(String(8))
-    suspend_timing: Mapped[str | None] = mapped_column(String(32))
+    suspend_timing: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
