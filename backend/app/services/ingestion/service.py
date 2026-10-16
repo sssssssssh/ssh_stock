@@ -37,6 +37,7 @@ from app.services.dirty import (
     record_dirty_range,
 )
 from app.services.ingestion.normalizers import (
+    StockSuspendNormalizationError,
     current_sector_members_missing_in_date,
     normalize_adj_factor,
     normalize_daily_basic,
@@ -452,12 +453,22 @@ class IngestionService:
     def sync_suspend_daily(self, trade_date: date, job_id: uuid.UUID | None = None) -> int:
         try:
             df = self.provider.get_suspend_daily(trade_date)
-            rows = normalize_stock_suspend(df)
+            try:
+                rows = normalize_stock_suspend(df)
+            except StockSuspendNormalizationError as exc:
+                # Persist the existing ERROR evidence path before rejecting the whole snapshot.
+                _persist_event_quality(
+                    self.db, trade_date, "suspend_d", [], issues=[exc.issue_code], job_id=job_id,
+                )
+                self.db.commit()
+                raise ValueError(f"suspend_d quality check failed: {exc.issue_code}") from exc
             issues = _raw_frame_issues(
                 df,
                 rows,
                 key_columns=["trade_date", "ts_code", "suspend_type"],
             )
+            if any(row["trade_date"] != trade_date for row in rows):
+                issues.append("SUSPEND_INVALID_TRADE_DATE")
             invalid_types = sorted(
                 {str(row["suspend_type"]) for row in rows if row["suspend_type"] not in {"S", "R"}}
             )

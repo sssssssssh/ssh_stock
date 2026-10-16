@@ -41,3 +41,25 @@
 定向 Ruff 和 git diff --check 通过。真实接口只读复现不等于业务库回填已修复。
 与旧归档/合同/PAPER foundation 迁移联测共 33 项通过，48 个既有 Alembic 配置弃用警告。
 现有测试和 CI 的 head 断言仅同步到 0056，未放宽业务或不可变断言。
+
+## B 批清洗与写入
+
+A 提交为 `0f6b4c766ff2c73bba96ef4ba517382fd443e96c`，
+[A CI](https://github.com/sssssssssh/ssh_stock/actions/runs/38837049096) 状态以实际 Actions 为准。
+新 Normalizer 回归先在旧实现执行，41 failed / 17 passed，证明测试可复现旧缺口；
+修复后新增 58 项与旧 7 项 Normalizer 测试全通过。
+与真实 PostgreSQL Ingestion、既有质量计数测试联测共 88 passed，21 个既有 Alembic 警告。
+完整后端 Ruff 通过。最终全量 CI 和上线验收另行留证，不以此定向数量替代。
+另执行全部 unit 测试：1405 passed，2 个既有弃用警告；不是全量集成测试通过声明。
+
+- None、NaN、pd.NA、缺字段、纯空白描述归为 NULL；合法文本（包括前后空格、中文、标点）原样保存。
+- 非字符串复杂对象、非法/缺失 S/R、非法代码或日期明确拒绝；不再将空类型默认为 S。
+  主日期只有真正缺失时才使用 suspend_date；畸形非空日期不回退掩盖错误。
+- 清洗异常仅携带受控字段/错误码，Ingestion 复用现有质量 ERROR 提交路径后拒绝整个快照。
+  有效记录日期若不等于请求日也拒绝，避免跨日快照对账删除。只修改停牌这一路，不改全局解析。
+- 日志仅有 rows、normalized_null_count、over_32_count；没有原文、Token、SQL 参数或整份响应。
+- PostgreSQL 实测 13 行合成混合批、12 个 SQL NULL、500 字符中英描述无损；重复拉取不重复行，
+  描述更新/替换 NULL 正确记录 Dirty；重复键/源截断警告保守拒绝；真实空响应仍权威对账。
+- 在真实 UPSERT 第一行后注入数据库除零错误：本日删除、部分写入、PASS 质量和 Dirty 整笔回滚，
+  已成功提交的前一日保持不变。非法清洗则按既有设计保留 ERROR 质量，Raw/Dirty 不变。
+- 真实 TradeStatusService 验证长描述或 NULL 均不改变 S 停牌、R 复牌的现有分类。

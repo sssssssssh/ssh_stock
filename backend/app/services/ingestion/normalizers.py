@@ -133,23 +133,58 @@ def normalize_stock_st(df: pd.DataFrame) -> list[dict[str, Any]]:
     return [row for row in rows if row["trade_date"] and row["ts_code"]]
 
 
+class StockSuspendNormalizationError(ValueError):
+    def __init__(self, issue_code: str) -> None:
+        self.issue_code = issue_code
+        super().__init__(issue_code)
+
+
+def _nullable_suspend_text(value: Any, field: str) -> str | None:
+    if isinstance(value, str):
+        return value if value.strip() else None
+    if value is None or (pd.api.types.is_scalar(value) and pd.isna(value)):
+        return None
+    raise StockSuspendNormalizationError(f"SUSPEND_INVALID_FIELD_TYPE:{field}")
+
+
+def _suspend_date(value: Any) -> date | None:
+    if type(value) is date:
+        return value
+    value = _nullable_suspend_text(value, "trade_date")
+    if value is None:
+        return None
+    if len(value) != 8 or not value.isascii() or not value.isdigit():
+        raise StockSuspendNormalizationError("SUSPEND_INVALID_DATE")
+    try:
+        return parse_tushare_date(value)
+    except ValueError:
+        raise StockSuspendNormalizationError("SUSPEND_INVALID_DATE") from None
+
+
 def normalize_stock_suspend(df: pd.DataFrame) -> list[dict[str, Any]]:
-    rows = [
-        {
-            "trade_date": parse_tushare_date(
-                item.get("trade_date") or item.get("suspend_date")
-            ),
-            "ts_code": item.get("ts_code"),
-            "suspend_type": item.get("suspend_type") or "S",
-            "suspend_timing": item.get("suspend_timing"),
-        }
-        for item in df.to_dict("records")
-    ]
-    return [
-        row
-        for row in rows
-        if row["trade_date"] and row["ts_code"] and row["suspend_type"]
-    ]
+    rows: list[dict[str, Any]] = []
+    for item in df.to_dict("records"):
+        trade_date = _suspend_date(item.get("trade_date"))
+        if trade_date is None:
+            trade_date = _suspend_date(item.get("suspend_date"))
+        if trade_date is None:
+            raise StockSuspendNormalizationError("SUSPEND_INVALID_DATE")
+        code = _nullable_suspend_text(item.get("ts_code"), "ts_code")
+        if not code or len(code) > 16 or any(char.isspace() for char in code):
+            raise StockSuspendNormalizationError("SUSPEND_INVALID_TS_CODE")
+        kind = _nullable_suspend_text(item.get("suspend_type"), "suspend_type")
+        if kind not in {"S", "R"}:
+            raise StockSuspendNormalizationError("SUSPEND_INVALID_TYPE")
+        rows.append({
+            "trade_date": trade_date, "ts_code": code, "suspend_type": kind,
+            "suspend_timing": _nullable_suspend_text(item.get("suspend_timing"), "suspend_timing"),
+        })
+    logger.info(
+        "normalized suspend_d rows={} normalized_null_count={} over_32_count={}",
+        len(rows), sum(row["suspend_timing"] is None for row in rows),
+        sum(row["suspend_timing"] is not None and len(row["suspend_timing"]) > 32 for row in rows),
+    )
+    return rows
 
 
 def normalize_stock_limit(df: pd.DataFrame) -> list[dict[str, Any]]:
