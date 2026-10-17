@@ -19,9 +19,39 @@
 功能冻结 SHA、逐控件清单与验收记录见 [UI 交付记录](docs/ui-upgrade/UI-2_delivery.md)。
 `node scripts/ui_visual_integrity.cjs` 校验本轮 74 个受保护前端文件与冻结提交逐字节一致；
 该门禁用于本轮 UI-only 分支，不是未来业务功能变更的通用许可。
-额外浏览器对照使用测试合成 API，不访问业务库：安装可用 Playwright/Chrome 后执行
-`PLAYWRIGHT_CHANNEL=chrome node scripts/ui_visual_browser.cjs`；可通过 `PLAYWRIGHT_MODULE`
-指定已有模块。结果与截图生成在 `frontend/coverage/ui-visual/`，不提交构建/覆盖率产物。
+额外浏览器对照运行真实 `App.vue`，所有 API 使用带标记的合成验收数据，不访问业务库。
+独立 `ui-visual-acceptance` CI 仅在 UI 分支推送及该分支向 master 的 PR 上运行，使用
+Node 22、临时 Playwright 1.64.0 和匹配 Chromium；原 `test` Job 完整保留。
+干净 checkout 可在仓库根目录依次复现（需要 Node 22，安装浏览器需要网络及系统库）：
+
+```bash
+git cat-file -e 0136ee9e03727314102cc041d52dd488cca50def^{commit}
+npm --prefix frontend ci
+npm --prefix frontend run test:coverage
+npm --prefix frontend run build
+node scripts/ui_visual_integrity.cjs
+node scripts/ui_visual_integrity.cjs --self-test
+UI_ACCEPTANCE_TEMP=$(mktemp -d)
+npm install --prefix "$UI_ACCEPTANCE_TEMP/tooling" --no-save --package-lock=false playwright@1.64.0
+export PLAYWRIGHT_MODULE="$UI_ACCEPTANCE_TEMP/tooling/node_modules/playwright"
+export PLAYWRIGHT_BROWSERS_PATH="$UI_ACCEPTANCE_TEMP/browsers"
+node "$PLAYWRIGHT_MODULE/cli.js" install --with-deps chromium
+export BROWSER_ARTIFACT_DIR="$UI_ACCEPTANCE_TEMP/evidence"
+node scripts/ui_visual_browser.cjs
+node scripts/m16_6_browser_smoke.cjs
+node scripts/m17_browser_smoke.cjs
+git diff --check
+```
+
+已有 Chrome 时可显式设置 `PLAYWRIGHT_CHANNEL=chrome`，不是缺 Chromium 后自动跳过或回退。
+新脚本只启动 `127.0.0.1` 上的临时 Vite，退出时关闭浏览器、停止 Vite 并验证端口释放。
+默认产物为 `frontend/coverage/ui-visual/<HEAD>/`；设置 `BROWSER_ARTIFACT_DIR` 可输出仓库外。
+CI 的 `ui-visual-acceptance-<完整 SHA>` Artifact 保存 `<SHA>/result.json`、逐状态
+前后 JSON、`index.md`、`screenshots.json`、PNG 和日志，失败也上传，保留 14 天。
+完整截图与覆盖边界见 [验收证据索引](docs/ui-upgrade/UI-3_acceptance_evidence.md)。
+不提交 PNG、依赖安装目录或构建产物；`--publish-summary` 仅在浏览器完整通过后将实际结果
+写入 `docs/ui-upgrade/UI-2_browser_summary.json`，不手填通过数。先运行 coverage，再运行浏览器，
+避免 coverage 清理默认产物目录。CI 产物的同 SHA 结果优先于历史或本地汇总。
 
 ## M17.1.2 停复牌描述兼容修复
 

@@ -227,7 +227,11 @@ async function run(browser, url, width, variant, mode='rich') {
       await click('返回智能研究');await capture('walk-forward-return');
       await click('查看证据归档');await capture('chat-archive',true);await click('关闭归档面板');
       await click('归档当前会话');await capture('chat-archived',true);
-      await nav('长线');await page.locator('.view-stack:visible .table-wrap').evaluate(e=>{e.scrollLeft=e.scrollWidth;});await capture('long-text-last-column',true);
+      await nav('长线');
+      await page.locator('.view-stack:visible .stock-code-button').first().click();await page.locator('.kline-chart canvas').waitFor();await capture('kline-initial',true);
+      await page.locator('.kline-chart').hover({position:{x:170,y:180}});await capture('kline-tooltip',true);
+      await page.locator('.kline-modal button[aria-label="关闭"]').click();
+      await page.locator('.view-stack:visible .table-wrap').evaluate(e=>{e.scrollLeft=e.scrollWidth;});await capture('long-text-last-column',true);
       await page.locator('.view-stack:visible .table-wrap tbody td:last-child button').first().click();await settle();await capture('stock-research-context',true);
       await nav('回测分析');await capture('missing-period',true);await click('生成周期分析');await page.clock.runFor(1100);await settle();await capture('generated-period',true);
       await nav('研究报告');

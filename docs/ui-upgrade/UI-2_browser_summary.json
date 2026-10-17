@@ -1,37 +1,389 @@
 {
-  "schema_version": "ui-visual-acceptance-v1",
-  "verified_on": "2026-10-17",
+  "schema_version": "ui-visual-acceptance-v1.2",
+  "head_sha": "596b054825608a116aab6b1d55b346288a295440",
   "baseline": "0136ee9e03727314102cc041d52dd488cca50def",
-  "style_sha256": "26a0793244a02687f9f9f6b2d88798b18992a0d961b6813c136412d01166da35",
-  "production_change_scope": ["frontend/src/style.css"],
-  "unchanged_frontend_files": 74,
-  "unchanged_vue_files": 29,
-  "frozen_control_declarations": 216,
-  "frozen_service_call_sites": 81,
-  "existing_unit_tests": {"files": 20, "passed": 122, "modified": 0},
   "viewports": [
-    {"width": 1440, "before_after_checkpoints": 94, "passed": true},
-    {"width": 1280, "before_after_checkpoints": 94, "passed": true},
-    {"width": 1024, "before_after_checkpoints": 94, "passed": true},
-    {"width": 768, "before_after_checkpoints": 94, "passed": true},
-    {"width": 390, "before_after_checkpoints": 94, "passed": true}
+    {
+      "width": 1440,
+      "checkpoints": 94,
+      "states": [
+        {
+          "state": "rich",
+          "before": 63,
+          "after": 63,
+          "passed": true
+        },
+        {
+          "state": "empty",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "error",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "login",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "password",
+          "before": 1,
+          "after": 1,
+          "passed": true
+        },
+        {
+          "state": "disabled",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "schema",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "PAUSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "CLOSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "width": 1280,
+      "checkpoints": 94,
+      "states": [
+        {
+          "state": "rich",
+          "before": 63,
+          "after": 63,
+          "passed": true
+        },
+        {
+          "state": "empty",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "error",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "login",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "password",
+          "before": 1,
+          "after": 1,
+          "passed": true
+        },
+        {
+          "state": "disabled",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "schema",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "PAUSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "CLOSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "width": 1024,
+      "checkpoints": 94,
+      "states": [
+        {
+          "state": "rich",
+          "before": 63,
+          "after": 63,
+          "passed": true
+        },
+        {
+          "state": "empty",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "error",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "login",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "password",
+          "before": 1,
+          "after": 1,
+          "passed": true
+        },
+        {
+          "state": "disabled",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "schema",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "PAUSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "CLOSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "width": 768,
+      "checkpoints": 94,
+      "states": [
+        {
+          "state": "rich",
+          "before": 63,
+          "after": 63,
+          "passed": true
+        },
+        {
+          "state": "empty",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "error",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "login",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "password",
+          "before": 1,
+          "after": 1,
+          "passed": true
+        },
+        {
+          "state": "disabled",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "schema",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "PAUSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "CLOSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        }
+      ],
+      "passed": true
+    },
+    {
+      "width": 390,
+      "checkpoints": 94,
+      "states": [
+        {
+          "state": "rich",
+          "before": 63,
+          "after": 63,
+          "passed": true
+        },
+        {
+          "state": "empty",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "error",
+          "before": 10,
+          "after": 10,
+          "passed": true
+        },
+        {
+          "state": "login",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "password",
+          "before": 1,
+          "after": 1,
+          "passed": true
+        },
+        {
+          "state": "disabled",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "schema",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "PAUSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        },
+        {
+          "state": "CLOSED",
+          "before": 2,
+          "after": 2,
+          "passed": true
+        }
+      ],
+      "passed": true
+    }
   ],
-  "short_screen": {"width": 1280, "height": 720, "checkpoints": 10, "passed": true},
-  "existing_browser_suites": {
-    "m16_6": {"widths": [1440, 390], "passed": true},
-    "m17": {"widths": [1440, 390], "passed": true}
+  "status": "passed",
+  "style_sha256": "26a0793244a02687f9f9f6b2d88798b18992a0d961b6813c136412d01166da35",
+  "script_sha256": "8ec44403f18236338a2e78e6d6a65e539d8200a75582dce0648405097a0d0cad",
+  "worktree_dirty": true,
+  "environment": {
+    "node": "v26.4.0",
+    "playwright": "1.64.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "browser": "155.0.8059.40"
   },
-  "assertions": [
-    "identical visible control text, values, disabled/required and aria semantics",
-    "identical table header order and cell values",
-    "identical per-step API method, URL, query, body and call count; opaque request IDs normalized",
-    "new layout has no document horizontal overflow; dense tables scroll internally",
-    "sorting uses native keyboard activation in both variants; new layout also verifies pointer activation"
+  "ci": {
+    "run_url": null,
+    "attempt": null
+  },
+  "assertion": "same controls, values, disabled/required/aria, table headers/cells and per-step API multiset",
+  "sourceProtection": {
+    "baseline": "0136ee9e03727314102cc041d52dd488cca50def",
+    "protectedFiles": 74,
+    "vueFiles": 29,
+    "controls": 216,
+    "apiCallSites": 81,
+    "changed": [
+      ".github/workflows/ci.yml",
+      "PROJECT_RULES.md",
+      "README.md",
+      "docs/ui-upgrade/UI-0_audit.md",
+      "docs/ui-upgrade/UI-0_controls.md",
+      "docs/ui-upgrade/UI-0_source_inventory.json",
+      "docs/ui-upgrade/UI-1_implementation_plan.md",
+      "docs/ui-upgrade/UI-2_browser_summary.json",
+      "docs/ui-upgrade/UI-2_delivery.md",
+      "docs/股票机会发现系统_PRD_V1.0.md",
+      "docs/股票机会发现系统_系统设计_V1.0.md",
+      "frontend/src/style.css",
+      "scripts/ui_visual_browser.cjs",
+      "scripts/ui_visual_integrity.cjs"
+    ]
+  },
+  "shortScreen": {
+    "width": 1280,
+    "height": 720,
+    "checkpoints": 10,
+    "passed": true
+  },
+  "secondary": [
+    {
+      "width": 1440,
+      "state": "evidence",
+      "checkpoints": 33,
+      "passed": true
+    },
+    {
+      "width": 1440,
+      "state": "recovery",
+      "checkpoints": 5,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "state": "evidence",
+      "checkpoints": 33,
+      "passed": true
+    },
+    {
+      "width": 390,
+      "state": "recovery",
+      "checkpoints": 5,
+      "passed": true
+    }
   ],
-  "scope_notes": [
-    "synthetic intercepted API fixtures, not a production database end-to-end test",
-    "fixed scenarios are not an exhaustive Cartesian product of all user/data/state combinations",
-    "ECharts options, business scripts, templates, services, dependencies and backend unchanged",
-    "existing dependency audit and bundle-size warnings remain; no automatic master merge or deployment"
-  ]
+  "screenshots": 704,
+  "cleanup": {
+    "browser_closed": true,
+    "vite_stopped": true,
+    "port_released": true
+  }
 }
