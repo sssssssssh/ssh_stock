@@ -188,3 +188,82 @@ jobs:
             .codex_tmp/m17_1_2-full.xml
             .codex_tmp/m17_1_2-release.json
           if-no-files-found: ignore
+
+  ui-visual-acceptance:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/codex/ui-visual-upgrade') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'codex/ui-visual-upgrade' && github.base_ref == 'master')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VITE_API_BASE_URL: /api/v1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Prepare isolated evidence directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/ui-visual/$GITHUB_SHA/logs"
+          echo "BROWSER_ARTIFACT_DIR=$RUNNER_TEMP/ui-visual/$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_BROWSERS_PATH=$RUNNER_TEMP/ui-browser-cache" >> "$GITHUB_ENV"
+      - name: Verify frozen Git tree is available
+        run: git cat-file -e 0136ee9e03727314102cc041d52dd488cca50def^{commit}
+      - name: Frontend clean installation
+        run: npm ci
+        working-directory: frontend
+      - name: UI-only source integrity and isolated negative controls
+        run: |
+          set -o pipefail
+          node scripts/ui_visual_integrity.cjs 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/integrity.log"
+          node scripts/ui_visual_integrity.cjs --self-test 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/negative-controls.log"
+      - name: Original frontend coverage and production build
+        run: |
+          set -o pipefail
+          npm --prefix frontend run test:coverage 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/coverage.log"
+          npm --prefix frontend run build 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/build.log"
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ui-browser-cache
+          key: ui-chromium-${{ runner.os }}-playwright-1.64.0
+      - name: Install pinned isolated browser tooling
+        run: |
+          set -o pipefail
+          npm install --prefix "$RUNNER_TEMP/ui-browser" --no-save --package-lock=false playwright@1.64.0 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/playwright-install.log"
+          node "$RUNNER_TEMP/ui-browser/node_modules/playwright/cli.js" install --with-deps chromium 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/chromium-install.log"
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/ui-browser/node_modules/playwright" >> "$GITHUB_ENV"
+      - name: UI five-width nine-state before-after acceptance and short screen
+        run: |
+          set -o pipefail
+          node scripts/ui_visual_browser.cjs 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/browser.log"
+      - name: Recheck source integrity after browser execution
+        run: |
+          set -o pipefail
+          node scripts/ui_visual_integrity.cjs 2>&1 | tee "$BROWSER_ARTIFACT_DIR/logs/integrity-after.log"
+      - name: Preserve explicit incomplete receipt on early failures
+        if: always()
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'), path=require('node:path');
+          const output=process.env.BROWSER_ARTIFACT_DIR || path.join(process.env.RUNNER_TEMP,'ui-visual',process.env.GITHUB_SHA);
+          fs.mkdirSync(output,{recursive:true});
+          const file=path.join(output,'result.json');
+          if(!fs.existsSync(file)) fs.writeFileSync(file,JSON.stringify({
+            head_sha:process.env.GITHUB_SHA,status:'not_completed',
+            reason:'A blocking installation, integrity, test or build step did not complete. See logs and job steps.',
+            run_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+          },null,2));
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-visual-acceptance-${{ github.sha }}
+          path: ${{ runner.temp }}/ui-visual
+          if-no-files-found: error
+          retention-days: 14
