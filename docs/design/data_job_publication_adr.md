@@ -1,7 +1,8 @@
 # ADR：数据任务候选隔离与原子发布
 
-状态：W01 盘点与候选方案；旧单表直写 CLI 的产品兼容决策待用户确认。
-W02 尚未开始，不把本 ADR 当作实现或验收完成。
+状态：W01 决策已落实，W02–W06 实现进入隔离回归；最终门禁以专项验收记录为准。
+用户已明确“我就网页操作”：本期保障网页入队/Worker/Scheduler 链路，保留旧单表直写 CLI，
+不把命令行兼容迁移列为本次阻断，也不宣称旧直写受候选发布保护。
 基线：master@ff3f221b4fcade5f9b8477d7df1acc66498abaf4。业务公式、原表自然键、
 版本/hash、PIT、金融 Artifact 与人工审批不变。没有业务库操作授权。
 
@@ -39,18 +40,18 @@ Ingestion 的原事务保存 Provider 事实。发布层不伪装 Raw 可回滚�
 `replace_slice_rows` 先查 scope 的键，删除 stale_keys，再 upsert surviving/new keys；
 仅加 SUCCESS 过滤无法保护已经被覆盖的 A。信号原 id 与幸存行必须保留，否则评价 FK/引用变化。
 
-### 1.1 已复现与待确认的入口边界
+### 1.1 已复现缺陷与确认的入口边界
 
 隔离 PostgreSQL 17 的 `test_data_publication.py` 红灯证据已复现：A 的同键因子值 10，
 B 经真实 Worker 派发并使用原 replace_slice_rows 提交检查点后，独立读连接看到 20/B Job。
-随后失败收尾也不能恢复 A。该测试是待修复回归，不表示当前分支已通过完整门禁。
+随后失败收尾也不能恢复 A。对应回归在修复后验证同一检查点仍只对外暴露 A。
 
 `backend/app/cli.py` 的 recalc-factors、recalc-market、recalc-sectors、recalc-states
 直接调用相应 Service 并 commit，没有 Job/执行 token/完整发布门禁；evaluate-signals 亦直接
 写 signal_forward_eval。它们不是 `_queue_cli_job` 路径。
-原样保留会留下绕过统一发布的正常入口；自动改为完整重算会扩大原单表命令的计算范围，
-而停用直写会改变现有使用方式。本任务未明确授权这项兼容取舍，必须先由用户确认。
-建议保留命令名称与明确迁移提示，但拒绝直接写库，转由完整补算队列执行；不静默扩大请求范围。
+根据用户网页操作范围，本次原样保留，不扩大单表计算请求。部署后不得与网页任务混用这些
+直写命令或旧 Worker。发布前比较原 public preimage，遇到已计算键被其他写者改变会明确
+PUBLICATION_BASE_CHANGED；这不是对任意直接写库的 fencing。
 
 ## 2. 方案比较与决策
 
@@ -73,7 +74,7 @@ A 的正确性先以真实 PG17 A/B 同键、取消/失败、跨表并发快照�
 
 ## 3. A 的具体存储与路由
 
-0058（或下一合法修订）增量创建正式候选存储、publication ledger、来源 Job 引用和删除掩码。
+0058_data_publication 增量创建正式候选存储、publication ledger、来源 Job 引用和删除掩码。
 不修改 0057、原表键或历史行。候选按根 Job 隔离；父 catchup 的同步子任务共用根候选，
 子计算身份仍为子 job_id，不能在子 SUCCESS 时提前对外发布。
 
@@ -96,8 +97,9 @@ staging 表；删除只形成本次键掩码，不能向 public 删除。信号�
 ## 4. 发布粒度与状态
 
 粒度为根任务已验证的完整计算范围，跨全部派生表一起发布；不新增逐月对外发布产品口径。
-暖启动范围沿用已有算法，不因本任务缩小或改变。在途计算有独立 PREPARING/VALIDATED/
-PUBLISHED/ABORTED 或等价 publication 状态，不能用处理行数宣称已发布。
+暖启动计算沿用已有算法，但暖启动额外日期仅供内部依赖，不发布超出请求并逐日验证的范围，
+避免更新早期因子而保留早期旧机会。在途 ledger 为 PREPARING；每来源 validation 保存逐日凭据，
+最终为 PUBLISHED/ABORTED；无派生变更 metadata 标记 NO_CHANGES。不能用处理行数宣称已发布。
 
 发布前再次检查：根 RUNNING、原 worker/token、未取消、冻结配置未变、所有子任务已正确结束、
 候选完整性/范围/质量/身份合格。终态竞争遵循原锁序及 CAS。单次发布事务保存
@@ -119,7 +121,7 @@ publish_started_at/published_at/identity、旧行审计和来源引用，应用�
 | 行业/题材 | api/v1/sectors.py、themes.py | 行业/题材因素和机会 JOIN 同一 MVCC 快照 |
 | 覆盖/就绪 | api/v1/system.py、quality/* | 外部只计 public；内部校验当前候选，不复用 A 的 PASS |
 | Research | research/opportunity_eval.py、theme_eval.py、transition_eval.py | 互斥与完整身份保持；当前选择只见发布结果 |
-| Portfolio/执行/会计 | portfolio/candidates.py、source_integrity.py、accounting_market_data.py；execution/market_data.py | public 原索引/身份过滤；来源捕获跨语句一致 |
+| Portfolio/执行/会计 | portfolio/candidates.py、source_integrity.py、accounting_market_data.py；execution/market_data.py | 候选发现采用 RR 快照；执行/会计只有一个批次派生状态查询，其他层为 Raw，保留原调用事务，不丢未提交事实 |
 | PAPER | decision/source.py | 已有独立 REPEATABLE READ/READ ONLY；冻结旧快照不改 |
 | Agent | core/agent_db.py 与九个只读工具 | 只读快照 public，不授予候选、写或任意 SQL 工具 |
 | 冻结历史 | M14–M17 Artifact、报告/合同/观察 | 原字节/Hash 不变，不把历史快照重定位到新结果 |
@@ -127,9 +129,32 @@ publish_started_at/published_at/identity、旧行审计和来源引用，应用�
 旧 ff3f221 之前已经覆盖且无历史副本的结果不能凭空恢复；诊断应明示 legacy 证据缺口，
 不伪造 A 或用当前数据重写旧 Artifact。新机制保证启用后 A/B 的隔离与可审计发布。
 
-## 6. 后续门禁
+## 6. 实际存储与预算
+
+Dirty 的 RESOLVED 延迟到根发布事务；计算/子任务先登记 pending_dirty_ids，PROCESSING 仍阻塞下游。
+根成功同步 RESOLVED；取消重开 OPEN 不增重试；失败仅对仍 PROCESSING 的登记项增加一次失败，
+提交未知保留 PROCESSING。Catchup Raw-only refresh 不重复写单阶段交易状态，避免覆盖已验证的子候选；
+完整补算/Dirty repair 继续使用原交易状态计算 Service。
+真实全链路回归还修正两处输入类型兼容：State 的 market_score 不与显式 Market 来源产生同名后缀，
+Pandas 3 的行业生命周期用文本列承载；不修改数值公式、权重、阈值、评分或版本身份。
+
+候选并非复制十张业务表：data_publication_row 使用 (publication_id,table_name,row_key JSONB)
+唯一键，保存完整 typed-row JSON、原 public JSON preimage、source_id 和删除掩码；额外 typed
+trade_date/entity_key 配合根/表/日期、根/表/实体/日期索引。私有 VIEW 用 jsonb_populate_record
+还原类型。public 沿用原索引与外层查询，不逐行查 Job 状态。原像使用 PG to_jsonb，避免
+Python/PG 时间小数尾零序列化造成虚假变化。
+
+data_publication、source、scope、preimage 提供审计；终态 ledger 和证据有数据库不可变触发器。
+新增三处 Job RESTRICT 引用纳入保留清单，总计 17 处；不改旧十处 NOT VALID。
+data_schedule_intent 是唯一计划键与重试证据，不是第二个执行队列，任务仍在 JobRun。
+发布默认最多 1000 万 candidate patch 行、合并阶段 300000ms，超限整笔拒绝、保留 A；不是年度
+容量承诺。JSON/WAL、保留证据磁盘增长、真实行情/题材规模与锁等待需维护窗口另行验收；不自动 GC。
+
+## 7. 验收门禁
 
 W02/W03 必须真实证明 A 在 B 每个 checkpoint/取消/失败后仍可查；B 全表一致验收后原子发布；
 缺 A 明确不可用；B 不合格不能依靠 A 通过质量；latest/JOIN/count/分页和并发请求快照一致；
-候选连接失败不泄漏/自动接管。随后完成 W04 只读诊断/人工审批手册、W05 调度补偿、
-W06 小范围状态展示，最后同 SHA 执行 S01–S22、PG17 非空迁移、双 Worker、全量测试/构建。
+候选连接失败不泄漏/自动接管。W04 只读诊断/经审批的 DBA CAS 手册，无修复 CLI/HTTP；W05
+持久计划/容量告警/限速补偿，取消不重放；W06 小范围状态展示。最后同 SHA 执行 S01–S22、
+PG17 非空迁移、双 Worker、全量测试/构建。以 docs/acceptance/data_queue_reliability_closeout.md
+为证据入口，合成协议验证不能替代真实 Provider 验收。

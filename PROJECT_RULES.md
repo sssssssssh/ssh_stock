@@ -1,5 +1,27 @@
 # 项目开发规则
 
+## 数据候选发布与调度可靠性 V1.1
+
+本专项基线 ff3f221，按用户“仅网页操作”接入既有队列/Worker/Scheduler；不重编号业务里程碑。
+策略公式、版本/Hash、PIT、Decimal 与历史 Artifact 字节不变；本节优先于旧阶段提交即发布描述。
+
+- 根任务计算只提交正式 0058 候选 patch，public 为已发布切片，不能先覆盖 A。内部专用连接 overlay
+  读取自身候选，归池前销毁私有 VIEW，失败 invalidate；普通连接不得读取候选。
+- 请求已验证的完整日期范围跨表一次发布，暖启动额外日期不发布。子任务 SUCCESS 不发布，继承根候选、
+  保留子来源。质量不得借用 A，候选变更使凭据失效；身份/scope 复核后 token/worker/status/取消 CAS、
+  preimage 审计、public 替换、ledger 与 SUCCESS 同事务。缺旧 A 不得用候选冒充成功。
+- 失败/取消/断连候选保留；提交未知保守占槽，不重放、不把真实提交 SUCCESS 改 FAILED。终态 ledger 与
+  证据不可变，新增 Job 引用必须被 retention 保护。发布行数/时间有界，超限保留 A，不切段/GC。
+- 公共多语句发现读取使用独立 REPEATABLE READ/READ ONLY 快照，与认证写分离；冻结下游快照不改。
+- Scheduler 唯一计划、有限退避、成功/就绪复核、取消不重放，错误码可见；不改 FIFO/通道优先级。
+- 只读诊断永不证明远端进程退出；人工恢复先冻结、核实所有执行者/SQL、子先父后、预期身份 CAS/审计。
+  无一键解锁、强杀或自动接管。日常网页无需终端。
+- 旧 recalc-* / evaluate-signals 直写 CLI 原样保留，不宣称受保护，部署禁止混跑；原像改变时明确拒绝发布，
+  不将其当任意直写 fencing。生产容量/Provider/维护验收另行审批，不由合成 CI 替代。
+
+证据入口：docs/design/data_job_publication_adr.md、docs/runbooks/data_job_manual_reconcile.md、
+docs/acceptance/data_queue_reliability_closeout.md。
+
 ## 数据任务队列与安全取消专项（2026-10-18）
 
 本次用户授权基线为 `7babdd2356dd3dd1dd52f60a8d8c85c84a474d22`，不重新编号或解封 M17 业务。
@@ -83,6 +105,10 @@ UI-only 交付维持历史冻结；本次仅允许任务轮询、心跳告警和
 发现冲突时，不擅自改业务口径；在代码 TODO、README 和开发总结中说明冲突。
 
 ## 当前阶段
+
+数据任务可靠性 V1.1 专项采用 0058 候选隔离/原子发布与持久调度补偿，不推进 M17 金融里程碑。
+代码门禁以本提交对应 CI 收据为准；业务库升级、全年容量、真实 Provider 与历史事故对账需另行审批。
+当前专项验收见 docs/acceptance/data_queue_reliability_closeout.md。
 
 M17.1.2 停复牌兼容整改分批进行。0056 仅无损扩大 suspend_timing 为可空 TEXT，
 旧 0010/0054/0055 不修改。缩列前持排他锁并拒绝任何 >32 字符值，禁止截断/删行回退。

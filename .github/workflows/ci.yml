@@ -47,6 +47,12 @@ jobs:
       - name: M17.1 targeted dirty dependency regressions
         # All retention writes/concurrency tests use disposable PG17 databases.
         run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
+      - name: Data publication and schedule compensation regressions
+        run: >-
+          python -m pytest tests/integration/test_data_publication.py
+          tests/integration/test_schedule_compensation.py tests/unit/test_scheduler_capacity.py
+          tests/unit/test_data_job_diagnostics.py -q
+          --junitxml=.codex_tmp/data-publication-targeted.xml
       - name: M17.1.1 reference-aware retention regressions
         run: >-
           python -m pytest tests/integration/test_m17_1_1_retention.py
@@ -71,7 +77,7 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config
       - run: docker compose build
-      - name: Data queue single and two Worker container acceptance
+      - name: Data queue single/two Worker and atomic publication acceptance
         run: TEST_DATABASE_URL="$DATABASE_URL" python scripts/data_queue_container_acceptance.py
       - uses: actions/upload-artifact@v4
         if: always()
@@ -128,7 +134,7 @@ jobs:
           finally:
               engine.dispose()
           heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-          assert heads == [current] == ["0057_data_queue"], "CI_MIGRATION_HEAD_MISMATCH"
+          assert heads == [current] == ["0058_data_publication"], "CI_MIGRATION_HEAD_MISMATCH"
           assert pg_version.startswith("17"), "CI_POSTGRES_MAJOR_MISMATCH"
           assert timing_column == {
               "data_type": "text", "character_maximum_length": None, "is_nullable": "YES",
@@ -174,6 +180,48 @@ jobs:
         with:
           name: runtime-reliability-synthetic-browser
           path: frontend/coverage/runtime-reliability-browser
+          if-no-files-found: error
+      - name: Data publication exact SHA release receipt
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          assert head == os.environ["GITHUB_SHA"]
+          containers = json.loads(Path(".codex_tmp/data-queue-containers.json").read_text())
+          browser = json.loads(Path("frontend/coverage/runtime-reliability-browser/result.json").read_text())
+          assert containers["head_sha"] == browser["head_sha"] == head
+          assert not containers["working_tree_dirty"] and not browser["working_tree_dirty"]
+          assert len(containers["results"]) == 3
+          assert all(r["max_top_level_running"] == 1 for r in containers["results"])
+          assert any(r["workers"] == 2 and r["atomic_publication"] and r["completed"] == 7
+                     for r in containers["results"])
+          assert len(browser["results"]) == 24 and all(r["passed"] for r in browser["results"])
+          suites = {}
+          for name in ("data-publication-targeted", "m17_1_2-full"):
+              root = ET.parse(f".codex_tmp/{name}.xml").getroot()
+              cases = list(root.iter("testcase"))
+              assert cases and not any(list(c.iter("failure")) or list(c.iter("error"))
+                                       or list(c.iter("skipped")) for c in cases)
+              suites[name] = len(cases)
+          Path(".codex_tmp/data-publication-release.json").write_text(json.dumps({
+              "schema_version": "data-publication-v1.1", "head_sha": head,
+              "suites": suites, "browser_scenarios": 24, "containers": containers,
+              "production_validation": "PENDING_SEPARATE_APPROVAL",
+          }, indent=2) + "\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-publication-reliability
+          path: |
+            .codex_tmp/data-publication-release.json
+            .codex_tmp/data-publication-targeted.xml
+            .codex_tmp/m17_1_2-full.xml
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

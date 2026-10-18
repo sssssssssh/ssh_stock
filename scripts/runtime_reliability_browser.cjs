@@ -33,7 +33,7 @@ async function main() {
       ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
     const results = [];
     for (const width of [1440, 390]) {
-      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error', 'queue', 'cancel', 'cancelled', 'unconfirmed']) {
+      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error', 'queue', 'cancel', 'cancelled', 'unconfirmed', 'candidate', 'published', 'schedule-alert']) {
         const page = await browser.newPage({ viewport: { width, height: 1000 } });
         const errors = [];
         let cancelRequested = false, cancelPosts = 0;
@@ -44,12 +44,16 @@ async function main() {
           metadata: { start: '2026-01-01', end: '2026-03-31' }
         }));
         const running = () => ({
-          id: 'synthetic-running', job_type: 'recalculate', status: mode === 'cancelled' ? 'CANCELLED' : 'RUNNING',
+          id: 'synthetic-running', job_type: 'recalculate', status: mode === 'cancelled' ? 'CANCELLED' : mode === 'published' ? 'SUCCESS' : 'RUNNING',
           started_at: '2026-10-18T00:00:00Z', execution_started_at: '2026-10-18T00:30:00Z',
           heartbeat_at: '2026-10-18T00:31:00Z', last_progress_at: '2026-10-18T00:30:30Z',
           finished_at: mode === 'cancelled' ? '2026-10-18T00:32:00Z' : null,
           cancel_requested: cancelRequested || mode === 'cancelled', can_cancel: !cancelRequested && !['cancelled', 'unconfirmed'].includes(mode),
           execution_unconfirmed: mode === 'unconfirmed',
+          publication: ['candidate', 'published'].includes(mode) ? {
+            state: mode === 'published' ? 'PUBLISHED' : 'PREPARING',
+            identity: 'synthetic-publication-identity', published_at: '2026-10-18T01:00:00Z'
+          } : undefined,
           metadata: { stage: 'factors', progress_pct: 20 }, row_count: 12, step: '90 factors', error_message: null
         });
         page.on('pageerror', error => errors.push(error.message));
@@ -60,9 +64,12 @@ async function main() {
           if (p === '/auth/me') data = { username: 'synthetic-admin', must_change_password: false };
           else if (p === '/dashboard/summary') data = { sector_heat_top: [] };
           else if (p === '/system/status') data = {};
-          else if (p === '/system/runtime') data = { services: {}, queued_count: 0, running_count: mode === 'stale' ? 1 : 0 };
+          else if (p === '/system/runtime') data = { services: {}, queued_count: 0, running_count: mode === 'stale' ? 1 : 0,
+            scheduler_compensation: mode === 'schedule-alert' ? { pending_count: 1, items: [{
+              kind: 'catchup', target_date: '2026-10-17', state: 'DEFERRED', error_code: 'QUEUE_CAPACITY_EXCEEDED'
+            }] } : undefined };
           else if (p === '/jobs/queue') data = {
-            running: ['queue', 'cancel', 'unconfirmed'].includes(mode) ? [running()] : [],
+            running: ['queue', 'cancel', 'unconfirmed', 'candidate'].includes(mode) ? [running()] : [],
             queued: mode === 'queue' ? pending.map((job, index) => ({ ...job, queue_position: index + 1 })) : []
           };
           else if (p.endsWith('/cancel')) {
@@ -77,7 +84,7 @@ async function main() {
           }
           else if (p === '/system/data-coverage' && mode === 'statistics-error') status = 503;
           else if (p === '/jobs') {
-            if (mode === 'cancelled') data = [running()];
+            if (['cancelled', 'published'].includes(mode)) data = [running()];
             if (mode === 'loading') await wait(1800);
             if (['stale', 'failed'].includes(mode)) data = [{
               id: 'synthetic-job', job_type: 'recalculate', status: mode === 'stale' ? 'RUNNING' : 'FAILED',
@@ -101,6 +108,9 @@ async function main() {
           if (mode === 'failed') await page.locator('.job-error-line').waitFor();
           if (mode === 'empty') assert((await page.locator('.job-list').innerText()).includes('暂无任务记录'));
           if (mode === 'statistics-error') await page.getByText('SYNTHETIC_STATISTICS_UNAVAILABLE', { exact: true }).waitFor();
+          if (mode === 'candidate') await page.getByText('候选计算中，尚未发布', { exact: true }).waitFor();
+          if (mode === 'published') await page.getByText(/已发布 · .*synthetic-publication-identity/).waitFor();
+          if (mode === 'schedule-alert') await page.getByText(/调度待处理 1 项/).waitFor();
           if (mode === 'queue') {
             await page.waitForFunction(() => document.querySelectorAll('.queue-entry').length === 35);
             page.once('dialog', dialog => dialog.accept());
