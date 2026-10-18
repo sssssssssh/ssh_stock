@@ -81,6 +81,22 @@ def _calculate(factors: pd.DataFrame, states: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def test_industry_lifecycle_keeps_string_type_under_pandas3() -> None:
+    from app.services.opportunity.engine import _industry_context
+
+    day = date(2026, 9, 1)
+    values = pd.DataFrame([{"trade_date": day, "ts_code": "TEST.SZ"}])
+    members = pd.DataFrame(
+        [{"ts_code": "TEST.SZ", "sector_id": 1, "valid_from": day, "valid_to": None}]
+    )
+    factors = pd.DataFrame(
+        [{"trade_date": day, "sector_id": 1, "heat_score": 73, "lifecycle": "MAIN_UP"}]
+    )
+    result = _industry_context(values, members, factors)
+    assert result.iloc[0]["industry_lifecycle"] == "MAIN_UP"
+    assert result.iloc[0]["industry_heat"] == 73
+
+
 def test_left_reversal_high_score_and_new_crossing() -> None:
     dates = [date(2026, 5, 1) + timedelta(days=index) for index in range(70)]
     factors = _factors(dates)

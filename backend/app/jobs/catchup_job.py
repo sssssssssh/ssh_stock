@@ -215,7 +215,13 @@ class CatchUpJob:
             raise DataQualityError(
                 f"raw completeness failed: trade_date={trade_date} statuses={statuses}"
             )
-        TradeStatusService(self.db).recalc(trade_date, trade_date)
+        from app.services.data_publication import workspace
+
+        if workspace(self.db) is None:
+            TradeStatusService(self.db).recalc(trade_date, trade_date)
+        # Under atomic publication, raw-only refresh must not overwrite a
+        # certified child's trade-status candidate with an unvalidated partial
+        # stage. Full analysis/dirty repair computes this using the same service.
         return True
 
     def _refresh_raw_only(self, trade_date: date) -> None:

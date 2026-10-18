@@ -74,7 +74,9 @@ class _Result:
         return iter(self._rows)
 
 
-def test_runtime_reports_queue_heartbeat_and_latest_dates() -> None:
+def test_runtime_reports_queue_heartbeat_and_latest_dates(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.v1.system.schedule_alerts",
+                        lambda db: {"pending_count": 0, "items": [], "truncated": False})
     heartbeat = datetime(2026, 9, 24, 6, 30, tzinfo=UTC)
     active = SimpleNamespace(
         id="job-1",

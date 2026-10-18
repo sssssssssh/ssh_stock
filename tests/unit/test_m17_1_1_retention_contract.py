@@ -18,7 +18,10 @@ from sqlalchemy.dialects import postgresql
 
 def test_manifest_discovers_every_persistent_reference_and_job_fk():
     assert discovered_orm_references() == set(JOB_REFERENCES)
-    assert len(JOB_REFERENCES) == 14
+    assert len(JOB_REFERENCES) == 17
+    assert {("data_publication", "job_id"),
+            ("data_publication_source", "source_job_id"),
+            ("data_schedule_intent", "job_id")} <= set(JOB_REFERENCES)
     assert {("job_run", "parent_job_id"), ("job_run", "depends_on_job_id")} <= set(JOB_REFERENCES)
 
 

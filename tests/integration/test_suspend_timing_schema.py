@@ -50,7 +50,9 @@ def test_fresh_postgresql_head_matches_nullable_text_orm(suspend_db):
         "trade_date", "ts_code", "suspend_type",
     ]
     with engine.connect() as c:
-        assert c.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0057_data_queue"
+        assert c.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
+            "0058_data_publication"
+        )
 
 
 def test_nonempty_upgrade_and_short_roundtrip_preserve_all_fields(suspend_db):
@@ -105,4 +107,6 @@ def test_downgrade_refuses_long_text_atomically(suspend_db, length):
     assert snapshot(engine) == before
     assert isinstance(column(engine)["type"], sa.Text)
     with engine.connect() as c:
-        assert c.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0057_data_queue"
+        assert c.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
+            "0058_data_publication"
+        )

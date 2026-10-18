@@ -49,6 +49,16 @@ class ThemeFactorService:
                 start,
                 end,
             )
+            from app.services.data_publication import workspace
+
+            if workspace(self.db):
+                # A candidate with unavailable optional theme input must not
+                # silently reuse A's old same-date theme heat as B's output.
+                replace_slice_rows(self.db, ThemeFactorDaily, [],
+                    scope_filters=[ThemeFactorDaily.trade_date >= start,
+                                   ThemeFactorDaily.trade_date <= end],
+                    key_columns=["trade_date", "theme_code"])
+                self.db.commit()
             return 0
         theme_daily = self._frame(ThemeDaily, lookback_start, end)
         if not theme_daily.empty:

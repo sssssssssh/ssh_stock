@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 
 @contextmanager
-def isolated_contract_database(monkeypatch):
+def isolated_contract_database(monkeypatch, *, revision="head"):
     """Create and destroy only a uniquely named synthetic integration-test database."""
     database_name = "m166_test_" + uuid.uuid4().hex
     test_url = os.environ.get("TEST_DATABASE_URL")
@@ -28,7 +28,7 @@ def isolated_contract_database(monkeypatch):
         with engine.begin() as connection:
             config = Config("alembic.ini")
             config.attributes["connection"] = connection
-            command.upgrade(config, "head")
+            command.upgrade(config, revision)
         factory = sessionmaker(bind=engine, expire_on_commit=False)
         monkeypatch.setattr("app.core.agent_db.SessionLocal", factory)
         yield factory, engine

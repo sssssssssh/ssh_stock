@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.v1.common import clamp_limit, clamp_offset, envelope, scalar_count
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.core.published_db import get_published_db, published_snapshot
+from app.models.data_publication import DataPublication
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange
 from app.services.analysis_identity import analysis_strategy_hash
@@ -73,13 +75,14 @@ class ValidateDataJobRequest(DataJobRequest):
 
 
 @router.get("/queue")
-def data_queue(db: Session = Depends(get_db)) -> dict:
+def data_queue(db: Session = Depends(get_published_db)) -> dict:
     rows = list(db.scalars(select(JobRun).where(
         JobRun.job_type.in_(INGESTION_JOB_TYPES), JobRun.parent_job_id.is_(None),
         JobRun.status.in_(("RUNNING", "QUEUED")),
     ).order_by(JobRun.started_at, JobRun.id).execution_options(populate_existing=True)))
-    running = [_job_payload(row) for row in rows if row.status == "RUNNING"]
-    queued = [_job_payload(row) for row in rows if row.status == "QUEUED"]
+    payloads = _job_payloads(db, rows)
+    running = [row for row in payloads if row["status"] == "RUNNING"]
+    queued = [row for row in payloads if row["status"] == "QUEUED"]
     dependency_ids = {row.depends_on_job_id for row in rows if row.depends_on_job_id}
     dependencies = dict(db.execute(select(JobRun.id, JobRun.status).where(
         JobRun.id.in_(dependency_ids))).all()) if dependency_ids else {}
@@ -93,12 +96,12 @@ def data_queue(db: Session = Depends(get_db)) -> dict:
 
 def _creation_response(job: JobRun, db: Session) -> dict:
     duplicate = bool(getattr(job, "_queue_deduplicated", False))
-    queue = data_queue(db)["data"]
-    current = next((row for row in [*queue["running"], *queue["queued"]]
-                    if row["id"] == str(job.id)), None)
-    if current is None:
-        db.refresh(job)
-        current = _job_payload(job)
+    with published_snapshot(db) as reader:
+        queue = data_queue(reader)["data"]
+        current = next((row for row in [*queue["running"], *queue["queued"]]
+                        if row["id"] == str(job.id)), None)
+        if current is None:
+            current = _job_payloads(reader, [reader.get(JobRun, job.id)])[0]
     return envelope(current, {"accepted": not duplicate, "deduplicated": duplicate,
                               "queue_position": current.get("queue_position")})
 
@@ -116,7 +119,7 @@ def list_jobs(
     offset: int = 0,
     status: str | None = None,
     job_type: str | None = None,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_published_db),
 ) -> dict:
     row_limit = clamp_limit(limit, default=20, maximum=100)
     row_offset = clamp_offset(offset)
@@ -139,7 +142,7 @@ def list_jobs(
     )
     total_stmt = select(func.count()).select_from(JobRun).where(*filters)
     return envelope(
-        [_job_payload(row) for row in rows],
+        _job_payloads(db, rows),
         {"limit": row_limit, "offset": row_offset, "total": scalar_count(db, total_stmt)},
     )
 
@@ -384,6 +387,28 @@ def _load_dirty_ranges(db: Session, dirty_range_ids: list[int]) -> list[DataDirt
         .scalars()
         .all()
     )
+
+
+def _job_payloads(db, rows):
+    if not rows:
+        return []
+    identities = {row.parent_job_id or row.id for row in rows}
+    publications = {record.job_id: record for record in db.scalars(
+        select(DataPublication).where(DataPublication.job_id.in_(identities)))}
+    payloads = []
+    for row in rows:
+        payload = _job_payload(row)
+        record = publications.get(row.parent_job_id or row.id)
+        if record:
+            state = record.state
+            if state == "ABORTED" and row.status == "SUCCESS" and dict(
+                    row.job_metadata or {}).get("publication", {}).get("state") == "NO_CHANGES":
+                state = "NO_CHANGES"
+            payload["publication"] = {"state": state, "identity": str(record.job_id),
+                "published_at": record.published_at.isoformat() if record.published_at else None,
+                "parent_owned": row.parent_job_id is not None}
+        payloads.append(payload)
+    return payloads
 
 
 def _job_payload(row: JobRun) -> dict[str, Any]:

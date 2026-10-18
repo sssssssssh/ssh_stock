@@ -21,6 +21,10 @@ def _data_task_transaction_timeouts(session, transaction, connection):
             "statement": str(int(config.get("data_statement_timeout_ms", 300000))),
             "lock": str(int(config.get("data_lock_timeout_ms", 5000))),
         })
+        identity = session.info.get("data_execution_job_id")
+        if identity:
+            connection.execute(text("SELECT set_config('application_name', :name, true)"),
+                               {"name": f"space-data/{identity}"})
 
 
 def database_error_summary(error: SQLAlchemyError) -> str:

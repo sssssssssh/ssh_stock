@@ -250,6 +250,7 @@ def create_queued_ingestion_job(
     *,
     step: str,
     metadata: dict[str, Any],
+    _before_commit=None,
 ) -> JobRun:
     _acquire_ingestion_advisory_lock(db)
     identity = data_queue_identity()
@@ -259,6 +260,8 @@ def create_queued_ingestion_job(
         JobRun.request_fingerprint == fingerprint, JobRun.status.in_(ACTIVE_JOB_STATUSES),
     ))
     if existing:
+        if _before_commit is not None:
+            _before_commit(existing)
         db.commit()
         existing._queue_deduplicated = True
         return existing
@@ -283,6 +286,9 @@ def create_queued_ingestion_job(
                  depends_on_job_id=dependency)
     db.add(job)
     try:
+        if _before_commit is not None:
+            db.flush()
+            _before_commit(job)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -293,6 +299,9 @@ def create_queued_ingestion_job(
             if dependency and getattr(exc.orig, "sqlstate", None) in {"23503", "23514"}:
                 raise ValueError("JOB_DEPENDENCY_NOT_FOUND") from None
             raise
+        if _before_commit is not None:
+            _before_commit(existing)
+            db.commit()
         existing._queue_deduplicated = True
         return existing
     db.refresh(job)

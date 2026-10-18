@@ -344,7 +344,7 @@ def record_cross_table_quality(
             strategy, "sector_factor_vs_expected", "error", 0.90
         ),
     )
-    return CrossTableQualityResult(
+    result = CrossTableQualityResult(
         trade_date=trade_date,
         counts=counts,
         results=results,
@@ -363,6 +363,10 @@ def record_cross_table_quality(
             }
         ],
     )
+    from app.services.data_publication import record_validation
+
+    record_validation(db, job_id, trade_date, result)
+    return result
 
 
 def validate_cross_table_range(
@@ -531,6 +535,10 @@ def _count_date(
     trade_date: date,
     *criteria: Any,
 ) -> int:
+    from app.services.data_publication import workspace
+
+    if workspace(db) and hasattr(model, "calc_run_id"):
+        criteria = (*criteria, model.calc_run_id == db.info["calculation_job_id"])
     return int(
         db.execute(
             select(func.count()).select_from(model).where(column == trade_date, *criteria)

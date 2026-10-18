@@ -51,6 +51,7 @@ class DecisionSourceReadiness:
         with Session(bind=self.db.get_bind()) as source:
             source.connection(execution_options={"isolation_level": "REPEATABLE READ"})
             source.execute(text("SET TRANSACTION READ ONLY"))
+            source.info["published_snapshot"] = True
             result = self._capture(source, day, cutoff, include_codes)
             if benchmark_code is not None:
                 result["execution_input"] = self._execution_input(

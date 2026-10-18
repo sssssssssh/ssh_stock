@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.v1.common import envelope, iso
 from app.core.config import get_settings
 from app.core.db import get_db
+from app.core.published_db import get_published_db
 from app.jobs.research_job import queue_research_eval
 from app.models.market_data import (
     OpportunityForwardEval,
@@ -263,7 +264,7 @@ def signal_stats(
     eval_version: str = "eval_v3",
     entry_basis: str = "NEXT_OPEN",
     executable_only: bool = False,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_published_db),
 ) -> dict[str, Any]:
     version = algo_version or get_settings().algo_version
     rows = _read_eval_rows(
@@ -321,7 +322,7 @@ def signal_buckets(
     eval_version: str = "eval_v3",
     entry_basis: str = "NEXT_OPEN",
     executable_only: bool = False,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_published_db),
 ) -> dict[str, Any]:
     version = algo_version or get_settings().algo_version
     if bucket_field not in {"score", "opportunity_score"}:

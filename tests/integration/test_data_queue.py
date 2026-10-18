@@ -280,15 +280,22 @@ def test_real_monthly_recalculation_preserves_commit_and_reopens_dirty(database,
 
         def recalc(self, *args, **kwargs):
             calls.append(args)
-            self.db.add(
-                DataQualityDaily(
-                    trade_date=day,
-                    dataset="synthetic_complete_chunk",
-                    status="PASS",
-                    actual_rows=1,
-                    expected_rows=1,
-                    job_id=key,
-                )
+            from app.repositories.upsert import upsert_rows
+
+            upsert_rows(
+                self.db,
+                DataQualityDaily,
+                [
+                    {
+                        "trade_date": day,
+                        "dataset": "synthetic_complete_chunk",
+                        "status": "PASS",
+                        "actual_rows": 1,
+                        "expected_rows": 1,
+                        "job_id": key,
+                    }
+                ],
+                ["trade_date", "dataset"],
             )
             self.db.commit()
             with factory() as cancellation:
@@ -306,9 +313,18 @@ def test_real_monthly_recalculation_preserves_commit_and_reopens_dirty(database,
         assert db.get(JobRun, key).status == "CANCELLED"
         dirty = db.get(DataDirtyRange, dirty_id)
         assert dirty.status == "OPEN" and dirty.retry_count == 0
+        from app.models.data_publication import DataPublicationRow
+
+        evidence = db.scalar(
+            select(DataPublicationRow.row_data).where(
+                DataPublicationRow.publication_id == key,
+                DataPublicationRow.table_name == "data_quality_daily",
+            )
+        )
+        assert evidence["status"] == "PASS" and evidence["actual_rows"] == 1
+        assert evidence["job_id"] == str(key)
         assert (
-            db.scalar(select(DataQualityDaily.status).where(DataQualityDaily.job_id == key))
-            == "PASS"
+            db.scalar(select(DataQualityDaily.status).where(DataQualityDaily.job_id == key)) is None
         )
     assert len(calls) == 1
 

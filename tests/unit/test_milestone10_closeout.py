@@ -193,6 +193,7 @@ def test_successful_optional_snapshot_reconciles_stale_rows(
 
 def test_theme_factor_error_date_does_not_replace_existing_results() -> None:
     service = ThemeFactorService.__new__(ThemeFactorService)
+    service.db = None  # This unit case is the legacy, non-publication Service path.
     service._source_quality = lambda start, end: {
         date(2026, 9, 17): {"status": "ERROR", "coverage_rate": 0.4}
     }

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.common import clamp_limit, clamp_offset, envelope, iso, latest_date, scalar_count
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.published_db import get_published_db as get_db
 from app.models.market_data import Sector, SectorFactorDaily
 from app.services.analysis_identity import SECTOR_CALC_VERSION, analysis_strategy_hash
 

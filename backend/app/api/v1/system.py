@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.common import envelope
 from app.core.config import get_settings
-from app.core.db import get_db
+from app.core.published_db import get_published_db as get_db
 from app.models.job import JobRun, ServiceHeartbeat
 from app.models.market_data import (
     DataQualityDaily,
@@ -41,6 +41,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.data_schedule import schedule_alerts
 from app.services.paper.queue import PAPER_JOB_TYPES
 
 router = APIRouter()
@@ -107,6 +108,7 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
             else None,
             "queued_count": int(counts.get("QUEUED", 0)),
             "running_count": int(counts.get("RUNNING", 0)),
+            "scheduler_compensation": schedule_alerts(db),
             "services": services,
             "scheduler_cron": {
                 "daily": scheduler.get("daily_cron", "10 18 * * 1-5"),

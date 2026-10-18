@@ -50,6 +50,30 @@ def legacy_job_snapshot(db):
 
 def reference(db, name, field, job_id, *, day=DAY, code="T001.SZ"):
     table = Base.metadata.tables[name]
+    if name == "data_schedule_intent":
+        from app.models.data_schedule import DataScheduleIntent
+
+        db.add(DataScheduleIntent(identity_key="a" * 64, kind="catchup", target_date=day,
+            identity={}, state="COMPLETE", job_id=job_id, attempts=1, next_attempt_at=NOW))
+        db.flush()
+        return
+    if name in {"data_publication", "data_publication_source"}:
+        from app.models.data_publication import DataPublication, DataPublicationSource
+
+        root = job_id
+        if name == "data_publication_source":
+            parent = JobRun(job_type="backfill", status="SUCCESS", job_metadata={})
+            db.add(parent)
+            db.flush()
+            root = parent.id
+        db.add(DataPublication(job_id=root, execution_token=uuid.uuid4(),
+            state="PREPARING", identity={"synthetic": True}, row_counts={}))
+        db.flush()
+        if name == "data_publication_source":
+            db.add(DataPublicationSource(publication_id=root, source_job_id=job_id,
+                                        role="PREIMAGE"))
+            db.flush()
+        return
     if name == "job_run":
         db.add(JobRun(job_type="backfill", status="QUEUED", **{field: job_id}))
         db.flush()

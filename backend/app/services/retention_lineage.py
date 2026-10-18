@@ -7,6 +7,9 @@ from app.models.job import JobRun
 from app.services.retention_frozen import FROZEN_ISSUES, FROZEN_SCHEMA, frozen_job_reference
 
 JOB_REFERENCES = (
+    ("data_publication", "job_id"),
+    ("data_publication_source", "source_job_id"),
+    ("data_schedule_intent", "job_id"),
     ("job_run", "parent_job_id"),
     ("job_run", "depends_on_job_id"),
     ("data_dirty_range", "source_job_id"),
@@ -25,7 +28,9 @@ JOB_REFERENCES = (
 
 INDEX_SPECS = tuple(
     (f"ix_{table}_{column}", table, (column,))
-    for table, column in JOB_REFERENCES if table not in {"portfolio_backtest_run", "job_run"}
+    for table, column in JOB_REFERENCES if table not in {
+        "portfolio_backtest_run", "job_run", "data_publication", "data_publication_source",
+        "data_schedule_intent"}
 ) + (("idx_job_run_retention", "job_run", ("status", "finished_at", "id")),)
 # The online prebuild targets legacy 0053 -> 0054. The new nullable columns do
 # not exist there; their indexes are owned by the 0057 maintenance migration.

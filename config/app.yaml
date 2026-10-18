@@ -17,6 +17,10 @@ app:
     data_queue_capacity: 100
     data_statement_timeout_ms: 300000
     data_lock_timeout_ms: 5000
+    data_publish_max_rows: 10000000
+    data_publish_timeout_ms: 300000
+    schedule_retry_seconds: 300
+    schedule_max_attempts: 12
     cancel_warning_seconds: 120
     progress_warning_seconds: 600
     service_heartbeat_interval_seconds: 45

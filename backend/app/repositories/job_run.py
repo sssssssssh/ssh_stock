@@ -92,6 +92,10 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
         execution.worker_id, execution.token,
     ):
         raise JobOwnershipLost("JOB_OWNERSHIP_LOST")
+    from app.services.data_publication import finish_publication, workspace
+
+    if workspace(db):
+        db.info["calculation_job_id"] = job.id
     if status not in {"FAILED", "CANCELLED"}:
         checkpoint()
     values = {"last_progress_at": now}
@@ -104,6 +108,11 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
             values[key] = value[:2048] if key == "error_message" else value
     if metadata is not None:
         values["job_metadata"] = {**dict(job.job_metadata or {}), **metadata}
+    if status in {"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"}:
+        publication = finish_publication(db, job, status)
+        if publication is not None:
+            values["job_metadata"] = {**dict(job.job_metadata or {}),
+                **values.get("job_metadata", {}), "publication": publication}
     conditions = [JobRun.id == job.id, JobRun.status == "RUNNING",
                   JobRun.worker_id == execution.worker_id,
                   JobRun.execution_token == execution.token]

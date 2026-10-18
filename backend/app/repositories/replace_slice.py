@@ -19,6 +19,11 @@ def replace_slice_rows(
     """Make one calculated scope authoritative without replacing surviving rows."""
     if not key_columns:
         raise ValueError("key_columns must not be empty")
+    from app.services.data_publication import REGISTRY, workspace
+
+    current = workspace(db)
+    if current and model.__tablename__ in REGISTRY:
+        current.record_scope(model, scope_filters)
     columns = [getattr(model, name) for name in key_columns]
     existing_keys = {
         tuple(row)
@@ -86,6 +91,12 @@ def _delete_stale_keys(
     chunk_size = max(1, 30_000 // len(columns))
     for start in range(0, len(ordered_keys), chunk_size):
         keys = ordered_keys[start : start + chunk_size]
+        from app.services.data_publication import REGISTRY, workspace
+
+        current = workspace(db)
+        if current and model.__tablename__ in REGISTRY:
+            current.delete_keys(model, keys)
+            continue
         if len(columns) == 1:
             key_filter = columns[0].in_([key[0] for key in keys])
         else:

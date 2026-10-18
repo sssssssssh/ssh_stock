@@ -40,7 +40,13 @@ def test_actual_inventory_fk_index_and_bounded_reference_counts(retention_db):
         factor = next(row for row in data["references"]
                       if row["table_name"] == "stock_factor_daily")
         assert factor["reference_rows_observed"] == 2 and factor["reference_rows_truncated"]
-        assert len(data["foreign_keys"]) == 14
+        assert len(data["foreign_keys"]) == 17
+        assert any(r["source_table"] == "data_schedule_intent" and "RESTRICT" in r["definition"]
+                   for r in data["foreign_keys"])
+        publication_fks = [r for r in data["foreign_keys"]
+                           if r["source_table"] in {"data_publication", "data_publication_source"}]
+        assert len(publication_fks) == 2
+        assert all("RESTRICT" in r["definition"] for r in publication_fks)
         queue_fks = [row for row in data["foreign_keys"] if row["source_table"] == "job_run"]
         assert len(queue_fks) == 2 and all("RESTRICT" in row["definition"] for row in queue_fks)
         legacy = {row["source_table"]: row for row in data["foreign_keys"]}

@@ -151,7 +151,10 @@ class OpportunityService:
             .scalars()
             .all()
         )
-        return _models_frame(rows, StockStateDaily)
+        # State carries its historical market_score too. MarketDaily is the
+        # explicitly version-filtered source supplied to the engine; retaining
+        # both would create market_score_x/y and remove the required input.
+        return _models_frame(rows, StockStateDaily).drop(columns=["market_score"], errors="ignore")
 
     def _all_frame(self, model: type) -> pd.DataFrame:
         return _models_frame(self.db.execute(select(model)).scalars().all(), model)

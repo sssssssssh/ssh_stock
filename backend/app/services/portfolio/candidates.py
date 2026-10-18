@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.portfolio_config import PortfolioConfig
+from app.core.published_db import published_snapshot
 from app.domain.portfolio import CandidateSourceIdentity, SignalCandidate
 from app.models.market_data import StockOpportunityDaily
 from app.services.analysis_filters import opportunity_identity_filters
@@ -23,17 +24,21 @@ class OpportunityCandidateProvider:
         self.settings = settings or get_settings()
 
     def list_candidates(self, trade_date: date, config: PortfolioConfig) -> CandidateBatch:
+        with published_snapshot(self.db) as source:
+            return self._list_candidates(source, trade_date, config)
+
+    def _list_candidates(self, db, trade_date: date, config: PortfolioConfig) -> CandidateBatch:
         ranking_column = self._RANKING_FIELDS.get(config.candidate.ranking_field)
         if ranking_column is None:
             raise ValueError("unsupported portfolio candidate ranking field")
         identity = opportunity_identity_filters(self.settings)
         integrity = check_portfolio_source_integrity(
-            self.db,
+            db,
             trade_date,
             settings=self.settings,
         )
         rows = (
-            self.db.execute(
+            db.execute(
                 select(StockOpportunityDaily)
                 .where(
                     StockOpportunityDaily.trade_date == trade_date,

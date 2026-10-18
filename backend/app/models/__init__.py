@@ -10,6 +10,14 @@ from app.models.agent_report import (
 )
 from app.models.auth import AppUser, AuthSession
 from app.models.base import Base
+from app.models.data_publication import (
+    DataPublication,
+    DataPublicationPreimage,
+    DataPublicationRow,
+    DataPublicationScope,
+    DataPublicationSource,
+)
+from app.models.data_schedule import DataScheduleIntent
 from app.models.experiment import PortfolioExperiment, PortfolioExperimentTrial
 from app.models.experiment_evaluation import (
     PortfolioExperimentEvaluationReport,
@@ -93,6 +101,12 @@ from app.models.walk_forward import (
 )
 
 __all__ = [
+    "DataScheduleIntent",
+    "DataPublication",
+    "DataPublicationPreimage",
+    "DataPublicationRow",
+    "DataPublicationScope",
+    "DataPublicationSource",
     "DecisionApprovalEvent",
     "DecisionObservation",
     "DecisionProposal",

@@ -207,6 +207,8 @@ def _validate_data_queue_runtime(config: dict) -> None:
     for section, limits in ((scheduler, {
         "data_queue_capacity": (1, 10000), "data_statement_timeout_ms": (1, 3600000),
         "data_lock_timeout_ms": (1, 60000), "cancel_warning_seconds": (1, 86400),
+        "data_publish_max_rows": (1, 100000000), "data_publish_timeout_ms": (1, 3600000),
+        "schedule_retry_seconds": (60, 86400), "schedule_max_attempts": (1, 288),
         "progress_warning_seconds": (1, 86400),
     }), (provider, {"request_timeout_seconds": (1, 300), "max_attempts": (1, 10),
                    "retry_max_seconds": (1, 60)})):

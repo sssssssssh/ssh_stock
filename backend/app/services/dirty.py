@@ -202,6 +202,11 @@ def mark_dirty_ranges_processing(db: Session, ranges: list[DataDirtyRange]) -> N
 
 
 def mark_dirty_ranges_resolved(db: Session, ranges: list[DataDirtyRange]) -> None:
+    from app.services.data_publication import defer_dirty_resolution
+
+    if defer_dirty_resolution(db, ranges):
+        db.commit()
+        return
     resolved_at = datetime.now(UTC)
     for row in ranges:
         row.status = "RESOLVED"

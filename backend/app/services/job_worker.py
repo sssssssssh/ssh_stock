@@ -223,9 +223,11 @@ def execute_claimed_job(
         ))
         # Applied to each transaction of this dedicated Session only.
         db.info["data_task_timeouts"] = True
+        db.info["data_execution_job_id"] = job.id
     metadata = dict(job.job_metadata or {})
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
+    publication_workspace = None
     worker_id = getattr(job, "worker_id", None)
     try:
         if context_token is not None:
@@ -240,6 +242,13 @@ def execute_claimed_job(
             )
             heartbeat_thread.start()
         checkpoint()
+        if (context_token is not None and isinstance(db, Session)
+                and job.job_type in {"daily", "recalculate", "catchup"}):
+            from app.services.data_publication import PublicationWorkspace
+
+            publication_workspace = PublicationWorkspace(db, job)
+            publication_workspace.open()
+            db.refresh(job)
         if job.job_type in PAPER_JOB_TYPES:
             PaperJobApplication(db, get_settings()).run_job(job.id)
         elif job.job_type == "daily":
@@ -285,6 +294,7 @@ def execute_claimed_job(
                     "analysis_required_days": len(plan.analysis_required_dates),
                     "refresh_days": len(plan.refresh_dates),
                     "skipped": plan.skipped,
+                    "skip_reason": plan.reason,
                     "stage": "eod_deferred" if plan.deferred_trade_date else "success",
                     "deferred_trade_date": plan.deferred_trade_date.isoformat()
                     if plan.deferred_trade_date
@@ -383,15 +393,22 @@ def execute_claimed_job(
         stop_heartbeat.set()
         if heartbeat_thread is not None:
             heartbeat_thread.join(timeout=5)
+        if publication_workspace is not None:
+            try:
+                publication_workspace.close()
+            except SQLAlchemyError as error:
+                logger.error("candidate connection cleanup failed job_id={} error={}",
+                             job_id, database_error_summary(error))
         if context_token is not None:
             current_execution.reset(context_token)
             db.info.pop("data_task_timeouts", None)
+            db.info.pop("data_execution_job_id", None)
 
 
 def _hold_unconfirmed_execution(db: Session, reason: str) -> None:
     execution = current_execution.get()
     assert execution is not None
-    logger.error("data execution unconfirmed; lane remains blocked job_id={} error={}",
+    logger.error("data execution response unconfirmed; never release RUNNING job_id={} error={}",
                  execution.job_id, reason)
     try:
         db.rollback()

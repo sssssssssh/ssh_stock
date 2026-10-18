@@ -18,11 +18,13 @@ def agent_db_session(
     db = SessionLocal()
     try:
         if db.get_bind().dialect.name == "postgresql":
+            db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
             timeout = _effective_statement_timeout_ms(
                 (settings or get_settings()).agent_config.statement_timeout_ms,
                 remaining_seconds,
             )
             db.execute(text("SET TRANSACTION READ ONLY"))
+            db.info["published_snapshot"] = True
             db.execute(
                 text("SELECT set_config('statement_timeout', :value, true)"),
                 {"value": f"{timeout}ms"},

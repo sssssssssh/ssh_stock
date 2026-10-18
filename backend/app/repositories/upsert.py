@@ -15,12 +15,24 @@ def upsert_rows(
     preserve_existing_on_null_columns: Sequence[str] | None = None,
     merge_json_columns: Sequence[str] | None = None,
     max_parameters: int = 60000,
+    _published_raw_quality: bool = False,
 ) -> int:
     payload = list(rows)
     if not payload:
         return 0
 
-    table = model.__table__
+    from app.services.data_publication import published_table, route_upsert, workspace
+
+    if not _published_raw_quality:
+        routed = route_upsert(db, model, payload, conflict_columns,
+            update_columns=update_columns,
+            preserve_existing_on_null_columns=preserve_existing_on_null_columns,
+            merge_json_columns=merge_json_columns)
+        if routed is not None:
+            return routed
+
+    table = (published_table(model) if _published_raw_quality and workspace(db)
+             else model.__table__)
     if update_columns is None:
         primary_keys = {col.name for col in table.primary_key.columns}
         excluded = set(conflict_columns) | primary_keys

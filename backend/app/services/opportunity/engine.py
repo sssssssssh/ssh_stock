@@ -305,7 +305,8 @@ def _industry_context(
     values: pd.DataFrame, members: pd.DataFrame, factors: pd.DataFrame
 ) -> pd.DataFrame:
     result = values.copy()
-    result[["industry_sector_id", "industry_heat", "industry_lifecycle"]] = np.nan
+    result[["industry_sector_id", "industry_heat"]] = np.nan
+    result["industry_lifecycle"] = pd.Series(None, index=result.index, dtype=object)
     if members.empty or factors.empty:
         return result
     member_values = members.copy()
