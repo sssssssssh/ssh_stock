@@ -349,14 +349,17 @@ def _reject_direct_derived_write(*, evaluation: bool = False) -> None:
     typer.echo("Use the web 数据 page or explicitly select 'recalculate --start ... --end ...'.")
     typer.echo("Full recalculation is broader than this command; no request has been queued.")
     if evaluation:
-        typer.echo("No equivalent queued signal_type/limit/eval_version/entry_basis workflow; "
-                   "these options cannot be silently mapped to full recalculation.")
+        typer.echo(
+            "No equivalent queued signal_type/limit/eval_version/entry_basis workflow; "
+            "these options cannot be silently mapped to full recalculation."
+        )
     raise typer.Exit(code=1)
 
 
 @cli.command("recalculate")
 def recalculate(
-    start: str = typer.Option(...), end: str = typer.Option(...),
+    start: str = typer.Option(...),
+    end: str = typer.Option(...),
     evaluate_signals: bool = typer.Option(True, "--evaluate-signals/--no-evaluate-signals"),
 ) -> None:
     """Enqueue FULL pipeline, not single-table recalc; Worker validates and atomically publishes."""
@@ -364,10 +367,17 @@ def recalculate(
     if start_date > end_date:
         raise typer.BadParameter("start must be <= end")
     with SessionLocal() as db:
-        job = _queue_cli_job(db, "recalculate", end_date, {
-            "start": start_date.isoformat(), "end": end_date.isoformat(),
-            "evaluate_signals": evaluate_signals, "mode": "manual",
-        })
+        job = _queue_cli_job(
+            db,
+            "recalculate",
+            end_date,
+            {
+                "start": start_date.isoformat(),
+                "end": end_date.isoformat(),
+                "evaluate_signals": evaluate_signals,
+                "mode": "manual",
+            },
+        )
     typer.echo(f"FULL recalculation queued job_id={job.id}; run worker to execute")
 
 

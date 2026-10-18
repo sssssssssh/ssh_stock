@@ -249,7 +249,8 @@ def test_is_analysis_complete_rejects_old_config_hash(monkeypatch) -> None:
     )
 
     assert complete is False
-    assert "factor_v1" in calls["StockFactorDaily"]
+    from app.services.analysis_identity import FACTOR_CALC_VERSION
+    assert FACTOR_CALC_VERSION in calls["StockFactorDaily"]
     assert "current_hash" in calls["StockFactorDaily"]
 
 

@@ -23,7 +23,8 @@ def engine(name, *, baseline=False):
     sys.modules[key] = module
     source = (
         subprocess.check_output(["git", "show", f"{BASELINE}:{path}"], cwd=ROOT, text=True)
-        if baseline else (ROOT / path).read_text()
+        if baseline
+        else (ROOT / path).read_text()
     )
     exec(compile(source, path, "exec"), module.__dict__)
     return module
@@ -32,30 +33,49 @@ def engine(name, *, baseline=False):
 def factor_inputs():
     days = list(pd.bdate_range("2025-01-01", periods=270).date)
     rows = []
-    for code, slope in (("A.SZ", .2), ("B.SZ", .35), ("C.SZ", .1)):
+    for code, slope in (("A.SZ", 0.2), ("B.SZ", 0.35), ("C.SZ", 0.1)):
         for index, day in enumerate(days):
             close = 10 + slope * index
-            rows.append(dict(trade_date=day, ts_code=code, open=close-.1, high=close+.1,
-                             low=close-.2, close=close, vol=1000, amount=100000))
+            rows.append(
+                dict(
+                    trade_date=day,
+                    ts_code=code,
+                    open=close - 0.1,
+                    high=close + 0.1,
+                    low=close - 0.2,
+                    close=close,
+                    vol=1000,
+                    amount=100000,
+                )
+            )
     daily = pd.DataFrame(rows)
     return dict(
         daily=daily,
-        adj_factor=daily[["trade_date", "ts_code"]].assign(adj_factor=1.),
-        stock_basic=pd.DataFrame([
-            dict(ts_code=code, list_date=date(2020, 1, 1), delist_date=None)
-            for code in ("A.SZ", "B.SZ", "C.SZ")
-        ]),
-        index_daily=pd.DataFrame([
-            dict(trade_date=day, ts_code="000300.SH", close=100+.1*index)
-            for index, day in enumerate(days)
-        ]),
-        benchmark_code="000300.SH", start=days[-1], end=days[-1],
+        adj_factor=daily[["trade_date", "ts_code"]].assign(adj_factor=1.0),
+        stock_basic=pd.DataFrame(
+            [
+                dict(ts_code=code, list_date=date(2020, 1, 1), delist_date=None)
+                for code in ("A.SZ", "B.SZ", "C.SZ")
+            ]
+        ),
+        index_daily=pd.DataFrame(
+            [
+                dict(trade_date=day, ts_code="000300.SH", close=100 + 0.1 * index)
+                for index, day in enumerate(days)
+            ]
+        ),
+        benchmark_code="000300.SH",
+        start=days[-1],
+        end=days[-1],
     )
 
 
 def status_for(daily):
     return daily[["trade_date", "ts_code"]].assign(
-        is_active=True, is_suspended=False, is_st=False, st_status_unknown=False,
+        is_active=True,
+        is_suspended=False,
+        is_st=False,
+        st_status_unknown=False,
     )
 
 
@@ -65,23 +85,54 @@ def opportunity_inputs():
     rows, states = [], []
     for code, state in (("A.SZ", "S2"), ("B.SZ", "S3"), ("C.SZ", "S5")):
         for index, day in enumerate(days):
-            rows.append(dict(
-                trade_date=day, ts_code=code, eligible=True, adj_close=10., ma20=9.9,
-                ma60=9.5, return20=-.05+index/1000, ma20_slope5=.01, atr20_pct=.02,
-                amount_ratio20=1.2, cross_above_ma20=True, cross_above_ma60=False,
-                higher_low=True, higher_low_pct=.06, drawdown_high60=-.15,
-                rps20=85., rps60=75., rps120=65., rps20_delta5=10., rps60_delta5=8.,
-            ))
-            states.append(dict(
-                trade_date=day, ts_code=code, state=state, previous_state="S2",
-                state_day_count=1, is_new_state=True, right_side_score=92., trend_score=90.,
-            ))
+            rows.append(
+                dict(
+                    trade_date=day,
+                    ts_code=code,
+                    eligible=True,
+                    adj_close=10.0,
+                    ma20=9.9,
+                    ma60=9.5,
+                    return20=-0.05 + index / 1000,
+                    ma20_slope5=0.01,
+                    atr20_pct=0.02,
+                    amount_ratio20=1.2,
+                    cross_above_ma20=True,
+                    cross_above_ma60=False,
+                    higher_low=True,
+                    higher_low_pct=0.06,
+                    drawdown_high60=-0.15,
+                    rps20=85.0,
+                    rps60=75.0,
+                    rps120=65.0,
+                    rps20_delta5=10.0,
+                    rps60_delta5=8.0,
+                )
+            )
+            states.append(
+                dict(
+                    trade_date=day,
+                    ts_code=code,
+                    state=state,
+                    previous_state="S2",
+                    state_day_count=1,
+                    is_new_state=True,
+                    right_side_score=92.0,
+                    trend_score=90.0,
+                )
+            )
     return dict(
-        factors=pd.DataFrame(rows), states=pd.DataFrame(states),
-        market=pd.DataFrame([dict(trade_date=day, market_score=70.) for day in days]),
-        sector_members=pd.DataFrame(), sector_factors=pd.DataFrame(), themes=pd.DataFrame(),
-        theme_members=pd.DataFrame(), theme_factors=pd.DataFrame(),
-        start=days[-1], end=days[-1], algo_version="v1.0",
+        factors=pd.DataFrame(rows),
+        states=pd.DataFrame(states),
+        market=pd.DataFrame([dict(trade_date=day, market_score=70.0) for day in days]),
+        sector_members=pd.DataFrame(),
+        sector_factors=pd.DataFrame(),
+        themes=pd.DataFrame(),
+        theme_members=pd.DataFrame(),
+        theme_factors=pd.DataFrame(),
+        start=days[-1],
+        end=days[-1],
+        algo_version="v1.0",
     )
 
 
@@ -94,20 +145,30 @@ def evaluate(module, kind, scenario):
         elif scenario == "missing":
             status = status.iloc[:0]
         return module.calculate_stock_factors(
-            **kwargs, config=module.FactorConfig(), trade_status=status,
+            **kwargs,
+            config=module.FactorConfig(),
+            trade_status=status,
         )
     kwargs = opportunity_inputs()
     if scenario != "complete":
-        for col in ("rps20_delta5", "rps60_delta5", "atr20_pct", "higher_low",
-                    "cross_above_ma20", "cross_above_ma60"):
+        for col in (
+            "rps20_delta5",
+            "rps60_delta5",
+            "atr20_pct",
+            "higher_low",
+            "cross_above_ma20",
+            "cross_above_ma60",
+        ):
             kwargs["factors"][col] = None if scenario == "missing" else pd.NA
     return module.calculate_opportunities(
-        **kwargs, config=module.OpportunityConfig.from_dict({}),
+        **kwargs,
+        config=module.OpportunityConfig.from_dict({}),
     )
 
 
 def report():
     result = dict(baseline=BASELINE, pandas=pd.__version__, numpy=np.__version__, cases=[])
+    result["object_mask_reproduction"] = (~pd.Series([True, False], dtype=object)).tolist()
     for kind in ("factors", "opportunity"):
         old, new = engine(kind, baseline=True), engine(kind)
         for scenario in ("complete", "partial", "missing"):
@@ -117,9 +178,12 @@ def report():
                 try:
                     frame = evaluate(module, kind, scenario)
                     outputs[label] = frame
-                    entry[label] = dict(rows=len(frame), records=json.loads(
-                        frame.to_json(orient="records", date_format="iso", double_precision=15)
-                    ))
+                    entry[label] = dict(
+                        rows=len(frame),
+                        records=json.loads(
+                            frame.to_json(orient="records", date_format="iso", double_precision=15)
+                        ),
+                    )
                 except (TypeError, ValueError, pd.errors.DataError) as exc:
                     entry[label] = dict(error_type=type(exc).__name__, error=str(exc))
             if len(outputs) == 2:
@@ -130,6 +194,13 @@ def report():
                 except AssertionError:
                     entry["equal_rtol_atol_1e_12"] = False
                 entry["changed_columns"] = [c for c in a if not a[c].equals(b[c])]
+                changed = pd.Series(False, index=a.index)
+                for column in entry["changed_columns"]:
+                    changed |= ~(a[column].eq(b[column]) | (a[column].isna() & b[column].isna()))
+                entry["affected_stocks"] = sorted(a.loc[changed, "ts_code"].unique())
+                entry["affected_dates"] = sorted(
+                    str(d) for d in a.loc[changed, "trade_date"].unique()
+                )
             result["cases"].append(entry)
     return result
 
@@ -143,9 +214,19 @@ if __name__ == "__main__":
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded + "\n")
-    print(json.dumps({**value, "cases": [
-        {k: v for k, v in case.items() if k not in {"old", "new"}}
-        | {label: {k: v for k, v in case[label].items() if k != "records"}
-           for label in ("old", "new")}
-        for case in value["cases"]
-    ]}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                **value,
+                "cases": [
+                    {k: v for k, v in case.items() if k not in {"old", "new"}}
+                    | {
+                        label: {k: v for k, v in case[label].items() if k != "records"}
+                        for label in ("old", "new")
+                    }
+                    for case in value["cases"]
+                ],
+            },
+            ensure_ascii=False,
+        )
+    )

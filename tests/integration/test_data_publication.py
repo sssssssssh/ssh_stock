@@ -178,8 +178,10 @@ def test_successful_candidate_publishes_all_tables_and_stable_signal_id(publicat
         assert len(list(reader.scalars(select(DataPublicationPreimage)))) == len(CORE)
 
 
-def test_real_recalculation_and_quality_publish_without_synthetic_certificate(publication_db):
-    from app.services.recalculation import run_recalculation
+@pytest.mark.parametrize("history", ["complete", "partial", "absent"])
+def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
+    publication_db, history
+):
 
     factory, engine = publication_db
     old = seed_published(factory)
@@ -265,15 +267,32 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(pu
                     "st_status_unknown": False,
                 }
                 for day in days
+                if history == "complete" or (history == "partial" and day.day % 2 == 0)
             ],
             KEYS["stock_trade_status_daily"],
         )
         db.commit()
-    with candidate(factory, engine) as (db, job):
-        run_recalculation(db, job, DAY, DAY, evaluate_signals=False)
-        assert job.status == "SUCCESS"
-        key = job.id
+    # Actual Worker owns candidate setup, computation, quality and publication;
+    # no calculator/quality/Provider mocks and no fabricated certificate.
+    with factory() as db:
+        job = create_queued_ingestion_job(
+            db,
+            "recalculate",
+            DAY,
+            step="queued",
+            metadata={
+                "start": DAY.isoformat(),
+                "end": DAY.isoformat(),
+                "evaluate_signals": False,
+            },
+        )
+        assert claim_next_job(db, "cold-start-worker") == job.id
+        db.refresh(job)
+        key, worker_id, token = job.id, job.worker_id, job.execution_token
+    with factory() as db:
+        execute_claimed_job(db, key, expected_worker=worker_id, expected_token=token)
     with factory() as reader:
+        assert reader.get(JobRun, key).status == "SUCCESS"
         assert reader.get(DataPublication, key).state == "PUBLISHED"
         for model in (m.StockFactorDaily, m.StockStateDaily, m.StockOpportunityDaily):
             assert reader.scalar(select(model.calc_run_id)) == key
