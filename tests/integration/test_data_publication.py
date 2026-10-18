@@ -696,7 +696,7 @@ def test_real_quality_cannot_borrow_a_and_keeps_a_quality_published(publication_
         assert reader.scalar(select(m.StockFactorDaily.calc_run_id)) == old
 
 
-@pytest.mark.parametrize("mode", ["budget", "identity", "changed_base", "missing_stage"])
+@pytest.mark.parametrize("mode", ["budget", "timeout", "identity", "changed_base", "missing_stage"])
 def test_publish_fails_closed_without_changing_a(publication_db, monkeypatch, mode):
     from app.services import data_publication as publication
 
@@ -714,6 +714,10 @@ def test_publish_fails_closed_without_changing_a(publication_db, monkeypatch, mo
                     1 if name == "data_publish_max_rows" else original(name, default)
                 ),
             )
+        elif mode == "timeout":
+            ticks = iter([0, 100000])
+            monkeypatch.setattr(publication, "monotonic", lambda: next(ticks))
+            expected = "PUBLICATION_TIME_BUDGET_EXCEEDED"
         elif mode == "identity":
             db.execute(
                 update(DataPublicationRow)

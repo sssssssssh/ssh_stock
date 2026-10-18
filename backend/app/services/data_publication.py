@@ -7,6 +7,7 @@ calculators read their own checkpoints without copying all published history.
 import json
 from datetime import UTC, date, datetime
 from functools import lru_cache
+from time import monotonic
 from uuid import UUID
 
 from sqlalchemy import Integer, MetaData, String, func, select, text, tuple_, update
@@ -706,14 +707,22 @@ def finish_publication(db, job, status):
         raise ValueError("JOB_CONFIG_CHANGED")
     ledger.publish_started_at = datetime.now(UTC)
     db.flush()
-    import time
-
-    started = time.monotonic()
+    started = monotonic()
     deadline_ms = int(scheduler_setting("data_publish_timeout_ms", 300000))
+
+    def budget():
+        remaining = deadline_ms - int((monotonic() - started) * 1000)
+        if remaining <= 0:
+            raise ValueError("PUBLICATION_TIME_BUDGET_EXCEEDED")
+        db.execute(
+            text("SELECT set_config('statement_timeout', :value, true)"), {"value": str(remaining)}
+        )
+
     parameters = {"root": current.job_id}
     counts = {}
     total = 0
     for name in REGISTRY:
+        budget()
         amount = db.scalar(
             text(
                 "SELECT count(*) FROM public.data_publication_row s WHERE " + _publishable_sql(name)
@@ -729,12 +738,7 @@ def finish_publication(db, job, status):
     if total > int(scheduler_setting("data_publish_max_rows", 10000000)):
         raise ValueError("PUBLICATION_ROW_BUDGET_EXCEEDED")
     for name, model in REGISTRY.items():
-        remaining = deadline_ms - int((time.monotonic() - started) * 1000)
-        if remaining <= 0:
-            raise ValueError("PUBLICATION_TIME_BUDGET_EXCEEDED")
-        db.execute(
-            text("SELECT set_config('statement_timeout', :value, true)"), {"value": str(remaining)}
-        )
+        budget()
         predicate = _publishable_sql(name)
         join = _qualified_keys(model, dialect=db.get_bind().dialect)
         # Verify the published preimage has not changed behind the serial lane
@@ -748,6 +752,7 @@ def finish_publication(db, job, status):
         if changed:
             raise ValueError("PUBLICATION_BASE_CHANGED")
         keys = ",".join(f'p."{key}"' for key in KEYS[name])
+        budget()
         db.execute(
             text(f"""INSERT INTO public.data_publication_preimage
             (publication_id, table_name, row_key, row_data)
@@ -759,6 +764,7 @@ def finish_publication(db, job, status):
         if name == "strategy_signal":
             # Preserve evaluation evidence before the existing signal FK's
             # ON DELETE CASCADE runs at publication, never at a checkpoint.
+            budget()
             db.execute(
                 text(f"""INSERT INTO public.data_publication_preimage
                 (publication_id, table_name, row_key, row_data)
@@ -769,6 +775,7 @@ def finish_publication(db, job, status):
                 WHERE {predicate} AND s.is_deleted ON CONFLICT DO NOTHING"""),
                 parameters,
             )
+        budget()
         db.execute(
             text(
                 f'DELETE FROM public."{name}" p USING public.data_publication_row s '
@@ -784,6 +791,7 @@ def finish_publication(db, job, status):
             if col not in {c.name for c in model.__table__.primary_key}
         )
         conflict = ",".join(f'"{col}"' for col in KEYS[name])
+        budget()
         db.execute(
             text(f"""INSERT INTO public."{name}" ({quoted})
             SELECT {",".join(f'r."{col}"' for col in columns)}
@@ -794,6 +802,7 @@ def finish_publication(db, job, status):
             parameters,
         )
     # Retain real previous Job references without fabricating missing legacy jobs.
+    budget()
     db.execute(
         text("""INSERT INTO public.data_publication_source
         (publication_id, source_job_id, role)
@@ -804,6 +813,7 @@ def finish_publication(db, job, status):
         parameters,
     )
     _finish_publication_dirty(db, current, "SUCCESS")
+    budget()
     ledger.state = "PUBLISHED"
     ledger.published_at = datetime.now(UTC)
     ledger.row_counts = counts
