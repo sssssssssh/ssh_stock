@@ -12,6 +12,74 @@ from app.services.dirty import recover_stale_processing_ranges, reopen_dirty_ran
 from app.services.job_worker import claim_next_job, execute_claimed_job
 from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import OperationalError
+
+
+def test_worker_reconnects_after_database_error_without_replaying_job(monkeypatch):
+    calls = []
+    stop = SimpleNamespace(set=lambda: calls.append("stopped"))
+    thread = SimpleNamespace(join=lambda timeout: None)
+    monkeypatch.setattr(worker_module, "start_service_heartbeat", lambda name: (stop, thread))
+
+    def loop():
+        calls.append("loop")
+        if calls.count("loop") == 1:
+            raise OperationalError("synthetic", {}, RuntimeError("database unavailable"))
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(worker_module, "_run_worker_loop", loop, raising=False)
+    # A unit regression must never open a configured application database.
+    def unavailable_session():
+        raise OperationalError("synthetic", {}, RuntimeError("database unavailable"))
+
+    monkeypatch.setattr(worker_module, "SessionLocal", unavailable_session)
+    monkeypatch.setattr(worker_module.time, "sleep", lambda seconds: calls.append("backoff"))
+    with pytest.raises(KeyboardInterrupt):
+        worker_module.run_worker()
+    assert calls == ["loop", "backoff", "loop", "stopped"]
+
+
+def test_heartbeat_database_errors_do_not_log_connection_details(monkeypatch):
+    class Stop:
+        waits = 0
+
+        def wait(self, seconds):
+            self.waits += 1
+            return self.waits > 1
+
+    class OfflineSession:
+        def __enter__(self):
+            raise OperationalError("synthetic", {}, RuntimeError("PRIVATE_CONNECTION_SENTINEL"))
+
+        def __exit__(self, *args):
+            return False
+
+    logs = []
+    monkeypatch.setattr(worker_module, "SessionLocal", OfflineSession)
+    monkeypatch.setattr(worker_module.logger, "error", lambda fmt, *args: logs.append(
+        fmt.format(*args),
+    ))
+    worker_module._run_heartbeat_loop(uuid4(), "test-worker", Stop(), interval_seconds=1)
+    assert len(logs) == 1
+    assert "OperationalError" in logs[0]
+    assert "PRIVATE_CONNECTION_SENTINEL" not in logs[0]
+
+
+@pytest.mark.parametrize("status,age,expected", [
+    ("RUNNING", 901, True), ("RUNNING", 900, True), ("RUNNING", 30, False),
+    ("QUEUED", 2000, False), ("FAILED", 2000, False),
+])
+def test_job_payload_exposes_stale_heartbeat_without_mutation(monkeypatch, status, age, expected):
+    now = datetime.now(UTC)
+    job = worker_module.JobRun(
+        id=uuid4(), job_type="recalculate", status=status, row_count=0, job_metadata={},
+        started_at=now - timedelta(seconds=age), heartbeat_at=now - timedelta(seconds=age),
+    )
+    monkeypatch.setattr(jobs_api, "scheduler_setting", lambda name, default: 15)
+    payload = jobs_api._job_payload(job)
+    assert payload["heartbeat_stale"] is expected
+    assert payload["status"] == status
+    assert job.status == status
 
 
 class _ScalarResult:

@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, database_error_summary
 from app.models.job import ServiceHeartbeat
 
 
@@ -69,6 +70,9 @@ def start_service_heartbeat(
             try:
                 with SessionLocal() as db:
                     touch_service_heartbeat(db, service_name, instance_id)
+            except SQLAlchemyError as exc:
+                logger.error("service heartbeat database unavailable service={} error={}",
+                             service_name, database_error_summary(exc))
             except Exception:
                 logger.exception(
                     "service heartbeat failed service={} instance={}",

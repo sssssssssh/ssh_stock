@@ -8,10 +8,11 @@ from typing import Any
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError, PendingRollbackError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, database_error_summary
 from app.jobs.backfill_job import BackfillJob
 from app.jobs.basic_info_job import BasicInfoJob
 from app.jobs.catchup_job import CatchUpJob
@@ -254,7 +255,10 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                 failed,
                 status="FAILED",
                 step=failed.step or "worker execution failed",
-                error_message=str(exc),
+                error_message=(
+                    database_error_summary(exc)
+                    if isinstance(exc, SQLAlchemyError) else str(exc)
+                ),
                 metadata=(
                     {
                         **dict(failed.job_metadata or {}),
@@ -276,7 +280,11 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
                     else None
                 ),
             )
-        logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
+        if isinstance(exc, SQLAlchemyError):
+            logger.error("worker job database failure job_id={} error={}",
+                         job_id, database_error_summary(exc))
+        else:
+            logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
     finally:
         stop_heartbeat.set()
         if heartbeat_thread is not None:
@@ -296,125 +304,139 @@ def _run_heartbeat_loop(
             with SessionLocal() as heartbeat_db:
                 if not touch_job_heartbeat(heartbeat_db, job_id, worker_id):
                     return
+        except SQLAlchemyError as exc:
+            logger.error("worker heartbeat database unavailable job_id={} error={}",
+                         job_id, database_error_summary(exc))
         except Exception:
             logger.exception("worker heartbeat failed job_id={} worker_id={}", job_id, worker_id)
 
 
 def run_worker() -> None:
     service_stop, service_thread = start_service_heartbeat("worker")
+    try:
+        while True:
+            try:
+                _run_worker_loop()
+            except (DBAPIError, PendingRollbackError) as exc:
+                # Session context managers close the failed connection. Restart
+                # polling with fresh sessions, never replay the interrupted job.
+                logger.error("worker database unavailable error={}", database_error_summary(exc))
+                time.sleep(max(1.0, float(scheduler_setting("worker_poll_seconds", 2))))
+    finally:
+        service_stop.set()
+        service_thread.join(timeout=5)
+
+
+def _run_worker_loop() -> None:
     poll_seconds = float(scheduler_setting("worker_poll_seconds", 2))
     recovery_interval = float(scheduler_setting("stale_recovery_interval_seconds", 60))
     worker_id = worker_identity()
     last_recovery = 0.0
-    try:
-        while True:
-            with SessionLocal() as db:
-                now = time.monotonic()
-                if now - last_recovery >= recovery_interval:
-                    recovered_paper = recover_stale_paper_jobs(
-                        db, timeout_minutes=float(
-                            scheduler_setting("running_heartbeat_timeout_minutes", 15)
-                        ),
-                    )
-                    if recovered_paper:
-                        logger.warning("paper jobs recovered count={}", recovered_paper)
-                    recovered_jobs = recover_stale_ingestion_jobs(db)
-                    recovered_research = recover_stale_research_jobs(db)
-                    recovered_backtests = recover_stale_backtest_jobs(
-                        db,
-                        timeout_minutes=float(
-                            scheduler_setting(
-                                "running_heartbeat_timeout_minutes", 15
-                            )
-                        ),
-                    )
-                    recovered_performance = recover_stale_performance_jobs(
-                        db,
-                        timeout_minutes=float(
-                            scheduler_setting(
-                                "running_heartbeat_timeout_minutes", 15
-                            )
-                        ),
-                    )
-                    recovered_performance_risk = recover_stale_performance_risk_jobs(
-                        db,
-                        timeout_minutes=float(
-                            scheduler_setting(
-                                "running_heartbeat_timeout_minutes", 15
-                            )
-                        ),
-                    )
-                    recovered_performance_trade = recover_stale_performance_trade_jobs(
-                        db,
-                        timeout_minutes=float(
-                            scheduler_setting(
-                                "running_heartbeat_timeout_minutes", 15
-                            )
-                        ),
-                    )
-                    recovered_performance_period = recover_stale_performance_period_jobs(
-                        db,
-                        timeout_minutes=float(
-                            scheduler_setting("running_heartbeat_timeout_minutes", 15)
-                        ),
-                    )
-                    recovered_experiment_evaluation = (
-                        recover_stale_experiment_evaluation_jobs(
-                            db,
-                            timeout_minutes=float(
-                                scheduler_setting(
-                                    "running_heartbeat_timeout_minutes", 15
-                                )
-                            ),
+    while True:
+        with SessionLocal() as db:
+            now = time.monotonic()
+            if now - last_recovery >= recovery_interval:
+                recovered_paper = recover_stale_paper_jobs(
+                    db, timeout_minutes=float(
+                        scheduler_setting("running_heartbeat_timeout_minutes", 15)
+                    ),
+                )
+                if recovered_paper:
+                    logger.warning("paper jobs recovered count={}", recovered_paper)
+                recovered_jobs = recover_stale_ingestion_jobs(db)
+                recovered_research = recover_stale_research_jobs(db)
+                recovered_backtests = recover_stale_backtest_jobs(
+                    db,
+                    timeout_minutes=float(
+                        scheduler_setting(
+                            "running_heartbeat_timeout_minutes", 15
                         )
-                    )
-                    recovered_walk_forward_validation = (
-                        recover_stale_walk_forward_validation_jobs(
-                            db,
-                            timeout_minutes=float(
-                                scheduler_setting(
-                                    "running_heartbeat_timeout_minutes", 15
-                                )
-                            ),
+                    ),
+                )
+                recovered_performance = recover_stale_performance_jobs(
+                    db,
+                    timeout_minutes=float(
+                        scheduler_setting(
+                            "running_heartbeat_timeout_minutes", 15
                         )
-                    )
-                    recovered_dirty = recover_stale_processing_ranges(
+                    ),
+                )
+                recovered_performance_risk = recover_stale_performance_risk_jobs(
+                    db,
+                    timeout_minutes=float(
+                        scheduler_setting(
+                            "running_heartbeat_timeout_minutes", 15
+                        )
+                    ),
+                )
+                recovered_performance_trade = recover_stale_performance_trade_jobs(
+                    db,
+                    timeout_minutes=float(
+                        scheduler_setting(
+                            "running_heartbeat_timeout_minutes", 15
+                        )
+                    ),
+                )
+                recovered_performance_period = recover_stale_performance_period_jobs(
+                    db,
+                    timeout_minutes=float(
+                        scheduler_setting("running_heartbeat_timeout_minutes", 15)
+                    ),
+                )
+                recovered_experiment_evaluation = (
+                    recover_stale_experiment_evaluation_jobs(
                         db,
-                        stale_minutes=float(
-                            scheduler_setting("dirty_processing_timeout_minutes", 30)
+                        timeout_minutes=float(
+                            scheduler_setting(
+                                "running_heartbeat_timeout_minutes", 15
+                            )
                         ),
                     )
-                    logger.info(
-                        "worker recovery id={} recovered_jobs={} "
-                        "recovered_research={} recovered_backtests={} "
-                        "recovered_performance={} recovered_performance_risk={} "
-                        "recovered_performance_trade={} "
-                        "recovered_performance_period={} "
-                        "recovered_experiment_evaluation={} "
-                        "recovered_walk_forward_validation={} "
-                        "recovered_dirty={}",
-                        worker_id,
-                        recovered_jobs,
-                        recovered_research,
-                        recovered_backtests,
-                        recovered_performance,
-                        recovered_performance_risk,
-                        recovered_performance_trade,
-                        recovered_performance_period,
-                        recovered_experiment_evaluation,
-                        recovered_walk_forward_validation,
-                        recovered_dirty,
+                )
+                recovered_walk_forward_validation = (
+                    recover_stale_walk_forward_validation_jobs(
+                        db,
+                        timeout_minutes=float(
+                            scheduler_setting(
+                                "running_heartbeat_timeout_minutes", 15
+                            )
+                        ),
                     )
-                    last_recovery = now
-                job_id = claim_next_job(db, worker_id)
-            if job_id is None:
-                time.sleep(poll_seconds)
-                continue
-            with SessionLocal() as db:
-                execute_claimed_job(db, job_id)
-    finally:
-        service_stop.set()
-        service_thread.join(timeout=5)
+                )
+                recovered_dirty = recover_stale_processing_ranges(
+                    db,
+                    stale_minutes=float(
+                        scheduler_setting("dirty_processing_timeout_minutes", 30)
+                    ),
+                )
+                logger.info(
+                    "worker recovery id={} recovered_jobs={} "
+                    "recovered_research={} recovered_backtests={} "
+                    "recovered_performance={} recovered_performance_risk={} "
+                    "recovered_performance_trade={} "
+                    "recovered_performance_period={} "
+                    "recovered_experiment_evaluation={} "
+                    "recovered_walk_forward_validation={} "
+                    "recovered_dirty={}",
+                    worker_id,
+                    recovered_jobs,
+                    recovered_research,
+                    recovered_backtests,
+                    recovered_performance,
+                    recovered_performance_risk,
+                    recovered_performance_trade,
+                    recovered_performance_period,
+                    recovered_experiment_evaluation,
+                    recovered_walk_forward_validation,
+                    recovered_dirty,
+                )
+                last_recovery = now
+            job_id = claim_next_job(db, worker_id)
+        if job_id is None:
+            time.sleep(poll_seconds)
+            continue
+        with SessionLocal() as db:
+            execute_claimed_job(db, job_id)
 
 
 def run_validate_data_job(db: Session, job: JobRun, metadata: dict[str, Any]) -> None:

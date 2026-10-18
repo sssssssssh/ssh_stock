@@ -71,6 +71,7 @@ import type {
   AuthUser
 } from "./types";
 import { businessDaysAgoIso, businessTodayIso } from "./utils/businessTime";
+import { createJobPoller } from "./utils/jobPolling";
 
 type ViewKey = "overview" | "data" | "long" | "short" | "analytics" | "agent" | "reports" | "walk_forward" | "paper";
 type PoolTab = "right" | "trend";
@@ -150,6 +151,24 @@ let sectorChart: EChartsType | null = null;
 let klineChart: EChartsType | null = null;
 let jobPollTimer: number | undefined;
 let elapsedTimer: number | undefined;
+let workspaceGeneration = 0;
+
+const jobPoller = createJobPoller({
+  fetchJobs,
+  publishJobs: (nextJobs) => { jobs.value = nextJobs; },
+  refreshCoverage: async (signal) => {
+    const month = calendarMonth.value;
+    const coverage = await fetchDataCoverage(signal);
+    if (signal.aborted) return;
+    const calendar = await fetchDataCalendar(monthStartIso(month), monthEndIso(month), signal);
+    if (signal.aborted) return;
+    dataCoverage.value = coverage;
+    if (month === calendarMonth.value) dataCalendar.value = calendar;
+  },
+  onError: (error) => {
+    errorMessage.value = error instanceof Error ? error.message : "任务状态刷新失败";
+  }
+});
 
 const navItems: Array<{ key: ViewKey; label: string; description: string }> = [
   { key: "overview", label: "总览", description: "市场状态与后验表现" },
@@ -284,6 +303,7 @@ const metrics = computed(() => {
 });
 
 async function loadData() {
+  const generation = workspaceGeneration;
   loading.value = true;
   errorMessage.value = "";
   try {
@@ -291,9 +311,6 @@ async function loadData() {
       nextStatus,
       nextRuntime,
       nextSummary,
-      nextDataCoverage,
-      nextDataCalendar,
-      nextJobs,
       nextRightSide,
       nextTrend,
       nextDecay,
@@ -302,14 +319,12 @@ async function loadData() {
       nextThemeHeat,
       nextLeftOpportunities,
       nextRightOpportunities,
-      nextTrendOpportunities
+      nextTrendOpportunities,
+      coverageLoaded
     ] = await Promise.all([
       fetchSystemStatus(),
       fetchSystemRuntime(),
       fetchDashboardSummary(),
-      fetchDataCoverage(),
-      fetchDataCalendar(monthStartIso(calendarMonth.value), monthEndIso(calendarMonth.value)),
-      fetchJobs(),
       fetchRightSidePool(),
       fetchTrendPool(),
       fetchDecayPool(),
@@ -318,14 +333,15 @@ async function loadData() {
       fetchThemeHeat(),
       fetchLeftReversal(),
       fetchOpportunityRightSide(),
-      fetchOpportunityTrends()
+      fetchOpportunityTrends(),
+      jobPoller.refreshCoverage(),
+      jobPoller.refresh()
     ]);
+    if (generation !== workspaceGeneration || !authUser.value) return;
     status.value = nextStatus;
     runtime.value = nextRuntime;
     summary.value = nextSummary;
-    dataCoverage.value = nextDataCoverage;
-    dataCalendar.value = nextDataCalendar;
-    jobs.value = nextJobs;
+    jobPoller.observe(jobs.value, coverageLoaded);
     rightSidePool.value = nextRightSide;
     trendPool.value = nextTrend;
     decayPool.value = nextDecay;
@@ -338,22 +354,16 @@ async function loadData() {
     await nextTick();
     renderCharts();
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "加载失败";
+    if (generation === workspaceGeneration) {
+      errorMessage.value = error instanceof Error ? error.message : "加载失败";
+    }
   } finally {
-    loading.value = false;
+    if (generation === workspaceGeneration) loading.value = false;
   }
 }
 
 async function refreshJobStatus() {
-  try {
-    jobs.value = await fetchJobs();
-    if (activeJob.value) {
-      dataCoverage.value = await fetchDataCoverage();
-      await loadCoverageCalendar();
-    }
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "任务状态刷新失败";
-  }
+  await jobPoller.refresh();
 }
 
 async function openThemeDetail(theme: ThemeHeat) {
@@ -375,10 +385,12 @@ function closeThemeDetail() {
 }
 
 async function loadCoverageCalendar() {
-  dataCalendar.value = await fetchDataCalendar(
-    monthStartIso(calendarMonth.value),
-    monthEndIso(calendarMonth.value)
+  const month = calendarMonth.value;
+  const rows = await fetchDataCalendar(
+    monthStartIso(month),
+    monthEndIso(month)
   );
+  if (month === calendarMonth.value && authUser.value) dataCalendar.value = rows;
 }
 
 async function submitBackfill() {
@@ -716,10 +728,12 @@ function startWorkspace() {
 }
 
 function stopWorkspace() {
+  workspaceGeneration++;
   if (jobPollTimer) window.clearInterval(jobPollTimer);
   if (elapsedTimer) window.clearInterval(elapsedTimer);
   jobPollTimer = undefined;
   elapsedTimer = undefined;
+  jobPoller.reset();
 }
 
 function handleAuthenticated(user: AuthUser) {
@@ -767,6 +781,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  stopWorkspace();
   window.removeEventListener("resize", handleResize);
   window.removeEventListener("auth-required", handleAuthRequired);
   window.removeEventListener("password-change-required", handlePasswordRequired);

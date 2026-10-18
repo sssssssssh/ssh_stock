@@ -82,16 +82,16 @@ export function fetchDashboardSummary(): Promise<DashboardSummary> {
   return request<DashboardSummary>("/dashboard/summary");
 }
 
-export function fetchDataCoverage(): Promise<DataCoverageRow[]> {
-  return request<DataCoverageRow[]>("/system/data-coverage");
+export function fetchDataCoverage(signal?: AbortSignal): Promise<DataCoverageRow[]> {
+  return request<DataCoverageRow[]>("/system/data-coverage", { signal });
 }
 
-export function fetchDataCalendar(start: string, end: string): Promise<DataCalendarRow[]> {
-  return request<DataCalendarRow[]>(`/system/data-calendar?start=${start}&end=${end}`);
+export function fetchDataCalendar(start: string, end: string, signal?: AbortSignal): Promise<DataCalendarRow[]> {
+  return request<DataCalendarRow[]>(`/system/data-calendar?start=${start}&end=${end}`, { signal });
 }
 
-export function fetchJobs(): Promise<JobRun[]> {
-  return request<JobRun[]>("/jobs?limit=30");
+export function fetchJobs(signal?: AbortSignal): Promise<JobRun[]> {
+  return request<JobRun[]>("/jobs?limit=30", { signal });
 }
 
 export function fetchRightSidePool(): Promise<StockPoolItem[]> {

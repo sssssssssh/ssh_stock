@@ -252,7 +252,12 @@ def test_recalculation_gate_runs_before_trade_status(monkeypatch) -> None:
         finished_at=None,
         job_metadata={},
     )
-    db = SimpleNamespace(add=lambda row: None, commit=lambda: None, refresh=lambda row: None)
+    transactions = []
+    db = SimpleNamespace(
+        add=lambda row: None, refresh=lambda row: None,
+        rollback=lambda: transactions.append("rollback"),
+        commit=lambda: transactions.append("commit"),
+    )
 
     with pytest.raises(DataQualityError, match="raw missing"):
         recalculation_module.run_recalculation(
@@ -264,6 +269,8 @@ def test_recalculation_gate_runs_before_trade_status(monkeypatch) -> None:
         )
 
     assert calls == []
+    assert transactions == ["rollback", "commit"]
+    assert job.status == "FAILED"
 
 
 def test_catchup_synchronous_recalculation_starts_running(monkeypatch) -> None:

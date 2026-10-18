@@ -250,6 +250,8 @@ export type JobRun = {
   target_trade_date: string | null;
   started_at: string | null;
   finished_at: string | null;
+  heartbeat_at?: string | null;
+  heartbeat_stale?: boolean;
   status: string;
   step: string | null;
   row_count: number;

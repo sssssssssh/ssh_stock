@@ -2,10 +2,13 @@ import uuid
 from datetime import date, timedelta
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.db import database_error_summary
 from app.models.job import JobRun
 from app.models.market_data import DataDirtyRange, TradeCalendar
 from app.repositories.job_run import cancel_requested, finish_cancelled, update_job
@@ -262,17 +265,31 @@ def run_recalculation(
         if dirty_ranges:
             mark_dirty_ranges_resolved(db, dirty_ranges)
     except Exception as exc:
-        if dirty_ranges:
-            mark_dirty_ranges_failed(db, dirty_ranges, str(exc))
-        update_job(
-            db,
-            job,
-            status="FAILED",
-            step="recalculation failed",
-            error_message=str(exc),
-            row_count=total_rows,
-            metadata={**metadata, "stage": "failed"},
+        # A disconnected transaction cannot be reused, even to record its failure.
+        # Already committed stages and quality evidence are not rolled back here.
+        message = (
+            database_error_summary(exc)
+            if isinstance(exc, SQLAlchemyError) else str(exc)
         )
+        try:
+            db.rollback()
+            if dirty_ranges:
+                mark_dirty_ranges_failed(db, dirty_ranges, message)
+            update_job(
+                db, job, status="FAILED", step="recalculation failed",
+                error_message=message, row_count=total_rows,
+                metadata={**metadata, "stage": "failed"},
+            )
+        except SQLAlchemyError as recording_error:
+            # The database may still be offline. Preserve the first exception;
+            # normal stale recovery must reconcile any unrecorded failure later.
+            logger.error("recalculation failure recording unavailable type={}",
+                         type(recording_error).__name__)
+            try:
+                db.rollback()
+            except SQLAlchemyError as rollback_error:
+                logger.error("recalculation rollback unavailable type={}",
+                             type(rollback_error).__name__)
         raise
 
 

@@ -63,9 +63,10 @@ function updateEnd(event: Event) {
     <div v-show="!collapsed" class="job-status-grid panel-collapsible">
       <section class="job-current" :class="activeJob?.status.toLowerCase() || 'idle'">
         <div class="job-current-head">
-          <span>当前任务</span><strong>{{ activeJob ? statusLabel(activeJob.status) : "无运行任务" }}</strong>
+          <span>当前任务</span><strong>{{ activeJob ? (activeJob.heartbeat_stale ? "心跳超时，状态待确认" : statusLabel(activeJob.status)) : "无运行任务" }}</strong>
         </div>
         <template v-if="activeJob">
+          <p v-if="activeJob.heartbeat_stale" class="job-error" role="status">任务心跳已超时，Worker 可能已退出；当前进度不代表仍在执行。恢复后由原有超时恢复机制确认终态，不会自动续算。</p>
           <div class="job-progress-track"><i :style="{ width: `${progressPct(activeJob)}%` }"></i></div>
           <div class="job-progress-meta">
             <span>{{ progressPct(activeJob).toFixed(1) }}%</span>
@@ -91,8 +92,8 @@ function updateEnd(event: Event) {
           :title="jobTooltip(job)"
         >
           <span class="job-type" :title="job.job_type">{{ jobTypeText(job.job_type) }}</span>
-          <span class="job-status" :class="job.status.toLowerCase()" :title="statusLabel(job.status)">
-            {{ statusLabel(job.status) }}
+          <span class="job-status" :class="job.status.toLowerCase()" :title="job.heartbeat_stale ? '心跳超时，状态待确认' : statusLabel(job.status)">
+            {{ job.heartbeat_stale ? "心跳超时" : statusLabel(job.status) }}
           </span>
           <span class="job-step" :title="job.step || '--'">{{ jobStepText(job) }}</span>
           <span class="job-date" :title="metadataText(job)">{{ metadataText(job) }}</span>

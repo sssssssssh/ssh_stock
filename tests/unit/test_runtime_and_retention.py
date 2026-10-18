@@ -7,6 +7,46 @@ from app.models.job import ServiceHeartbeat
 from app.services.retention import run_retention
 from app.services.service_heartbeat import touch_service_heartbeat
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import OperationalError
+
+
+def test_service_heartbeat_disconnect_keeps_retry_loop_and_redacts_details(monkeypatch):
+    from app.services import service_heartbeat as module
+
+    class Stop:
+        stopped = False
+
+        def is_set(self):
+            return self.stopped
+
+        def wait(self, interval):
+            self.stopped = True
+
+    class Thread:
+        def __init__(self, *, target, **kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    class OfflineSession:
+        def __enter__(self):
+            raise OperationalError("PRIVATE_SQL", {}, RuntimeError("PRIVATE_CONNECTION"))
+
+        def __exit__(self, *args):
+            return False
+
+    logs = []
+    monkeypatch.setattr(module, "threading", SimpleNamespace(Event=Stop, Thread=Thread))
+    monkeypatch.setattr(module, "SessionLocal", OfflineSession)
+    monkeypatch.setattr(module.logger, "error", lambda fmt, *args: logs.append(
+        fmt.format(*args),
+    ))
+    stop, _ = module.start_service_heartbeat("worker", interval_seconds=1)
+    assert stop.stopped
+    assert len(logs) == 1
+    assert "OperationalError/RuntimeError" in logs[0]
+    assert "PRIVATE_" not in logs[0]
 
 
 class _Result:

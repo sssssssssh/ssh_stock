@@ -159,6 +159,14 @@ jobs:
           name: m16-6-synthetic-browser
           path: frontend/coverage/browser
           if-no-files-found: ignore
+      - name: Runtime reliability desktop and narrow-screen synthetic acceptance
+        run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/runtime_reliability_browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-reliability-synthetic-browser
+          path: frontend/coverage/runtime-reliability-browser
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

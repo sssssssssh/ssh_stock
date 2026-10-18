@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -301,6 +301,14 @@ def _load_dirty_ranges(db: Session, dirty_range_ids: list[int]) -> list[DataDirt
 
 
 def _job_payload(row: JobRun) -> dict[str, Any]:
+    reference = row.heartbeat_at or row.started_at
+    if reference is not None and reference.tzinfo is None:
+        reference = reference.replace(tzinfo=UTC)
+    heartbeat_stale = row.status == "RUNNING" and (
+        reference is None or reference <= datetime.now(UTC) - timedelta(
+            minutes=float(scheduler_setting("running_heartbeat_timeout_minutes", 15))
+        )
+    )
     return {
         "id": str(row.id),
         "job_type": row.job_type,
@@ -308,6 +316,7 @@ def _job_payload(row: JobRun) -> dict[str, Any]:
         "started_at": row.started_at.isoformat() if row.started_at else None,
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         "heartbeat_at": row.heartbeat_at.isoformat() if row.heartbeat_at else None,
+        "heartbeat_stale": heartbeat_stale,
         "worker_id": row.worker_id,
         "status": row.status,
         "step": row.step,

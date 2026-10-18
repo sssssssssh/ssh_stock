@@ -5,6 +5,7 @@ from uuid import uuid4
 import app.services.recalculation as recalculation_module
 import pytest
 from app.services.quality.daily_quality import DataQualityError
+from sqlalchemy.exc import OperationalError, PendingRollbackError
 
 
 class _FakeDb:
@@ -23,6 +24,48 @@ class _FakeDb:
 
     def rollback(self):
         self.rollbacks += 1
+
+
+@pytest.mark.parametrize("failure_record_unavailable", [False, True])
+def test_database_disconnect_rolls_back_and_preserves_first_error(
+    monkeypatch, failure_record_unavailable,
+):
+    _patch_successful_calculators(monkeypatch)
+    original = OperationalError("synthetic statement", {}, RuntimeError("disconnected"))
+
+    class Db(_FakeDb):
+        invalid = False
+
+        def commit(self):
+            if self.invalid:
+                raise PendingRollbackError("must rollback first")
+            if failure_record_unavailable and self.rollbacks:
+                raise OperationalError("synthetic failure recording", {}, RuntimeError("offline"))
+            super().commit()
+
+        def rollback(self):
+            self.invalid = False
+            super().rollback()
+
+    class DisconnectedTrend:
+        def __init__(self, db):
+            self.db = db
+
+        def recalc(self, *args, **kwargs):
+            self.db.invalid = True
+            raise original
+
+    monkeypatch.setattr(recalculation_module, "TrendService", DisconnectedTrend)
+    db, job = Db(), _job()
+    with pytest.raises(OperationalError) as error:
+        recalculation_module.run_recalculation(
+            db, job, date(2026, 9, 1), date(2026, 9, 2), evaluate_signals=False,
+        )
+    assert error.value is original
+    assert db.rollbacks >= 1
+    if not failure_record_unavailable:
+        assert job.status == "FAILED"
+        assert "OperationalError" in job.error_message
 
 
 class _SuccessfulFactorService:
