@@ -15,6 +15,7 @@ let jobRequest: (() => Promise<JobRun[]>) | undefined;
 let coverageRequest: (() => Promise<unknown>) | undefined;
 let requests: string[];
 let cancellation: (() => Promise<unknown>) | undefined;
+let schedulerCompensation: unknown;
 const count = (path: string) => requests.filter((url) => url.includes(path)).length;
 
 function job(status = "RUNNING", stale = false): JobRun {
@@ -35,6 +36,7 @@ beforeEach(() => {
   jobRequest = undefined;
   coverageRequest = undefined;
   cancellation = undefined;
+  schedulerCompensation = undefined;
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     requests.push(url);
     let data: unknown = [];
@@ -47,9 +49,21 @@ beforeEach(() => {
     else if (url.includes("/system/data-coverage")) data = coverageRequest ? await coverageRequest() : [];
     else if (url.includes("/dashboard/summary")) data = { sector_heat_top: [] };
     else if (url.includes("/system/status")) data = {};
-    else if (url.includes("/system/runtime")) data = { services: {}, queued_count: 0, running_count: 1 };
+    else if (url.includes("/system/runtime")) data = { services: {}, queued_count: 0, running_count: 1,
+      scheduler_compensation: schedulerCompensation };
     return { ok: true, status: 200, json: async () => ({ code: 0, data, meta: {} }) };
   }));
+});
+
+it("shows durable scheduling alerts without offering an unlock action", async () => {
+  schedulerCompensation = { pending_count: 1, items: [{ kind: "catchup", target_date: "2026-10-17",
+    state: "DEFERRED", error_code: "QUEUE_CAPACITY_EXCEEDED", next_attempt_at: "2026-10-18T01:00:00Z" }] };
+  await start();
+  await wrapper!.findAll(".nav-button").find((button) => button.text().includes("覆盖、拉取"))!.trigger("click");
+  expect(wrapper!.text()).toContain("调度待处理 1 项");
+  expect(wrapper!.text()).toContain("QUEUE_CAPACITY_EXCEEDED");
+  expect(wrapper!.text()).toContain("最近整页刷新快照");
+  expect(wrapper!.findAll("button").some((button) => button.text().includes("解锁"))).toBe(false);
 });
 
 it("confirms cancellation, prevents duplicate posts, and waits for server CANCELLED", async () => {

@@ -17,6 +17,23 @@ function mountJobs(jobs: JobRun[], activeJob: JobRun | null = null) {
   } });
 }
 
+it.each([
+  ["PREPARING", "RUNNING", false, "候选计算中，尚未发布"],
+  ["PREPARING", "SUCCESS", true, "等待父任务整体发布"],
+  ["ABORTED", "CANCELLED", false, "本次候选未替换已发布结果"],
+  ["PUBLISHED", "SUCCESS", false, "已发布 · 2026-10-18T01:00:00Z · published-identity"],
+  ["NO_CHANGES", "SUCCESS", false, "本次无派生结果发布"]
+])("shows truthful %s publication independently of processed row count", (state, status, parentOwned, expected) => {
+  const job = { ...baseJob, status, row_count: 9999, publication: {
+    state, identity: "published-identity", parent_owned: parentOwned,
+    published_at: "2026-10-18T01:00:00Z"
+  } };
+  const wrapper = mountJobs([job], status === "RUNNING" ? job : null);
+  expect(wrapper.text()).toContain(expected);
+  expect(wrapper.text()).not.toContain("已对外发布 9999");
+  wrapper.unmount();
+});
+
 it("sorts all queued jobs oldest first and emits cancellation without network calls", async () => {
   const wrapper = mountJobs([{ ...baseJob, id: "b", started_at: "2026-10-18T00:01:00Z" }, baseJob]);
   const entries = wrapper.findAll(".queue-entry");

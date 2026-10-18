@@ -1312,6 +1312,13 @@ function statusLabel(status: string) {
           <div><span>数据排队 / 运行</span><strong>{{ jobsLoading || jobsError ? "待确认" : `${queuedDataCount} / ${runningDataCount}` }}</strong></div>
           <div><span>Raw / 分析 / 机会</span><strong>{{ runtime?.latest_raw_date || "--" }} / {{ runtime?.latest_analysis_date || "--" }} / {{ runtime?.latest_opportunity_date || "--" }}</strong></div>
         </section>
+        <p v-if="runtime?.scheduler_compensation?.pending_count" class="job-error" role="alert">
+          调度待处理 {{ runtime.scheduler_compensation.pending_count }} 项（最近整页刷新快照）：
+          <span v-for="item in runtime.scheduler_compensation.items" :key="`${item.kind}/${item.target_date}`">
+            {{ item.target_date }} / {{ item.kind }} / {{ item.error_code || item.state }}；
+          </span>
+          已登记补偿的计划会限速重试；需人工处理的计划不会自动解锁。可刷新查看最新告警。
+        </p>
         <article class="panel action-panel" :class="{ collapsed: collapsedDataPanels.recalc }">
           <div class="panel-title coverage-title">
             <div>

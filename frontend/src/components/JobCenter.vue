@@ -52,6 +52,17 @@ function label(job: JobRun) {
   return job.heartbeat_stale ? "心跳超时，状态待确认" : props.statusLabel(job.status);
 }
 
+function publicationText(job: JobRun) {
+  const raw = job.publication || job.metadata.publication;
+  if (!raw || typeof raw !== "object") return "";
+  const publication = raw as Record<string, unknown>;
+  if (publication.state === "PUBLISHED") return `已发布 · ${publication.published_at || "--"} · ${publication.identity}`;
+  if (publication.state === "ABORTED") return "未发布：本次候选未替换已发布结果";
+  if (publication.state === "NO_CHANGES") return "本次无派生结果发布";
+  if (publication.parent_owned && job.status === "SUCCESS") return "候选已完成，等待父任务整体发布";
+  return "候选计算中，尚未发布";
+}
+
 function updateStart(event: Event) {
   emit("update:backfillStart", (event.target as HTMLInputElement).value);
 }
@@ -109,6 +120,7 @@ function updateEnd(event: Event) {
           <p>最近心跳：{{ activeJob.heartbeat_at || "--" }}</p>
           <p>最近进度：{{ activeJob.last_progress_at || "--" }}</p>
           <p v-if="activeJob.metadata.last_completed_end">最近确认完成：{{ activeJob.metadata.last_completed_stage }} / {{ activeJob.metadata.last_completed_start }} ~ {{ activeJob.metadata.last_completed_end }}</p>
+          <p v-if="publicationText(activeJob)" class="job-publication" role="status">{{ publicationText(activeJob) }}</p>
           <button v-if="activeJob.can_cancel || canCancel(activeJob) || activeJob.cancel_requested" class="secondary-button" type="button"
             :disabled="!canCancel(activeJob)" @click="$emit('cancel', activeJob.id)">
             {{ activeJob.cancel_requested ? "取消中" : cancellingJobs?.includes(activeJob.id) ? "提交中" : "请求取消" }}
@@ -118,7 +130,7 @@ function updateEnd(event: Event) {
             已写入/处理行数：{{ activeJob.row_count }}
             <template v-if="rowCountHint(activeJob)"> / {{ rowCountHint(activeJob) }}</template>
           </small>
-          <p><small>已提交阶段保留；新格式派生结果在来源任务成功前不计入已就绪统计。</small></p>
+          <p><small>处理行数不代表发布行数。计算检查点保存在候选区；整体发布前仍读取旧成功结果。</small></p>
         </template>
         <p v-else>最近状态会每 5 秒自动刷新</p>
       </section>
@@ -153,6 +165,7 @@ function updateEnd(event: Event) {
           <button v-if="canCancel(job)" class="secondary-button" type="button" @click="$emit('cancel', job.id)">请求取消</button>
           <span v-if="job.error_message" class="job-error-line" :title="job.error_message">{{ job.error_message }}</span>
           <span v-if="job.metadata.last_completed_end" class="job-completed-line">最近确认完成：{{ job.metadata.last_completed_start }} ~ {{ job.metadata.last_completed_end }}</span>
+          <span v-if="publicationText(job)" class="job-completed-line job-publication">{{ publicationText(job) }}</span>
         </div>
         <div v-if="!history.length" class="empty-block compact-empty">暂无任务记录</div>
       </section>

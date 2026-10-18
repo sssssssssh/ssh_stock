@@ -183,6 +183,10 @@ export type SystemStatus = {
 };
 
 export type SystemRuntime = {
+  scheduler_compensation?: { pending_count: number; truncated: boolean; items: {
+    kind: string; target_date: string; state: string; error_code: string | null;
+    next_attempt_at: string;
+  }[] };
   latest_job_heartbeat: string | null;
   worker_heartbeat: string | null;
   active_job: { id: string; job_type: string; step: string | null; started_at: string | null } | null;
@@ -245,6 +249,8 @@ export type DataCalendarRow = {
 };
 
 export type JobRun = {
+  publication?: { state: string; identity: string; published_at?: string | null;
+    parent_owned?: boolean };
   id: string;
   job_type: string;
   target_trade_date: string | null;
