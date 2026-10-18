@@ -10,6 +10,7 @@ from app.services.factors.engine import FactorConfig, _assign_eligibility, calcu
 from app.services.opportunity import engine as opportunity
 
 from scripts.cold_start_comparison import (
+    downstream_signals,
     engine,
     evaluate,
     factor_inputs,
@@ -23,6 +24,14 @@ def test_complete_golden_matches_frozen_v11(kind):
     expected = evaluate(engine(kind, baseline=True), kind, "complete")
     actual = evaluate(engine(kind), kind, "complete")
     pd.testing.assert_frame_equal(actual, expected, rtol=1e-12, atol=1e-12)
+    if kind == "opportunity":
+        assert set(actual.opportunity_stage) == {
+            "LEFT_REVERSAL",
+            "RIGHT_SIDE_NEW",
+            "STRONG_TREND",
+        }
+    else:
+        assert downstream_signals(actual) == downstream_signals(expected)
 
 
 def test_partial_left_join_does_not_exclude_present_status():

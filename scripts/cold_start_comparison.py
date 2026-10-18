@@ -1,6 +1,7 @@
 """Pure synthetic comparison against the frozen V1.1 source; no DB or Provider IO."""
 
 import argparse
+import ast
 import json
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 BASELINE = "f3158dd5317f1da2ba950522b300f66b70d9f901"
 ROOT = Path(__file__).resolve().parents[1]
@@ -162,13 +164,95 @@ def evaluate(module, kind, scenario):
             kwargs["factors"][col] = None if scenario == "missing" else pd.NA
     return module.calculate_opportunities(
         **kwargs,
-        config=module.OpportunityConfig.from_dict({}),
+        config=module.OpportunityConfig.from_dict(
+            {
+                "left_reversal": {
+                    "watch_score": 60,
+                    "strong_score": 75,
+                    "weights": {
+                        "stabilization": 0.15,
+                        "ma20_turn": 0.20,
+                        "higher_low": 0.15,
+                        "rps_recovery": 0.20,
+                        "price_recovery": 0.15,
+                        "volatility_contraction": 0.10,
+                        "volume_structure": 0.05,
+                    },
+                },
+                "trend_pool": {
+                    "weights": {
+                        "trend_score": 0.55,
+                        "rps60": 0.20,
+                        "rps120": 0.10,
+                        "context": 0.10,
+                        "market": 0.05,
+                    }
+                },
+            }
+        ),
+    )
+
+
+def downstream_signals(factors):
+    from app.services.trend.engine import (
+        TrendConfig,
+        calculate_stock_states,
+        generate_strategy_signals,
+    )
+
+    config = TrendConfig.from_strategy(yaml.safe_load((ROOT / "config/strategy.yaml").read_text()))
+    states = calculate_stock_states(
+        factors,
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        pd.DataFrame(),
+        factors.trade_date.min(),
+        factors.trade_date.max(),
+        config,
+    )
+    signals = generate_strategy_signals(states, config)
+    return dict(
+        state_rows=len(states),
+        signal_rows=len(signals),
+        states=json.loads(states.to_json(orient="records", date_format="iso", double_precision=15)),
+        signals=json.loads(
+            signals.to_json(orient="records", date_format="iso", double_precision=15)
+        ),
     )
 
 
 def report():
     result = dict(baseline=BASELINE, pandas=pd.__version__, numpy=np.__version__, cases=[])
     result["object_mask_reproduction"] = (~pd.Series([True, False], dtype=object)).tolist()
+    from app.services.analysis_identity import analysis_strategy_hash
+    from app.services.calc_metadata import config_hash
+
+    result["identities"] = {}
+    for label, baseline in (("old", True), ("new", False)):
+
+        def source(path, baseline=baseline):
+            return (
+                subprocess.check_output(["git", "show", f"{BASELINE}:{path}"], cwd=ROOT, text=True)
+                if baseline
+                else (ROOT / path).read_text()
+            )
+
+        tree = ast.parse(source("backend/app/services/analysis_identity.py"))
+        versions = {
+            node.targets[0].id: ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id.endswith("CALC_VERSION")
+        }
+        result["identities"][label] = dict(
+            versions=versions,
+            analysis_config_hash=analysis_strategy_hash(
+                yaml.safe_load(source("config/strategy.yaml"))
+            ),
+            opportunity_config_hash=config_hash(yaml.safe_load(source("config/opportunity.yaml"))),
+        )
     for kind in ("factors", "opportunity"):
         old, new = engine(kind, baseline=True), engine(kind)
         for scenario in ("complete", "partial", "missing"):
@@ -184,6 +268,15 @@ def report():
                             frame.to_json(orient="records", date_format="iso", double_precision=15)
                         ),
                     )
+                    if "opportunity_stage" in frame:
+                        entry[label]["stage_counts"] = (
+                            frame.opportunity_stage.value_counts().to_dict()
+                        )
+                        entry[label]["ranked_codes"] = frame.sort_values(
+                            ["opportunity_score", "ts_code"], ascending=[False, True]
+                        ).ts_code.tolist()
+                    if kind == "factors":
+                        entry[label]["downstream"] = downstream_signals(frame)
                 except (TypeError, ValueError, pd.errors.DataError) as exc:
                     entry[label] = dict(error_type=type(exc).__name__, error=str(exc))
             if len(outputs) == 2:
