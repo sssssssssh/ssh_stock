@@ -1,5 +1,38 @@
 # A 股机会发现与趋势研究系统
 
+## 计算引擎冷启动与安全入口 V1.2
+
+网页日常操作不变：在“数据”页提交完整补算，独立 Worker 计算候选，通过质量校验后原子发布。
+修复历史交易状态部分缺失的 object 布尔掩码、可空上市状态降级，以及机会计算 None/NaN/pd.NA
+比较/布尔/rolling 异常。未知数据不会伪装为强信号，数值公式、权重、阈值和金融口径不变。
+
+此次 Factor/Market/Sector/Theme/Trend/Signal/Opportunity 计算版本提升至 v2；TradeStatus 未变。
+config_hash/algo_version 算法和旧历史身份不变。升级后旧 v1 不计当前就绪，可能暂时显示无当前结果；
+旧排队身份漂移明确失败，须确认后重提。**不自动回算**，历史日期回补需单独批准。
+冻结研究/报告/账本不改写，来源不符继续拒绝执行。见
+[版本与黄金样本决定](docs/design/cold_start_version_decision.md)。
+
+旧 `recalc-factors/market/sectors/states` 与 `evaluate-signals` 现在永久拒绝直接写库，
+退出码 1、`UNSAFE_DIRECT_DERIVED_WRITE_DISABLED`，不创建 Job/候选，也不静默替换参数。
+下文旧命令示例仅为历史记录，不再可执行；此安全边界替代 V1.1“保留旧直写”的例外。
+没有强制直写开关。终端管理员如明确需要**完整流水线**，可用：
+
+```bash
+python -m app.cli recalculate --start YYYY-MM-DD --end YYYY-MM-DD --no-evaluate-signals
+```
+
+默认开启信号后验，可显式关闭。此命令比旧单表计算范围更大；不支持按 signal_type/limit/eval_version/
+entry_basis 等旧评价参数等价映射。普通网页用户无需终端。
+`daily/sync-basic/backfill/validate-data/research-eval` 仍按原队列执行；Worker/Scheduler 是既有运行入口。
+`data-job-diagnose/retention-inventory/check/indexes` 默认只读（indexes --apply 属显式运维写）；
+`retention-run/reset-admin-password/provider-smoke-test` 属既有受控运维操作，不是派生重算后门。
+
+不新增迁移，0058 保持原字节；不得新旧 Worker/CLI 混跑。部署前另行授权生产只读预检、备份恢复、
+磁盘/WAL/Provider 容量及停旧 Writer。代码推送不等于迁移、部署或回补许可。
+合成容量/一致性实验及 S01–S26 见
+[容量报告](docs/acceptance/data_publication_capacity_v12.md)、
+[专项验收](docs/acceptance/cold_start_cli_closeout_v12.md)。
+
 ## 派生发布可靠性 V1.1（2026-10-18）
 
 网页操作方式不变，无需终端提交任务。补算先保存私有候选检查点，页面与下游继续读取旧的已发布结果；

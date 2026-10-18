@@ -229,6 +229,7 @@ jobs:
                      and r["publish_seconds"] < r["merge_timeout_ms"] / 1000
                      for r in capacity["results"])
           comparison = json.loads(Path(".codex_tmp/cold-start-comparison.json").read_text())
+          assert comparison["head_sha"] == head and not comparison["working_tree_dirty"]
           assert all(r.get("equal_rtol_atol_1e_12") for r in comparison["cases"]
                      if r["scenario"] == "complete")
           assert all("error_type" not in r["new"] for r in comparison["cases"])

@@ -1,5 +1,9 @@
 # 数据任务可靠性与安全发布 V1.1 收尾
 
+后续 V1.2 已单独授权处理本文保留的冷启动/旧 CLI 风险，版本决定与现行验收见
+[冷启动专项](cold_start_cli_closeout_v12.md)。下述内容保留为 V1.1 当时的范围和证据，
+不表示当前仍允许旧 CLI 直写；生产部署/容量审批边界仍适用。
+
 基线：master@ff3f221b4fcade5f9b8477d7df1acc66498abaf4。用户授权修改并推送，并明确日常仅网页操作。
 当前记录为开发自检，最终同 SHA 证据以 GitHub CI 的 data-publication-reliability Artifact 为准；
 CI 尚未通过时不得据本文件宣称可上线。没有业务数据库/阿里云迁移、停服务、补算或维护状态写入授权。

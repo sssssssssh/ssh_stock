@@ -224,6 +224,8 @@ def downstream_signals(factors):
 
 def report():
     result = dict(baseline=BASELINE, pandas=pd.__version__, numpy=np.__version__, cases=[])
+    result["head_sha"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    result["working_tree_dirty"] = bool(subprocess.check_output(["git", "status", "--porcelain"]))
     result["object_mask_reproduction"] = (~pd.Series([True, False], dtype=object)).tolist()
     from app.services.analysis_identity import analysis_strategy_hash
     from app.services.calc_metadata import config_hash
