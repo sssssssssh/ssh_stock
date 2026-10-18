@@ -80,6 +80,8 @@ def calculate_opportunities(
     state_values = states.copy()
     state_values["trade_date"] = pd.to_datetime(state_values["trade_date"]).dt.date
     values = values.merge(state_values, on=["trade_date", "ts_code"], how="inner")
+    for column in ("right_side_score", "trend_score"):
+        values[column] = values[column].map(_number).astype(float)
     if not market.empty:
         market = market.copy()
         market["trade_date"] = pd.to_datetime(market["trade_date"]).dt.date
@@ -147,11 +149,21 @@ def calculate_opportunities(
         "opportunity_score",
         "reason_codes",
     ]
-    return output[columns].replace({np.nan: None})
+    return output[columns].replace({np.nan: None, np.inf: None, -np.inf: None})
 
 
 def _prepare_factor_context(factors: pd.DataFrame) -> pd.DataFrame:
     values = factors.copy()
+    boolean_columns = {"eligible", "higher_low", "cross_above_ma20", "cross_above_ma60"}
+    numeric_columns = {
+        "adj_close", "ma20", "ma60", "return20", "ma20_slope5", "atr20_pct",
+        "amount_ratio20", "higher_low_pct", "drawdown_high60", "rps20", "rps60",
+        "rps120", "rps20_delta5", "rps60_delta5",
+    }
+    for column in numeric_columns & set(values):
+        values[column] = values[column].map(_number).astype(float)
+    for column in boolean_columns & set(values):
+        values[column] = values[column].map(_truth).astype(bool)
     values["trade_date"] = pd.to_datetime(values["trade_date"]).dt.date
     values = values.sort_values(["ts_code", "trade_date"])
     grouped = values.groupby("ts_code", group_keys=False)
@@ -221,7 +233,7 @@ def _left_scores(
 
 
 def _stabilization(row: pd.Series) -> float:
-    drawdown = row.get("drawdown_high60")
+    drawdown = _number(row.get("drawdown_high60"))
     if pd.isna(drawdown):
         return 0
     score = (
@@ -235,13 +247,14 @@ def _stabilization(row: pd.Series) -> float:
         if drawdown >= -0.45
         else 40
     )
-    if not pd.isna(row.get("return20_lag5")) and row.get("return20") > row.get("return20_lag5"):
-        score += min(20, max(5, (row.get("return20") - row.get("return20_lag5")) * 200))
+    current, previous = _number(row.get("return20")), _number(row.get("return20_lag5"))
+    if current > previous:
+        score += min(20, max(5, (current - previous) * 200))
     return min(100, score)
 
 
 def _ma20_turn(row: pd.Series) -> float:
-    current, previous = row.get("ma20_slope5"), row.get("ma20_slope_prev")
+    current, previous = _number(row.get("ma20_slope5")), _number(row.get("ma20_slope_prev"))
     if pd.isna(current):
         return 0
     if not pd.isna(previous) and previous < 0 <= current:
@@ -254,18 +267,18 @@ def _ma20_turn(row: pd.Series) -> float:
 
 
 def _higher_low(row: pd.Series) -> float:
-    pct = row.get("higher_low_pct")
-    if bool(row.get("higher_low")):
+    pct = _number(row.get("higher_low_pct"))
+    if _truth(row.get("higher_low")):
         return 100 if not pd.isna(pct) and pct >= 0.05 else 80
     return 40 if not pd.isna(pct) and pct >= -0.02 else 0
 
 
 def _price_recovery(row: pd.Series) -> float:
-    if bool(row.get("cross_above_ma60")):
+    if _truth(row.get("cross_above_ma60")):
         return 100
-    if bool(row.get("cross_above_ma20")):
+    if _truth(row.get("cross_above_ma20")):
         return 85
-    close, ma20 = row.get("adj_close"), row.get("ma20")
+    close, ma20 = _number(row.get("adj_close")), _number(row.get("ma20"))
     if pd.isna(close) or pd.isna(ma20) or not ma20:
         return 0
     distance = close / ma20 - 1
@@ -275,6 +288,7 @@ def _price_recovery(row: pd.Series) -> float:
 
 
 def _atr_score(percentile: float | None) -> float:
+    percentile = _number(percentile)
     if percentile is None or pd.isna(percentile):
         return 0
     return (
@@ -289,10 +303,10 @@ def _atr_score(percentile: float | None) -> float:
 
 
 def _volume_structure(row: pd.Series) -> float:
-    ratio = row.get("amount_ratio20")
+    ratio = _number(row.get("amount_ratio20"))
     if pd.isna(ratio):
         return 0
-    if bool(row.get("cross_above_ma20")) and 1 <= ratio <= 1.8:
+    if _truth(row.get("cross_above_ma20")) and 1 <= ratio <= 1.8:
         return 100
     if 0.6 <= ratio <= 1:
         return 80
@@ -416,8 +430,9 @@ def _weighted_available(values: pd.DataFrame, weights: dict[str, float]) -> pd.S
     numerator = pd.Series(0.0, index=values.index)
     denominator = pd.Series(0.0, index=values.index)
     for column, weight in weights.items():
-        numerator += values[column].fillna(0) * weight
-        denominator += values[column].notna().astype(float) * weight
+        numbers = values[column].map(_number).astype(float)
+        numerator += numbers.fillna(0) * weight
+        denominator += numbers.notna().astype(float) * weight
     return numerator.div(denominator.replace(0, np.nan))
 
 
@@ -431,6 +446,7 @@ def _position_score(values: pd.DataFrame, config: PositionConfig) -> pd.Series:
 
 
 def _ma20_distance_score(value: float, config: PositionConfig) -> float:
+    value = _number(value)
     if pd.isna(value):
         return 0
     if value < -0.05:
@@ -449,6 +465,7 @@ def _ma20_distance_score(value: float, config: PositionConfig) -> float:
 
 
 def _drawdown_position_score(value: float) -> float:
+    value = _number(value)
     if pd.isna(value):
         return 0
     if value >= -0.03:
@@ -463,12 +480,14 @@ def _drawdown_position_score(value: float) -> float:
 
 
 def _atr_position_score(value: float) -> float:
+    value = _number(value)
     if pd.isna(value):
         return 0
     return 70 if value <= 0.30 else 100 if value <= 0.60 else 60 if value <= 0.80 else 25
 
 
 def _volume_heat_score(value: float) -> float:
+    value = _number(value)
     if pd.isna(value):
         return 0
     if 0.8 <= value <= 1.5:
@@ -479,9 +498,9 @@ def _volume_heat_score(value: float) -> float:
 
 
 def _extension_risk(row: pd.Series, config: PositionConfig) -> str | None:
-    if row.get("state") not in {"S4", "S5"}:
+    if _label(row.get("state")) not in {"S4", "S5"}:
         return None
-    close, ma20, ma60 = row.get("adj_close"), row.get("ma20"), row.get("ma60")
+    close, ma20, ma60 = (_number(row.get(key)) for key in ("adj_close", "ma20", "ma60"))
     if pd.isna(close) or pd.isna(ma20) or not ma20:
         return None
     distance = close / ma20 - 1
@@ -489,21 +508,21 @@ def _extension_risk(row: pd.Series, config: PositionConfig) -> str | None:
         return "BROKEN"
     if -0.03 <= distance <= 0.03 and (pd.isna(ma60) or close > ma60):
         return "PULLBACK"
-    if distance > config.ma20_extreme or row.get("amount_ratio20", 0) > config.amount_extreme:
+    if distance > config.ma20_extreme or _number(row.get("amount_ratio20")) > config.amount_extreme:
         return "EXTREME"
-    if distance > config.ma20_extended or row.get("amount_ratio20", 0) > config.amount_overheat:
+    if distance > config.ma20_extended or _number(row.get("amount_ratio20")) > config.amount_overheat:
         return "EXTENDED"
     return "NORMAL"
 
 
 def _stage(row: pd.Series, config: OpportunityConfig) -> str:
-    state, left = row.get("state"), row.get("left_reversal_score")
+    state, left = _label(row.get("state")), _number(row.get("left_reversal_score"))
     if state == "S5":
         return "STRONG_TREND"
     if state == "S4":
         return "TREND"
     if state == "S3":
-        return "RIGHT_SIDE_NEW" if bool(row.get("is_new_state")) else "RIGHT_SIDE"
+        return "RIGHT_SIDE_NEW" if _truth(row.get("is_new_state")) else "RIGHT_SIDE"
     if state in {"S1", "S2"} and not pd.isna(left):
         if left >= config.left_strong:
             return "LEFT_REVERSAL"
@@ -513,13 +532,16 @@ def _stage(row: pd.Series, config: OpportunityConfig) -> str:
 
 
 def _opportunity_score(row: pd.Series, config: OpportunityConfig) -> float | None:
-    stage = row["opportunity_stage"]
+    stage = _label(row.get("opportunity_stage")) or "OTHER"
     if stage.startswith("LEFT"):
-        context = row.get("context_score")
+        context = _number(row.get("context_score"))
+        left = _number(row.get("left_reversal_score"))
+        if pd.isna(left):
+            return None
         return (
-            row["left_reversal_score"]
+            left
             if pd.isna(context)
-            else config.left_structure_weight * row["left_reversal_score"]
+            else config.left_structure_weight * left
             + config.left_context_weight * context
         )
     if stage.startswith("RIGHT"):
@@ -529,44 +551,47 @@ def _opportunity_score(row: pd.Series, config: OpportunityConfig) -> float | Non
             (row.get("market_score"), config.right_market_weight),
         ]
         valid = [
-            (score, weight) for score, weight in scores if score is not None and not pd.isna(score)
+            (_number(score), weight) for score, weight in scores if not pd.isna(_number(score))
         ]
         return (
             sum(score * weight for score, weight in valid) / sum(weight for _, weight in valid)
-            if valid
+            if valid and sum(weight for _, weight in valid) != 0
             else None
         )
     if stage in {"TREND", "STRONG_TREND"}:
+        rank, position = _number(row.get("trend_rank_score")), _number(row.get("position_score"))
+        if pd.isna(rank) or pd.isna(position):
+            return None
         return (
-            config.trend_quality_weight * row["trend_rank_score"]
-            + config.trend_position_weight * row["position_score"]
+            config.trend_quality_weight * rank
+            + config.trend_position_weight * position
         )
     return None
 
 
 def _reason_codes(row: pd.Series) -> dict[str, list[str]]:
     codes: list[str] = []
-    if row.get("drawdown_high60", 0) <= -0.08:
+    if _number(row.get("drawdown_high60")) <= -0.08:
         codes.append("DRAWDOWN_BASE")
-    if row.get("return20", 0) > row.get("return20_lag5", 0):
+    if _number(row.get("return20")) > _number(row.get("return20_lag5")):
         codes.append("RETURN20_STABILIZING")
-    if row.get("ma20_turn", 0) >= 75:
+    if _number(row.get("ma20_turn")) >= 75:
         codes.append("MA20_TURN_UP")
-    if bool(row.get("higher_low")):
+    if _truth(row.get("higher_low")):
         codes.append("HIGHER_LOW")
-    if row.get("rps20_delta5", 0) > 0:
+    if _number(row.get("rps20_delta5")) > 0:
         codes.append("RPS20_RECOVERING")
-    if row.get("rps60_delta5", 0) > 0:
+    if _number(row.get("rps60_delta5")) > 0:
         codes.append("RPS60_RECOVERING")
-    if bool(row.get("cross_above_ma20")):
+    if _truth(row.get("cross_above_ma20")):
         codes.append("CROSS_MA20")
-    elif row.get("price_recovery", 0) >= 70:
+    elif _number(row.get("price_recovery")) >= 70:
         codes.append("ABOVE_MA20")
-    if row.get("volatility_contraction", 0) >= 80:
+    if _number(row.get("volatility_contraction")) >= 80:
         codes.append("VOLATILITY_CONTRACTING")
-    if row.get("volume_structure") == 80:
+    if _number(row.get("volume_structure")) == 80:
         codes.append("VOLUME_CONTRACTION")
-    if row.get("volume_structure") == 100:
+    if _number(row.get("volume_structure")) == 100:
         codes.append("VOLUME_CONFIRMATION")
     if _number(row.get("primary_theme_heat")) >= 60:
         codes.append("HOT_THEME")
@@ -574,7 +599,7 @@ def _reason_codes(row: pd.Series) -> dict[str, list[str]]:
         codes.append("HOT_INDUSTRY")
     if _number(row.get("position_score")) >= 70:
         codes.append("GOOD_POSITION")
-    if row.get("extension_risk") in {"EXTENDED", "EXTREME"}:
+    if _label(row.get("extension_risk")) in {"EXTENDED", "EXTREME"}:
         codes.append("OVEREXTENDED")
     if _number(row.get("rps60")) >= 80:
         codes.append("STRONG_RPS")
@@ -584,4 +609,21 @@ def _reason_codes(row: pd.Series) -> dict[str, list[str]]:
 
 
 def _number(value: Any) -> float:
-    return 0.0 if value is None or pd.isna(value) else float(value)
+    # Only finite real numeric scalars are evidence. Strings/objects/bools are
+    # unavailable, not zero or truthy indicators. Existing component defaults
+    # and weighted-available policies remain at their original call sites.
+    if isinstance(value, (bool, np.bool_, str, bytes)) or not pd.api.types.is_scalar(value):
+        return np.nan
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return np.nan
+    return number if np.isfinite(number) else np.nan
+
+
+def _truth(value: Any) -> bool:
+    return isinstance(value, (bool, np.bool_)) and bool(value)
+
+
+def _label(value: Any) -> str | None:
+    return value if isinstance(value, str) else None

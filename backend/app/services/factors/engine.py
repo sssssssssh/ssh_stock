@@ -55,7 +55,20 @@ def _reason_join(reasons: list[str]) -> str | None:
     return ",".join(reasons) if reasons else None
 
 
+def _status_boolean(values: pd.Series, name: str) -> pd.Series:
+    valid = values.map(
+        lambda value: isinstance(value, (bool, np.bool_))
+        or (pd.api.types.is_scalar(value) and bool(pd.isna(value)))
+    )
+    if not valid.all():
+        raise ValueError(f"TRADE_STATUS_INVALID_BOOLEAN:{name}")
+    return values.astype("boolean")
+
+
 def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
+    for name in ("trade_status_present", "is_st", "is_suspended", "st_status_unknown"):
+        if name in df:
+            df[name] = _status_boolean(df[name], name).fillna(False).astype(bool)
     listed_days = df.groupby("ts_code").cumcount() + 1
     reasons: list[list[str]] = [[] for _ in range(len(df.index))]
 
@@ -88,7 +101,9 @@ def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
         axis=1,
     )
     if "is_active" in df.columns:
-        active_mask = df["is_active"].where(df["trade_status_present"], active_mask)
+        active = _status_boolean(df["is_active"], "is_active")
+        present = df.get("trade_status_present", pd.Series(False, index=df.index))
+        active_mask = active.where(present & active.notna(), active_mask)
     inactive_mask = ~active_mask.astype(bool)
     for idx in np.flatnonzero(inactive_mask.to_numpy()):
         reasons[idx].append("NOT_ACTIVE_ON_DATE")
@@ -145,6 +160,8 @@ def calculate_stock_factors(
     if trade_status is not None and not trade_status.empty:
         status = trade_status.copy()
         status["trade_date"] = pd.to_datetime(status["trade_date"]).dt.date
+        if status.duplicated(["trade_date", "ts_code"]).any():
+            raise ValueError("TRADE_STATUS_DUPLICATE_KEY")
         status["trade_status_present"] = True
         df = df.merge(
             status[
@@ -160,8 +177,8 @@ def calculate_stock_factors(
             ],
             on=["trade_date", "ts_code"],
             how="left",
+            validate="many_to_one",
         )
-        df["trade_status_present"] = df["trade_status_present"].fillna(False)
     else:
         df["is_active"] = None
         df["is_suspended"] = None
