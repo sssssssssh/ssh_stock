@@ -30,7 +30,7 @@ from m16_6_support import isolated_contract_database
 from sqlalchemy.exc import DBAPIError
 from test_m16_4_research_reports import _source, _user
 
-HEAD = "0056_suspend_timing_text"
+HEAD = "0057_data_queue"
 PARENT = "0052_m16_6_frozen_research_contracts"
 MODELS = (
     PaperAccount,

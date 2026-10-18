@@ -90,8 +90,26 @@ export function fetchDataCalendar(start: string, end: string, signal?: AbortSign
   return request<DataCalendarRow[]>(`/system/data-calendar?start=${start}&end=${end}`, { signal });
 }
 
-export function fetchJobs(signal?: AbortSignal): Promise<JobRun[]> {
-  return request<JobRun[]>("/jobs?limit=30", { signal });
+export async function fetchJobs(signal?: AbortSignal): Promise<JobRun[]> {
+  const [history, queue] = await Promise.all([
+    request<JobRun[]>("/jobs?limit=30", { signal }),
+    request<{ running: JobRun[]; queued: JobRun[] }>("/jobs/queue", { signal })
+  ]);
+  // Active jobs come from the complete server queue, not a history page.
+  const rows = new Map(history.map((job) => [job.id, job]));
+  for (const job of [...queue.running, ...queue.queued]) rows.set(job.id, job);
+  return [...rows.values()];
+}
+
+export function cancelJob(jobId: string): Promise<JobRun> {
+  return request<JobRun>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+}
+
+async function createJob(path: string, init: RequestInit): Promise<JobRun> {
+  const result = await requestEnvelope<JobRun>(path, init);
+  return result.meta?.deduplicated === undefined ? result.data : {
+    ...result.data, submission_deduplicated: Boolean(result.meta.deduplicated)
+  };
 }
 
 export function fetchRightSidePool(): Promise<StockPoolItem[]> {
@@ -144,7 +162,7 @@ export function enqueueBackfillJob(payload: {
   start: string;
   end: string;
 }): Promise<JobRun> {
-  return request<JobRun>("/jobs/backfill", {
+  return createJob("/jobs/backfill", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -152,7 +170,7 @@ export function enqueueBackfillJob(payload: {
 }
 
 export function enqueueSyncBasicJob(): Promise<JobRun> {
-  return request<JobRun>("/jobs/sync-basic", {
+  return createJob("/jobs/sync-basic", {
     method: "POST",
     headers: { "Content-Type": "application/json" }
   });
@@ -163,7 +181,7 @@ export function enqueueRecalculateJob(payload: {
   end: string;
   evaluate_signals?: boolean;
 }): Promise<JobRun> {
-  return request<JobRun>("/jobs/recalculate", {
+  return createJob("/jobs/recalculate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
@@ -171,7 +189,7 @@ export function enqueueRecalculateJob(payload: {
 }
 
 export function enqueueDailyJob(payload: { trade_date: string }): Promise<JobRun> {
-  return request<JobRun>("/jobs/daily", {
+  return createJob("/jobs/daily", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)

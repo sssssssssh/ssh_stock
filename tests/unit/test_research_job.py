@@ -9,7 +9,7 @@ from app.services.job_guard import ResearchQueueConflictError
 
 
 def test_research_job_processes_batches_and_records_progress(monkeypatch) -> None:
-    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db, **kwargs: True)
     settings = get_settings()
     monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -79,7 +79,7 @@ def test_research_job_processes_batches_and_records_progress(monkeypatch) -> Non
 
 
 def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
-    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db, **kwargs: True)
     settings = get_settings()
     monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(research_job, "trade_batches", lambda *args: iter([[date(2026, 1, 2)]]))
@@ -108,7 +108,7 @@ def test_research_job_rejects_positive_input_without_eval(monkeypatch) -> None:
 
 
 def test_transition_only_records_readiness_skip_warning(monkeypatch) -> None:
-    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db, **kwargs: True)
     settings = get_settings()
     monkeypatch.setattr(research_job, "get_settings", lambda: settings)
     monkeypatch.setattr(
@@ -176,7 +176,7 @@ def test_research_queue_rejects_active_job_atomically(monkeypatch, status) -> No
 
 def test_research_queue_recovers_stale_and_stores_lineage_metadata(monkeypatch) -> None:
     stale = SimpleNamespace(
-        status="RUNNING", started_at=datetime.now(UTC) - timedelta(hours=2),
+        status="QUEUED", started_at=datetime.now(UTC) - timedelta(hours=25),
         heartbeat_at=datetime.now(UTC) - timedelta(hours=1),
         finished_at=None, error_message=None,
     )
@@ -226,7 +226,7 @@ def test_manual_research_queue_rejects_active_production(monkeypatch) -> None:
 
 def test_stale_recovery_survives_production_conflict(monkeypatch) -> None:
     stale = SimpleNamespace(
-        status="RUNNING", started_at=datetime.now(UTC) - timedelta(hours=2),
+        status="QUEUED", started_at=datetime.now(UTC) - timedelta(hours=25),
         heartbeat_at=datetime.now(UTC) - timedelta(hours=1),
         finished_at=None, error_message=None,
     )
@@ -254,7 +254,7 @@ def test_research_identity_drift_fails_before_trade_batches(monkeypatch, changed
     else:
         current_settings.algo_version = "changed"
     monkeypatch.setattr(research_job, "get_settings", lambda: current_settings)
-    monkeypatch.setattr(research_job, "research_can_run", lambda db: True)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db, **kwargs: True)
     monkeypatch.setattr(
         research_job, "trade_batches",
         lambda *args: pytest.fail("drifted job must not load trade batches"),
@@ -323,7 +323,7 @@ def test_scheduled_research_uses_last_65_open_days_without_tushare(monkeypatch) 
     )
     calls = []
     monkeypatch.setattr(scheduler_module, "recover_stale_research_jobs", lambda db: 0)
-    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: True)
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db, **kwargs: True)
     monkeypatch.setattr(
         scheduler_module, "research_source_window_complete", lambda *args: True
     )
@@ -382,7 +382,7 @@ def test_scheduled_research_rejects_middle_window_gap(monkeypatch) -> None:
         ),
     )
     monkeypatch.setattr(scheduler_module, "recover_stale_research_jobs", lambda db: 0)
-    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: True)
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db, **kwargs: True)
     monkeypatch.setattr(
         scheduler_module, "research_source_window_complete", lambda *args: False
     )
@@ -399,7 +399,7 @@ def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch
     monkeypatch.setattr(
         scheduler_module, "recover_stale_research_jobs", lambda db: calls.append("recover")
     )
-    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db: False)
+    monkeypatch.setattr(scheduler_module, "research_can_run", lambda db, **kwargs: False)
     monkeypatch.setattr(
         scheduler_module, "queue_research_eval", lambda *args, **kwargs: calls.append("queue")
     )
@@ -407,7 +407,7 @@ def test_scheduled_research_skips_busy_production_and_recovers_stale(monkeypatch
     assert calls == ["recover"]
 
 
-def test_scheduler_requeues_after_recovering_stale_research(monkeypatch) -> None:
+def test_scheduler_does_not_replay_unconfirmed_running_research(monkeypatch) -> None:
     now = datetime.now(UTC)
     job = SimpleNamespace(
         job_type="RESEARCH_EVAL", status="RUNNING",
@@ -440,13 +440,13 @@ def test_scheduler_requeues_after_recovering_stale_research(monkeypatch) -> None
     monkeypatch.setattr(
         scheduler_module, "research_source_window_complete", lambda *args: True
     )
-    assert scheduler_module.run_scheduled_research(Db(), dates[0]) is True
-    assert job.status == "FAILED"
-    assert len(calls) == 1
+    assert scheduler_module.run_scheduled_research(Db(), dates[0]) is False
+    assert job.status == "RUNNING"
+    assert calls == []
 
 
 def test_research_worker_defers_when_production_queued_after_claim(monkeypatch) -> None:
-    monkeypatch.setattr(research_job, "research_can_run", lambda db: False)
+    monkeypatch.setattr(research_job, "research_can_run", lambda db, **kwargs: False)
 
     class Db:
         def __init__(self):

@@ -141,7 +141,7 @@ def queue_research_eval(
 
 
 def run_research_eval(db: Session, job: JobRun) -> dict[str, Any]:
-    if not research_can_run(db):
+    if not research_can_run(db, running_only=True):
         job.status = "QUEUED"
         job.step = "waiting for production jobs"
         job.worker_id = None

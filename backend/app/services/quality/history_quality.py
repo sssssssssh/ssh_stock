@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.market_data import TradeCalendar
+from app.services.job_execution import checkpoint
 from app.services.quality.daily_quality import record_cross_table_quality
 from app.services.quality.raw_completeness import (
     RawCompletenessResult,
@@ -57,6 +58,7 @@ class HistoricalDataQualityService:
         error_days = 0
         summary = HistoricalQualitySummary(total_days, 0, 0, 0, 0)
         for index, trade_date in enumerate(trade_dates, 1):
+            checkpoint()
             result = self.validate_trade_date(
                 trade_date,
                 job_id=job_id,

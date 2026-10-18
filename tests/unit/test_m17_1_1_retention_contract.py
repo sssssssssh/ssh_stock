@@ -18,7 +18,8 @@ from sqlalchemy.dialects import postgresql
 
 def test_manifest_discovers_every_persistent_reference_and_job_fk():
     assert discovered_orm_references() == set(JOB_REFERENCES)
-    assert len(JOB_REFERENCES) == 12
+    assert len(JOB_REFERENCES) == 14
+    assert {("job_run", "parent_job_id"), ("job_run", "depends_on_job_id")} <= set(JOB_REFERENCES)
 
 
 def test_new_orm_reference_without_manifest_change_blocks_before_sql(monkeypatch):
@@ -39,7 +40,8 @@ def test_protection_sql_uses_indexable_exists_without_record_json_or_uuid_materi
     assert "SELECT decision_observation.record_json" not in sql and "job_metadata" not in sql
     assert "decision_observation.record_json @>" in sql
     for table, column in JOB_REFERENCES:
-        assert f"{table}.{column} = job_run.id" in sql
+        source = f"referencing_{column}" if table == "job_run" else table
+        assert f"{source}.{column} = job_run.id" in sql
 
 
 def test_age_predicate_keeps_original_statuses_and_strict_cutoffs():

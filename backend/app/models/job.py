@@ -2,7 +2,19 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, Date, DateTime, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,6 +26,14 @@ class JobRun(Base):
     __table_args__ = (
         Index("idx_job_run_type_date_status", "job_type", "target_trade_date", "status"),
         Index("idx_job_run_retention", "status", "finished_at", "id"),
+        Index("idx_job_data_queue", "status", "started_at", "id"),
+        Index("idx_job_parent", "parent_job_id"),
+        Index("idx_job_dependency", "depends_on_job_id"),
+        Index("uq_job_active_fingerprint", "request_fingerprint", unique=True,
+              postgresql_where=text(
+                  "status IN ('QUEUED','RUNNING') AND request_fingerprint IS NOT NULL")),
+        CheckConstraint("depends_on_job_id <> id", name="job_no_self_dependency"),
+        CheckConstraint("parent_job_id <> id", name="job_no_self_parent"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -28,6 +48,17 @@ class JobRun(Base):
     row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(String(2048))
     cancel_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    execution_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_progress_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    request_fingerprint: Mapped[str | None] = mapped_column(String(128))
+    depends_on_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"),
+    )
+    parent_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("job_run.id", ondelete="RESTRICT"),
+    )
     job_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
 

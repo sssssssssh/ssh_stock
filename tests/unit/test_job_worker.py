@@ -15,6 +15,12 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import OperationalError
 
 
+@pytest.fixture(autouse=True)
+def cancellation_unit_lock_boundary(monkeypatch):
+    # Real locking/cancellation races are covered by the independent PG17 suite.
+    monkeypatch.setattr(jobs_api, "_acquire_ingestion_advisory_lock", lambda db: None)
+
+
 def test_worker_reconnects_after_database_error_without_replaying_job(monkeypatch):
     calls = []
     stop = SimpleNamespace(set=lambda: calls.append("stopped"))
@@ -93,10 +99,13 @@ class _ScalarResult:
         return self.value
 
 
-def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
+def test_worker_claim_waits_for_head_and_sets_ownership() -> None:
     job = SimpleNamespace(
         id=uuid4(),
         status="QUEUED",
+        job_type="backfill",
+        depends_on_job_id=None,
+        job_metadata={"queue_identity": guard_module.data_queue_identity()},
         worker_id=None,
         heartbeat_at=None,
         step=None,
@@ -106,6 +115,7 @@ def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
         def __init__(self):
             self.statement = None
             self.commits = 0
+            self.info = {}
 
         def execute(self, statement):
             self.statement = statement
@@ -128,7 +138,9 @@ def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
     claimed = claim_next_job(db, "worker-a")
 
     sql = str(db.statement.compile(dialect=postgresql.dialect()))
-    assert "FOR UPDATE SKIP LOCKED" in sql
+    assert "FOR UPDATE" in sql and "SKIP LOCKED" not in sql
+    assert job.execution_token is not None
+    assert job.execution_started_at is not None
     assert claimed == job.id
     assert job.status == "RUNNING"
     assert job.worker_id == "worker-a"
@@ -138,6 +150,9 @@ def test_worker_claim_uses_skip_locked_and_sets_heartbeat() -> None:
 
 def test_worker_claim_filters_opposing_job_type_when_busy(monkeypatch) -> None:
     class Db:
+        def scalar(self, statement):
+            return None
+
         def __init__(self):
             self.statement = None
 
@@ -294,6 +309,10 @@ def test_cancel_queued_job_finishes_without_worker() -> None:
     job.id = uuid4()
 
     class Db:
+        def scalar(self, statement):
+            assert "FOR UPDATE" in str(statement)
+            return job
+
         def get(self, model, key):
             return job
 
@@ -322,8 +341,12 @@ def test_cancel_running_job_requests_safe_stop(job_type: str) -> None:
         job_metadata={},
     )
     job.id = uuid4()
+    job.execution_token = uuid4() if job_type != "RESEARCH_EVAL" else None
 
     class Db:
+        def scalar(self, statement):
+            return job
+
         def get(self, model, key):
             return job
 
@@ -340,12 +363,13 @@ def test_cancel_running_job_requests_safe_stop(job_type: str) -> None:
 
     assert response["data"]["status"] == "RUNNING"
     assert response["data"]["cancel_requested"] is True
-    assert job.step == "cancellation requested"
+    assert job.step is None  # Cancelling must not overwrite business progress.
+    assert response["meta"]["cancel_completed"] is False
 
 
 def test_cancel_running_unsupported_job_returns_conflict() -> None:
     job = worker_module.JobRun(
-        job_type="validate_data",
+        job_type="performance_build",
         status="RUNNING",
         row_count=0,
         job_metadata={},
@@ -353,6 +377,9 @@ def test_cancel_running_unsupported_job_returns_conflict() -> None:
     job.id = uuid4()
 
     class Db:
+        def scalar(self, statement):
+            return job
+
         def get(self, model, key):
             return job
 
@@ -461,7 +488,7 @@ def test_worker_heartbeat_loop_uses_independent_sessions_and_stops(monkeypatch) 
     monkeypatch.setattr(
         worker_module,
         "touch_job_heartbeat",
-        lambda db, job_id, worker_id: touches.append((db, job_id, worker_id)) or True,
+        lambda db, job_id, worker_id, **kw: touches.append((db, job_id, worker_id)) or True,
     )
     job_id = uuid4()
 
@@ -494,7 +521,7 @@ def test_worker_heartbeat_stops_when_job_is_terminal(monkeypatch) -> None:
     monkeypatch.setattr(
         worker_module,
         "touch_job_heartbeat",
-        lambda *args: touches.append(args) or False,
+        lambda *args, **kw: touches.append(args) or False,
     )
 
     worker_module._run_heartbeat_loop(

@@ -29,6 +29,7 @@ from app.services.dirty import (
     reopen_dirty_ranges_after_cancel,
 )
 from app.services.factors import FactorService
+from app.services.job_execution import checkpoint, preserve_execution_on_disconnect
 from app.services.market import MarketService
 from app.services.opportunity import OpportunityService
 from app.services.quality.daily_quality import DataQualityError, validate_cross_table_range
@@ -78,6 +79,7 @@ def run_recalculation(
     }
     total_rows = 0
     try:
+        checkpoint()
         analysis_start = _factor_warmup_start(db, start)
         metadata["analysis_warmup_start"] = analysis_start.isoformat()
         metadata["factor_warmup_start"] = analysis_start.isoformat()
@@ -129,6 +131,9 @@ def run_recalculation(
             metadata = {
                 **chunk_metadata,
                 "progress_pct": round(8 + (index / len(factor_chunks)) * 52, 1),
+                "last_completed_stage": "factors",
+                "last_completed_start": chunk_start.isoformat(),
+                "last_completed_end": chunk_end.isoformat(),
             }
             update_job(
                 db,
@@ -179,6 +184,11 @@ def run_recalculation(
                 metadata=metadata,
             )
             total_rows += theme_service.recalc(chunk_start, chunk_end, calc_run_id=job.id)
+            metadata = {**metadata, "last_completed_stage": "themes",
+                        "last_completed_start": chunk_start.isoformat(),
+                        "last_completed_end": chunk_end.isoformat()}
+            update_job(db, job, step=f"115 theme heat done {chunk_end}",
+                       row_count=total_rows, metadata=metadata)
 
         if _stop_if_cancelled(db, job, metadata, dirty_ranges):
             return
@@ -216,6 +226,11 @@ def run_recalculation(
             total_rows += opportunity_service.recalc(
                 chunk_start, chunk_end, calc_run_id=job.id
             )
+            metadata = {**metadata, "last_completed_stage": "opportunities",
+                        "last_completed_start": chunk_start.isoformat(),
+                        "last_completed_end": chunk_end.isoformat()}
+            update_job(db, job, step=f"130 opportunities done {chunk_end}",
+                       row_count=total_rows, metadata=metadata)
 
         if _stop_if_cancelled(db, job, metadata, dirty_ranges):
             return
@@ -254,6 +269,8 @@ def run_recalculation(
             metadata["signal_eval"] = signal_eval_rows
             total_rows += signal_eval_rows["evaluated"]
 
+        if dirty_ranges:
+            mark_dirty_ranges_resolved(db, dirty_ranges)
         update_job(
             db,
             job,
@@ -262,9 +279,8 @@ def run_recalculation(
             row_count=total_rows,
             metadata={**metadata, "stage": "success", "progress_pct": 100},
         )
-        if dirty_ranges:
-            mark_dirty_ranges_resolved(db, dirty_ranges)
     except Exception as exc:
+        preserve_execution_on_disconnect(exc)
         # A disconnected transaction cannot be reused, even to record its failure.
         # Already committed stages and quality evidence are not rolled back here.
         message = (
@@ -349,6 +365,7 @@ def _stop_if_cancelled(
     metadata: dict[str, Any],
     dirty_ranges: list[DataDirtyRange] | None = None,
 ) -> bool:
+    checkpoint()
     try:
         requested = cancel_requested(db, job.id)
     except AttributeError:
@@ -407,15 +424,14 @@ def create_recalculation_job(
     dirty_ranges: list[DataDirtyRange] | None = None,
     job_id: uuid.UUID | None = None,
 ) -> JobRun:
-    from app.repositories.job_run import start_job
+    from app.services.job_guard import create_queued_ingestion_job
 
     dirty_ranges = dirty_ranges or []
     settings = get_settings()
-    job = start_job(
+    job = create_queued_ingestion_job(
         db,
         "recalculate",
         end,
-        status="QUEUED",
         step="queued from scheduler" if mode == "dirty_repair" else "queued from catchup",
         metadata={
             "source": mode,

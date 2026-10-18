@@ -71,6 +71,14 @@ jobs:
       - run: cp .env.example .env
       - run: docker compose config
       - run: docker compose build
+      - name: Data queue single and two Worker container acceptance
+        run: TEST_DATABASE_URL="$DATABASE_URL" python scripts/data_queue_container_acceptance.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: data-queue-container-acceptance
+          path: .codex_tmp/data-queue-containers.json
+          if-no-files-found: error
       - run: docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t
       - uses: actions/setup-node@v4
         with:
@@ -120,7 +128,7 @@ jobs:
           finally:
               engine.dispose()
           heads = ScriptDirectory.from_config(Config("alembic.ini")).get_heads()
-          assert heads == [current] == ["0056_suspend_timing_text"], "CI_MIGRATION_HEAD_MISMATCH"
+          assert heads == [current] == ["0057_data_queue"], "CI_MIGRATION_HEAD_MISMATCH"
           assert pg_version.startswith("17"), "CI_POSTGRES_MAJOR_MISMATCH"
           assert timing_column == {
               "data_type": "text", "character_maximum_length": None, "is_nullable": "YES",

@@ -9,13 +9,14 @@ from app.core.clock import business_today
 from app.core.config import get_settings
 from app.models.market_data import TradeCalendar
 from app.providers.base import MarketDataProvider
-from app.repositories.job_run import start_job
+from app.repositories.job_run import start_job, update_job
 from app.services.dirty import (
     latest_raw_trade_date,
     repairable_dirty_ranges,
     unresolved_dirty_ranges,
 )
 from app.services.ingestion import EodDataNotReadyError, IngestionService
+from app.services.job_execution import checkpoint, preserve_execution_on_disconnect
 from app.services.job_guard import scheduler_setting
 from app.services.quality.analysis_readiness import is_analysis_complete
 from app.services.quality.daily_quality import DataQualityError
@@ -51,17 +52,28 @@ class CatchUpJob:
         self.settings = get_settings()
         self.ingestion = IngestionService(db, provider)
 
+    def _checkpoint(self, stage: str) -> None:
+        checkpoint()
+        parent = getattr(self, "parent_job", None)
+        if parent is not None:
+            update_job(self.db, parent, step=stage,
+                       metadata={**dict(parent.job_metadata or {}), "stage": stage})
+
     def run(self, target_date: date) -> CatchUpPlan:
+        self._checkpoint("catchup calendar")
         max_trade_days = int(scheduler_setting("max_catchup_trade_days", 20))
         refresh_recent_days = int(scheduler_setting("refresh_recent_trade_days", 5))
         calendar_start = target_date - timedelta(days=max(90, max_trade_days * 4))
         self.ingestion.sync_trade_calendar(calendar_start, target_date)
+        self._checkpoint("catchup stock basic")
         self.ingestion.sync_stock_basic()
+        self._checkpoint("catchup theme catalog")
         sync_theme_catalog = getattr(self.ingestion, "sync_ths_themes", None)
         if callable(sync_theme_catalog):
             try:
                 sync_theme_catalog(business_today())
             except Exception as exc:
+                preserve_execution_on_disconnect(exc)
                 rollback = getattr(self.db, "rollback", None)
                 if callable(rollback):
                     rollback()
@@ -97,6 +109,7 @@ class CatchUpJob:
 
         deferred_trade_date = None
         for current in plan.raw_required_dates:
+            self._checkpoint(f"catchup raw {current}")
             logger.info("catch-up raw-only repair trade_date={}", current)
             if self._sync_and_validate_raw_date(current) is False:
                 deferred_trade_date = current
@@ -121,10 +134,12 @@ class CatchUpJob:
             )
 
         for current in plan.refresh_dates:
+            self._checkpoint(f"catchup refresh {current}")
             logger.info("catch-up raw-only refresh trade_date={}", current)
             self._refresh_raw_only(current)
 
         self._run_dirty_repair_if_needed()
+        self._checkpoint("catchup complete")
         logger.info(
             "catch-up complete target_date={} raw_required={} "
             "analysis_required={} refresh_dates={}",
@@ -146,6 +161,7 @@ class CatchUpJob:
         return plan
 
     def _run_analysis_repair(self, start: date, end: date, *, mode: str) -> None:
+        self._checkpoint("catchup analysis repair")
         job = start_job(
             self.db,
             "recalculate",
@@ -172,6 +188,7 @@ class CatchUpJob:
         )
 
     def _sync_and_validate_raw_date(self, trade_date: date) -> bool:
+        self._checkpoint(f"catchup raw datasets {trade_date}")
         self.ingestion.sync_stock_st(trade_date)
         self.ingestion.sync_suspend_daily(trade_date)
         try:
@@ -234,11 +251,13 @@ class CatchUpJob:
                     "WARNING",
                 }
         except Exception as exc:
+            preserve_execution_on_disconnect(exc)
             self.db.rollback()
             logger.warning("catch-up theme daily repair failed date={} error={}", trade_date, exc)
         try:
             self.ingestion.sync_theme_optional_sources(trade_date)
         except Exception as exc:
+            preserve_execution_on_disconnect(exc)
             self.db.rollback()
             logger.warning(
                 "catch-up optional theme repair failed date={} error={}", trade_date, exc
@@ -246,6 +265,7 @@ class CatchUpJob:
         return repaired
 
     def _run_dirty_repair_if_needed(self) -> None:
+        self._checkpoint("catchup dirty repair")
         dirty_ranges = repairable_dirty_ranges(
             self.db,
             max_retry_count=int(scheduler_setting("dirty_max_retry_count", 3)),
@@ -354,6 +374,7 @@ def classify_catchup_dates(
     raw_required_dates: list[date] = []
     analysis_required_dates: list[date] = []
     for trade_date in candidate_dates:
+        checkpoint()
         raw = check_raw_completeness(
             db,
             trade_date,

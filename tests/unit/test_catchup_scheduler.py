@@ -577,7 +577,8 @@ def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
         ),
     )
 
-    executed = run_scheduled_catchup(object(), object(), date(2026, 9, 4))
+    executed = run_scheduled_catchup(
+        SimpleNamespace(scalar=lambda stmt: None), object(), date(2026, 9, 4))
 
     assert executed is False
 
@@ -595,7 +596,8 @@ def test_scheduler_enqueues_catchup_without_executing_it(monkeypatch) -> None:
         enqueue,
     )
 
-    executed = run_scheduled_catchup(object(), object(), date(2026, 9, 4))
+    executed = run_scheduled_catchup(
+        SimpleNamespace(scalar=lambda stmt: None), object(), date(2026, 9, 4))
 
     assert executed is True
     assert calls[0][0:2] == ("catchup", date(2026, 9, 4))
@@ -614,7 +616,7 @@ def test_scheduler_runs_weekly_basic_refresh_with_existing_guard(monkeypatch) ->
         fake_enqueue,
     )
 
-    assert run_scheduled_basic_info(object(), object()) is True
+    assert run_scheduled_basic_info(SimpleNamespace(scalar=lambda stmt: None), object()) is True
     assert calls == [("sync_basic", "scheduler")]
 
 

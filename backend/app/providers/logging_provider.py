@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.db import SessionLocal
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import log_provider_call
+from app.services.job_execution import checkpoint
 
 T = TypeVar("T")
 
@@ -35,9 +36,11 @@ class LoggingMarketDataProvider:
         *args: object,
         **kwargs: object,
     ) -> pd.DataFrame:
+        checkpoint()
         started = perf_counter()
         try:
             df = fn(*args, **kwargs)
+            checkpoint()
         except Exception as exc:
             elapsed_ms = int((perf_counter() - started) * 1000)
             self._write_log(

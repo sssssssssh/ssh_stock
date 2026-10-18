@@ -9,6 +9,7 @@ import app.services.theme.service as theme_service_module
 import pandas as pd
 import pytest
 from app.core.config import get_settings
+from app.models.job import JobRun
 from app.models.market_data import (
     MarketDaily,
     OpportunityForwardEval,
@@ -335,6 +336,7 @@ def test_opportunity_batch_preserves_existing_v10_slice_when_sector_is_incomplet
     opportunity_hash = config_hash(settings.opportunity_config)
     engine = create_engine("sqlite+pysqlite:///:memory:")
     for table in (
+        JobRun.__table__,
         StockDaily.__table__,
         StockFactorDaily.__table__,
         MarketDaily.__table__,
@@ -462,6 +464,7 @@ def test_theme_batch_preserves_existing_v10_slice_with_real_incomplete_core() ->
     strategy_hash = analysis_strategy_hash(settings.strategy)
     engine = create_engine("sqlite+pysqlite:///:memory:")
     for table in (
+        JobRun.__table__,
         StockDaily.__table__,
         StockFactorDaily.__table__,
         MarketDaily.__table__,

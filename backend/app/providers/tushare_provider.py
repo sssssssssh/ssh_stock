@@ -6,10 +6,11 @@ from typing import Any
 import pandas as pd
 from loguru import logger
 from requests.exceptions import RequestException
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential_jitter
+from tenacity import retry, retry_if_exception, wait_exponential_jitter
 
 from app.core.config import get_settings
 from app.providers.rate_limiter import wait_for_rate_limit
+from app.services.job_execution import checkpoint
 
 
 def to_tushare_date(value: date) -> str:
@@ -63,6 +64,17 @@ def _is_retryable_provider_error(exc: BaseException) -> bool:
     return any(marker in message for marker in _TRANSIENT_PROVIDER_ERRORS)
 
 
+def _retry_limit(state):
+    config = get_settings().app_config.get("provider", {}).get("tushare", {})
+    return state.attempt_number >= int(config.get("max_attempts", 3))
+
+
+def _retry_wait(state):
+    checkpoint()
+    config = get_settings().app_config.get("provider", {}).get("tushare", {})
+    return wait_exponential_jitter(initial=1, max=float(config.get("retry_max_seconds", 10)))(state)
+
+
 class TushareProvider:
     provider_name = "tushare"
 
@@ -97,7 +109,10 @@ class TushareProvider:
         import tushare as ts
 
         ts.set_token(self._token)
-        self._pro = ts.pro_api()
+        timeout = settings.app_config.get("provider", {}).get("tushare", {}).get(
+            "request_timeout_seconds", 30,
+        )
+        self._pro = ts.pro_api(timeout=float(timeout))
         if self._http_url:
             _configure_tushare_http_url(self._pro, self._http_url)
 
@@ -106,15 +121,17 @@ class TushareProvider:
 
     @retry(
         retry=retry_if_exception(_is_retryable_provider_error),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential_jitter(initial=1, max=10),
+        stop=_retry_limit,
+        wait=_retry_wait,
         reraise=True,
     )
     def _call(
         self, api_name: str, log_trade_date: date | None = None, **kwargs: Any
     ) -> pd.DataFrame:
+        checkpoint()
         api: Callable[..., pd.DataFrame] = getattr(self._pro, api_name)
         self._wait_for_rate_limit(api_name)
+        checkpoint()
         started = perf_counter()
         try:
             df = api(**kwargs)
@@ -136,6 +153,7 @@ class TushareProvider:
             elapsed_ms,
         )
         result = df if df is not None else pd.DataFrame()
+        checkpoint()
         self._mark_possible_truncation(api_name, result)
         return result
 

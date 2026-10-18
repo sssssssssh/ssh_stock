@@ -14,7 +14,13 @@ from app.services.retention_lineage import (
 )
 from sqlalchemy.exc import DBAPIError
 
-from tests.integration.test_m17_1_1_retention import NOW, migrate, old_job, reference
+from tests.integration.test_m17_1_1_retention import (
+    NOW,
+    legacy_job_snapshot,
+    migrate,
+    old_job,
+    reference,
+)
 from tests.integration.test_m17_1_1_retention import retention_db as retention_db
 from tests.integration.test_m17_1_1_retention_capacity import emit
 
@@ -34,7 +40,9 @@ def test_actual_inventory_fk_index_and_bounded_reference_counts(retention_db):
         factor = next(row for row in data["references"]
                       if row["table_name"] == "stock_factor_daily")
         assert factor["reference_rows_observed"] == 2 and factor["reference_rows_truncated"]
-        assert len(data["foreign_keys"]) == 12
+        assert len(data["foreign_keys"]) == 14
+        queue_fks = [row for row in data["foreign_keys"] if row["source_table"] == "job_run"]
+        assert len(queue_fks) == 2 and all("RESTRICT" in row["definition"] for row in queue_fks)
         legacy = {row["source_table"]: row for row in data["foreign_keys"]}
         assert "SET NULL" in legacy["portfolio_backtest_run"]["definition"]
         assert "RESTRICT" in legacy["paper_day_run"]["definition"]
@@ -154,7 +162,7 @@ def test_old_age_only_delete_reproduces_orphan_then_new_retention_preserves_same
         identity = old_job(db)
         reference(db, "stock_factor_daily", "calc_run_id", identity)
         db.commit()
-        original = db.execute(sa.select(JobRun.__table__)).all()
+        original = legacy_job_snapshot(db)
         with db.begin_nested() as savepoint:
             count = db.execute(sa.delete(JobRun).where(
                 JobRun.status.in_(("SUCCESS", "PARTIAL", "CANCELLED")),
@@ -166,12 +174,12 @@ def test_old_age_only_delete_reproduces_orphan_then_new_retention_preserves_same
             assert db.scalar(sa.select(StockFactorDaily.calc_run_id)) == identity
             savepoint.rollback()
         db.commit()
-        assert db.execute(sa.select(JobRun.__table__)).all() == original
+        assert legacy_job_snapshot(db) == original
     migrate(engine, "head")
     with factory() as db:
         result = run_retention(db, now=NOW, policy=ENABLED)
         assert not result["blocked"] and result["protected_referenced_jobs"] == 1
         assert result["successful_jobs"] == 0
-        assert db.execute(sa.select(JobRun.__table__)).all() == original
+        assert legacy_job_snapshot(db) == original
         emit({"kind": "old_rule_reproduction_then_protection", "old_deleted_jobs": count,
               "old_orphan_rows": 1, "new_result": result})

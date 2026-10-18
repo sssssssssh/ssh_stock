@@ -1,7 +1,7 @@
 import type { JobRun } from "../types";
 
 const ACTIVE = new Set(["QUEUED", "RUNNING"]);
-const TERMINAL = new Set(["SUCCESS", "FAILED", "CANCELLED", "PARTIAL"]);
+const TERMINAL = new Set(["SUCCESS", "FAILED", "CANCELLED", "PARTIAL", "BLOCKED"]);
 
 // Heartbeats change frequently but do not mean derived data has been committed.
 function progressSignature(jobs: JobRun[]) {
@@ -16,6 +16,7 @@ export function createJobPoller(options: {
   publishJobs: (jobs: JobRun[]) => void;
   refreshCoverage: (signal: AbortSignal) => Promise<void>;
   onError: (error: unknown) => void;
+  onJobError?: (error: unknown) => void;
   now?: () => number;
   coverageIntervalMs?: number;
 }) {
@@ -66,6 +67,12 @@ export function createJobPoller(options: {
   }
 
   function observe(jobs: JobRun[], coverageLoaded = false) {
+    const ids = new Set(jobs.map((job) => job.id));
+    // Complete active-queue reads can lose a just-finished old job outside the
+    // recent-history page. Refresh facts without inventing its terminal status.
+    for (const [id, status] of observed) {
+      if (ACTIVE.has(status) && !ids.has(id)) terminalVersion++;
+    }
     for (const job of jobs) {
       if (ACTIVE.has(observed.get(job.id) || "") && TERMINAL.has(job.status)) terminalVersion++;
     }
@@ -87,7 +94,10 @@ export function createJobPoller(options: {
         // Slow historical statistics must not block lightweight task polling.
         void refreshCoverage(false);
       } catch (error) {
-        if (token === generation && !signal.aborted) options.onError(error);
+        if (token === generation && !signal.aborted) {
+          options.onJobError?.(error);
+          options.onError(error);
+        }
       } finally {
         if (token === generation) jobFlight = null;
       }
@@ -107,5 +117,10 @@ export function createJobPoller(options: {
     terminalVersion = attemptedTerminalVersion = completedTerminalVersion = 0;
   }
 
-  return { refresh, refreshCoverage, observe, reset };
+  async function refreshAfterMutation() {
+    if (jobFlight) await jobFlight;
+    await refresh();
+  }
+
+  return { refresh, refreshAfterMutation, refreshCoverage, observe, reset };
 }

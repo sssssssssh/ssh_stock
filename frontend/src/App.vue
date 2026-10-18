@@ -32,6 +32,7 @@ import { fetchCurrentUser, logout } from "./services/auth";
 import type { ResearchContext, ResearchNavigationContext } from "./services/agent";
 import type { ReportSourceSelection } from "./services/agentReports";
 import {
+  cancelJob,
   enqueueBackfillJob,
   enqueueRecalculateJob,
   enqueueSyncBasicJob,
@@ -94,6 +95,9 @@ const authLoading = ref(true);
 const authUser = ref<AuthUser | null>(null);
 const showChangePassword = ref(false);
 const submittingBasicInfo = ref(false);
+const cancellingJobs = ref<string[]>([]);
+const jobsLoading = ref(true);
+const jobsError = ref("");
 const submittingIngestion = ref(false);
 const submittingRecalculation = ref(false);
 const errorMessage = ref("");
@@ -155,7 +159,13 @@ let workspaceGeneration = 0;
 
 const jobPoller = createJobPoller({
   fetchJobs,
-  publishJobs: (nextJobs) => { jobs.value = nextJobs; },
+  publishJobs: (nextJobs) => {
+    jobs.value = nextJobs; jobsLoading.value = false; jobsError.value = "";
+  },
+  onJobError: (error) => {
+    jobsLoading.value = false;
+    jobsError.value = error instanceof Error ? error.message : "任务状态查询失败";
+  },
   refreshCoverage: async (signal) => {
     const month = calendarMonth.value;
     const coverage = await fetchDataCoverage(signal);
@@ -198,9 +208,11 @@ const shortSectorRows = computed(() =>
     .slice(0, 12)
 );
 
-const activeJob = computed(() =>
-  jobs.value.find((job) => ["QUEUED", "RUNNING"].includes(job.status))
-);
+const dataTypes = new Set(["daily", "backfill", "recalculate", "sync_basic", "validate_data", "catchup"]);
+const dataJobs = computed(() => jobs.value.filter((job) => !job.parent_job_id && dataTypes.has(job.job_type)));
+const activeJob = computed(() => dataJobs.value.find((job) => job.status === "RUNNING"));
+const queuedDataCount = computed(() => dataJobs.value.filter((job) => job.status === "QUEUED").length);
+const runningDataCount = computed(() => dataJobs.value.filter((job) => job.status === "RUNNING").length);
 
 const latestJobs = computed(() => jobs.value);
 
@@ -394,6 +406,7 @@ async function loadCoverageCalendar() {
 }
 
 async function submitBackfill() {
+  if (submittingIngestion.value) return;
   errorMessage.value = "";
   jobMessage.value = "";
   if (!backfillStart.value || !backfillEnd.value) {
@@ -412,8 +425,7 @@ async function submitBackfill() {
       end: backfillEnd.value
     });
     jobMessage.value = jobMessageText(job);
-    await refreshJobStatus();
-    await loadCoverageCalendar();
+    void jobPoller.refreshAfterMutation();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "任务提交失败";
   } finally {
@@ -422,13 +434,14 @@ async function submitBackfill() {
 }
 
 async function submitBasicInfo() {
+  if (submittingBasicInfo.value) return;
   errorMessage.value = "";
   jobMessage.value = "";
   submittingBasicInfo.value = true;
   try {
     const job = await enqueueSyncBasicJob();
     jobMessage.value = jobMessageText(job);
-    await refreshJobStatus();
+    void jobPoller.refreshAfterMutation();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "基础信息同步任务提交失败";
   } finally {
@@ -437,6 +450,7 @@ async function submitBasicInfo() {
 }
 
 async function submitRecalculation() {
+  if (submittingRecalculation.value) return;
   errorMessage.value = "";
   jobMessage.value = "";
   if (!recalcStart.value || !recalcEnd.value) {
@@ -456,11 +470,36 @@ async function submitRecalculation() {
       evaluate_signals: recalcEvaluateSignals.value
     });
     jobMessage.value = jobMessageText(job);
-    await refreshJobStatus();
+    void jobPoller.refreshAfterMutation();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "补算任务提交失败";
   } finally {
     submittingRecalculation.value = false;
+  }
+}
+
+async function requestJobCancellation(jobId: string) {
+  if (cancellingJobs.value.includes(jobId)) return;
+  const job = jobs.value.find((row) => row.id === jobId);
+  if (!job || !window.confirm(job.status === "QUEUED" ? "确认取消排队？" :
+    "确认请求安全取消？将等待当前调用结束并到达安全点，已提交数据不会清除。")) return;
+  const generation = workspaceGeneration;
+  cancellingJobs.value = [...cancellingJobs.value, jobId];
+  errorMessage.value = "";
+  jobMessage.value = "";
+  try {
+    const result = await cancelJob(jobId);
+    if (generation !== workspaceGeneration) return;
+    jobMessage.value = result.status === "CANCELLED" ? "已取消" : "已请求取消，等待当前安全点";
+    await jobPoller.refreshAfterMutation();
+  } catch (error) {
+    if (generation === workspaceGeneration) {
+      errorMessage.value = error instanceof Error ? error.message : "取消请求失败";
+    }
+  } finally {
+    if (generation === workspaceGeneration) {
+      cancellingJobs.value = cancellingJobs.value.filter((id) => id !== jobId);
+    }
   }
 }
 
@@ -729,6 +768,9 @@ function startWorkspace() {
 
 function stopWorkspace() {
   workspaceGeneration++;
+  cancellingJobs.value = [];
+  jobsLoading.value = true;
+  jobsError.value = "";
   if (jobPollTimer) window.clearInterval(jobPollTimer);
   if (elapsedTimer) window.clearInterval(elapsedTimer);
   jobPollTimer = undefined;
@@ -805,7 +847,7 @@ function formatPercent(value: number | null | undefined) {
 
 function formatJobElapsed(job: JobRun | null | undefined) {
   if (!job?.started_at) return "--";
-  const startedAt = Date.parse(job.started_at);
+  const startedAt = Date.parse(job.execution_started_at || job.started_at);
   if (Number.isNaN(startedAt)) return "--";
   const finishedAt = job.finished_at ? Date.parse(job.finished_at) : nowMs.value;
   if (Number.isNaN(finishedAt) || finishedAt < startedAt) return "--";
@@ -891,7 +933,7 @@ function calendarStatusLabel(status: DataCalendarRow["coverage_status"] | undefi
 
 function jobMessageText(job: JobRun) {
   const shortId = job.id.slice(0, 8);
-  return `任务已提交：${job.job_type} / ${job.status} / ${shortId}`;
+  return `${job.submission_deduplicated ? "已存在同参数任务" : "已加入队列"}：${job.job_type} / ${job.status} / ${shortId}`;
 }
 
 function progressPct(job: JobRun | undefined) {
@@ -1027,6 +1069,7 @@ function jobStepText(job: JobRun) {
   if (step.startsWith("70 validate raw data")) {
     return `70 校验存量原始数据 ${step.replace("70 validate raw data", "").trim()}`;
   }
+  if (step.startsWith("70 raw day complete")) return `70 原始数据当日校验完成 ${step.replace("70 raw day complete", "").trim()}`;
   if (step.startsWith("90 factors done")) return "90 个股因子分块完成";
   if (step.startsWith("90 factors")) return "90 计算个股因子分块";
   if (step.startsWith("90 calculate stock factors")) return "90 计算个股因子";
@@ -1127,7 +1170,8 @@ function statusLabel(status: string) {
     RUNNING: "运行中",
     SUCCESS: "已完成",
     FAILED: "失败",
-    PARTIAL: "部分完成"
+    PARTIAL: "部分完成",
+    CANCELLED: "已取消", BLOCKED: "依赖阻塞"
   };
   return map[status] || status;
 }
@@ -1261,11 +1305,11 @@ function statusLabel(status: string) {
       </section>
 
       <section v-show="activeView === 'data'" class="view-stack">
-        <section class="runtime-strip" aria-label="运行状态">
+        <section class="runtime-strip" aria-label="运行状态" title="服务状态来自最近整页刷新；实时任务心跳以下方队列为准">
           <div><span>Backend / 数据库</span><strong>{{ runtime?.services?.backend?.status || "--" }} / {{ runtime?.services?.database?.status || "--" }}</strong></div>
           <div><span>Worker / Scheduler</span><strong>{{ runtime?.services?.worker?.status || "--" }} / {{ runtime?.services?.scheduler?.status || "--" }}</strong></div>
-          <div><span>当前任务</span><strong>{{ runtime?.active_job?.step || "无" }}</strong></div>
-          <div><span>排队 / 运行</span><strong>{{ runtime?.queued_count ?? 0 }} / {{ runtime?.running_count ?? 0 }}</strong></div>
+          <div><span>当前任务</span><strong>{{ activeJob?.step || (jobsLoading || jobsError ? "待确认" : "无") }}</strong></div>
+          <div><span>数据排队 / 运行</span><strong>{{ jobsLoading || jobsError ? "待确认" : `${queuedDataCount} / ${runningDataCount}` }}</strong></div>
           <div><span>Raw / 分析 / 机会</span><strong>{{ runtime?.latest_raw_date || "--" }} / {{ runtime?.latest_analysis_date || "--" }} / {{ runtime?.latest_opportunity_date || "--" }}</strong></div>
         </section>
         <article class="panel action-panel" :class="{ collapsed: collapsedDataPanels.recalc }">
@@ -1321,6 +1365,9 @@ function statusLabel(status: string) {
           :submitting-ingestion="submittingIngestion"
           :active-job="activeJob"
           :jobs="latestJobs"
+          :cancelling-jobs="cancellingJobs"
+          :loading="jobsLoading"
+          :load-error="jobsError"
           :status-label="statusLabel"
           :progress-pct="progressPct"
           :job-step-text="jobStepText"
@@ -1332,6 +1379,7 @@ function statusLabel(status: string) {
           @toggle="toggleDataPanel('tasks')"
           @sync-basic="submitBasicInfo"
           @submit-backfill="submitBackfill"
+          @cancel="requestJobCancellation"
         />
 
         <DataQuality

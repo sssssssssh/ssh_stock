@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   enqueueBackfillJob,
+  cancelJob,
+  fetchJobs,
   fetchDataCalendar,
   fetchRealtimeKline,
   fetchSystemRuntime,
@@ -19,6 +21,25 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("API request mapping", () => {
+  it("merges complete active queue over a recent history page", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => response({
+      code: 0, data: String(url).includes("/queue") ? {
+        running: [{ id: "old-running", status: "RUNNING" }],
+        queued: [{ id: "old-queued", status: "QUEUED", queue_position: 1 }]
+      } : [{ id: "recent", status: "SUCCESS" }], meta: {}
+    }));
+    const jobs = await fetchJobs();
+    expect(jobs.map((job) => job.id)).toEqual(["recent", "old-running", "old-queued"]);
+  });
+
+  it("preserves deduplication feedback and posts cancellation", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => response({
+      code: 0, data: { id: "queued", status: "QUEUED" }, meta: { accepted: false, deduplicated: true }
+    }));
+    expect((await enqueueBackfillJob({ start: "2026-01-01", end: "2026-01-02" })).submission_deduplicated).toBe(true);
+    await cancelJob("queued");
+    expect(fetch.mock.calls[1]).toMatchObject(["/api/v1/jobs/queued/cancel", { method: "POST" }]);
+  });
   it("unwraps successful envelopes and maps representative endpoints", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")

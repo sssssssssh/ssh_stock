@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     def build(cls) -> "Settings":
         settings = cls()
         app_config = load_yaml_config(ROOT_DIR / "config" / "app.yaml")
+        _validate_data_queue_runtime(app_config)
         agent_config = AgentConfig.model_validate(
             load_yaml_config(ROOT_DIR / "config" / "agent.yaml").get("agent", {})
         )
@@ -198,6 +199,21 @@ class Settings(BaseSettings):
         settings.performance_period_config = performance_period_config
         settings.performance_trade_config = performance_trade_config
         return settings
+
+
+def _validate_data_queue_runtime(config: dict) -> None:
+    scheduler = config.get("app", {}).get("scheduler", {})
+    provider = config.get("provider", {}).get("tushare", {})
+    for section, limits in ((scheduler, {
+        "data_queue_capacity": (1, 10000), "data_statement_timeout_ms": (1, 3600000),
+        "data_lock_timeout_ms": (1, 60000), "cancel_warning_seconds": (1, 86400),
+        "progress_warning_seconds": (1, 86400),
+    }), (provider, {"request_timeout_seconds": (1, 300), "max_attempts": (1, 10),
+                   "retry_max_seconds": (1, 60)})):
+        for name, (low, high) in limits.items():
+            if name in section and (type(section[name]) is not int or
+                                    not low <= section[name] <= high):
+                raise ValueError(f"invalid bounded data queue setting: {name}")
 
 
 def _apply_agent_llm_overrides(config: AgentConfig, settings: Settings) -> AgentConfig:

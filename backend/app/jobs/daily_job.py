@@ -10,6 +10,7 @@ from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.services.factors import FactorService
 from app.services.ingestion import IngestionService
+from app.services.job_execution import preserve_execution_on_disconnect
 from app.services.market import MarketService
 from app.services.opportunity import OpportunityService
 from app.services.quality.daily_quality import DataQualityError, record_cross_table_quality
@@ -273,6 +274,7 @@ class DailyJob:
             )
             logger.info("daily job success trade_date={} rows={}", trade_date, total_rows)
         except Exception as exc:
+            preserve_execution_on_disconnect(exc)
             self.db.rollback()
             update_job(
                 self.db,

@@ -336,9 +336,9 @@ def test_running_recovery_uses_heartbeat_minute_boundary() -> None:
         now=now,
     )
 
-    assert recovered == 1
+    assert recovered == 0
     assert fresh.status == "RUNNING"
-    assert stale.status == "FAILED"
+    assert stale.status == "RUNNING"
 
 
 def test_sector_member_successful_snapshot_deletes_stale_sw_member(monkeypatch) -> None:

@@ -27,6 +27,7 @@ from app.models.market_data import (
     ThemeMemberSnapshot,
     TradeCalendar,
 )
+from app.repositories.job_run import completed_data_source
 from app.services.analysis_filters import (
     opportunity_identity_filters,
     theme_factor_identity_filters,
@@ -55,7 +56,8 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
     settings = get_settings()
     active = db.scalar(
         select(JobRun)
-        .where(JobRun.status == "RUNNING", JobRun.job_type.not_in(PAPER_JOB_TYPES))
+        .where(JobRun.status == "RUNNING", JobRun.job_type.not_in(PAPER_JOB_TYPES),
+               JobRun.parent_job_id.is_(None))
         .order_by(JobRun.started_at)
         .limit(1)
     )
@@ -63,7 +65,8 @@ def runtime(db: Session = Depends(get_db)) -> dict[str, Any]:
         db.execute(
             select(JobRun.status, func.count())
             .where(
-                JobRun.status.in_(("QUEUED", "RUNNING")), JobRun.job_type.not_in(PAPER_JOB_TYPES)
+                JobRun.status.in_(("QUEUED", "RUNNING")),
+                JobRun.job_type.not_in(PAPER_JOB_TYPES), JobRun.parent_job_id.is_(None),
             )
             .group_by(JobRun.status)
         ).all()
@@ -606,6 +609,8 @@ def _counts_by_date(
     *criteria: Any,
 ) -> dict[date, int]:
     table = column.class_
+    if hasattr(table, "calc_run_id"):
+        criteria = (*criteria, completed_data_source(table.calc_run_id))
     rows = (
         db.execute(
             select(column.label("trade_date"), func.count().label("rows"))

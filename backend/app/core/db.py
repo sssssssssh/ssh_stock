@@ -1,7 +1,7 @@
 import re
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -10,6 +10,17 @@ from app.core.config import get_settings
 settings = get_settings()
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+@event.listens_for(Session, "after_begin")
+def _data_task_transaction_timeouts(session, transaction, connection):
+    if session.info.get("data_task_timeouts") and connection.dialect.name == "postgresql":
+        config = get_settings().app_config.get("app", {}).get("scheduler", {})
+        connection.execute(text("SELECT set_config('statement_timeout', :statement, true), "
+                                "set_config('lock_timeout', :lock, true)"), {
+            "statement": str(int(config.get("data_statement_timeout_ms", 300000))),
+            "lock": str(int(config.get("data_lock_timeout_ms", 5000))),
+        })
 
 
 def database_error_summary(error: SQLAlchemyError) -> str:

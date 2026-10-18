@@ -1,13 +1,25 @@
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.job import JobRun
-from app.repositories.job_run import start_job
+from app.services.analysis_identity import (
+    FACTOR_CALC_VERSION,
+    MARKET_CALC_VERSION,
+    OPPORTUNITY_CALC_VERSION,
+    SECTOR_CALC_VERSION,
+    THEME_CALC_VERSION,
+    TREND_CALC_VERSION,
+    analysis_strategy_hash,
+)
+from app.services.calc_metadata import config_hash
 
 INGESTION_JOB_TYPES = (
     "daily",
@@ -22,6 +34,40 @@ RESEARCH_JOB_TYPE = "RESEARCH_EVAL"
 PRODUCTION_MUTATING_JOB_TYPES = ("daily", "sync_basic", "backfill", "recalculate", "catchup")
 INGESTION_ADVISORY_LOCK_KEY = 7_307_202_609_15
 RESEARCH_ADVISORY_LOCK_KEY = 7_307_202_609_19
+
+
+class QueueCapacityError(RuntimeError):
+    pass
+
+
+def data_queue_identity() -> dict[str, str]:
+    settings = get_settings()
+    return {"analysis": analysis_strategy_hash(settings.strategy),
+            "opportunity": config_hash(settings.opportunity_config),
+            "algo": settings.algo_version, "factor": FACTOR_CALC_VERSION,
+            "raw_quality": config_hash(settings.strategy.get("raw_quality", {})),
+            "data_quality": config_hash(settings.strategy.get("data_quality", {})),
+            "provider_limits": config_hash(settings.app_config.get("provider", {}).get(
+                "tushare", {}).get("safe_limits", {})),
+            "market": MARKET_CALC_VERSION, "sector": SECTOR_CALC_VERSION,
+            "theme": THEME_CALC_VERSION, "trend": TREND_CALC_VERSION,
+            "opportunity_calc": OPPORTUNITY_CALC_VERSION}
+
+
+def request_fingerprint(job_type: str, target: date | None, metadata: dict[str, Any]) -> str:
+    params = {key: metadata[key] for key in (
+        "start", "end", "evaluate_signals", "mode", "dirty_range_ids", "depends_on_job_id",
+    ) if key in metadata and metadata[key] is not None}
+    if "dirty_range_ids" in params:
+        params["dirty_range_ids"] = sorted(params["dirty_range_ids"])
+    if job_type == "recalculate":
+        params.setdefault("evaluate_signals", True)
+        params.setdefault("mode", "manual")
+    canonical = {"type": job_type, "target": target.isoformat() if target else None,
+                 "parameters": params,
+                 "identity": metadata.get("queue_identity", data_queue_identity())}
+    return hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":"),
+                                     default=str).encode()).hexdigest()
 
 
 class ResearchQueueConflictError(RuntimeError):
@@ -68,14 +114,10 @@ def recover_stale_ingestion_jobs(
     running_heartbeat_timeout_minutes: float | None = None,
     now: datetime | None = None,
 ) -> int:
-    return _recover_stale_jobs(
-        db,
-        active_ingestion_jobs(db),
-        stale_job_hours=stale_job_hours,
-        queued_stale_hours=queued_stale_hours,
-        running_heartbeat_timeout_minutes=running_heartbeat_timeout_minutes,
-        now=now,
-    )
+    # A missing heartbeat cannot prove that the old Writer has stopped.
+    # Leave RUNNING (including legacy rows) blocking the lane for operator
+    # reconciliation; legitimate QUEUED jobs have no implicit expiry.
+    return 0
 
 
 def recover_stale_research_jobs(
@@ -127,6 +169,10 @@ def _recover_stale_jobs(
         current = current.replace(tzinfo=UTC)
     recovered = 0
     for job in jobs:
+        if job.status == "RUNNING":
+            # Do not unblock production while an unconfirmed old research
+            # executor might still be reading/writing the same derived slice.
+            continue
         original_status = job.status
         reference_at = (
             (getattr(job, "heartbeat_at", None) or job.started_at)
@@ -158,11 +204,11 @@ def _recover_stale_jobs(
     return recovered
 
 
-def research_can_run(db: Session) -> bool:
+def research_can_run(db: Session, *, running_only: bool = False) -> bool:
     return not bool(db.scalar(
         select(func.count()).select_from(JobRun).where(
-            JobRun.job_type.in_(PRODUCTION_MUTATING_JOB_TYPES),
-            JobRun.status.in_(ACTIVE_JOB_STATUSES),
+            JobRun.job_type.in_(INGESTION_JOB_TYPES),
+            JobRun.status.in_(("RUNNING",) if running_only else ACTIVE_JOB_STATUSES),
         )
     ))
 
@@ -205,29 +251,65 @@ def create_queued_ingestion_job(
     step: str,
     metadata: dict[str, Any],
 ) -> JobRun:
-    recover_stale_ingestion_jobs(db)
     _acquire_ingestion_advisory_lock(db)
-    active = find_active_ingestion_job(db, recover_stale=False)
-    if active:
-        raise ActiveIngestionJobError(
-            job_id=str(active.id),
-            job_type=active.job_type,
-            status=active.status,
-        )
-    return start_job(
-        db,
-        job_type,
-        target_trade_date,
-        status="QUEUED",
-        step=step,
-        metadata=metadata,
-    )
+    identity = data_queue_identity()
+    metadata = {**metadata, "queue_identity": identity}
+    fingerprint = request_fingerprint(job_type, target_trade_date, metadata)
+    existing = db.scalar(select(JobRun).where(
+        JobRun.request_fingerprint == fingerprint, JobRun.status.in_(ACTIVE_JOB_STATUSES),
+    ))
+    if existing:
+        db.commit()
+        existing._queue_deduplicated = True
+        return existing
+    count = db.scalar(select(func.count()).select_from(JobRun).where(
+        JobRun.job_type.in_(INGESTION_JOB_TYPES), JobRun.parent_job_id.is_(None),
+        JobRun.status == "QUEUED",
+    ))
+    if count >= int(scheduler_setting("data_queue_capacity", 100)):
+        db.rollback()
+        raise QueueCapacityError("QUEUE_CAPACITY_EXCEEDED")
+    dependency = metadata.get("depends_on_job_id")
+    if dependency:
+        parent = db.get(JobRun, dependency)
+        if parent is None or parent.job_type not in INGESTION_JOB_TYPES or parent.parent_job_id:
+            db.rollback()
+            raise ValueError("JOB_DEPENDENCY_NOT_FOUND")
+    # The same advisory lock serializes every supported enqueue path. The
+    # partial unique index also rejects duplicate inserts from other clients.
+    job = JobRun(job_type=job_type, target_trade_date=target_trade_date, status="QUEUED",
+                 started_at=func.clock_timestamp(),
+                 step=step, job_metadata=metadata, request_fingerprint=fingerprint,
+                 depends_on_job_id=dependency)
+    db.add(job)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        existing = db.scalar(select(JobRun).where(
+            JobRun.request_fingerprint == fingerprint, JobRun.status.in_(ACTIVE_JOB_STATUSES),
+        ))
+        if existing is None:
+            if dependency and getattr(exc.orig, "sqlstate", None) in {"23503", "23514"}:
+                raise ValueError("JOB_DEPENDENCY_NOT_FOUND") from None
+            raise
+        existing._queue_deduplicated = True
+        return existing
+    db.refresh(job)
+    job._queue_deduplicated = False
+    return job
 
 
 def _acquire_ingestion_advisory_lock(db: Session) -> None:
     bind = db.get_bind()
     if bind.dialect.name != "postgresql":
         return
+    db.execute(select(func.set_config(
+        "lock_timeout", str(int(scheduler_setting("data_lock_timeout_ms", 5000))), True,
+    ))).scalar_one()
+    db.execute(select(func.set_config(
+        "statement_timeout", str(int(scheduler_setting("data_statement_timeout_ms", 300000))), True,
+    ))).scalar_one()
     db.execute(
         select(func.pg_advisory_xact_lock(INGESTION_ADVISORY_LOCK_KEY))
     ).scalar_one()

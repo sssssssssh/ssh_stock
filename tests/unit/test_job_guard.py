@@ -64,7 +64,7 @@ def test_reject_if_active_ingestion_job_raises_for_running_job() -> None:
         reject_if_active_ingestion_job(db)
 
 
-def test_recover_stale_running_and_queued_jobs() -> None:
+def test_unconfirmed_running_and_legitimate_queue_never_expire() -> None:
     now = datetime(2026, 9, 4, tzinfo=UTC)
     stale_running = _job("RUNNING", now - timedelta(hours=25))
     stale_queued = _job("QUEUED", now - timedelta(hours=26))
@@ -73,24 +73,24 @@ def test_recover_stale_running_and_queued_jobs() -> None:
 
     recovered = recover_stale_ingestion_jobs(db, stale_job_hours=24, now=now)
 
-    assert recovered == 2
-    assert stale_running.status == "FAILED"
-    assert stale_queued.status == "FAILED"
-    assert stale_running.finished_at == now
-    assert stale_queued.error_message == "stale QUEUED job recovered after queue timeout"
+    assert recovered == 0
+    assert stale_running.status == "RUNNING"
+    assert stale_queued.status == "QUEUED"
+    assert stale_running.finished_at is None
+    assert stale_queued.error_message is None
     assert fresh.status == "RUNNING"
-    assert db.commits == 1
+    assert db.commits == 0
 
 
-def test_find_active_job_ignores_recovered_stale_jobs() -> None:
+def test_unconfirmed_old_writer_still_blocks_lane() -> None:
     now = datetime.now(UTC)
     stale = _job("RUNNING", now - timedelta(hours=25))
     db = _FakeDb([stale])
 
     active = find_active_ingestion_job(db)
 
-    assert active is None
-    assert stale.status == "FAILED"
+    assert active is stale
+    assert stale.status == "RUNNING"
 
 
 def test_research_stale_recovery_keeps_fresh_running() -> None:
@@ -105,7 +105,7 @@ def test_research_stale_recovery_keeps_fresh_running() -> None:
     fresh.heartbeat_at = now - timedelta(minutes=2)
     db = _FakeDb([stale_running, stale_queued, fresh])
 
-    assert recover_stale_research_jobs(db, now=now) == 2
-    assert stale_running.status == "FAILED"
+    assert recover_stale_research_jobs(db, now=now) == 1
+    assert stale_running.status == "RUNNING"
     assert stale_queued.status == "FAILED"
     assert fresh.status == "RUNNING"

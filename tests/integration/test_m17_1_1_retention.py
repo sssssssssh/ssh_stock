@@ -31,16 +31,29 @@ def retention_db(monkeypatch):
 
 
 def old_job(db, *, age=181, status="SUCCESS", kind="recalculate"):
-    job = JobRun(id=uuid.uuid4(), job_type=kind, status=status,
-                 started_at=NOW - timedelta(days=age, minutes=1),
-                 finished_at=NOW - timedelta(days=age), job_metadata={})
-    db.add(job)
+    identity = uuid.uuid4()
+    # This fixture also seeds the historical 0053 schema. Do not send newer
+    # nullable ORM columns to a database deliberately downgraded by the test.
+    db.execute(sa.insert(JobRun.__table__).values(id=identity, job_type=kind, status=status,
+               started_at=NOW - timedelta(days=age, minutes=1),
+               finished_at=NOW - timedelta(days=age), job_metadata={}))
     db.commit()
-    return job.id
+    return identity
+
+
+def legacy_job_snapshot(db):
+    fields = ("id", "job_type", "target_trade_date", "started_at", "heartbeat_at", "worker_id",
+              "finished_at", "status", "step", "row_count", "error_message", "cancel_requested",
+              "job_metadata")
+    return db.execute(sa.select(*(JobRun.__table__.c[name] for name in fields))).all()
 
 
 def reference(db, name, field, job_id, *, day=DAY, code="T001.SZ"):
     table = Base.metadata.tables[name]
+    if name == "job_run":
+        db.add(JobRun(job_type="backfill", status="QUEUED", **{field: job_id}))
+        db.flush()
+        return
     if name == "portfolio_backtest_run":
         run = _run(day)
         run.job_id = job_id

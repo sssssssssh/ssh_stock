@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import DBAPIError, PendingRollbackError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -31,9 +31,19 @@ from app.services.experiment_evaluation.application import (
 from app.services.experiment_evaluation.recovery import (
     recover_stale_experiment_evaluation_jobs,
 )
+from app.services.job_execution import (
+    Execution,
+    JobCancelled,
+    JobExecutionUnconfirmed,
+    JobOwnershipLost,
+    checkpoint,
+    current_execution,
+    uncertain_database_error,
+)
 from app.services.job_guard import (
-    PRODUCTION_MUTATING_JOB_TYPES,
+    INGESTION_JOB_TYPES,
     _acquire_ingestion_advisory_lock,
+    data_queue_identity,
     production_can_run,
     recover_stale_ingestion_jobs,
     recover_stale_research_jobs,
@@ -118,25 +128,73 @@ def claim_next_job(db: Session, worker_id: str) -> uuid.UUID | None:
         allowed.remove(RESEARCH_JOB_TYPE)
     if not production_can_run(db):
         allowed = [
-            job_type for job_type in allowed if job_type not in PRODUCTION_MUTATING_JOB_TYPES
+            job_type for job_type in allowed if job_type not in INGESTION_JOB_TYPES
         ]
-    job = (
-        db.execute(
+    if db.scalar(select(JobRun.id).where(
+        JobRun.job_type.in_(INGESTION_JOB_TYPES), JobRun.status == "RUNNING",
+        JobRun.parent_job_id.is_(None),
+    ).limit(1)):
+        allowed = [kind for kind in allowed if kind not in INGESTION_JOB_TYPES]
+    completed_dependencies = select(JobRun.id).where(JobRun.status.in_(
+        ("SUCCESS", "PARTIAL", "FAILED", "CANCELLED", "BLOCKED"),
+    ))
+    statement = (
             select(JobRun)
             .where(
                 JobRun.status == "QUEUED",
                 JobRun.job_type.in_(allowed),
+                JobRun.parent_job_id.is_(None),
+                or_(JobRun.depends_on_job_id.is_(None),
+                    JobRun.depends_on_job_id.in_(completed_dependencies)),
             )
             .order_by(JobRun.started_at, JobRun.id)
-            .with_for_update(skip_locked=True)
             .limit(1)
-        )
-        .scalars()
-        .first()
     )
+    candidate = db.execute(statement).scalars().first()
+    if candidate is None:
+        return None
+    if candidate.job_type in INGESTION_JOB_TYPES:
+        # Never overtake a temporarily locked data queue head.
+        statement = statement.where(JobRun.id == candidate.id).with_for_update()
+    else:
+        # Adjacent PAPER/analytics lanes keep their existing SKIP LOCKED policy;
+        # that policy must never skip a locked data head and take a later Writer.
+        statement = statement.where(JobRun.job_type.not_in(INGESTION_JOB_TYPES))
+        statement = statement.with_for_update(skip_locked=True)
+    job = db.execute(statement.execution_options(populate_existing=True)).scalars().first()
     if job is None:
         return None
     now = datetime.now(UTC)
+    if job.job_type in INGESTION_JOB_TYPES:
+        if job.depends_on_job_id:
+            dependency = db.get(JobRun, job.depends_on_job_id)
+            if dependency.status != "SUCCESS":
+                job.status = "BLOCKED"
+                job.error_message = "JOB_DEPENDENCY_FAILED"
+                job.finished_at = now
+                db.commit()
+                return None
+        identity = dict(job.job_metadata or {}).get("queue_identity")
+        legacy_hash = dict(job.job_metadata or {}).get("config_hash")
+        if identity is None:
+            # An old analysis hash is checkable, but does not prove the other
+            # queued versions. Retain the record and require explicit resubmit.
+            job.status = "FAILED"
+            job.finished_at = now
+            job.error_message = ("JOB_CONFIG_CHANGED" if legacy_hash and
+                legacy_hash != data_queue_identity()["analysis"] else "JOB_CONFIG_SNAPSHOT_MISSING")
+            db.commit()
+            return None
+        if identity is not None and identity != data_queue_identity():
+            job.status = "FAILED"
+            job.finished_at = now
+            job.error_message = "JOB_CONFIG_CHANGED"
+            db.commit()
+            return None
+        job.execution_token = uuid.uuid4()
+        job.execution_started_at = now
+        job.last_progress_at = now
+        db.info["data_claim"] = (job.id, worker_id, job.execution_token)
     job.status = "RUNNING"
     job.worker_id = worker_id
     job.heartbeat_at = now
@@ -146,23 +204,42 @@ def claim_next_job(db: Session, worker_id: str) -> uuid.UUID | None:
     return job.id
 
 
-def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
+def execute_claimed_job(
+    db: Session, job_id: uuid.UUID, *,
+    expected_worker: str | None = None, expected_token: uuid.UUID | None = None,
+) -> None:
     job = db.get(JobRun, job_id)
     if job is None:
         return
+    if job.status != "RUNNING":
+        return
+    context_token = None
+    if job.job_type in INGESTION_JOB_TYPES and getattr(job, "execution_token", None):
+        if (job.worker_id, job.execution_token) != (expected_worker, expected_token):
+            logger.warning("data dispatch no longer owns claim job_id={}", job_id)
+            return
+        context_token = current_execution.set(Execution(
+            job.id, job.worker_id, job.execution_token, db.get_bind(),
+        ))
+        # Applied to each transaction of this dedicated Session only.
+        db.info["data_task_timeouts"] = True
     metadata = dict(job.job_metadata or {})
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
     worker_id = getattr(job, "worker_id", None)
-    if job.status == "RUNNING" and worker_id:
-        heartbeat_thread = threading.Thread(
-            target=_run_heartbeat_loop,
-            args=(job.id, worker_id, stop_heartbeat),
-            daemon=True,
-            name=f"job-heartbeat-{job.id}",
-        )
-        heartbeat_thread.start()
     try:
+        if context_token is not None:
+            db.commit()
+        if job.status == "RUNNING" and worker_id:
+            heartbeat_thread = threading.Thread(
+                target=_run_heartbeat_loop,
+                args=(job.id, worker_id, stop_heartbeat),
+                kwargs={"execution_token": getattr(job, "execution_token", None)},
+                daemon=True,
+                name=f"job-heartbeat-{job.id}",
+            )
+            heartbeat_thread.start()
+        checkpoint()
         if job.job_type in PAPER_JOB_TYPES:
             PaperJobApplication(db, get_settings()).run_job(job.id)
         elif job.job_type == "daily":
@@ -194,7 +271,9 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
         elif job.job_type == "catchup":
             provider = _provider(db)
             target = job.target_trade_date or _metadata_date(metadata, "trade_date")
-            plan = CatchUpJob(db, provider).run(target)
+            catchup = CatchUpJob(db, provider)
+            catchup.parent_job = job
+            plan = catchup.run(target)
             update_job(
                 db,
                 job,
@@ -231,7 +310,22 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
             WalkForwardApplicationService(db).run_validation_job(job.id)
         else:
             raise ValueError(f"unsupported worker job type: {job.job_type}")
+    except JobExecutionUnconfirmed as exc:
+        _hold_unconfirmed_execution(db, str(exc))
+    except JobCancelled:
+        db.rollback()
+        try:
+            _finish_data_cancellation(db, job)
+        except JobOwnershipLost:
+            db.rollback()
+            logger.warning("cancelling worker lost ownership job_id={}", job_id)
+    except JobOwnershipLost:
+        db.rollback()
+        logger.warning("data worker lost execution ownership job_id={}", job_id)
     except Exception as exc:
+        if uncertain_database_error(exc):
+            _hold_unconfirmed_execution(db, database_error_summary(exc))
+            return
         db.rollback()
         failed = db.get(JobRun, job_id)
         if job.job_type in PAPER_JOB_TYPES:
@@ -289,6 +383,47 @@ def execute_claimed_job(db: Session, job_id: uuid.UUID) -> None:
         stop_heartbeat.set()
         if heartbeat_thread is not None:
             heartbeat_thread.join(timeout=5)
+        if context_token is not None:
+            current_execution.reset(context_token)
+            db.info.pop("data_task_timeouts", None)
+
+
+def _hold_unconfirmed_execution(db: Session, reason: str) -> None:
+    execution = current_execution.get()
+    assert execution is not None
+    logger.error("data execution unconfirmed; lane remains blocked job_id={} error={}",
+                 execution.job_id, reason)
+    try:
+        db.rollback()
+        db.execute(update(JobRun).where(
+            JobRun.id == execution.job_id, JobRun.status == "RUNNING",
+            JobRun.worker_id == execution.worker_id, JobRun.execution_token == execution.token,
+        ).values(error_message=reason, job_metadata=JobRun.job_metadata.op("||")({
+            "execution_unconfirmed": True, "execution_error_code": "DATABASE_EXECUTION_UNCONFIRMED",
+        })).execution_options(synchronize_session=False))
+        db.commit()
+    except SQLAlchemyError:
+        try:
+            db.rollback()
+        except SQLAlchemyError:
+            pass
+        logger.error("unconfirmed execution audit unavailable; keep RUNNING job_id={}",
+                     execution.job_id)
+
+
+def _finish_data_cancellation(db: Session, job: JobRun) -> None:
+    from app.repositories.job_run import finish_cancelled
+    from app.services.dirty import reopen_dirty_ranges_after_cancel
+
+    children = list(db.scalars(select(JobRun).where(
+        JobRun.parent_job_id == job.id, JobRun.status == "RUNNING",
+    )))
+    for current in [*children, job]:
+        ranges = _load_dirty_ranges(db, dict(current.job_metadata or {}).get("dirty_range_ids", []))
+        if ranges:
+            reopen_dirty_ranges_after_cancel(db, ranges)
+        finish_cancelled(db, current,
+                         metadata={**dict(current.job_metadata or {}), "stage": "cancelled"})
 
 
 def _run_heartbeat_loop(
@@ -297,12 +432,14 @@ def _run_heartbeat_loop(
     stop_event: threading.Event,
     *,
     interval_seconds: float | None = None,
+    execution_token: object | None = None,
 ) -> None:
     interval = interval_seconds or float(scheduler_setting("worker_heartbeat_interval_seconds", 45))
     while not stop_event.wait(interval):
         try:
             with SessionLocal() as heartbeat_db:
-                if not touch_job_heartbeat(heartbeat_db, job_id, worker_id):
+                if not touch_job_heartbeat(heartbeat_db, job_id, worker_id,
+                                           execution_token=execution_token):
                     return
         except SQLAlchemyError as exc:
             logger.error("worker heartbeat database unavailable job_id={} error={}",
@@ -403,7 +540,10 @@ def _run_worker_loop() -> None:
                         ),
                     )
                 )
-                recovered_dirty = recover_stale_processing_ranges(
+                data_writer = db.scalar(select(JobRun.id).where(
+                    JobRun.job_type.in_(INGESTION_JOB_TYPES), JobRun.status == "RUNNING",
+                ).limit(1))
+                recovered_dirty = 0 if data_writer else recover_stale_processing_ranges(
                     db,
                     stale_minutes=float(
                         scheduler_setting("dirty_processing_timeout_minutes", 30)
@@ -432,11 +572,16 @@ def _run_worker_loop() -> None:
                 )
                 last_recovery = now
             job_id = claim_next_job(db, worker_id)
+            ownership = db.info.pop("data_claim", None)
         if job_id is None:
             time.sleep(poll_seconds)
             continue
         with SessionLocal() as db:
-            execute_claimed_job(db, job_id)
+            if ownership:
+                _, owner, token = ownership
+                execute_claimed_job(db, job_id, expected_worker=owner, expected_token=token)
+            else:
+                execute_claimed_job(db, job_id)
 
 
 def run_validate_data_job(db: Session, job: JobRun, metadata: dict[str, Any]) -> None:
@@ -482,6 +627,9 @@ def run_validate_data_job(db: Session, job: JobRun, metadata: dict[str, Any]) ->
                 **summary.as_dict(),
                 **raw_metadata,
                 "current_trade_date": trade_date.isoformat(),
+                "last_completed_stage": "validate_data",
+                "last_completed_start": trade_date.isoformat(),
+                "last_completed_end": trade_date.isoformat(),
                 "progress_pct": progress_pct,
             },
         )

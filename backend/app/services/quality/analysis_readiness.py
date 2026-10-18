@@ -11,6 +11,7 @@ from app.models.market_data import (
     StockStateDaily,
     TradeCalendar,
 )
+from app.repositories.job_run import completed_data_source
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
     MARKET_CALC_VERSION,
@@ -159,4 +160,6 @@ def is_core_analysis_complete(
 
 
 def _count_matching(db: Session, model: type, *criteria) -> int:
+    if hasattr(model, "calc_run_id"):
+        criteria = (*criteria, completed_data_source(model.calc_run_id))
     return int(db.execute(select(func.count()).select_from(model).where(*criteria)).scalar_one())

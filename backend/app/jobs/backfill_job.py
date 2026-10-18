@@ -19,6 +19,7 @@ from app.repositories.job_run import (
 from app.repositories.upsert import upsert_rows
 from app.services.ingestion import EodDataNotReadyError, IngestionService
 from app.services.ingestion.normalizers import normalize_trade_calendar
+from app.services.job_execution import checkpoint, preserve_execution_on_disconnect
 from app.services.quality.raw_completeness import (
     RawCompletenessResult,
     check_raw_completeness,
@@ -72,6 +73,7 @@ class BackfillJob:
             validate_trade_calendar_rows(start, end, calendar_rows)
             total_rows += upsert_rows(self.db, TradeCalendar, calendar_rows, ["cal_date"])
             self.db.commit()
+            checkpoint()
             open_dates = [row["cal_date"] for row in calendar_rows if row["is_open"]]
             if open_dates and not self.db.execute(
                 select(func.count()).select_from(Theme)
@@ -79,6 +81,7 @@ class BackfillJob:
                 try:
                     self.ingestion.sync_ths_themes(business_today())
                 except Exception as exc:
+                    preserve_execution_on_disconnect(exc)
                     self.db.rollback()
                     logger.warning("theme catalog initialization failed end={} error={}", end, exc)
             metadata = {
@@ -99,6 +102,7 @@ class BackfillJob:
                 try:
                     total_rows += self.ingestion.sync_index_daily_range(start, end, job_id=job.id)
                 except Exception as exc:
+                    preserve_execution_on_disconnect(exc)
                     self.db.rollback()
                     logger.warning(
                         "index_daily range sync failed; "
@@ -126,6 +130,7 @@ class BackfillJob:
             completed_open_days = 0
             deferred_trade_date: date | None = None
             for index, current in enumerate(open_dates, 1):
+                checkpoint()
                 try:
                     should_cancel = cancel_requested(self.db, job.id)
                 except AttributeError:
@@ -147,6 +152,7 @@ class BackfillJob:
                         "theme_optional_status": theme_optional,
                     }
                 except Exception as exc:
+                    preserve_execution_on_disconnect(exc)
                     self.db.rollback()
                     metadata = {
                         **metadata,
@@ -176,6 +182,9 @@ class BackfillJob:
                             "skipped_raw_days": skipped_raw_days,
                             "synced_dataset_count": synced_dataset_count,
                             "skipped_dataset_count": skipped_dataset_count,
+                            "last_completed_stage": "raw",
+                            "last_completed_start": current.isoformat(),
+                            "last_completed_end": current.isoformat(),
                         },
                     )
                     completed_open_days = index
@@ -237,6 +246,11 @@ class BackfillJob:
                 if not completeness.is_complete:
                     raise ValueError(_raw_incomplete_error(completeness))
                 completed_open_days = index
+                metadata = {**metadata, "last_completed_stage": "raw",
+                            "last_completed_start": current.isoformat(),
+                            "last_completed_end": current.isoformat()}
+                update_job(self.db, job, step=f"70 raw day complete {current}",
+                           row_count=total_rows, metadata=metadata)
             metadata = _clear_daily_progress(
                 {
                     **metadata,
@@ -272,6 +286,7 @@ class BackfillJob:
             )
             logger.info("backfill job success start={} end={} rows={}", start, end, total_rows)
         except Exception as exc:
+            preserve_execution_on_disconnect(exc)
             self.db.rollback()
             update_job(self.db, job, status="FAILED", row_count=total_rows, error_message=str(exc))
             logger.exception("backfill job failed start={} end={}", start, end)

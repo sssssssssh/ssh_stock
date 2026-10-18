@@ -7,6 +7,8 @@ from app.models.job import JobRun
 from app.services.retention_frozen import FROZEN_ISSUES, FROZEN_SCHEMA, frozen_job_reference
 
 JOB_REFERENCES = (
+    ("job_run", "parent_job_id"),
+    ("job_run", "depends_on_job_id"),
     ("data_dirty_range", "source_job_id"),
     ("data_quality_daily", "job_id"),
     ("market_daily", "calc_run_id"),
@@ -23,8 +25,10 @@ JOB_REFERENCES = (
 
 INDEX_SPECS = tuple(
     (f"ix_{table}_{column}", table, (column,))
-    for table, column in JOB_REFERENCES if table != "portfolio_backtest_run"
+    for table, column in JOB_REFERENCES if table not in {"portfolio_backtest_run", "job_run"}
 ) + (("idx_job_run_retention", "job_run", ("status", "finished_at", "id")),)
+# The online prebuild targets legacy 0053 -> 0054. The new nullable columns do
+# not exist there; their indexes are owned by the 0057 maintenance migration.
 
 SCHEMA_REFERENCES = text("""
 SELECT c.relname AS table_name, a.attname AS column_name,
@@ -76,12 +80,12 @@ def assert_reference_schema(db):
 
 
 def referenced_job():
-    typed = [
-        select(Base.metadata.tables[table].c[column]).where(
-            Base.metadata.tables[table].c[column] == JobRun.id,
-        ).exists()
-        for table, column in JOB_REFERENCES
-    ]
+    typed = []
+    for table, column in JOB_REFERENCES:
+        source = Base.metadata.tables[table]
+        if table == "job_run":
+            source = source.alias(f"referencing_{column}")
+        typed.append(select(source.c[column]).where(source.c[column] == JobRun.id).exists())
     return or_(*typed, frozen_job_reference())
 
 
@@ -98,6 +102,8 @@ def reference_inventory(db, *, max_rows=10000):
             row["supported"] = False
             continue
         table = Base.metadata.tables[key[0]]
+        if key[0] == "job_run":
+            table = table.alias("referencing_job")
         column = table.c[key[1]]
         bounded = select(column).where(column.is_not(None)).limit(max_rows + 1).subquery()
         count = db.scalar(select(func.count()).select_from(bounded))

@@ -6,6 +6,7 @@ from app.models.job import JobRun
 from app.providers.base import MarketDataProvider
 from app.repositories.job_run import start_job, update_job
 from app.services.ingestion import IngestionService
+from app.services.job_execution import preserve_execution_on_disconnect
 from app.services.quality.theme_quality import theme_source_status
 
 
@@ -77,6 +78,7 @@ class BasicInfoJob:
                     "theme_member_snapshot_status": member_status,
                 }
             except Exception as exc:
+                preserve_execution_on_disconnect(exc)
                 self.db.rollback()
                 metadata = {
                     **metadata,
@@ -97,6 +99,7 @@ class BasicInfoJob:
             )
             logger.info("sync basic info job success rows={}", total_rows)
         except Exception as exc:
+            preserve_execution_on_disconnect(exc)
             self.db.rollback()
             update_job(self.db, job, status="FAILED", row_count=total_rows, error_message=str(exc))
             logger.exception("sync basic info job failed")

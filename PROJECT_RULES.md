@@ -1,5 +1,30 @@
 # 项目开发规则
 
+## 数据任务队列与安全取消专项（2026-10-18）
+
+本次用户授权基线为 `7babdd2356dd3dd1dd52f60a8d8c85c84a474d22`，不重新编号或解封 M17 业务。
+本专项替代历史版本的“有活跃任务即拒绝”和“心跳超时直接释放数据执行槽位”规则；
+历史 UI-only 冻结与金融/研究版本不变量不变。验收见 `docs/acceptance/data_queue_20261018.md`。
+
+- DATA_MUTATION 覆盖 daily/sync_basic/backfill/recalculate/validate_data/catchup；多个请求持久化等待，
+  规范化参数与计算身份去重，默认最多 100 条等待，满载明确拒绝。API/CLI/Scheduler 共用同一入口。
+- 领取在 advisory transaction lock 内确认无顶层数据 RUNNING、无运行中 Research，
+  按 started_at/id 领取最早可运行任务；数据队首行锁不跳过。相邻非数据通道保留 SKIP LOCKED。
+  未满足依赖可等待；依赖终态非 SUCCESS 则 BLOCKED。依赖只允许既有顶层数据任务，创建后不可改。
+  数据库同时约束链接创建次序与不可修改，禁止绕过 API 造环；BLOCKED 保守保留历史诊断。
+- RUNNING + cancel_requested 仍占执行槽位；实际退出安全点、回滚未提交事务及完成 Dirty/子任务清理后，
+  才发布 CANCELLED。取消 API 不覆盖业务进度，终态不可覆写；原领取凭据必须随派发传递，不能冒领新 token。
+- 数据终态/进度按 status/worker_id/execution_token 校验；SUCCESS/PARTIAL 同时校验未请求取消。
+  已提交完整阶段保留，不清理 Raw/Derived/PIT 或金融历史。Catch-up 子补算继承父身份，不独立领取槽位。
+- 合法数据队列不按 24 小时过期。数据和运行中的 Research 心跳失联时保守阻塞，不自动重放或放行。
+  数据连接失效、执行结果不确定时保留 RUNNING/执行待确认，不能一律 FAILED 后放行下一 Writer。
+  人工恢复必须先证实旧执行者及数据库写事务已停止；本实现不支持抢占式硬取消或逐行写入 fencing。
+- 新队列冻结计算版本/配置，执行前复核；旧队列缺完整快照时保留失败审计并要求显式重提，
+  不推断历史身份或改写 started_at。旧已完成记录新增字段为 NULL，前端耗时兼容回退。
+- 心跳与 last_progress_at 分离；SQL/Provider 有配置化有限等待，取消延迟仅告警，不能伪报已停止。
+- 新增 Job 父子/依赖 FK 必须纳入保留引用清单；被引用的旧 Job 不删除。0057 仅增量迁移，
+  发布需维护窗口及旧 Writer 已退出；不得混跑旧 Worker 或直接回滚旧程序消费新队列。
+
 ## UI 纯视觉升级边界
 
 本轮 UI-only 基线为 `0136ee9e03727314102cc041d52dd488cca50def`，不推进或重新解释 M17 业务封版。

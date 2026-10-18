@@ -33,9 +33,25 @@ async function main() {
       ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
     const results = [];
     for (const width of [1440, 390]) {
-      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error']) {
+      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error', 'queue', 'cancel', 'cancelled', 'unconfirmed']) {
         const page = await browser.newPage({ viewport: { width, height: 1000 } });
         const errors = [];
+        let cancelRequested = false, cancelPosts = 0;
+        let pending = Array.from({ length: 35 }, (_, index) => ({
+          id: `queued-${index}`, job_type: 'backfill', status: 'QUEUED', can_cancel: true,
+          started_at: new Date(Date.UTC(2026, 9, 18, 1, 0, index)).toISOString(),
+          finished_at: null, step: 'queued from api', row_count: 0, error_message: null,
+          metadata: { start: '2026-01-01', end: '2026-03-31' }
+        }));
+        const running = () => ({
+          id: 'synthetic-running', job_type: 'recalculate', status: mode === 'cancelled' ? 'CANCELLED' : 'RUNNING',
+          started_at: '2026-10-18T00:00:00Z', execution_started_at: '2026-10-18T00:30:00Z',
+          heartbeat_at: '2026-10-18T00:31:00Z', last_progress_at: '2026-10-18T00:30:30Z',
+          finished_at: mode === 'cancelled' ? '2026-10-18T00:32:00Z' : null,
+          cancel_requested: cancelRequested || mode === 'cancelled', can_cancel: !cancelRequested && !['cancelled', 'unconfirmed'].includes(mode),
+          execution_unconfirmed: mode === 'unconfirmed',
+          metadata: { stage: 'factors', progress_pct: 20 }, row_count: 12, step: '90 factors', error_message: null
+        });
         page.on('pageerror', error => errors.push(error.message));
         await page.route('**/api/v1/**', async route => {
           const p = new URL(route.request().url()).pathname.replace('/api/v1', '');
@@ -45,8 +61,23 @@ async function main() {
           else if (p === '/dashboard/summary') data = { sector_heat_top: [] };
           else if (p === '/system/status') data = {};
           else if (p === '/system/runtime') data = { services: {}, queued_count: 0, running_count: mode === 'stale' ? 1 : 0 };
+          else if (p === '/jobs/queue') data = {
+            running: ['queue', 'cancel', 'unconfirmed'].includes(mode) ? [running()] : [],
+            queued: mode === 'queue' ? pending.map((job, index) => ({ ...job, queue_position: index + 1 })) : []
+          };
+          else if (p.endsWith('/cancel')) {
+            assert.equal(route.request().method(), 'POST');
+            cancelPosts++;
+            if (p.includes('/queued-')) {
+              const id = p.split('/').at(-2);
+              const job = pending.find(row => row.id === id);
+              pending = pending.filter(row => row.id !== id);
+              data = { ...job, status: 'CANCELLED', cancel_requested: true };
+            } else { cancelRequested = true; data = running(); }
+          }
           else if (p === '/system/data-coverage' && mode === 'statistics-error') status = 503;
           else if (p === '/jobs') {
+            if (mode === 'cancelled') data = [running()];
             if (mode === 'loading') await wait(1800);
             if (['stale', 'failed'].includes(mode)) data = [{
               id: 'synthetic-job', job_type: 'recalculate', status: mode === 'stale' ? 'RUNNING' : 'FAILED',
@@ -70,6 +101,27 @@ async function main() {
           if (mode === 'failed') await page.locator('.job-error-line').waitFor();
           if (mode === 'empty') assert((await page.locator('.job-list').innerText()).includes('暂无任务记录'));
           if (mode === 'statistics-error') await page.getByText('SYNTHETIC_STATISTICS_UNAVAILABLE', { exact: true }).waitFor();
+          if (mode === 'queue') {
+            await page.waitForFunction(() => document.querySelectorAll('.queue-entry').length === 35);
+            page.once('dialog', dialog => dialog.accept());
+            await page.locator('.queue-entry button').first().click();
+            await page.waitForFunction(() => document.querySelectorAll('.queue-entry').length === 34);
+            assert.equal(cancelPosts, 1);
+            assert((await page.locator('.queue-entry').first().innerText()).includes('#1'));
+          }
+          if (mode === 'cancel') {
+            page.once('dialog', dialog => dialog.accept());
+            await page.getByRole('button', { name: '请求取消', exact: true }).click();
+            await page.getByRole('button', { name: '取消中', exact: true }).waitFor();
+            assert(await page.getByRole('button', { name: '取消中', exact: true }).isDisabled());
+            assert.equal(cancelPosts, 1);
+            assert((await page.locator('.job-current').innerText()).includes('已请求取消，等待当前安全点'));
+          }
+          if (mode === 'unconfirmed') {
+            await page.getByText('执行结果待确认', { exact: true }).waitFor();
+            assert.equal(await page.locator('.job-current button').count(), 0);
+            assert((await page.locator('.job-current').innerText()).includes('无法证明旧 SQL 已停止'));
+          }
         }
         assert.equal(await page.getByRole('button', { name: '同步基础信息', exact: true }).count(), 1);
         assert.equal(await page.getByRole('button', { name: '拉取原始数据', exact: true }).count(), 1);

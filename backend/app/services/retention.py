@@ -41,6 +41,8 @@ def missing_provenance(policy, execute):
     total, diagnostics, samples = 0, [], []
     for name, field in JOB_REFERENCES:
         table = Base.metadata.tables[name]
+        if name == "job_run":
+            table = table.alias("referencing_job")
         column = table.c[field]
         day = table.c.get("trade_date")
         if day is None:

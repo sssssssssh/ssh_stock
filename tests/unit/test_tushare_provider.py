@@ -25,7 +25,8 @@ def test_tushare_provider_uses_proxy_initialization(monkeypatch) -> None:
     def set_token(token: str) -> None:
         calls.append(("set_token", token))
 
-    def pro_api():
+    def pro_api(**kwargs):
+        assert kwargs == {"timeout": 30.0}
         calls.append(("pro_api", None))
         return fake_pro
 
@@ -177,7 +178,7 @@ def test_tushare_provider_fetches_stock_basic_statuses(monkeypatch) -> None:
     fake_pro.stock_basic = stock_basic
     fake_ts = ModuleType("tushare")
     fake_ts.set_token = lambda token: None
-    fake_ts.pro_api = lambda: fake_pro
+    fake_ts.pro_api = lambda **kwargs: fake_pro
     monkeypatch.setitem(__import__("sys").modules, "tushare", fake_ts)
 
     provider = TushareProvider(token="test-token", min_interval_seconds=0)
@@ -203,7 +204,7 @@ def test_stock_basic_required_status_error_includes_source_error(monkeypatch) ->
     fake_pro.stock_basic = stock_basic
     fake_ts = ModuleType("tushare")
     fake_ts.set_token = lambda token: None
-    fake_ts.pro_api = lambda: fake_pro
+    fake_ts.pro_api = lambda **kwargs: fake_pro
     monkeypatch.setitem(__import__("sys").modules, "tushare", fake_ts)
 
     provider = TushareProvider(token="test-token", min_interval_seconds=0)

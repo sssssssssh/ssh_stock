@@ -25,6 +25,7 @@ from app.services.job_guard import (
     ActiveIngestionJobError,
     ResearchQueueConflictError,
     create_queued_ingestion_job,
+    data_queue_identity,
     recover_stale_research_jobs,
     research_can_run,
 )
@@ -146,8 +147,16 @@ def run_scheduler() -> None:
 
 
 def run_scheduled_catchup(db, provider: object | None, target_date: date) -> bool:
+    completed = db.scalar(select(JobRun.id).where(
+        JobRun.job_type == "catchup", JobRun.target_trade_date == target_date,
+        JobRun.status == "SUCCESS",
+        JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
+        JobRun.job_metadata["stage"].as_string() != "eod_deferred",
+    ).limit(1))
+    if completed:
+        return False
     try:
-        create_queued_ingestion_job(
+        job = create_queued_ingestion_job(
             db,
             "catchup",
             target_date,
@@ -162,17 +171,25 @@ def run_scheduled_catchup(db, provider: object | None, target_date: date) -> boo
             active.status,
         )
         return False
-    return True
+    return not bool(getattr(job, "_queue_deduplicated", False))
 
 
 def run_scheduled_basic_info(db, provider: object | None) -> bool:
+    day = _scheduler_today(ZoneInfo(get_settings().app_timezone)).isoformat()
+    if db.scalar(select(JobRun.id).where(
+        JobRun.job_type == "sync_basic", JobRun.status == "SUCCESS",
+        JobRun.job_metadata["schedule_date"].as_string() == day,
+        JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
+    ).limit(1)):
+        return False
     try:
-        create_queued_ingestion_job(
+        job = create_queued_ingestion_job(
             db,
             "sync_basic",
             None,
             step="queued from weekly scheduler",
-            metadata={"source": "scheduler", "stage": "queued", "progress_pct": 0},
+            metadata={"source": "scheduler", "stage": "queued", "progress_pct": 0,
+                      "schedule_date": day},
         )
     except ActiveIngestionJobError as active:
         logger.warning(
@@ -182,7 +199,7 @@ def run_scheduled_basic_info(db, provider: object | None) -> bool:
             active.status,
         )
         return False
-    return True
+    return not bool(getattr(job, "_queue_deduplicated", False))
 
 
 def run_scheduled_research(db, target_date: date) -> bool:

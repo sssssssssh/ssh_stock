@@ -2,6 +2,7 @@ from datetime import date
 
 import pytest
 from app.core.config import get_settings
+from app.models.job import JobRun
 from app.models.market_data import (
     MarketDaily,
     SectorFactorDaily,
@@ -32,6 +33,7 @@ def _compile_jsonb_for_sqlite(_type, _compiler, **_kwargs):
 def _readiness_db() -> Session:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     for table in (
+        JobRun.__table__,
         StockDaily.__table__,
         StockFactorDaily.__table__,
         MarketDaily.__table__,

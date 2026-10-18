@@ -14,6 +14,11 @@ app:
     refresh_recent_trade_days: 5
     dirty_max_retry_count: 3
     worker_poll_seconds: 2
+    data_queue_capacity: 100
+    data_statement_timeout_ms: 300000
+    data_lock_timeout_ms: 5000
+    cancel_warning_seconds: 120
+    progress_warning_seconds: 600
     service_heartbeat_interval_seconds: 45
     service_stale_seconds: 120
     eod_retry_cron: "10,30,50 18-19 * * 1-5"
@@ -31,6 +36,9 @@ retention:
 
 provider:
   tushare:
+    request_timeout_seconds: 30
+    max_attempts: 3
+    retry_max_seconds: 10
     safe_limits:
       ths_index: 5000
       ths_daily: 3000
