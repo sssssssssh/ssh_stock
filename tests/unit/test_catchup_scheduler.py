@@ -569,6 +569,9 @@ def test_scheduler_cron_converts_crontab_weekdays_to_apscheduler_names() -> None
 
 
 def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
+    monkeypatch.setattr(scheduler_module, "enqueue_scheduled_data",
+        lambda db, kind, target, **kw: kw.pop("enqueue")(db, kind, target,
+            **{k: v for k, v in kw.items() if k != "now"}))
     monkeypatch.setattr(
         scheduler_module,
         "create_queued_ingestion_job",
@@ -584,6 +587,9 @@ def test_scheduler_skips_when_active_job_exists(monkeypatch) -> None:
 
 
 def test_scheduler_enqueues_catchup_without_executing_it(monkeypatch) -> None:
+    monkeypatch.setattr(scheduler_module, "enqueue_scheduled_data",
+        lambda db, kind, target, **kw: kw.pop("enqueue")(db, kind, target,
+            **{k: v for k, v in kw.items() if k != "now"}))
     calls = []
 
     def enqueue(db, job_type, target_trade_date, **kwargs):
@@ -604,6 +610,9 @@ def test_scheduler_enqueues_catchup_without_executing_it(monkeypatch) -> None:
 
 
 def test_scheduler_runs_weekly_basic_refresh_with_existing_guard(monkeypatch) -> None:
+    monkeypatch.setattr(scheduler_module, "enqueue_scheduled_data",
+        lambda db, kind, target, **kw: kw.pop("enqueue")(db, kind, target,
+            **{k: v for k, v in kw.items() if k != "now"}))
     calls = []
 
     def fake_enqueue(db, job_type, target_trade_date, **kwargs):

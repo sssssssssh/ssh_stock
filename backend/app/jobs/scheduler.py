@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -21,6 +21,12 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.data_schedule import (
+    enqueue_scheduled_data,
+    mark_schedule_complete,
+    retry_schedule_intents,
+    safe_schedule,
+)
 from app.services.job_guard import (
     ActiveIngestionJobError,
     ResearchQueueConflictError,
@@ -30,7 +36,8 @@ from app.services.job_guard import (
     research_can_run,
 )
 from app.services.paper.scheduling import run_scheduled_paper
-from app.services.quality.analysis_readiness import analysis_complete_dates
+from app.services.quality.analysis_readiness import analysis_complete_dates, is_analysis_complete
+from app.services.quality.raw_completeness import check_raw_completeness
 from app.services.retention import run_retention
 from app.services.service_heartbeat import new_instance_id, touch_service_heartbeat
 
@@ -46,8 +53,10 @@ def run_scheduler() -> None:
             touch_service_heartbeat(db, "scheduler", scheduler_instance)
 
     heartbeat()
-    heartbeat_seconds = settings.app_config.get("app", {}).get("scheduler", {}).get(
-        "service_heartbeat_interval_seconds", 45
+    heartbeat_seconds = (
+        settings.app_config.get("app", {})
+        .get("scheduler", {})
+        .get("service_heartbeat_interval_seconds", 45)
     )
     scheduler.add_job(
         heartbeat,
@@ -70,11 +79,15 @@ def run_scheduler() -> None:
         settings.app_config.get("app", {}).get("scheduler", {}).get("daily_cron", "10 18 * * 1-5")
     )
     scheduler.add_job(run_daily, "cron", id="daily_job", **cron_trigger_kwargs(cron))
-    retry_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
-        "eod_retry_cron", "10,30,50 18-19 * * 1-5"
+    retry_cron = (
+        settings.app_config.get("app", {})
+        .get("scheduler", {})
+        .get("eod_retry_cron", "10,30,50 18-19 * * 1-5")
     )
-    retry_final_cron = settings.app_config.get("app", {}).get("scheduler", {}).get(
-        "eod_retry_final_cron", "10,30 20 * * 1-5"
+    retry_final_cron = (
+        settings.app_config.get("app", {})
+        .get("scheduler", {})
+        .get("eod_retry_final_cron", "10,30 20 * * 1-5")
     )
 
     def run_eod_retry() -> None:
@@ -106,6 +119,7 @@ def run_scheduler() -> None:
         settings.paper_config.auto_advance
         or settings.paper_config.decision.daily_observation_enabled
     ):
+
         def run_paper() -> None:
             with SessionLocal() as db:
                 result = run_scheduled_paper(db, _scheduler_today(timezone), settings=settings)
@@ -114,8 +128,12 @@ def run_scheduler() -> None:
                 )
 
         scheduler.add_job(
-            run_paper, "interval", seconds=settings.paper_config.scheduler_interval_seconds,
-            id="paper_daily_forward", max_instances=1, coalesce=True,
+            run_paper,
+            "interval",
+            seconds=settings.paper_config.scheduler_interval_seconds,
+            id="paper_daily_forward",
+            max_instances=1,
+            coalesce=True,
         )
 
     def cleanup_retention() -> None:
@@ -143,25 +161,67 @@ def run_scheduler() -> None:
             **cron_trigger_kwargs(research_cron),
         )
     logger.info("scheduler started daily_cron={} basic_info_cron={}", cron, basic_cron)
+    startup_pending = True
+
+    def compensate() -> None:
+        nonlocal startup_pending
+        with SessionLocal() as db:
+            retry_schedule_intents(db)
+            if startup_pending:
+                startup_pending = False
+                today = _scheduler_today(timezone)
+                run_scheduled_catchup(db, None, today)
+                saturday = today - timedelta(days=(today.weekday() - 5) % 7)
+                enqueue_scheduled_data(
+                    db,
+                    "sync_basic",
+                    None,
+                    step="queued from startup compensation",
+                    metadata={
+                        "source": "scheduler",
+                        "schedule_date": saturday.isoformat(),
+                        "stage": "queued",
+                    },
+                )
+
+    scheduler.add_job(
+        compensate,
+        "interval",
+        seconds=60,
+        id="data_schedule_compensation",
+        max_instances=1,
+        coalesce=True,
+        next_run_time=datetime.now(timezone),
+    )
     scheduler.start()
 
 
-def run_scheduled_catchup(db, provider: object | None, target_date: date) -> bool:
-    completed = db.scalar(select(JobRun.id).where(
-        JobRun.job_type == "catchup", JobRun.target_trade_date == target_date,
-        JobRun.status == "SUCCESS",
-        JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
-        JobRun.job_metadata["stage"].as_string() != "eod_deferred",
-    ).limit(1))
-    if completed:
+@safe_schedule("catchup")
+def run_scheduled_catchup(db, provider: object | None, target_date: date, *, now=None) -> bool:
+    completed = db.scalar(
+        select(JobRun.id)
+        .where(
+            JobRun.job_type == "catchup",
+            JobRun.target_trade_date == target_date,
+            JobRun.status == "SUCCESS",
+            JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
+            JobRun.job_metadata["stage"].as_string() != "eod_deferred",
+            JobRun.job_metadata["skipped"].as_boolean().is_distinct_from(True),
+        )
+        .limit(1)
+    )
+    if completed and scheduled_output_ready(db, target_date):
+        mark_schedule_complete(db, "catchup", target_date)
         return False
     try:
-        job = create_queued_ingestion_job(
+        job = enqueue_scheduled_data(
             db,
             "catchup",
             target_date,
             step="queued from scheduler",
             metadata={"source": "scheduler", "trade_date": target_date.isoformat()},
+            enqueue=create_queued_ingestion_job,
+            now=now,
         )
     except ActiveIngestionJobError as active:
         logger.warning(
@@ -171,25 +231,37 @@ def run_scheduled_catchup(db, provider: object | None, target_date: date) -> boo
             active.status,
         )
         return False
-    return not bool(getattr(job, "_queue_deduplicated", False))
+    return job is not None and not bool(getattr(job, "_queue_deduplicated", False))
 
 
+@safe_schedule("sync_basic")
 def run_scheduled_basic_info(db, provider: object | None) -> bool:
     day = _scheduler_today(ZoneInfo(get_settings().app_timezone)).isoformat()
-    if db.scalar(select(JobRun.id).where(
-        JobRun.job_type == "sync_basic", JobRun.status == "SUCCESS",
-        JobRun.job_metadata["schedule_date"].as_string() == day,
-        JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
-    ).limit(1)):
+    if db.scalar(
+        select(JobRun.id)
+        .where(
+            JobRun.job_type == "sync_basic",
+            JobRun.status == "SUCCESS",
+            JobRun.job_metadata["schedule_date"].as_string() == day,
+            JobRun.job_metadata["queue_identity"].as_json() == data_queue_identity(),
+        )
+        .limit(1)
+    ):
+        mark_schedule_complete(db, "sync_basic", date.fromisoformat(day))
         return False
     try:
-        job = create_queued_ingestion_job(
+        job = enqueue_scheduled_data(
             db,
             "sync_basic",
             None,
             step="queued from weekly scheduler",
-            metadata={"source": "scheduler", "stage": "queued", "progress_pct": 0,
-                      "schedule_date": day},
+            metadata={
+                "source": "scheduler",
+                "stage": "queued",
+                "progress_pct": 0,
+                "schedule_date": day,
+            },
+            enqueue=create_queued_ingestion_job,
         )
     except ActiveIngestionJobError as active:
         logger.warning(
@@ -199,7 +271,38 @@ def run_scheduled_basic_info(db, provider: object | None) -> bool:
             active.status,
         )
         return False
-    return not bool(getattr(job, "_queue_deduplicated", False))
+    return job is not None and not bool(getattr(job, "_queue_deduplicated", False))
+
+
+def scheduled_output_ready(db, target_date):
+    from app.models.market_data import DataDirtyRange
+
+    day = db.scalar(
+        select(func.max(TradeCalendar.cal_date)).where(
+            TradeCalendar.is_open.is_(True), TradeCalendar.cal_date <= target_date
+        )
+    )
+    if day is None:
+        return False
+    if db.scalar(
+        select(DataDirtyRange.id)
+        .where(
+            DataDirtyRange.status.in_(("OPEN", "PROCESSING", "FAILED")),
+            DataDirtyRange.dirty_start_date <= day,
+        )
+        .limit(1)
+    ):
+        return False
+    settings = get_settings()
+    return check_raw_completeness(
+        db, day, strategy=settings.strategy
+    ).is_complete and is_analysis_complete(
+        db,
+        day,
+        strategy=settings.strategy,
+        opportunity_config=settings.opportunity_config,
+        algo_version=settings.algo_version,
+    )
 
 
 def run_scheduled_research(db, target_date: date) -> bool:
@@ -247,9 +350,7 @@ def run_scheduled_research(db, target_date: date) -> bool:
             ),
         )
     )
-    if not _research_sources_current(
-        expected_latest, latest_raw, latest_state, latest_opportunity
-    ):
+    if not _research_sources_current(expected_latest, latest_raw, latest_state, latest_opportunity):
         logger.warning(
             "RESEARCH_SOURCE_STALE expected={} raw={} state={} opportunity={}",
             expected_latest,
@@ -321,12 +422,12 @@ def scheduled_research_completed(db, target_date: date, settings) -> bool:
         JobRun.job_metadata["source"].as_string() == "scheduler",
     ]
     filters.extend(
-        JobRun.job_metadata[key].as_string() == str(identity[key])
-        for key in RESEARCH_IDENTITY_KEYS
+        JobRun.job_metadata[key].as_string() == str(identity[key]) for key in RESEARCH_IDENTITY_KEYS
     )
     return db.scalar(select(func.count()).select_from(JobRun).where(*filters)) > 0
 
 
+@safe_schedule("catchup")
 def run_scheduled_eod_retry(db, target_date: date) -> bool:
     """Retry the same trade date without duplicating active jobs.
 
@@ -360,9 +461,7 @@ def run_scheduled_eod_retry(db, target_date: date) -> bool:
             )
         )
     )
-    if _research_sources_current(
-        expected_latest, latest_raw, latest_state, latest_opportunity
-    ):
+    if _research_sources_current(expected_latest, latest_raw, latest_state, latest_opportunity):
         return run_scheduled_research(db, target_date)
     return run_scheduled_catchup(db, None, target_date)
 
