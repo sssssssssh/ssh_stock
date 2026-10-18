@@ -195,6 +195,11 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
     factory, engine = publication_db
     old = seed_published(factory)
     with factory() as db:
+        if history == "absent":
+            # Genuine v1 A remains untouched until the corrected v2 root commits.
+            for model in MODELS[:8]:
+                previous_version = sample_row(model, old)["calc_version"].replace("_v2", "_v1")
+                db.execute(model.__table__.update().values(calc_version=previous_version))
         db.add(
             m.StockBasic(
                 ts_code="TEST.SZ", name="synthetic", list_status="L", list_date=date(2020, 1, 1)
@@ -339,6 +344,9 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
         assert reader.get(DataPublication, key).state == "PUBLISHED"
         for model in (m.StockFactorDaily, m.StockStateDaily, m.StockOpportunityDaily):
             assert reader.scalar(select(model.calc_run_id)) == key
+            assert (
+                reader.scalar(select(model.calc_version)) == sample_row(model, key)["calc_version"]
+            )
             assert reader.scalar(select(func.min(model.trade_date))) == DAY
         quality = reader.scalar(
             select(m.DataQualityDaily).where(

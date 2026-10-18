@@ -8,6 +8,7 @@ Real calculator + quality + Worker coverage lives in test_data_publication.py.
 import argparse
 import json
 import os
+import platform
 import resource
 import statistics
 import subprocess
@@ -24,6 +25,7 @@ from sqlalchemy.engine import make_url
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
 
+from app.core.config import get_settings  # noqa: E402
 from app.models import market_data as m  # noqa: E402
 from app.models.data_publication import DataPublicationRow  # noqa: E402
 from app.models.job import JobRun  # noqa: E402
@@ -40,7 +42,7 @@ def payload(model, source, day, entity, value):
             trade_date=day,
             ts_code=f"S{entity:06d}.SZ",
             signal_type="RIGHT_SIDE_NEW",
-            algo_version="v1.0",
+            algo_version=get_settings().algo_version,
             eval_version="eval_v3",
             entry_basis="NEXT_OPEN",
             horizon_basis="MARKET_TRADING_DAY",
@@ -160,6 +162,14 @@ def run_level(stocks, count, label):
         with factory() as db:
             before = stats(db)
             pg_version = db.scalar(text("SHOW server_version"))
+            database_settings = dict(
+                db.execute(
+                    text("""SELECT name,setting || ' ' ||
+                coalesce(unit,'') FROM pg_settings WHERE name IN
+                ('shared_buffers','work_mem','maintenance_work_mem','max_connections',
+                 'wal_level','max_wal_size','checkpoint_timeout','block_size')""")
+                ).all()
+            )
         stop = threading.Event()
         latencies, failures, observations, locks = [], [], [], []
 
@@ -369,6 +379,7 @@ def run_level(stocks, count, label):
                 stocks=stocks,
                 days=count,
                 postgres=pg_version,
+                database_settings=database_settings,
                 rows=staged,
                 write_seconds=write_seconds,
                 rows_per_second=staged / write_seconds,
@@ -437,6 +448,12 @@ if __name__ == "__main__":
         head_sha=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         working_tree_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"])),
         results=[],
+        environment=dict(
+            platform=platform.platform(),
+            machine=platform.machine(),
+            python=platform.python_version(),
+            logical_cpus=os.cpu_count(),
+        ),
     )
     for stocks, days, level in levels:
         result["results"].append(run_level(stocks, days, level))
