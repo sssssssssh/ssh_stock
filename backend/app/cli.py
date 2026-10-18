@@ -11,18 +11,13 @@ from app.jobs.research_job import queue_research_eval
 from app.jobs.scheduler import run_scheduler
 from app.providers.tushare_provider import TushareProvider
 from app.services.auth.service import reset_admin_password as reset_admin_password_service
-from app.services.factors import FactorService
 from app.services.job_guard import (
     ActiveIngestionJobError,
     ResearchQueueConflictError,
     create_queued_ingestion_job,
 )
 from app.services.job_worker import run_worker
-from app.services.market import MarketService
 from app.services.provider_smoke import run_provider_smoke_test
-from app.services.research import SignalEvaluationService
-from app.services.sector import SectorService
-from app.services.trend import TrendService
 
 cli = typer.Typer(no_args_is_help=True)
 
@@ -309,32 +304,20 @@ def validate_data(start: str = typer.Option(...), end: str = typer.Option(...)) 
 
 @cli.command("recalc-factors")
 def recalc_factors(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
-    configure_logging()
-    start_date = _parse_date(start, "start")
-    end_date = _parse_date(end, "end")
-    with SessionLocal() as db:
-        rows = FactorService(db).recalc(start_date, end_date)
-    typer.echo(f"stock_factor_daily rows={rows}")
+    """Disabled unsafe single-table write; use explicit full recalculate or web UI."""
+    _reject_direct_derived_write()
 
 
 @cli.command("recalc-market")
 def recalc_market(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
-    configure_logging()
-    start_date = _parse_date(start, "start")
-    end_date = _parse_date(end, "end")
-    with SessionLocal() as db:
-        rows = MarketService(db).recalc(start_date, end_date)
-    typer.echo(f"market_daily rows={rows}")
+    """Disabled unsafe single-table write; not silently mapped to full recalculate."""
+    _reject_direct_derived_write()
 
 
 @cli.command("recalc-sectors")
 def recalc_sectors(start: str = typer.Option(...), end: str = typer.Option(...)) -> None:
-    configure_logging()
-    start_date = _parse_date(start, "start")
-    end_date = _parse_date(end, "end")
-    with SessionLocal() as db:
-        rows = SectorService(db).recalc(start_date, end_date)
-    typer.echo(f"sector_factor_daily rows={rows}")
+    """Disabled unsafe single-table write; not silently mapped to full recalculate."""
+    _reject_direct_derived_write()
 
 
 @cli.command("recalc-states")
@@ -343,13 +326,8 @@ def recalc_states(
     end: str = typer.Option(...),
     algo_version: str | None = typer.Option(None, "--algo-version"),
 ) -> None:
-    configure_logging()
-    start_date = _parse_date(start, "start")
-    end_date = _parse_date(end, "end")
-    with SessionLocal() as db:
-        rows = TrendService(db).recalc(start_date, end_date, algo_version=algo_version)
-    typer.echo(f"stock_state_daily rows={rows['states']}")
-    typer.echo(f"strategy_signal rows={rows['signals']}")
+    """Disabled unsafe single-table write; algo-version is not silently discarded."""
+    _reject_direct_derived_write()
 
 
 @cli.command("evaluate-signals")
@@ -362,21 +340,35 @@ def evaluate_signals(
     eval_version: str = typer.Option("eval_v3", "--eval-version"),
     entry_basis: str = typer.Option("NEXT_OPEN", "--entry-basis"),
 ) -> None:
-    configure_logging()
-    start_date = _parse_date(start, "start") if start else None
-    end_date = _parse_date(end, "end") if end else None
+    """Disabled direct evaluation: no equivalent queued signal-type/limit workflow."""
+    _reject_direct_derived_write(evaluation=True)
+
+
+def _reject_direct_derived_write(*, evaluation: bool = False) -> None:
+    typer.echo("UNSAFE_DIRECT_DERIVED_WRITE_DISABLED: direct public writes are disabled.")
+    typer.echo("Use the web 数据 page or explicitly select 'recalculate --start ... --end ...'.")
+    typer.echo("Full recalculation is broader than this command; no request has been queued.")
+    if evaluation:
+        typer.echo("No equivalent queued signal_type/limit/eval_version/entry_basis workflow; "
+                   "these options cannot be silently mapped to full recalculation.")
+    raise typer.Exit(code=1)
+
+
+@cli.command("recalculate")
+def recalculate(
+    start: str = typer.Option(...), end: str = typer.Option(...),
+    evaluate_signals: bool = typer.Option(True, "--evaluate-signals/--no-evaluate-signals"),
+) -> None:
+    """Enqueue FULL pipeline, not single-table recalc; Worker validates and atomically publishes."""
+    start_date, end_date = _parse_date(start, "start"), _parse_date(end, "end")
+    if start_date > end_date:
+        raise typer.BadParameter("start must be <= end")
     with SessionLocal() as db:
-        rows = SignalEvaluationService(db).evaluate(
-            signal_type=signal_type,
-            algo_version=algo_version,
-            start=start_date,
-            end=end_date,
-            limit=limit,
-            eval_version=eval_version,
-            entry_basis=entry_basis,
-        )
-    typer.echo(f"strategy_signal rows={rows['signals']}")
-    typer.echo(f"signal_forward_eval rows={rows['evaluated']}")
+        job = _queue_cli_job(db, "recalculate", end_date, {
+            "start": start_date.isoformat(), "end": end_date.isoformat(),
+            "evaluate_signals": evaluate_signals, "mode": "manual",
+        })
+    typer.echo(f"FULL recalculation queued job_id={job.id}; run worker to execute")
 
 
 @cli.command()

@@ -510,7 +510,10 @@ def _extension_risk(row: pd.Series, config: PositionConfig) -> str | None:
         return "PULLBACK"
     if distance > config.ma20_extreme or _number(row.get("amount_ratio20")) > config.amount_extreme:
         return "EXTREME"
-    if distance > config.ma20_extended or _number(row.get("amount_ratio20")) > config.amount_overheat:
+    if (
+        distance > config.ma20_extended
+        or _number(row.get("amount_ratio20")) > config.amount_overheat
+    ):
         return "EXTENDED"
     return "NORMAL"
 
