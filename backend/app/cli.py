@@ -27,6 +27,29 @@ from app.services.trend import TrendService
 cli = typer.Typer(no_args_is_help=True)
 
 
+@cli.command("data-job-diagnose")
+def data_job_diagnose(job_id: str = typer.Option(..., "--job-id")) -> None:
+    """Read incident evidence; never changes a Job or releases its slot."""
+    import json
+    from uuid import UUID
+
+    from app.services.data_job_diagnostics import diagnose_data_job
+
+    try:
+        identity = UUID(job_id)
+    except ValueError:
+        raise typer.BadParameter("job-id must be UUID") from None
+    try:
+        with SessionLocal() as db:
+            typer.echo(json.dumps(diagnose_data_job(db, identity), default=str, ensure_ascii=False))
+    except DBAPIError:
+        typer.echo("DATA_JOB_DIAGNOSTIC_DATABASE_UNAVAILABLE", err=True)
+        raise typer.Exit(code=1) from None
+    except ValueError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(code=1) from None
+
+
 @cli.command("retention-inventory")
 def retention_inventory() -> None:
     import json
