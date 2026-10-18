@@ -53,6 +53,13 @@ jobs:
           tests/integration/test_schedule_compensation.py tests/unit/test_scheduler_capacity.py
           tests/unit/test_data_job_diagnostics.py -q
           --junitxml=.codex_tmp/data-publication-targeted.xml
+      - name: Cold start engines and zero-write CLI regressions
+        run: >-
+          python -m pytest tests/unit/test_cold_start_v12.py
+          tests/unit/test_cli_derived_safety.py tests/integration/test_cold_start_cli_v12.py -q
+          --junitxml=.codex_tmp/cold-start-targeted.xml
+      - name: Cold start baseline golden and missing-input comparison
+        run: python scripts/cold_start_comparison.py --output .codex_tmp/cold-start-comparison.json
       - name: M17.1.1 reference-aware retention regressions
         run: >-
           python -m pytest tests/integration/test_m17_1_1_retention.py
@@ -74,6 +81,10 @@ jobs:
       - run: python -m alembic current
       - run: python -m alembic heads
       - run: python -m ruff check backend tests migrations scripts
+      - name: Cold start L1 L2 L3 isolated publication capacity
+        run: >-
+          TEST_DATABASE_URL="$DATABASE_URL" python scripts/data_publication_capacity_v12.py
+          --confirm-synthetic
       - run: cp .env.example .env
       - run: docker compose config
       - run: docker compose build
@@ -208,9 +219,26 @@ jobs:
               assert cases and not any(list(c.iter("failure")) or list(c.iter("error"))
                                        or list(c.iter("skipped")) for c in cases)
               suites[name] = len(cases)
+          capacity = json.loads(Path(".codex_tmp/cold-start-capacity.json").read_text())
+          assert capacity["head_sha"] == head and not capacity["working_tree_dirty"]
+          assert [r["level"] for r in capacity["results"]] == ["L1", "L2", "L3-scaled-10pct"]
+          assert all(not r["reader_errors"] and r["max_running"] <= 1
+                     and r["rows"] < r["row_budget"]
+                     and r["publish_seconds"] < r["merge_timeout_ms"] / 1000
+                     for r in capacity["results"])
+          comparison = json.loads(Path(".codex_tmp/cold-start-comparison.json").read_text())
+          assert all(r.get("equal_rtol_atol_1e_12") for r in comparison["cases"]
+                     if r["scenario"] == "complete")
+          assert all("error_type" not in r["new"] for r in comparison["cases"])
+          cold = ET.parse(".codex_tmp/cold-start-targeted.xml").getroot()
+          cold_cases = list(cold.iter("testcase"))
+          assert cold_cases and not any(list(c.iter("failure")) or list(c.iter("error"))
+                                       or list(c.iter("skipped")) for c in cold_cases)
+          suites["cold-start-targeted"] = len(cold_cases)
           Path(".codex_tmp/data-publication-release.json").write_text(json.dumps({
               "schema_version": "data-publication-v1.1", "head_sha": head,
               "suites": suites, "browser_scenarios": 24, "containers": containers,
+              "cold_start_capacity": capacity,
               "production_validation": "PENDING_SEPARATE_APPROVAL",
           }, indent=2) + "\n")
           PY
@@ -222,6 +250,9 @@ jobs:
             .codex_tmp/data-publication-release.json
             .codex_tmp/data-publication-targeted.xml
             .codex_tmp/m17_1_2-full.xml
+            .codex_tmp/cold-start-targeted.xml
+            .codex_tmp/cold-start-comparison.json
+            .codex_tmp/cold-start-capacity.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

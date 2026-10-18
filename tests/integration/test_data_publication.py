@@ -178,9 +178,18 @@ def test_successful_candidate_publishes_all_tables_and_stable_signal_id(publicat
         assert len(list(reader.scalars(select(DataPublicationPreimage)))) == len(CORE)
 
 
-@pytest.mark.parametrize("history", ["complete", "partial", "absent"])
+@pytest.mark.parametrize(
+    "history, failure",
+    [
+        ("complete", None),
+        ("partial", None),
+        ("absent", None),
+        ("absent", "cancel"),
+        ("absent", "quality"),
+    ],
+)
 def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
-    publication_db, history
+    publication_db, monkeypatch, history, failure
 ):
 
     factory, engine = publication_db
@@ -272,6 +281,29 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
             KEYS["stock_trade_status_daily"],
         )
         db.commit()
+    if failure:
+        from app.api.v1.jobs import cancel_job
+        from app.services.factors import FactorService
+
+        from tests.integration.test_cold_start_cli_v12 import snapshot
+
+        baseline = snapshot(factory)
+        original = FactorService.recalc
+
+        def interrupt_after_real_calculation(service, start, end, **kwargs):
+            rows = original(service, start, end, **kwargs)
+            if end == DAY:
+                if failure == "cancel":
+                    with factory() as external:
+                        cancel_job(kwargs["calc_run_id"], external)
+                else:
+                    service.db.info["publication_workspace"].delete_keys(
+                        m.StockFactorDaily, [(DAY, "TEST.SZ")]
+                    )
+                    service.db.commit()
+            return rows
+
+        monkeypatch.setattr(FactorService, "recalc", interrupt_after_real_calculation)
     # Actual Worker owns candidate setup, computation, quality and publication;
     # no calculator/quality/Provider mocks and no fabricated certificate.
     with factory() as db:
@@ -292,6 +324,17 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
     with factory() as db:
         execute_claimed_job(db, key, expected_worker=worker_id, expected_token=token)
     with factory() as reader:
+        if failure:
+            assert reader.get(JobRun, key).status == (
+                "CANCELLED" if failure == "cancel" else "FAILED"
+            )
+            assert reader.get(DataPublication, key).state == "ABORTED"
+            after = snapshot(factory)
+            for model in MODELS:
+                # Raw quality facts retain their independent evidence policy.
+                if model is not m.DataQualityDaily:
+                    assert after[model.__tablename__] == baseline[model.__tablename__]
+            return
         assert reader.get(JobRun, key).status == "SUCCESS"
         assert reader.get(DataPublication, key).state == "PUBLISHED"
         for model in (m.StockFactorDaily, m.StockStateDaily, m.StockOpportunityDaily):
