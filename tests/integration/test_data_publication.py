@@ -118,14 +118,18 @@ def seed_published(factory, *, legacy_null=False):
 
 
 @contextmanager
-def candidate(factory, engine, *, kind="recalculate"):
+def candidate(factory, engine, *, kind="recalculate", start=DAY, end=DAY):
     with factory() as db:
         job = create_queued_ingestion_job(
             db,
             kind,
-            DAY,
+            end,
             step="queued",
-            metadata={"start": DAY.isoformat(), "end": DAY.isoformat(), "evaluate_signals": False},
+            metadata={
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "evaluate_signals": False,
+            },
         )
         assert claim_next_job(db, "publication-test") == job.id
         db.refresh(job)

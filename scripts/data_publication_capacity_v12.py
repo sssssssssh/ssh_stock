@@ -19,8 +19,9 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
@@ -142,6 +143,89 @@ def stats(db):
     )
 
 
+def public_digests(factory):
+    """Bounded aggregate (32 bytes/row), not one huge JSON array in server memory."""
+    with factory() as db:
+        db.execute(text("SET TRANSACTION READ ONLY"))
+        result = {}
+        for model in MODELS:
+            keys = ",".join(f'p."{key}"' for key in KEYS[model.__tablename__])
+            result[model.__tablename__] = db.scalar(
+                text(
+                    "SELECT md5(string_agg(md5(to_jsonb(p)::text),'' ORDER BY " + keys + ")) "
+                    f'FROM public."{model.__tablename__}" p'
+                )
+            )
+        return result
+
+
+def rollback_probe(db, job, factory, expected_a, mode):
+    """Known, acknowledged rollback probes only; never a Worker recovery/replay path."""
+    from app.models.data_publication import DataPublication
+    from app.services import data_publication as publication
+
+    started = time.perf_counter()
+    if mode == "row_budget":
+        original = publication.scheduler_setting
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                publication,
+                "scheduler_setting",
+                lambda name, default: (
+                    1 if name == "data_publish_max_rows" else original(name, default)
+                ),
+            )
+            try:
+                with pytest.raises(ValueError, match="^PUBLICATION_ROW_BUDGET_EXCEEDED$"):
+                    update_job(db, job, status="SUCCESS")
+            finally:
+                db.rollback()
+        code = "PUBLICATION_ROW_BUDGET_EXCEEDED"
+    else:
+        # Trade-status merge has already executed in the SAME uncommitted root
+        # transaction. Interrupt before the next table using a real PG timeout.
+        connection = db.info["publication_workspace"].connection
+        fired = []
+
+        def interrupt(c, cursor, statement, parameters, context, executemany):
+            if not fired and statement.lstrip().startswith(
+                'INSERT INTO public."stock_factor_daily"'
+            ):
+                fired.append(True)
+                c.exec_driver_sql("SET LOCAL statement_timeout = '1ms'")
+                c.exec_driver_sql("SELECT pg_sleep(0.05)")
+
+        event.listen(connection, "before_cursor_execute", interrupt)
+        try:
+            with pytest.raises(DBAPIError) as error:
+                update_job(db, job, status="SUCCESS")
+            assert fired and error.value.orig.sqlstate == "57014"
+        finally:
+            db.rollback()
+            event.remove(connection, "before_cursor_execute", interrupt)
+        code = "PG_SQLSTATE_57014"
+    rollback_seconds = time.perf_counter() - started
+    observed_a = public_digests(factory)
+    assert observed_a == expected_a
+    with factory() as reader:
+        root = reader.get(JobRun, job.id)
+        ledger = reader.get(DataPublication, job.id)
+        assert root.status == "RUNNING" and ledger.state == "PREPARING"
+        assert reader.scalar(text("SELECT count(*) FROM data_publication_preimage")) == 0
+    return dict(
+        mode=mode,
+        code=code,
+        elapsed_seconds=rollback_seconds,
+        a_digest_unchanged=True,
+        a_before=expected_a,
+        a_after=observed_a,
+        root_status="RUNNING",
+        ledger_state="PREPARING",
+        queue_slot_held=True,
+        test_only_known_rollback=True,
+    )
+
+
 def run_level(stocks, count, label):
     days = list(pd.bdate_range("2026-01-01", periods=count).date)
     with (
@@ -149,6 +233,7 @@ def run_level(stocks, count, label):
         isolated_contract_database(patch) as (factory, engine),
     ):
         old = seed(factory, stocks, days)
+        expected_a = public_digests(factory)
         with factory() as db:
             before = stats(db)
             pg_version = db.scalar(text("SHOW server_version"))
@@ -234,15 +319,8 @@ def run_level(stocks, count, label):
         for thread in threads:
             thread.start()
         try:
-            # Existing candidate context fixes its target to DAY; keep protocol,
-            # replace only this isolated Job's requested synthetic date range.
-            with candidate(factory, engine) as (db, job):
-                job.job_metadata = {
-                    **job.job_metadata,
-                    "start": days[0].isoformat(),
-                    "end": days[-1].isoformat(),
-                }
-                db.commit()
+            # Freeze the actual benchmark range at enqueue, before claim.
+            with candidate(factory, engine, start=days[0], end=days[-1]) as (db, job):
                 ws = db.info["publication_workspace"]
                 staged, stage_seconds = 0, {}
                 stage_peak_rss = {}
@@ -330,10 +408,15 @@ def run_level(stocks, count, label):
                     dict(root=job.id),
                 ).scalar()
                 assert db.scalar(select(func.count()).select_from(DataPublicationRow)) == staged
+                rollback_probes = [
+                    rollback_probe(db, job, factory, expected_a, mode)
+                    for mode in ("row_budget", "sql_timeout_after_first_table")
+                ]
                 started = time.perf_counter()
                 update_job(db, job, status="SUCCESS")
                 publish_seconds = time.perf_counter() - started
-                root_id = str(job.id)
+                root_key = job.id
+                root_id = str(root_key)
             # Require a completed B snapshot, not timing luck on a busy runner.
             reader_deadline = time.monotonic() + 10
             while (
@@ -341,6 +424,11 @@ def run_level(stocks, count, label):
             ):
                 stop.wait(0.05)
             with factory() as db:
+                from app.models.data_publication import DataPublication
+
+                final_root_status = db.get(JobRun, root_key).status
+                final_ledger_state = db.get(DataPublication, root_key).state
+                assert final_root_status == "SUCCESS" and final_ledger_state == "PUBLISHED"
                 after = stats(db)
                 wal_bytes = db.scalar(
                     text("SELECT pg_wal_lsn_diff(:end,:start)"),
@@ -381,6 +469,9 @@ def run_level(stocks, count, label):
                 stage_seconds=stage_seconds,
                 stage_peak_process_rss_bytes=stage_peak_rss,
                 publish_seconds=publish_seconds,
+                rollback_probes=rollback_probes,
+                final_root_status=final_root_status,
+                final_ledger_state=final_ledger_state,
                 peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
                 * (1 if sys.platform == "darwin" else 1024),
                 candidate=candidate_stats,
@@ -484,6 +575,7 @@ if __name__ == "__main__":
                             "max_running",
                             "max_lock_waiters",
                             "reader_errors",
+                            "rollback_probes",
                         )
                     }
                 }

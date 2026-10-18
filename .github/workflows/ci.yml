@@ -228,6 +228,12 @@ jobs:
                      and r["rows"] < r["row_budget"]
                      and r["publish_seconds"] < r["merge_timeout_ms"] / 1000
                      for r in capacity["results"])
+          assert all(r["final_root_status"] == "SUCCESS" and r["final_ledger_state"] == "PUBLISHED"
+              and len(r["rollback_probes"]) == 2 and all(
+              p["a_digest_unchanged"] and p["queue_slot_held"]
+              and p["a_before"] == p["a_after"]
+              and p["root_status"] == "RUNNING" and p["ledger_state"] == "PREPARING"
+              for p in r["rollback_probes"]) for r in capacity["results"])
           comparison = json.loads(Path(".codex_tmp/cold-start-comparison.json").read_text())
           assert comparison["head_sha"] == head and not comparison["working_tree_dirty"]
           assert all(r.get("equal_rtol_atol_1e_12") for r in comparison["cases"]
