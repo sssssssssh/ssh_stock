@@ -1,6 +1,7 @@
 # ADR：数据任务候选隔离与原子发布
 
-状态：W01 盘点及方案决策；实现/测试通过状态以专项 closeout 为准。
+状态：W01 盘点与候选方案；旧单表直写 CLI 的产品兼容决策待用户确认。
+W02 尚未开始，不把本 ADR 当作实现或验收完成。
 基线：master@ff3f221b4fcade5f9b8477d7df1acc66498abaf4。业务公式、原表自然键、
 版本/hash、PIT、金融 Artifact 与人工审批不变。没有业务库操作授权。
 
@@ -37,6 +38,19 @@ Ingestion 的原事务保存 Provider 事实。发布层不伪装 Raw 可回滚�
 
 `replace_slice_rows` 先查 scope 的键，删除 stale_keys，再 upsert surviving/new keys；
 仅加 SUCCESS 过滤无法保护已经被覆盖的 A。信号原 id 与幸存行必须保留，否则评价 FK/引用变化。
+
+### 1.1 已复现与待确认的入口边界
+
+隔离 PostgreSQL 17 的 `test_data_publication.py` 红灯证据已复现：A 的同键因子值 10，
+B 经真实 Worker 派发并使用原 replace_slice_rows 提交检查点后，独立读连接看到 20/B Job。
+随后失败收尾也不能恢复 A。该测试是待修复回归，不表示当前分支已通过完整门禁。
+
+`backend/app/cli.py` 的 recalc-factors、recalc-market、recalc-sectors、recalc-states
+直接调用相应 Service 并 commit，没有 Job/执行 token/完整发布门禁；evaluate-signals 亦直接
+写 signal_forward_eval。它们不是 `_queue_cli_job` 路径。
+原样保留会留下绕过统一发布的正常入口；自动改为完整重算会扩大原单表命令的计算范围，
+而停用直写会改变现有使用方式。本任务未明确授权这项兼容取舍，必须先由用户确认。
+建议保留命令名称与明确迁移提示，但拒绝直接写库，转由完整补算队列执行；不静默扩大请求范围。
 
 ## 2. 方案比较与决策
 
