@@ -56,3 +56,37 @@ def test_explicit_full_recalculation_enqueues_without_dropping_parameters(monkey
     assert calls[0][3] == dict(
         start="2026-01-01", end="2026-01-02", evaluate_signals=False, mode="manual"
     )
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        None,
+        "postgresql+psycopg://synthetic:synthetic@production.invalid/not_test",
+        "postgresql+psycopg://synthetic:synthetic@127.0.0.1/business",
+    ],
+)
+def test_capacity_cli_rejects_nonisolated_target_before_loading_business_settings(target):
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "DATABASE_URL": "invalid-business-url-must-not-be-loaded"}
+    env.pop("TEST_DATABASE_URL", None)
+    if target:
+        env["TEST_DATABASE_URL"] = target
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/data_publication_capacity_v12.py",
+            "--confirm-synthetic",
+            "--levels",
+            "smoke",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED" in result.stderr
+    assert "Traceback" not in result.stderr

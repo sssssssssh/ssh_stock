@@ -240,6 +240,8 @@ jobs:
           suites["cold-start-targeted"] = len(cold_cases)
           Path(".codex_tmp/data-publication-release.json").write_text(json.dumps({
               "schema_version": "data-publication-v1.1", "head_sha": head,
+              "ci_run_url": (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                             f"{os.environ['GITHUB_RUN_ID']}"),
               "suites": suites, "browser_scenarios": 24, "containers": containers,
               "cold_start_capacity": capacity,
               "production_validation": "PENDING_SEPARATE_APPROVAL",

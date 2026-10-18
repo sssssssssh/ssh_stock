@@ -9,6 +9,9 @@
 此次 Factor/Market/Sector/Theme/Trend/Signal/Opportunity 计算版本提升至 v2；TradeStatus 未变。
 config_hash/algo_version 算法和旧历史身份不变。升级后旧 v1 不计当前就绪，可能暂时显示无当前结果；
 旧排队身份漂移明确失败，须确认后重提。**不自动回算**，历史日期回补需单独批准。
+这里“不自动回算”指本次交付不执行或添加历史迁移启动器，不是关闭既有调度逻辑的开关。
+**部署时必须保持 Scheduler 停止**：既有 catchup 会把 v1→v2 视为分析缺口，恢复调度前须
+批准具体日期范围、完成手动安全补算并核对其候选窗口及旧取消计划；不能直接重启调度来批量升级历史。
 冻结研究/报告/账本不改写，来源不符继续拒绝执行。见
 [版本与黄金样本决定](docs/design/cold_start_version_decision.md)。
 

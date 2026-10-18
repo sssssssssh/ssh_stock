@@ -67,12 +67,28 @@ L1/L2/L3 开发容量实验均已完成，603040 / 378240 行根发布分别约 
 另建空的专属 PG17 库正式 upgrade head，同一批文件 20 项全部通过（旧库触发器数 0、新库 1）。
 随后在又一个新建空库重新运行全量；首次失败不计入通过证据。后续复现应始终使用全新一次性测试库，
 不要复用未知历史的 stock_test 或业务连接；最终同 SHA CI 的 PG 服务也是全新空库。
+新库全量实际结果：2125 passed / 0 failed，429 warnings，后端 term 覆盖率 89%，耗时约 23分54秒。
+其后追加的 3 项容量脚本防误连测试单独通过（CLI 文件共 14 项），最终同 SHA CI 全量应含 2128 项。
+最终本地组合专项（引擎/CLI/真实 PG 入口/发布/调度/诊断）159 项全部通过，未跳过/放宽断言。
+容量脚本在导入任何 app/Settings/DB 模型前校验并覆盖显式测试 URL，拒绝远端、非测试库名及缺失 URL；
+不从业务 .env 创建 Engine，探测使用合成 Token。完整历史、版本/preimage 的五条 Worker 追加断言亦全部通过。
+Compose config/build、Nginx、单/双 Worker 三组、24 场景以及 M16/M17 双视口浏览器均已开发自检通过；
+最终 Git 提交后的 clean HEAD 回执和精确 CI 链接优先，不用之前的 SHA 替代最终门禁。
+
+精确 CI 入口：最终 `data-publication-reliability` Artifact 内的
+`data-publication-release.json` 同时保存 `head_sha`、`ci_run_url`、完整/专项测试数量、
+三级容量和容器回执；与同包黄金样本的 clean HEAD 对照。静态文档不硬写自引用最终 SHA，
+避免记录 CI URL 的文档提交又变成另一未验收 SHA。最终交付消息提供该真实运行链接；
+CI 失败或缺任一回执不能标记交付全绿。
 
 ## W08 部署与回退前置条件
 
 生产操作未执行。另批只读核对 Alembic 当前/heads、全部活动 Job、所有主机旧 Writer/CLI、
 公开历史血缘、磁盘/WAL/备份余量；完成备份恢复演练和指定规模/Provider 测试后才能制定维护窗口。
 先停 Scheduler/所有旧 Writer，证明旧进程和 SQL 已结束；不能心跳超时就改 FAILED 解锁。
+既有 Scheduler 会因新版本不就绪而识别历史缺口；其行为保持原样，不新增自动历史迁移器。
+因此维护后也不能未经日期范围批准就恢复 Scheduler：先完成批准范围的手动安全补算，
+核对 catchup 候选日期、旧取消意图及 Dirty 范围，再单独批准恢复自动调度。
 回滚应用也要核对 0058 协议、v2 来源与旧程序兼容，不能让旧 CLI/Worker 与新程序混跑。
 保留 Job/Candidate/Preimage/Artifact/审计，不降级带证据的 0058、不自动回算旧财务。
 历史补算另批日期/配额/容量。npm 继承的 11 项风险（4 moderate/3 high/4 critical）未在此专项升级。

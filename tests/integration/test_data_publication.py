@@ -342,6 +342,19 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
             return
         assert reader.get(JobRun, key).status == "SUCCESS"
         assert reader.get(DataPublication, key).state == "PUBLISHED"
+        if history == "absent":
+            for table, version in (
+                ("stock_factor_daily", "factor_v1"),
+                ("strategy_signal", "signal_v1"),
+            ):
+                prior = reader.scalar(
+                    select(DataPublicationPreimage.row_data).where(
+                        DataPublicationPreimage.publication_id == key,
+                        DataPublicationPreimage.table_name == table,
+                    )
+                )
+                assert prior["calc_version"] == version
+                assert prior["calc_run_id"] == str(old)
         for model in (m.StockFactorDaily, m.StockStateDaily, m.StockOpportunityDaily):
             assert reader.scalar(select(model.calc_run_id)) == key
             assert (

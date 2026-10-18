@@ -25,16 +25,6 @@ from sqlalchemy.engine import make_url
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
 
-from app.core.config import get_settings  # noqa: E402
-from app.models import market_data as m  # noqa: E402
-from app.models.data_publication import DataPublicationRow  # noqa: E402
-from app.models.job import JobRun  # noqa: E402
-from app.repositories.job_run import update_job  # noqa: E402
-from app.services.data_publication import KEYS, MODELS, record_validation  # noqa: E402
-
-from tests.integration.m16_6_support import isolated_contract_database  # noqa: E402
-from tests.integration.test_data_publication import candidate, sample_row  # noqa: E402
-
 
 def payload(model, source, day, entity, value):
     if model is m.SignalForwardEval:
@@ -344,7 +334,12 @@ def run_level(stocks, count, label):
                 update_job(db, job, status="SUCCESS")
                 publish_seconds = time.perf_counter() - started
                 root_id = str(job.id)
-            time.sleep(0.4)
+            # Require a completed B snapshot, not timing luck on a busy runner.
+            reader_deadline = time.monotonic() + 10
+            while (
+                root_id not in observations and not failures and time.monotonic() < reader_deadline
+            ):
+                stop.wait(0.05)
             with factory() as db:
                 after = stats(db)
                 wal_bytes = db.scalar(
@@ -421,6 +416,8 @@ if __name__ == "__main__":
     parser.add_argument("--levels", choices=["smoke", "all"], default="all")
     parser.add_argument("--output", type=Path, default=Path(".codex_tmp/cold-start-capacity.json"))
     args = parser.parse_args()
+    if not os.environ.get("TEST_DATABASE_URL"):
+        raise SystemExit("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED")
     url = make_url(os.environ["TEST_DATABASE_URL"])
     allowed_database = (url.database or "").endswith("_test") or (
         os.environ.get("CI") == "true" and url.database == "stock_db"
@@ -428,8 +425,18 @@ if __name__ == "__main__":
     if url.host not in {"127.0.0.1", "localhost"} or not allowed_database:
         raise SystemExit("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED")
     os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
-    # Imports above never connect; clear Settings cache before any DB work.
+    os.environ["TUSHARE_TOKEN"] = "synthetic-capacity-fixture"
+    # Validate and override the explicit URL BEFORE importing application models,
+    # Settings or app.core.db; never even construct an engine from business .env.
     from app.core.config import get_settings
+    from app.models import market_data as m
+    from app.models.data_publication import DataPublicationRow
+    from app.models.job import JobRun
+    from app.repositories.job_run import update_job
+    from app.services.data_publication import KEYS, MODELS, record_validation
+
+    from tests.integration.m16_6_support import isolated_contract_database
+    from tests.integration.test_data_publication import candidate, sample_row
 
     get_settings.cache_clear()
     from loguru import logger
@@ -457,6 +464,32 @@ if __name__ == "__main__":
     )
     for stocks, days, level in levels:
         result["results"].append(run_level(stocks, days, level))
+        measurement = result["results"][-1]
+        print(
+            json.dumps(
+                {
+                    "capacity_level_result": {
+                        key: measurement[key]
+                        for key in (
+                            "level",
+                            "stocks",
+                            "days",
+                            "rows",
+                            "write_seconds",
+                            "publish_seconds",
+                            "peak_rss_bytes",
+                            "wal_bytes",
+                            "reader_samples",
+                            "reader_p95_ms",
+                            "max_running",
+                            "max_lock_waiters",
+                            "reader_errors",
+                        )
+                    }
+                }
+            ),
+            flush=True,
+        )
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, default=str, allow_nan=False, indent=2) + "\n")
     print(json.dumps(dict(output=str(args.output), levels=len(result["results"]))))
