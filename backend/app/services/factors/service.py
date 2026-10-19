@@ -16,6 +16,7 @@ from app.models.market_data import (
     StockFactorDaily,
     StockTradeStatusDaily,
 )
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
@@ -88,7 +89,7 @@ class FactorService:
             .where(StockDaily.trade_date >= start, StockDaily.trade_date <= end)
             .order_by(StockDaily.ts_code, StockDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="factors.stock_daily")
 
     def _read_adj_factor(self, start: date, end: date) -> pd.DataFrame:
         stmt = select(
@@ -96,7 +97,7 @@ class FactorService:
             StockAdjFactor.ts_code,
             StockAdjFactor.adj_factor,
         ).where(StockAdjFactor.trade_date >= start, StockAdjFactor.trade_date <= end)
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="factors.adj_factor")
 
     def _read_stock_basic(self) -> pd.DataFrame:
         stmt = select(
@@ -104,7 +105,7 @@ class FactorService:
             StockBasic.list_date,
             StockBasic.delist_date,
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="factors.stock_basic")
 
     def _read_trade_status(self, start: date, end: date) -> pd.DataFrame:
         hash_value = analysis_strategy_hash(self.settings.strategy)
@@ -121,7 +122,7 @@ class FactorService:
             StockTradeStatusDaily.calc_version == TRADE_STATUS_CALC_VERSION,
             StockTradeStatusDaily.config_hash == hash_value,
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="factors.trade_status")
 
     def _read_index_daily(self, start: date, end: date) -> pd.DataFrame:
         stmt = (
@@ -129,7 +130,7 @@ class FactorService:
             .where(IndexDaily.trade_date >= start, IndexDaily.trade_date <= end)
             .order_by(IndexDaily.ts_code, IndexDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="factors.index_daily")
 
 
 def _clean_row(row: dict[str, Any]) -> dict[str, Any]:

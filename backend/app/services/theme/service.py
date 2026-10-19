@@ -18,6 +18,7 @@ from app.models.market_data import (
     ThemeMoneyflowDaily,
     TradeCalendar,
 )
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
@@ -113,44 +114,25 @@ class ThemeFactorService:
         return count
 
     def _frame(self, model: type, start: date, end: date) -> pd.DataFrame:
-        rows = (
-            self.db.execute(
-                select(model)
-                .where(model.trade_date >= start, model.trade_date <= end)
-                .order_by(model.trade_date)
-            )
-            .scalars()
-            .all()
-        )
-        return pd.DataFrame(
-            [
-                {column.name: getattr(row, column.name) for column in model.__table__.columns}
-                for row in rows
-            ]
+        return read_calculation_frame(
+            self.db,
+            select(*model.__table__.columns)
+            .where(model.trade_date >= start, model.trade_date <= end)
+            .order_by(model.trade_date),
+            name=f"theme.{model.__tablename__}",
         )
 
     def _factors(self, start: date, end: date) -> pd.DataFrame:
         hash_value = analysis_strategy_hash(self.settings.strategy)
-        rows = (
-            self.db.execute(
-                select(StockFactorDaily).where(
-                    StockFactorDaily.trade_date >= start,
-                    StockFactorDaily.trade_date <= end,
-                    StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
-                    StockFactorDaily.config_hash == hash_value,
-                )
-            )
-            .scalars()
-            .all()
-        )
-        return pd.DataFrame(
-            [
-                {
-                    column.name: getattr(row, column.name)
-                    for column in StockFactorDaily.__table__.columns
-                }
-                for row in rows
-            ]
+        return read_calculation_frame(
+            self.db,
+            select(*StockFactorDaily.__table__.columns).where(
+                StockFactorDaily.trade_date >= start,
+                StockFactorDaily.trade_date <= end,
+                StockFactorDaily.calc_version == FACTOR_CALC_VERSION,
+                StockFactorDaily.config_hash == hash_value,
+            ),
+            name="theme.stock_factors",
         )
 
     def _pass_dates(self, dataset: str, end: date, *, allow_empty: bool = True) -> set[date]:

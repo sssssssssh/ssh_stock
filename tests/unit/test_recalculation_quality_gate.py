@@ -66,6 +66,8 @@ def test_database_disconnect_rolls_back_and_preserves_first_error(
     if not failure_record_unavailable:
         assert job.status == "FAILED"
         assert "OperationalError" in job.error_message
+        assert job.job_metadata["failed_stage"] == "states"
+        assert job.job_metadata["progress_pct"] == 90
 
 
 class _SuccessfulFactorService:

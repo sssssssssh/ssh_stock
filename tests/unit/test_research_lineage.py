@@ -60,6 +60,13 @@ class _Rows:
     def all(self):
         return self.rows
 
+    def partitions(self, size):
+        for offset in range(0, len(self.rows), size):
+            yield self.rows[offset:offset + size]
+
+    def close(self):
+        pass
+
 
 class _ResearchDb:
     def __init__(self, base=None):

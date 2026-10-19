@@ -83,6 +83,8 @@ def run_recalculation(
         analysis_start = _factor_warmup_start(db, start)
         metadata["analysis_warmup_start"] = analysis_start.isoformat()
         metadata["factor_warmup_start"] = analysis_start.isoformat()
+        metadata = {**metadata, "stage": "raw_prerequisites"}
+        logger.info("recalculation raw prerequisites started job_id={}", job.id)
         validate_recalculation_raw_prerequisites(
             db,
             analysis_start,
@@ -91,13 +93,14 @@ def run_recalculation(
         )
         if dirty_ranges:
             mark_dirty_ranges_processing(db, dirty_ranges)
+        metadata = {**metadata, "stage": "trade_status", "progress_pct": 4}
         update_job(
             db,
             job,
             status="RUNNING",
             step="80 calculate trade status",
             row_count=total_rows,
-            metadata={**metadata, "stage": "trade_status", "progress_pct": 4},
+            metadata=metadata,
         )
         total_rows += TradeStatusService(db).recalc(
             analysis_start,
@@ -119,6 +122,7 @@ def run_recalculation(
                 "factor_chunk_start": chunk_start.isoformat(),
                 "factor_chunk_end": chunk_end.isoformat(),
             }
+            metadata = chunk_metadata
             update_job(
                 db,
                 job,
@@ -144,21 +148,23 @@ def run_recalculation(
                 metadata=metadata,
             )
 
+        metadata = {**metadata, "stage": "market", "progress_pct": 65}
         update_job(
             db,
             job,
             step="100 calculate market score",
             row_count=total_rows,
-            metadata={**metadata, "stage": "market", "progress_pct": 65},
+            metadata=metadata,
         )
         total_rows += MarketService(db).recalc(analysis_start, end, calc_run_id=job.id)
 
+        metadata = {**metadata, "stage": "sectors", "progress_pct": 78}
         update_job(
             db,
             job,
             step="110 calculate sector heat",
             row_count=total_rows,
-            metadata={**metadata, "stage": "sectors", "progress_pct": 78},
+            metadata=metadata,
         )
         total_rows += SectorService(db).recalc(analysis_start, end, calc_run_id=job.id)
 
@@ -192,12 +198,13 @@ def run_recalculation(
 
         if _stop_if_cancelled(db, job, metadata, dirty_ranges):
             return
+        metadata = {**metadata, "stage": "states", "progress_pct": 90}
         update_job(
             db,
             job,
             step="120 calculate trend states",
             row_count=total_rows,
-            metadata={**metadata, "stage": "states", "progress_pct": 90},
+            metadata=metadata,
         )
         trend_rows = TrendService(db).recalc(analysis_start, end, calc_run_id=job.id)
         total_rows += trend_rows["states"] + trend_rows["signals"]
@@ -235,12 +242,13 @@ def run_recalculation(
         if _stop_if_cancelled(db, job, metadata, dirty_ranges):
             return
 
+        metadata = {**metadata, "stage": "cross_table_quality", "progress_pct": 94}
         update_job(
             db,
             job,
             step="180 validate cross table quality",
             row_count=total_rows,
-            metadata={**metadata, "stage": "cross_table_quality", "progress_pct": 94},
+            metadata=metadata,
         )
         cross_table_quality = validate_cross_table_range(
             db,
@@ -258,12 +266,13 @@ def run_recalculation(
             )
 
         if evaluate_signals:
+            metadata = {**metadata, "stage": "signal_eval", "progress_pct": 96}
             update_job(
                 db,
                 job,
                 step="190 evaluate signals",
                 row_count=total_rows,
-                metadata={**metadata, "stage": "signal_eval", "progress_pct": 96},
+                metadata=metadata,
             )
             signal_eval_rows = SignalEvaluationService(db).evaluate(start=start, end=end)
             metadata["signal_eval"] = signal_eval_rows
@@ -294,7 +303,7 @@ def run_recalculation(
             update_job(
                 db, job, status="FAILED", step="recalculation failed",
                 error_message=message, row_count=total_rows,
-                metadata={**metadata, "stage": "failed"},
+                metadata={**metadata, "failed_stage": metadata.get("stage"), "stage": "failed"},
             )
         except SQLAlchemyError as recording_error:
             # The database may still be offline. Preserve the first exception;

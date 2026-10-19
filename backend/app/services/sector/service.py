@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.market_data import IndexDaily, SectorFactorDaily, SectorMember, StockFactorDaily
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
@@ -87,7 +88,7 @@ class SectorService:
             )
             .order_by(StockFactorDaily.trade_date, StockFactorDaily.ts_code)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="sector.factors")
 
     def _read_members(self) -> pd.DataFrame:
         stmt = select(
@@ -97,7 +98,7 @@ class SectorService:
             SectorMember.valid_to,
             SectorMember.is_latest,
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="sector.members")
 
     def _read_index_daily(self, start: date, end: date) -> pd.DataFrame:
         stmt = (
@@ -105,7 +106,7 @@ class SectorService:
             .where(IndexDaily.trade_date >= start, IndexDaily.trade_date <= end)
             .order_by(IndexDaily.ts_code, IndexDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="sector.index_daily")
 
 
 def _clean_row(row: dict[str, Any]) -> dict[str, Any]:

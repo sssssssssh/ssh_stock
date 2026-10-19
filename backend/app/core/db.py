@@ -38,7 +38,21 @@ def database_error_summary(error: SQLAlchemyError) -> str:
         f" (SQLSTATE {code})"
         if isinstance(code, str) and re.fullmatch(r"[0-9A-Z]{5}", code) else ""
     )
-    return f"database operation failed: {kind}{suffix}"
+    details = []
+    query_name = getattr(error, "calculation_query_name", None)
+    if (isinstance(query_name, str) and len(query_name) <= 80
+            and re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?", query_name)):
+        details.append(f"query={query_name}")
+    primary = getattr(getattr(original, "diag", None), "message_primary", None)
+    reason = {
+        "canceling statement due to statement timeout": "STATEMENT_TIMEOUT",
+        "canceling statement due to user request": "QUERY_CANCELLED",
+        "canceling statement due to lock timeout": "LOCK_TIMEOUT",
+    }.get(primary) if isinstance(primary, str) else None
+    if reason:
+        details.append(f"reason={reason}")
+    diagnostic = f" [{' '.join(details)}]" if details else ""
+    return f"database operation failed: {kind}{suffix}{diagnostic}"
 
 
 def get_db() -> Generator[Session, None, None]:

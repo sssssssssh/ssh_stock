@@ -135,6 +135,7 @@ def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
     assert dirty_range.last_error == "factor boom"
     assert dirty_range.last_failed_at is not None
     assert job.status == "FAILED"
+    assert job.job_metadata["failed_stage"] == "factors"
 
     job.status = "QUEUED"
     job.finished_at = None

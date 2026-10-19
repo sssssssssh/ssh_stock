@@ -17,6 +17,7 @@ from app.models.market_data import (
     StockTradeStatusDaily,
     TradeCalendar,
 )
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     TRADE_STATUS_CALC_VERSION,
@@ -80,28 +81,19 @@ class TradeStatusService:
         return count
 
     def _read_stock_basic(self) -> pd.DataFrame:
-        return pd.DataFrame(
-            self.db.execute(
-                select(
-                    StockBasic.ts_code,
-                    StockBasic.list_date,
-                    StockBasic.delist_date,
-                )
-            )
-            .mappings()
-            .all()
+        return read_calculation_frame(
+            self.db,
+            select(StockBasic.ts_code, StockBasic.list_date, StockBasic.delist_date),
+            name="trade_status.stock_basic",
         )
 
     def _read_range(self, model: type, start: date, end: date) -> pd.DataFrame:
-        return pd.DataFrame(
-            self.db.execute(
-                select(*model.__table__.columns).where(
-                    model.trade_date >= start,
-                    model.trade_date <= end,
-                )
-            )
-            .mappings()
-            .all()
+        return read_calculation_frame(
+            self.db,
+            select(*model.__table__.columns).where(
+                model.trade_date >= start, model.trade_date <= end,
+            ),
+            name=f"trade_status.{model.__tablename__}",
         )
 
 

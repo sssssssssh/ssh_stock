@@ -19,6 +19,7 @@ from app.models.market_data import (
     ThemeFactorDaily,
     TradeCalendar,
 )
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
@@ -134,38 +135,33 @@ class OpportunityService:
                 ThemeFactorDaily.source_strategy_config_hash
                 == analysis_strategy_hash(self.settings.strategy)
             )
-        rows = self.db.execute(select(model).where(*filters)).scalars().all()
-        return _models_frame(rows, model)
+        return read_calculation_frame(
+            self.db, select(*model.__table__.columns).where(*filters),
+            name=f"opportunity.{model.__tablename__}",
+        )
 
     def _states(self, start: date, end: date, algo_version: str, hash_value: str) -> pd.DataFrame:
-        rows = (
-            self.db.execute(
-                select(StockStateDaily).where(
-                    StockStateDaily.trade_date >= start,
-                    StockStateDaily.trade_date <= end,
-                    StockStateDaily.algo_version == algo_version,
-                    StockStateDaily.calc_version == TREND_CALC_VERSION,
-                    StockStateDaily.config_hash == hash_value,
-                )
-            )
-            .scalars()
-            .all()
+        frame = read_calculation_frame(
+            self.db,
+            select(*StockStateDaily.__table__.columns).where(
+                StockStateDaily.trade_date >= start,
+                StockStateDaily.trade_date <= end,
+                StockStateDaily.algo_version == algo_version,
+                StockStateDaily.calc_version == TREND_CALC_VERSION,
+                StockStateDaily.config_hash == hash_value,
+            ),
+            name="opportunity.states",
         )
         # State carries its historical market_score too. MarketDaily is the
         # explicitly version-filtered source supplied to the engine; retaining
         # both would create market_score_x/y and remove the required input.
-        return _models_frame(rows, StockStateDaily).drop(columns=["market_score"], errors="ignore")
+        return frame.drop(columns=["market_score"], errors="ignore")
 
     def _all_frame(self, model: type) -> pd.DataFrame:
-        return _models_frame(self.db.execute(select(model)).scalars().all(), model)
-
-def _models_frame(rows: list[Any], model: type) -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {column.name: getattr(row, column.name) for column in model.__table__.columns}
-            for row in rows
-        ]
-    )
+        return read_calculation_frame(
+            self.db, select(*model.__table__.columns),
+            name=f"opportunity.{model.__tablename__}",
+        )
 
 
 def _clean(row: dict[str, Any]) -> dict[str, Any]:

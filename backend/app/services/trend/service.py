@@ -16,6 +16,7 @@ from app.models.market_data import (
     StockStateDaily,
     StrategySignal,
 )
+from app.repositories.calculation_frame import read_calculation_frame
 from app.repositories.replace_slice import replace_slice_rows
 from app.services.analysis_identity import (
     FACTOR_CALC_VERSION,
@@ -167,7 +168,7 @@ class TrendService:
             )
             .order_by(StockFactorDaily.ts_code, StockFactorDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="trend.factors")
 
     def _read_market(self, start: date, end: date) -> pd.DataFrame:
         hash_value = analysis_strategy_hash(self.settings.strategy)
@@ -181,7 +182,7 @@ class TrendService:
             )
             .order_by(MarketDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="trend.market")
 
     def _read_sector_members(self) -> pd.DataFrame:
         stmt = select(
@@ -191,7 +192,7 @@ class TrendService:
             SectorMember.valid_to,
             SectorMember.is_latest,
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="trend.sector_members")
 
     def _read_sector_factors(self, start: date, end: date) -> pd.DataFrame:
         hash_value = analysis_strategy_hash(self.settings.strategy)
@@ -210,7 +211,7 @@ class TrendService:
             )
             .order_by(SectorFactorDaily.trade_date, SectorFactorDaily.sector_id)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="trend.sector_factors")
 
     def _read_previous_states(
         self, start: date, target_start: date, algo_version: str
@@ -232,7 +233,7 @@ class TrendService:
             )
             .order_by(StockStateDaily.ts_code, StockStateDaily.trade_date)
         )
-        return pd.DataFrame(self.db.execute(stmt).mappings().all())
+        return read_calculation_frame(self.db, stmt, name="trend.previous_states")
 
 
 def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
