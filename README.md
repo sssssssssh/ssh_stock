@@ -2,10 +2,14 @@
 
 ## V1.3 候选写入整改
 
-本轮先冻结基线和合成性能证据，再分提交优化；不自动部署、迁移、重启 Worker/Scheduler 或重提任务。
+本轮已交付精确键查询、有界集合写入、批次取消保护及回归工具；不自动部署、迁移、重启 Worker/Scheduler 或重提任务。
 基线与安全测量入口见 [V1.3 基线](docs/acceptance/v13_baseline.md)。
 只能显式设置独立 loopback `TEST_DATABASE_URL`（数据库名以 `_test` 结尾）运行性能脚本；
-不得复用云端业务库。基线阶段没有性能修复完成声明，最终以专项矩阵和同 HEAD CI 为准。
+不得复用云端业务库。结果见 [验收矩阵](docs/acceptance/v13_closeout.md)；
+试运行与回退见 [操作手册](docs/runbooks/publication_v13_rollout.md)。
+安全取消增加每批检查成本，不能把早期写入 SQL 减半当成最终总往返减半；性能整改仍为 OPEN。
+本地完整 pytest 2169 项通过，后补测试单独记录；代码验收仍须最终提交的 CI 全部必需任务成功。
+无需新增 migration，schema 仍为 `0058_data_publication`；本轮没有替用户重跑云端补算。
 
 ## 补算批次与操作明细（2026-10-19）
 
