@@ -291,7 +291,9 @@ class PublicationWorkspace:
         for offset in range(0, len(payload), 500):
             batch = payload[offset : offset + 500]
             index = offset // 500 + 1
-            progress.report("lookup_candidate", completed_rows=count, batch_index=index, log=True)
+            batch_started = monotonic()
+            progress.report("lookup_candidate", completed_rows=count, batch_index=index,
+                            log=index==1)
             existing, bases, now = self._lookup_batch(model, batch)
             progress.report("lookup_published", completed_rows=count, batch_index=index)
             progress.report("prepare", completed_rows=count, batch_index=index)
@@ -375,7 +377,7 @@ class PublicationWorkspace:
             self._store(staged)
             count += len(batch)
             progress.report("batch_complete", completed_rows=count, batch_index=index,
-                            advanced=True, log=True)
+                            advanced=True, log=(monotonic()-batch_started>=30))
         progress.report("complete", completed_rows=count, batch_index=progress.batch_count,
                         advanced=True, log=True)
         return count
@@ -389,6 +391,9 @@ class PublicationWorkspace:
             self._store_batch(rows[offset : offset + 500])
 
     def _store_batch(self, rows):
+        # Independent observer: cancellation/ownership must be visible even while
+        # this Session holds candidate writes and FK KEY SHARE locks on the Job.
+        checkpoint()
         # One bounded JSON bind avoids thousands of scalar binds/SQL compilation.
         # The native composite, regular INSERT and unchanged conflict allowlist
         # retain constraints, audit triggers and first-observed base_row.

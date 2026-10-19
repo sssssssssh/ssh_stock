@@ -1,17 +1,19 @@
 """Compare candidate bytes with the immutable 9a377e4 implementation, not a mock."""
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from app.models import market_data as m
 from app.models.data_publication import DataPublicationRow, DataPublicationSource
 from app.repositories.job_run import update_job
+from app.repositories.replace_slice import replace_slice_rows
 from app.services import data_publication as publication
 from sqlalchemy import event, select, text
 
 from scripts.publication_candidate_benchmark_v13 import baseline_class
 from tests.integration import test_data_publication as support
+from tests.integration.m16_6_support import isolated_contract_database
 from tests.integration.test_data_publication import (  # noqa: F401
     publication_db,
 )
@@ -197,3 +199,69 @@ def test_core_rewrite_invalidates_already_cached_quality_certificate(publication
         )
         assert certificate.validation is None
         assert certificate.validated_at is None
+
+
+@pytest.mark.parametrize("start", [date(2025, 12, 31), date(2026, 1, 31)])
+def test_scope_closed_boundaries_match_baseline_without_deleting_neighbors(
+    publication_db, monkeypatch, start,  # noqa: F811
+):
+    factory, engine = publication_db
+    end = start + timedelta(days=1)
+    model = m.StockTradeStatusDaily
+    support.seed_published(factory)
+    with factory() as db:
+        old = db.scalar(select(model.calc_run_id))
+        for day in (start - timedelta(days=1), start, end, end + timedelta(days=1)):
+            db.add(model(**support.sample_row(model, old, day=day)))
+        db.commit()
+    outputs = []
+    for cls in (baseline_class(), publication.PublicationWorkspace):
+        monkeypatch.setattr(support, "PublicationWorkspace", cls)
+        with support.candidate(factory, engine, start=start, end=end) as (db, job):
+            replace_slice_rows(
+                db, model, [], scope_filters=[model.trade_date >= start, model.trade_date <= end],
+                key_columns=support.KEYS[model.__tablename__],
+            )
+            days = set(db.scalars(select(model.trade_date)))
+            assert start not in days and end not in days
+            assert {start - timedelta(days=1), end + timedelta(days=1)} <= days
+            outputs.append(snapshot(db, job))
+            with factory() as reader:
+                assert {start, end} <= set(reader.scalars(select(model.trade_date)))
+            update_job(db, job, status="FAILED")
+    assert outputs[0] == outputs[1]
+
+
+def test_real_worker_chain_published_business_output_matches_frozen_baseline(monkeypatch):
+    from app.models.data_publication import DataPublication
+
+    outputs = []
+    current = publication.PublicationWorkspace
+    for cls in (baseline_class(), current):
+        with monkeypatch.context() as patch:
+            patch.setattr(publication, "PublicationWorkspace", cls)
+            with isolated_contract_database(patch) as (factory, engine):
+                # Same real input fixture, real Worker, calculators, quality and
+                # root publication; no synthetic quality certificate or engines.
+                support.test_real_recalculation_and_quality_publish_without_synthetic_certificate(
+                    (factory, engine), patch, "absent", None,
+                )
+                with factory() as reader:
+                    roots = set(reader.scalars(select(DataPublication.job_id)))
+                    result = {}
+                    for model in support.MODELS:
+                        rows = []
+                        for row in reader.execute(select(model.__table__)).mappings():
+                            value = dict(row)
+                            # Independent executions have different audit clocks
+                            # and UUIDs; compare all business fields exactly and
+                            # retain the source role instead of discarding lineage.
+                            for field in ("calculated_at", "created_at", "checked_at"):
+                                value.pop(field, None)
+                            for field in ("calc_run_id", "job_id"):
+                                if value.get(field) is not None:
+                                    value[field] = "ROOT" if value[field] in roots else "SEED"
+                            rows.append(json.dumps(value, default=str, sort_keys=True))
+                        result[model.__tablename__] = sorted(rows)
+                    outputs.append(result)
+    assert outputs[0] == outputs[1]

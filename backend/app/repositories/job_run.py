@@ -117,7 +117,9 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
 
     progress = current_progress.get()
     if progress is not None and status in {"FAILED", "CANCELLED"}:
-        progress.failed()
+        progress.failed(cancelled=status=="CANCELLED")
+    elif progress is not None and status in {"SUCCESS", "PARTIAL"}:
+        progress.finished()
     if progress is not None and (snapshot := progress.snapshot()) is not None:
         values["job_metadata"] = JobRun.job_metadata.op("||")({
             **values.get("job_metadata", {}), "calculation_progress": snapshot,

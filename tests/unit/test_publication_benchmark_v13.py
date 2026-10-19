@@ -42,3 +42,12 @@ def test_memory_measurement_is_real_and_positive():
     from scripts.publication_candidate_benchmark_v13 import rss_bytes
 
     assert rss_bytes() > 0
+
+
+def test_small_sample_percentiles_do_not_hide_a_slow_batch():
+    from scripts.publication_candidate_benchmark_v13 import distribution
+
+    summary = distribution([1, 101])
+    assert summary["p50"] == summary["median"] == 51
+    assert summary["p95"] == 96
+    assert summary["p99"] == 100

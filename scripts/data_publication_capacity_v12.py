@@ -9,7 +9,6 @@ import argparse
 import json
 import os
 import platform
-import resource
 import statistics
 import subprocess
 import sys
@@ -25,6 +24,12 @@ from sqlalchemy.exc import DBAPIError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
+
+
+def peak_rss_bytes():
+    from scripts.publication_candidate_benchmark_v13 import rss_bytes
+
+    return rss_bytes()
 
 
 def payload(model, source, day, entity, value):
@@ -354,9 +359,7 @@ def run_level(stocks, count, label):
                             staged += len(rows)
                         db.commit()
                     stage_seconds[model.__tablename__] = time.perf_counter() - stage_start
-                    stage_peak_rss[model.__tablename__] = resource.getrusage(
-                        resource.RUSAGE_SELF
-                    ).ru_maxrss * (1 if sys.platform == "darwin" else 1024)
+                    stage_peak_rss[model.__tablename__] = peak_rss_bytes()
                     print(
                         json.dumps(dict(level=label, stage=model.__tablename__, rows=staged)),
                         flush=True,
@@ -472,8 +475,7 @@ def run_level(stocks, count, label):
                 rollback_probes=rollback_probes,
                 final_root_status=final_root_status,
                 final_ledger_state=final_ledger_state,
-                peak_rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                * (1 if sys.platform == "darwin" else 1024),
+                peak_rss_bytes=peak_rss_bytes(),
                 candidate=candidate_stats,
                 preimage=preimage,
                 relations=relations,

@@ -16,6 +16,7 @@ current_progress: ContextVar["CalculationProgress | None"] = ContextVar(
 PHASES = {
     "started", "query", "fetch", "frame", "compute", "prepare",
     "lookup_candidate", "lookup_published", "store", "batch_complete", "complete", "failed",
+    "cancelled",
 }
 
 
@@ -42,12 +43,17 @@ class CalculationProgress:
                 return None
             return deepcopy({**self._latest, "recent_events": list(self._events)})
 
-    def failed(self):
+    def failed(self, *, cancelled=False):
+        self.finished("cancelled" if cancelled else "failed")
+
+    def finished(self, phase="complete"):
+        if phase not in {"complete", "failed", "cancelled"}:
+            raise ValueError("CALCULATION_PROGRESS_TERMINAL_INVALID")
         value = self.snapshot()
         if value is None:
             return
         now = datetime.now(UTC)
-        value.update(phase="failed", updated_at=now.isoformat(),
+        value.update(phase=phase, updated_at=now.isoformat(),
                      elapsed_seconds=round((now-datetime.fromisoformat(
                          value["started_at"],
                      )).total_seconds(), 1),
@@ -56,6 +62,9 @@ class CalculationProgress:
                      )).total_seconds(), 1))
         value.pop("recent_events", None)
         self.record(value)
+        logger.info("calculation batch terminal name={} phase={} batch={}/{} rows={}/{}",
+                    value["name"], phase, value["batch_index"], value["batch_count"],
+                    value["completed_rows"], value["total_rows"])
 
 
 class ProgressStep:
@@ -78,7 +87,7 @@ class ProgressStep:
         if phase not in PHASES:
             raise ValueError("CALCULATION_PROGRESS_PHASE_INVALID")
         now, stamp = monotonic(), datetime.now(UTC).isoformat()
-        if (phase not in {"complete", "batch_complete", "failed"}
+        if (phase not in {"complete", "batch_complete", "failed", "cancelled"}
                 and (phase != self.phase or batch_index != self.batch_index)):
             self.phase, self.operation_started = phase, now
             self.operation_started_at = stamp

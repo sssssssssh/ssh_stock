@@ -1,0 +1,100 @@
+name: Publication V1.3
+
+"on":
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: publication_v13_test
+          POSTGRES_USER: synthetic
+          POSTGRES_PASSWORD: synthetic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U synthetic -d publication_v13_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:5432/publication_v13_test
+      TEST_DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:5432/publication_v13_test
+      TUSHARE_TOKEN: synthetic-v13
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - run: git rev-parse HEAD
+      - run: python -m alembic upgrade head
+      - run: python -m alembic current
+      - run: python -m alembic heads
+      - name: Candidate equivalence, real row locks, isolation and cancellation
+        run: >-
+          python -m pytest tests/integration/test_publication_lookup_v13.py
+          tests/integration/test_publication_cancel_v13.py
+          tests/integration/test_calculation_batch_progress.py
+          tests/integration/test_data_publication.py
+          tests/unit/test_calculation_progress.py tests/unit/test_publication_benchmark_v13.py
+          tests/unit/test_cli_derived_safety.py
+          tests/unit/test_publication_v13_receipt.py
+          --junitxml=.codex_tmp/v13-targeted.xml
+      - run: python -m ruff check backend tests migrations scripts
+      - name: Frozen baseline B0 B1 B2, three repetitions, public A present
+        run: >-
+          python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic
+          --implementation baseline --rows 1000 100000 500000 --repeats 3 --public
+          --output .codex_tmp/v13-baseline.json
+      - name: Current B0 B1 B2, identical input and reader workload
+        run: >-
+          python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic
+          --implementation current --rows 1000 100000 500000 --repeats 3 --public
+          --output .codex_tmp/v13-current.json
+      - name: Empty A and existing candidate matrix
+        run: |
+          for implementation in baseline current; do
+            python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic --implementation "$implementation" --rows 1000 --repeats 3 --output ".codex_tmp/v13-empty-$implementation.json"
+            python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic --implementation "$implementation" --rows 1000 --repeats 3 --existing 500000 --output ".codex_tmp/v13-existing-$implementation.json"
+            python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic --implementation "$implementation" --rows 1000 --repeats 3 --existing 500000 --public --output ".codex_tmp/v13-existing-public-$implementation.json"
+          done
+      - name: Scope memory and bounded deletion-mask sample
+        run: |
+          for amount in 500000 1000000; do
+            python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic --implementation current --rows 1000 --repeats 1 --existing "$amount" --public --scope-probe --output ".codex_tmp/v13-scope-$amount.json"
+          done
+      - name: Bounded key workload scaling, 500 5000 50000 inputs
+        run: |
+          for implementation in baseline current; do
+            python scripts/publication_candidate_benchmark_v13.py --confirm-synthetic --implementation "$implementation" --rows 500 5000 50000 --repeats 3 --existing 500000 --public --output ".codex_tmp/v13-keys-$implementation.json"
+          done
+      - name: Exact SHA receipts and honest performance status
+        run: >-
+          python scripts/publication_v13_receipt.py --baseline .codex_tmp/v13-baseline.json
+          --current .codex_tmp/v13-current.json --junit .codex_tmp/v13-targeted.xml
+          --output .codex_tmp/v13-comparison.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-v13-${{ github.sha }}
+          path: .codex_tmp/v13-*.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-v13-junit-${{ github.sha }}
+          path: .codex_tmp/v13-targeted.xml
+          if-no-files-found: error

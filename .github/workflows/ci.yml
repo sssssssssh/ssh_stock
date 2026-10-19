@@ -213,7 +213,7 @@ jobs:
           assert all(r["max_top_level_running"] == 1 for r in containers["results"])
           assert any(r["workers"] == 2 and r["atomic_publication"] and r["completed"] == 7
                      for r in containers["results"])
-          assert len(browser["results"]) == 24 and all(r["passed"] for r in browser["results"])
+          assert len(browser["results"]) == 28 and all(r["passed"] for r in browser["results"])
           suites = {}
           for name in ("data-publication-targeted", "m17_1_2-full"):
               root = ET.parse(f".codex_tmp/{name}.xml").getroot()
@@ -248,7 +248,7 @@ jobs:
               "schema_version": "data-publication-v1.1", "head_sha": head,
               "ci_run_url": (f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
                              f"{os.environ['GITHUB_RUN_ID']}"),
-              "suites": suites, "browser_scenarios": 24, "containers": containers,
+              "suites": suites, "browser_scenarios": 28, "containers": containers,
               "cold_start_capacity": capacity,
               "production_validation": "PENDING_SEPARATE_APPROVAL",
           }, indent=2) + "\n")

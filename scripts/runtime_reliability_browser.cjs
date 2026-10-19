@@ -55,8 +55,8 @@ async function main() {
             identity: 'synthetic-publication-identity', published_at: '2026-10-18T01:00:00Z'
           } : undefined,
           metadata: { stage: 'factors', progress_pct: 20,
-            ...(['batch-progress', 'batch-history'].includes(mode) ? { calculation_progress: {
-              name: 'stock_trade_status_daily', kind: 'candidate', phase: 'lookup_published',
+            ...(['batch-progress', 'batch-history', 'cancelled'].includes(mode) ? { calculation_progress: {
+              name: 'stock_trade_status_daily', kind: 'candidate', phase: mode === 'cancelled' ? 'cancelled' : 'lookup_published',
               batch_index: 157, batch_count: 2880, completed_rows: 78000, total_rows: 1439327,
               started_at: new Date(Date.now() - 7200000).toISOString(),
               operation_started_at: new Date(Date.now() - 90000).toISOString(),
@@ -147,6 +147,10 @@ async function main() {
             }
           }
           if (mode === 'published') await page.getByText(/已发布 · .*synthetic-publication-identity/).waitFor();
+          if (mode === 'cancelled') {
+            await page.locator('.job-history-progress summary').first().click();
+            await page.getByText('本步骤已取消', { exact: true }).waitFor();
+          }
           if (mode === 'batch-history') {
             const details = page.locator('.job-history-progress');
             await details.first().waitFor();

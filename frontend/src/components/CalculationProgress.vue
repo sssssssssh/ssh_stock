@@ -16,7 +16,7 @@ const phases: Record<string, string> = {
   started: "准备开始", query: "查询输入", fetch: "分批读取", frame: "整理输入数据",
   compute: "执行计算", prepare: "整理待写入结果", lookup_candidate: "查询已有候选",
   lookup_published: "核对已发布结果", store: "写入候选区", batch_complete: "本批暂存完成",
-  complete: "本步骤完成", failed: "本步骤异常",
+  complete: "本步骤完成", failed: "本步骤异常", cancelled: "本步骤已取消",
 };
 const kinds: Record<string, string> = {
   read: "读取输入", compute: "计算", reconcile: "核对结果范围", candidate: "暂存候选", validate: "校验", publish: "整体发布事务",
@@ -51,7 +51,7 @@ function duration(seconds: number) {
 }
 const operationElapsed = computed(() => {
   if (!detail.value) return "--";
-  if (!props.running || ['complete', 'batch_complete', 'failed'].includes(String(detail.value.phase))) {
+  if (!props.running || ['complete', 'batch_complete', 'failed', 'cancelled'].includes(String(detail.value.phase))) {
     return duration(Number(detail.value.operation_elapsed_seconds));
   }
   return duration((now.value - Date.parse(String(detail.value.operation_started_at))) / 1000);
@@ -59,7 +59,7 @@ const operationElapsed = computed(() => {
 const stepElapsed = computed(() => {
   if (!detail.value) return "--";
   const started = Date.parse(String(detail.value.started_at));
-  const active = props.running && !['complete', 'failed'].includes(String(detail.value.phase));
+  const active = props.running && !['complete', 'failed', 'cancelled'].includes(String(detail.value.phase));
   return duration(active && Number.isFinite(started) ? (now.value - started) / 1000
     : Number(detail.value.elapsed_seconds));
 });
@@ -89,7 +89,8 @@ const fraction = computed(() => {
     <div v-if="fraction !== null" class="detail-fraction">本步骤 {{ fraction.toFixed(1) }}%</div>
     <p v-if="detail.kind === 'candidate'" class="candidate-note">候选暂存计数，尚未发布；当前事务回滚时可能撤销。</p>
     <p v-if="detail.kind === 'publish' && running">发布事务尚未提交，正式结果以最终发布状态为准。</p>
-    <p v-if="running && !['complete', 'batch_complete', 'failed'].includes(String(detail.phase))">当前操作尚未返回；以上行数为已完成部分。</p>
+    <p v-if="detail.kind === 'reconcile' && detail.phase === 'complete'">范围核对完成，候选写入及正式发布尚未完成。</p>
+    <p v-if="running && !['complete', 'batch_complete', 'failed', 'cancelled'].includes(String(detail.phase))">当前操作尚未返回；以上行数为已完成部分。</p>
     <details v-if="events.length"><summary>最近处理记录（{{ events.length }} 条）</summary>
       <ol><li v-for="(event, index) in events" :key="index">
         <time>{{ new Date(String(event.updated_at)).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) }}</time>

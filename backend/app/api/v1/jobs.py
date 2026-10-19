@@ -305,14 +305,16 @@ def cancel_job(job_id: UUID, db: Session = Depends(get_db)) -> dict[str, Any]:
     # detached GET snapshot over a concurrently completed job.
     if job.parent_job_id:
         parent = db.scalar(select(JobRun).where(JobRun.id == job.parent_job_id)
-                           .with_for_update().execution_options(populate_existing=True))
+                           .with_for_update(key_share=True).execution_options(populate_existing=True))
         if parent and _execution_unconfirmed(parent):
             db.rollback()
             raise HTTPException(status_code=409, detail={"code": "JOB_EXECUTION_UNCONFIRMED"})
         if parent and parent.status == "RUNNING":
             parent.cancel_requested = True
             parent.cancel_requested_at = parent.cancel_requested_at or datetime.now(UTC)
-    job = db.scalar(select(JobRun).where(JobRun.id == job_id).with_for_update()
+    # NO KEY UPDATE still serializes claim/terminal writes, but is compatible
+    # with candidate FK KEY SHARE locks; do not wait for the whole candidate tx.
+    job = db.scalar(select(JobRun).where(JobRun.id == job_id).with_for_update(key_share=True)
                     .execution_options(populate_existing=True))
     if job.status == "CANCELLED":
         # Idempotency must not add an audit timestamp or cancel a parent after

@@ -66,8 +66,9 @@ def test_calculation_wrapper_preserves_results_and_original_exception(recorder):
     assert "PRIVATE_ERROR_SENTINEL" not in str(recorder.snapshot())
 
 
-@pytest.mark.parametrize("name,kind", [("secret URL", "read"), ("a" * 81, "read"),
-                                      ("valid_name", "PRIVATE_KIND")])
+@pytest.mark.parametrize(
+    "name,kind", [("secret URL", "read"), ("a" * 81, "read"), ("valid_name", "PRIVATE_KIND")]
+)
 def test_only_fixed_safe_log_labels_are_accepted(name, kind):
     with pytest.raises(ValueError, match="LABEL_INVALID"):
         ProgressStep(name, kind)
@@ -96,11 +97,42 @@ def test_heartbeat_reports_waiting_without_manufacturing_progress(monkeypatch, r
             return self.count > 2
 
     monkeypatch.setattr(job_worker, "SessionLocal", Db)
-    monkeypatch.setattr(job_worker, "touch_job_heartbeat",
-                        lambda *a, **kw: snapshots.append(kw["calculation_progress"]) or True)
-    job_worker._run_heartbeat_loop(uuid4(), "test", Stop(), execution_token=uuid4(),
-                                   interval_seconds=0.01, progress=recorder)
+    monkeypatch.setattr(
+        job_worker,
+        "touch_job_heartbeat",
+        lambda *a, **kw: snapshots.append(kw["calculation_progress"]) or True,
+    )
+    job_worker._run_heartbeat_loop(
+        uuid4(), "test", Stop(), execution_token=uuid4(), interval_seconds=0.01, progress=recorder
+    )
     assert len(snapshots) == 2
     assert snapshots[0] == snapshots[1]
     assert snapshots[0]["phase"] == "lookup_published"
     assert snapshots[0]["completed_rows"] == 500
+
+
+def test_cancelled_snapshot_keeps_counts_and_is_not_failed(recorder):
+    step = ProgressStep("stock_trade_status_daily", "candidate", total_rows=1000, batch_count=2)
+    step.report("batch_complete", batch_index=1, completed_rows=500, advanced=True)
+    advanced = recorder.snapshot()["advanced_at"]
+    recorder.failed(cancelled=True)
+    assert recorder.snapshot()["phase"] == "cancelled"
+    assert recorder.snapshot()["completed_rows"] == 500
+    assert recorder.snapshot()["advanced_at"] == advanced
+
+
+def test_fast_batch_snapshots_do_not_force_text_logs(monkeypatch, recorder):
+    from types import SimpleNamespace
+
+    messages = []
+    monkeypatch.setattr(module, "logger", SimpleNamespace(info=lambda *a, **kw: messages.append(a)))
+    monkeypatch.setattr(module, "monotonic", lambda: 100.0)
+    step = ProgressStep(
+        "stock_trade_status_daily", "candidate", total_rows=500000, batch_count=1000
+    )
+    for batch in range(1, 1001):
+        step.report("lookup_candidate", batch_index=batch, completed_rows=(batch - 1) * 500)
+        step.report("batch_complete", batch_index=batch, completed_rows=batch * 500, advanced=True)
+    assert len(messages) == 1
+    assert recorder.snapshot()["completed_rows"] == 500000
+    assert len(recorder.snapshot()["recent_events"]) == 12
