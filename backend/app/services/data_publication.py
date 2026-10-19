@@ -189,6 +189,8 @@ class PublicationWorkspace:
         self.db.execute(statement.on_conflict_do_nothing())
 
     def _lookup(self, model, payload, *, public=False):
+        if not public:
+            return self._lookup_batch(model, payload)[0]
         table = published_table(model) if public else model.__table__
         keys = KEYS[model.__tablename__]
         values = [tuple(row[k] for k in keys) for row in payload]
@@ -204,6 +206,52 @@ class PublicationWorkspace:
             tuple(row[k] for k in keys): dict(row)
             for row in self.db.execute(select(*selected).where(condition)).mappings()
         }
+
+    def _lookup_batch(self, model, payload):
+        """Resolve only the requested keys; never re-evaluate the overlay view.
+
+        Populate the matched candidate through the native composite type so date,
+        UUID, Decimal, defaults and NULL retain the old typed-view behavior.
+        Tombstones hide public rows, but the public preimage remains available.
+        """
+        name = model.__tablename__
+        if REGISTRY.get(name) is not model:
+            raise ValueError("PUBLICATION_MODEL_NOT_REGISTERED")
+        if not payload:
+            return {}, {}, None
+        keys = KEYS[name]
+        requested = [{key: row[key] for key in keys} for row in payload]
+        key_sql = ",".join(f'i."{key}"' for key in keys)
+        join = " AND ".join(f'p."{key}"=i."{key}"' for key in keys)
+        selected = ",".join(
+            f'CASE WHEN c.publication_id IS NOT NULL THEN r."{col.name}" '
+            f'ELSE p."{col.name}" END AS "{col.name}"' for col in model.__table__.columns
+        )
+        key_columns = ",".join(f'i."{key}" AS "_key_{n}"' for n, key in enumerate(keys))
+        statement = text(f"""WITH input_keys AS (
+            SELECT * FROM jsonb_populate_recordset(NULL::public."{name}",CAST(:keys AS jsonb)))
+            SELECT {key_columns},{selected},
+              CASE WHEN c.publication_id IS NOT NULL THEN NOT c.is_deleted
+                ELSE p."{keys[0]}" IS NOT NULL END AS _has_current,
+              to_jsonb(p) AS _publication_base,now() AS _transaction_now
+            FROM input_keys i
+            LEFT JOIN public.data_publication_row c
+              ON c.publication_id=:publication AND c.table_name=:table_name
+              AND c.row_key=jsonb_build_array({key_sql})
+            LEFT JOIN public."{name}" p ON {join}
+            CROSS JOIN LATERAL jsonb_populate_record(NULL::public."{name}",c.row_data) r""")
+        existing, bases, now = {}, {}, None
+        for row in self.db.execute(statement, {
+            "keys": json.dumps(_json(requested), allow_nan=False),
+            "publication": self.job_id, "table_name": name,
+        }).mappings():
+            key = tuple(row[f"_key_{n}"] for n in range(len(keys)))
+            if row["_has_current"]:
+                existing[key] = {col.name: row[col.name] for col in model.__table__.columns}
+            if row["_publication_base"] is not None:
+                bases[key] = {"_publication_base": row["_publication_base"]}
+            now = row["_transaction_now"]
+        return existing, bases, now
 
     def upsert(
         self,
