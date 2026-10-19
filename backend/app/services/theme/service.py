@@ -26,6 +26,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.theme.engine import ThemeConfig, calculate_theme_factors
 from app.services.theme.membership import resolve_theme_memberships
 
@@ -66,7 +67,7 @@ class ThemeFactorService:
             theme_daily = theme_daily[theme_daily["trade_date"].isin(usable_dates)]
         market_trade_dates = self._open_trade_dates(lookback_start, end)
         membership = resolve_theme_memberships(self.db, market_trade_dates)
-        rows = calculate_theme_factors(
+        rows = run_calculation("theme.compute", calculate_theme_factors,
             theme_daily=theme_daily,
             members=membership.members,
             factors=self._factors(lookback_start, end),

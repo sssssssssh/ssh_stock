@@ -33,7 +33,7 @@ async function main() {
       ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
     const results = [];
     for (const width of [1440, 390]) {
-      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error', 'queue', 'cancel', 'cancelled', 'unconfirmed', 'candidate', 'published', 'schedule-alert']) {
+      for (const mode of ['loading', 'empty', 'stale', 'failed', 'statistics-error', 'queue', 'cancel', 'cancelled', 'unconfirmed', 'candidate', 'published', 'schedule-alert', 'batch-progress', 'batch-history']) {
         const page = await browser.newPage({ viewport: { width, height: 1000 } });
         const errors = [];
         let cancelRequested = false, cancelPosts = 0;
@@ -54,7 +54,18 @@ async function main() {
             state: mode === 'published' ? 'PUBLISHED' : 'PREPARING',
             identity: 'synthetic-publication-identity', published_at: '2026-10-18T01:00:00Z'
           } : undefined,
-          metadata: { stage: 'factors', progress_pct: 20 }, row_count: 12, step: '90 factors', error_message: null
+          metadata: { stage: 'factors', progress_pct: 20,
+            ...(['batch-progress', 'batch-history'].includes(mode) ? { calculation_progress: {
+              name: 'stock_trade_status_daily', kind: 'candidate', phase: 'lookup_published',
+              batch_index: 157, batch_count: 2880, completed_rows: 78000, total_rows: 1439327,
+              started_at: new Date(Date.now() - 7200000).toISOString(),
+              operation_started_at: new Date(Date.now() - 90000).toISOString(),
+              updated_at: new Date().toISOString(), elapsed_seconds: 7200,
+              recent_events: Array.from({ length: 12 }, (_, i) => ({
+                name: 'stock_trade_status_daily', phase: 'batch_complete', batch_index: 145 + i,
+                completed_rows: (145 + i) * 500, updated_at: new Date().toISOString()
+              }))
+            } } : {}) }, row_count: 12, step: '90 factors', error_message: null
         });
         page.on('pageerror', error => errors.push(error.message));
         await page.route('**/api/v1/**', async route => {
@@ -69,7 +80,7 @@ async function main() {
               kind: 'catchup', target_date: '2026-10-17', state: 'DEFERRED', error_code: 'QUEUE_CAPACITY_EXCEEDED'
             }] } : undefined };
           else if (p === '/jobs/queue') data = {
-            running: ['queue', 'cancel', 'unconfirmed', 'candidate'].includes(mode) ? [running()] : [],
+            running: ['queue', 'cancel', 'unconfirmed', 'candidate', 'batch-progress'].includes(mode) ? [running()] : [],
             queued: mode === 'queue' ? pending.map((job, index) => ({ ...job, queue_position: index + 1 })) : []
           };
           else if (p.endsWith('/cancel')) {
@@ -85,6 +96,12 @@ async function main() {
           else if (p === '/system/data-coverage' && mode === 'statistics-error') status = 503;
           else if (p === '/jobs') {
             if (['cancelled', 'published'].includes(mode)) data = [running()];
+            if (mode === 'batch-history') data = [
+              { ...running(), id: 'batch-history-1', status: 'FAILED', can_cancel: false,
+                finished_at: new Date().toISOString(), error_message: 'SYNTHETIC_FAILURE '.repeat(16) },
+              { ...running(), id: 'batch-history-2', status: 'CANCELLED', can_cancel: false,
+                finished_at: new Date().toISOString(), error_message: null }
+            ];
             if (mode === 'loading') await wait(1800);
             if (['stale', 'failed'].includes(mode)) data = [{
               id: 'synthetic-job', job_type: 'recalculate', status: mode === 'stale' ? 'RUNNING' : 'FAILED',
@@ -109,7 +126,38 @@ async function main() {
           if (mode === 'empty') assert((await page.locator('.job-list').innerText()).includes('暂无任务记录'));
           if (mode === 'statistics-error') await page.getByText('SYNTHETIC_STATISTICS_UNAVAILABLE', { exact: true }).waitFor();
           if (mode === 'candidate') await page.getByText('候选计算中，尚未发布', { exact: true }).waitFor();
+          if (mode === 'batch-progress') {
+            const detail = page.getByRole('region', { name: '阶段内进度' });
+            await detail.waitFor();
+            assert((await detail.innerText()).includes('157 / 2,880'));
+            assert((await detail.innerText()).includes('78,000 / 1,439,327'));
+            assert((await detail.innerText()).includes('核对已发布结果'));
+            await detail.locator('summary').click();
+            assert.equal(await detail.locator('li').count(), 12);
+            const boxes = await detail.locator('dl > div').evaluateAll(nodes => nodes.map(node => {
+              const r = node.getBoundingClientRect();
+              return { x: r.x, y: r.y, right: r.right, bottom: r.bottom,
+                fits: node.scrollWidth <= node.clientWidth + 1 };
+            }));
+            assert(boxes.every(box => box.fits), 'Batch progress text overflow');
+            for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+              const a = boxes[i], b = boxes[j];
+              assert(a.right <= b.x || b.right <= a.x || a.bottom <= b.y || b.bottom <= a.y,
+                'Batch progress fields overlap');
+            }
+          }
           if (mode === 'published') await page.getByText(/已发布 · .*synthetic-publication-identity/).waitFor();
+          if (mode === 'batch-history') {
+            const details = page.locator('.job-history-progress');
+            await details.first().waitFor();
+            assert.equal(await details.count(), 2);
+            assert.equal(await details.first().getAttribute('open'), null);
+            await details.first().locator('summary').first().click();
+            const rows = await page.locator('.job-row').evaluateAll(nodes => nodes.map(node => {
+              const r = node.getBoundingClientRect(); return { y: r.y, bottom: r.bottom };
+            }));
+            assert(rows[0].bottom <= rows[1].y, 'Expanded history overlaps the next task');
+          }
           if (mode === 'schedule-alert') await page.getByText(/调度待处理 1 项/).waitFor();
           if (mode === 'queue') {
             await page.waitForFunction(() => document.querySelectorAll('.queue-entry').length === 35);

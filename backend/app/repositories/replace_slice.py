@@ -5,6 +5,7 @@ from sqlalchemy import delete, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.repositories.upsert import upsert_rows
+from app.services.calculation_progress import ProgressStep
 
 
 def replace_slice_rows(
@@ -25,6 +26,8 @@ def replace_slice_rows(
     if current and model.__tablename__ in REGISTRY:
         current.record_scope(model, scope_filters)
     columns = [getattr(model, name) for name in key_columns]
+    progress = ProgressStep(model.__tablename__, "reconcile", total_rows=len(rows))
+    progress.report("query", log=True)
     existing_keys = {
         tuple(row)
         for row in db.execute(select(*columns).where(*scope_filters)).all()
@@ -33,6 +36,7 @@ def replace_slice_rows(
         tuple(row[column] for column in key_columns)
         for row in rows
     }
+    progress.report("prepare", log=True)
     stale_keys = existing_keys - current_keys
     _delete_stale_keys(
         db,
@@ -41,6 +45,7 @@ def replace_slice_rows(
         scope_filters=scope_filters,
         stale_keys=stale_keys,
     )
+    progress.report("complete", advanced=True, log=True)
     return upsert_rows(
         db,
         model,

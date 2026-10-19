@@ -18,6 +18,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.market.engine import MarketConfig, calculate_market_daily
 
 
@@ -33,7 +34,7 @@ class MarketService:
         index_daily = self._read_index_daily(lookback_start, end)
 
         config = MarketConfig.from_strategy(self.settings.strategy)
-        market = calculate_market_daily(
+        market = run_calculation("market.compute", calculate_market_daily,
             factors=factors,
             daily=daily,
             index_daily=index_daily,

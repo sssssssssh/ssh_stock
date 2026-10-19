@@ -25,6 +25,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.factors.engine import FactorConfig, calculate_stock_factors
 
 
@@ -43,7 +44,7 @@ class FactorService:
 
         benchmark = self.settings.strategy.get("benchmark", {}).get("primary", "000300.SH")
         config = FactorConfig.from_strategy(self.settings.strategy)
-        factors = calculate_stock_factors(
+        factors = run_calculation("factors.compute", calculate_stock_factors,
             daily=daily,
             adj_factor=adj_factor,
             stock_basic=stock_basic,

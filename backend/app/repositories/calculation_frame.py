@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.db import database_error_summary
+from app.services.calculation_progress import ProgressStep
 from app.services.job_execution import checkpoint
 
 FETCH_ROWS = 5000
@@ -20,12 +21,15 @@ def read_calculation_frame(db: Session, statement, *, name: str) -> pd.DataFrame
     started = last_log = monotonic()
     result = None
     rows = []
+    progress = ProgressStep(name, "read")
+    progress.report("query", log=True)
     logger.info("calculation read started query={}", name)
     try:
         result = db.execute(statement.execution_options(yield_per=FETCH_ROWS))
-        for batch in result.mappings().partitions(FETCH_ROWS):
+        for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
             checkpoint()
             rows.extend(batch)
+            progress.report("fetch", completed_rows=len(rows), batch_index=index, advanced=True)
             now = monotonic()
             if now - last_log >= 30:
                 logger.info("calculation read progress query={} rows={} elapsed_seconds={:.1f}",
@@ -33,11 +37,14 @@ def read_calculation_frame(db: Session, statement, *, name: str) -> pd.DataFrame
                 last_log = now
         # Construct once, not one frame per FETCH, to retain whole-result dtype
         # inference (including all-NULL batches), ordering and empty-frame behavior.
+        progress.report("frame", completed_rows=len(rows), log=True)
         frame = pd.DataFrame(rows)
+        progress.report("complete", completed_rows=len(rows), advanced=True, log=True)
         logger.info("calculation read complete query={} rows={} elapsed_seconds={:.1f}",
                     name, len(rows), monotonic() - started)
         return frame
     except SQLAlchemyError as exc:
+        progress.report("failed", completed_rows=len(rows), log=True)
         exc.calculation_query_name = name
         logger.error("calculation read failed query={} rows={} elapsed_seconds={:.1f} error={}",
                      name, len(rows), monotonic() - started, database_error_summary(exc))

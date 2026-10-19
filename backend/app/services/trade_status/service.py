@@ -24,6 +24,7 @@ from app.services.analysis_identity import (
     analysis_strategy_config,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.trade_status.engine import calculate_trade_status_rows
 
 
@@ -46,7 +47,7 @@ class TradeStatusService:
             .scalars()
             .all()
         )
-        status = calculate_trade_status_rows(
+        status = run_calculation("trade_status.compute", calculate_trade_status_rows,
             trade_dates=trade_dates,
             stock_basic=self._read_stock_basic(),
             daily=self._read_range(StockDaily, start, end),

@@ -23,6 +23,7 @@ from app.models.market_data import DataDirtyRange
 from app.providers.gateway import market_data_gateway
 from app.providers.logging_provider import LoggingMarketDataProvider
 from app.repositories.job_run import touch_job_heartbeat, update_job
+from app.services.calculation_progress import CalculationProgress, current_progress
 from app.services.dirty import recover_stale_processing_ranges
 from app.services.experiment_evaluation.application import (
     EXPERIMENT_EVALUATION_JOB_TYPE,
@@ -214,6 +215,7 @@ def execute_claimed_job(
     if job.status != "RUNNING":
         return
     context_token = None
+    progress_token = None
     if job.job_type in INGESTION_JOB_TYPES and getattr(job, "execution_token", None):
         if (job.worker_id, job.execution_token) != (expected_worker, expected_token):
             logger.warning("data dispatch no longer owns claim job_id={}", job_id)
@@ -224,6 +226,7 @@ def execute_claimed_job(
         # Applied to each transaction of this dedicated Session only.
         db.info["data_task_timeouts"] = True
         db.info["data_execution_job_id"] = job.id
+        progress_token = current_progress.set(CalculationProgress())
     metadata = dict(job.job_metadata or {})
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
@@ -236,7 +239,8 @@ def execute_claimed_job(
             heartbeat_thread = threading.Thread(
                 target=_run_heartbeat_loop,
                 args=(job.id, worker_id, stop_heartbeat),
-                kwargs={"execution_token": getattr(job, "execution_token", None)},
+                kwargs={"execution_token": getattr(job, "execution_token", None),
+                        "progress": current_progress.get() if progress_token else None},
                 daemon=True,
                 name=f"job-heartbeat-{job.id}",
             )
@@ -403,6 +407,8 @@ def execute_claimed_job(
             current_execution.reset(context_token)
             db.info.pop("data_task_timeouts", None)
             db.info.pop("data_execution_job_id", None)
+        if progress_token is not None:
+            current_progress.reset(progress_token)
 
 
 def _hold_unconfirmed_execution(db: Session, reason: str) -> None:
@@ -450,13 +456,25 @@ def _run_heartbeat_loop(
     *,
     interval_seconds: float | None = None,
     execution_token: object | None = None,
+    progress: CalculationProgress | None = None,
 ) -> None:
     interval = interval_seconds or float(scheduler_setting("worker_heartbeat_interval_seconds", 45))
     while not stop_event.wait(interval):
         try:
+            snapshot = progress.snapshot() if progress is not None else None
+            if snapshot:
+                operation_age = (datetime.now(UTC) - datetime.fromisoformat(
+                    snapshot["operation_started_at"],
+                )).total_seconds()
+                logger.info("calculation activity job_id={} name={} phase={} batch={}/{} "
+                            "rows={}/{} operation_elapsed_seconds={:.1f}",
+                            job_id, snapshot["name"], snapshot["phase"],
+                            snapshot["batch_index"], snapshot["batch_count"],
+                            snapshot["completed_rows"], snapshot["total_rows"], operation_age)
             with SessionLocal() as heartbeat_db:
+                telemetry = {"calculation_progress": snapshot} if snapshot else {}
                 if not touch_job_heartbeat(heartbeat_db, job_id, worker_id,
-                                           execution_token=execution_token):
+                                           execution_token=execution_token, **telemetry):
                     return
         except SQLAlchemyError as exc:
             logger.error("worker heartbeat database unavailable job_id={} error={}",

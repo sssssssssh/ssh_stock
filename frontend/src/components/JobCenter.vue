@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { JobRun } from "../types";
 import { computed } from "vue";
+import CalculationProgress from "./CalculationProgress.vue";
 
 const props = defineProps<{
   collapsed: boolean;
@@ -119,6 +120,8 @@ function updateEnd(event: Event) {
           <p>Worker：{{ activeJob.worker_id || "--" }}</p>
           <p>最近心跳：{{ activeJob.heartbeat_at || "--" }}</p>
           <p>最近进度：{{ activeJob.last_progress_at || "--" }}</p>
+          <CalculationProgress :value="activeJob.metadata.calculation_progress" :running="activeJob.status === 'RUNNING'" />
+          <p v-if="activeJob.job_type === 'recalculate' && !activeJob.metadata.calculation_progress">当前执行尚未上报阶段内明细。</p>
           <p v-if="activeJob.metadata.last_completed_end">最近确认完成：{{ activeJob.metadata.last_completed_stage }} / {{ activeJob.metadata.last_completed_start }} ~ {{ activeJob.metadata.last_completed_end }}</p>
           <p v-if="publicationText(activeJob)" class="job-publication" role="status">{{ publicationText(activeJob) }}</p>
           <button v-if="activeJob.can_cancel || canCancel(activeJob) || activeJob.cancel_requested" class="secondary-button" type="button"
@@ -166,6 +169,10 @@ function updateEnd(event: Event) {
           <span v-if="job.error_message" class="job-error-line" :title="job.error_message">{{ job.error_message }}</span>
           <span v-if="job.metadata.last_completed_end" class="job-completed-line">最近确认完成：{{ job.metadata.last_completed_start }} ~ {{ job.metadata.last_completed_end }}</span>
           <span v-if="publicationText(job)" class="job-completed-line job-publication">{{ publicationText(job) }}</span>
+          <details v-if="job.metadata.calculation_progress" class="job-completed-line job-history-progress">
+            <summary>阶段内明细</summary>
+            <CalculationProgress :value="job.metadata.calculation_progress" :running="job.status === 'RUNNING'" />
+          </details>
         </div>
         <div v-if="!history.length" class="empty-block compact-empty">暂无任务记录</div>
       </section>
@@ -181,4 +188,5 @@ function updateEnd(event: Event) {
 .job-current-head { flex-wrap: wrap; }
 .job-completed-line { grid-column: 1 / -1; font-size: 12px; overflow-wrap: anywhere; }
 .job-status-grid > p { grid-column: 1 / -1; margin: 0; }
+.job-history-progress > summary { cursor: pointer; padding-top: 8px; }
 </style>

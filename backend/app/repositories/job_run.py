@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import case, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.models.job import JobRun, ProviderApiLog
@@ -113,6 +113,15 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
         if publication is not None:
             values["job_metadata"] = {**dict(job.job_metadata or {}),
                 **values.get("job_metadata", {}), "publication": publication}
+    from app.services.calculation_progress import current_progress
+
+    progress = current_progress.get()
+    if progress is not None and status in {"FAILED", "CANCELLED"}:
+        progress.failed()
+    if progress is not None and (snapshot := progress.snapshot()) is not None:
+        values["job_metadata"] = JobRun.job_metadata.op("||")({
+            **values.get("job_metadata", {}), "calculation_progress": snapshot,
+        })
     conditions = [JobRun.id == job.id, JobRun.status == "RUNNING",
                   JobRun.worker_id == execution.worker_id,
                   JobRun.execution_token == execution.token]
@@ -137,14 +146,34 @@ def touch_job_heartbeat(
     *,
     now: datetime | None = None,
     execution_token: object | None = None,
+    calculation_progress: dict[str, Any] | None = None,
 ) -> bool:
     ownership = [JobRun.id == job_id, JobRun.status == "RUNNING", JobRun.worker_id == worker_id]
     if execution_token is not None:
         ownership.append(JobRun.execution_token == execution_token)
+    values = {"heartbeat_at": now or datetime.now(UTC)}
+    if calculation_progress is not None and execution_token is not None:
+        # Only the observer transaction commits here; never the calculator's Session.
+        db.execute(text("SET LOCAL lock_timeout='1s'"))
+        db.execute(text("SET LOCAL statement_timeout='3s'"))
+        merged = JobRun.job_metadata.op("||")({
+            "calculation_progress": calculation_progress,
+        })
+        # A heartbeat can capture a snapshot just before the calculator advances.
+        # Do not let that delayed observer overwrite a newer stage checkpoint.
+        values["job_metadata"] = case(
+            (JobRun.job_metadata["calculation_progress"]["updated_at"].as_string()
+             > calculation_progress["updated_at"], JobRun.job_metadata),
+            else_=merged,
+        )
+        if advanced := calculation_progress.get("advanced_at"):
+            values["last_progress_at"] = func.greatest(
+                JobRun.last_progress_at, datetime.fromisoformat(advanced),
+            )
     result = db.execute(
         update(JobRun)
         .where(*ownership)
-        .values(heartbeat_at=now or datetime.now(UTC))
+        .values(**values)
     )
     db.commit()
     return result.rowcount == 1

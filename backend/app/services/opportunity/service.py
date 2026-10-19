@@ -31,6 +31,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata, config_hash
+from app.services.calculation_progress import run_calculation
 from app.services.opportunity.engine import OpportunityConfig, calculate_opportunities
 from app.services.theme.membership import resolve_theme_memberships
 
@@ -65,7 +66,7 @@ class OpportunityService:
             .all()
         )
         theme_members = resolve_theme_memberships(self.db, market_trade_dates).members
-        frame = calculate_opportunities(
+        frame = run_calculation("opportunity.compute", calculate_opportunities,
             factors=self._versioned_frame(
                 StockFactorDaily, lookback_start, end, FACTOR_CALC_VERSION, strategy_hash
             ),

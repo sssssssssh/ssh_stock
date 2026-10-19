@@ -17,6 +17,64 @@ function mountJobs(jobs: JobRun[], activeJob: JobRun | null = null) {
   } });
 }
 
+it("shows in-flight batches separately from committed stage counts and publication", async () => {
+  const active: JobRun = { ...baseJob, status: "RUNNING", job_type: "recalculate", metadata: {
+    calculation_progress: { name: "stock_trade_status_daily", kind: "candidate",
+      phase: "lookup_published", batch_index: 157, batch_count: 2880,
+      completed_rows: 78000, total_rows: 1439327, elapsed_seconds: 7200,
+      operation_started_at: "2026-10-19T03:00:00Z", updated_at: "2026-10-19T05:00:00Z",
+      recent_events: [{ name: "stock_trade_status_daily", phase: "batch_complete",
+        batch_index: 156, completed_rows: 78000, updated_at: "2026-10-19T05:00:00Z" }] }
+  } };
+  const wrapper = mountJobs([active], active);
+  const detail = wrapper.get('[aria-label="阶段内进度"]');
+  expect(detail.text()).toContain("157 / 2,880");
+  expect(detail.text()).toContain("78,000 / 1,439,327 行");
+  expect(detail.text()).toContain("核对已发布结果");
+  expect(detail.text()).toContain("尚未发布");
+  expect(detail.text()).toContain("当前操作尚未返回");
+  expect(wrapper.text()).toContain("已写入/处理行数：0");
+  expect(wrapper.text()).not.toContain("已发布 78,000");
+  await detail.get("summary").trigger("click");
+  expect(detail.get("ol").text()).toContain("第 156 批");
+  wrapper.unmount();
+});
+
+it("does not invent a batch total for input reads or add empty diagnostics to legacy jobs", () => {
+  const legacy = { ...baseJob, status: "RUNNING", job_type: "recalculate" };
+  const empty = mountJobs([legacy], legacy);
+  expect(empty.find('[aria-label="阶段内进度"]').exists()).toBe(false);
+  expect(empty.text()).toContain("当前执行尚未上报阶段内明细");
+  empty.unmount();
+  const active = { ...legacy, metadata: { calculation_progress: {
+    name: "trade_status.stock_daily", kind: "read", phase: "fetch", batch_index: 12,
+    batch_count: null, total_rows: null, completed_rows: 60000, elapsed_seconds: 30,
+    operation_started_at: "2026-10-19T03:00:00Z", recent_events: []
+  } } };
+  const wrapper = mountJobs([active], active);
+  const text = wrapper.get('[aria-label="阶段内进度"]').text();
+  expect(text).toContain("12 / --");
+  expect(text).toContain("60,000 行");
+  expect(text).not.toContain("NaN");
+  expect(text).not.toContain("undefined");
+  expect(text).not.toContain("100.0%");
+  wrapper.unmount();
+});
+
+it("keeps historical batch details collapsed so recent task rows stay compact", async () => {
+  const job = { ...baseJob, status: "FAILED", metadata: { calculation_progress: {
+    name: "stock_trade_status_daily", kind: "candidate", phase: "failed",
+    batch_index: 157, batch_count: 2880, completed_rows: 78000, total_rows: 1439327,
+    elapsed_seconds: 7200, operation_elapsed_seconds: 120, recent_events: []
+  } } };
+  const wrapper = mountJobs([job]);
+  const history = wrapper.get(".job-history-progress");
+  expect(history.attributes("open")).toBeUndefined();
+  expect(history.get("summary").text()).toBe("阶段内明细");
+  expect(history.get('[aria-label="阶段内进度"]').text()).toContain("78,000");
+  wrapper.unmount();
+});
+
 it.each([
   ["PREPARING", "RUNNING", false, "候选计算中，尚未发布"],
   ["PREPARING", "SUCCESS", true, "等待父任务整体发布"],

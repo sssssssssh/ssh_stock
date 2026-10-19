@@ -18,6 +18,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.sector.engine import SectorConfig, calculate_sector_factors
 
 
@@ -33,7 +34,7 @@ class SectorService:
         index_daily = self._read_index_daily(lookback_start, end)
 
         config = SectorConfig.from_strategy(self.settings.strategy)
-        sector_factors = calculate_sector_factors(
+        sector_factors = run_calculation("sector.compute", calculate_sector_factors,
             factors=factors,
             members=members,
             index_daily=index_daily,

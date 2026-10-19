@@ -22,6 +22,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.calculation_progress import ProgressStep
 from app.services.dirty import (
     mark_dirty_ranges_failed,
     mark_dirty_ranges_processing,
@@ -85,12 +86,15 @@ def run_recalculation(
         metadata["factor_warmup_start"] = analysis_start.isoformat()
         metadata = {**metadata, "stage": "raw_prerequisites"}
         logger.info("recalculation raw prerequisites started job_id={}", job.id)
+        progress = ProgressStep("recalculation.raw_prerequisites", "validate")
+        progress.report("query", log=True)
         validate_recalculation_raw_prerequisites(
             db,
             analysis_start,
             end,
             strategy=settings.strategy,
         )
+        progress.report("complete", advanced=True, log=True)
         if dirty_ranges:
             mark_dirty_ranges_processing(db, dirty_ranges)
         metadata = {**metadata, "stage": "trade_status", "progress_pct": 4}
@@ -250,6 +254,8 @@ def run_recalculation(
             row_count=total_rows,
             metadata=metadata,
         )
+        progress = ProgressStep("recalculation.cross_table_quality", "validate")
+        progress.report("query", log=True)
         cross_table_quality = validate_cross_table_range(
             db,
             start,
@@ -257,6 +263,7 @@ def run_recalculation(
             job_id=job.id,
             strategy=settings.strategy,
         )
+        progress.report("complete", advanced=True, log=True)
         metadata = {**metadata, **cross_table_quality.as_metadata()}
         if cross_table_quality.has_error:
             raise DataQualityError(
@@ -274,7 +281,10 @@ def run_recalculation(
                 row_count=total_rows,
                 metadata=metadata,
             )
+            progress = ProgressStep("recalculation.signal_eval", "compute")
+            progress.report("compute", log=True)
             signal_eval_rows = SignalEvaluationService(db).evaluate(start=start, end=end)
+            progress.report("complete", advanced=True, log=True)
             metadata["signal_eval"] = signal_eval_rows
             total_rows += signal_eval_rows["evaluated"]
 

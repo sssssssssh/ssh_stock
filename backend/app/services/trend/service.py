@@ -28,6 +28,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import calculation_metadata
+from app.services.calculation_progress import run_calculation
 from app.services.trend.engine import (
     TrendConfig,
     calculate_stock_states,
@@ -57,7 +58,7 @@ class TrendService:
         previous_states = self._read_previous_states(lookback_start, start, version)
 
         config = TrendConfig.from_strategy(self.settings.strategy, algo_version=version)
-        states = calculate_stock_states(
+        states = run_calculation("trend.compute", calculate_stock_states,
             factors=factors,
             market=market,
             sector_members=sector_members,
@@ -86,7 +87,7 @@ class TrendService:
             key_columns=["trade_date", "ts_code", "algo_version"],
         )
 
-        signals = generate_strategy_signals(states, config)
+        signals = run_calculation("trend.signals", generate_strategy_signals, states, config)
         signal_metadata = calculation_metadata(
             config=analysis_strategy_config(self.settings.strategy),
             calc_version=SIGNAL_CALC_VERSION,

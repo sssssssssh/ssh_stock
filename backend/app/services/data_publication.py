@@ -24,6 +24,7 @@ from app.models.data_publication import (
     DataPublicationSource,
 )
 from app.models.job import JobRun
+from app.services.calculation_progress import ProgressStep
 from app.services.job_execution import JobCancelled, JobOwnershipLost, checkpoint
 from app.services.job_guard import data_queue_identity, scheduler_setting
 
@@ -228,10 +229,17 @@ class PublicationWorkspace:
                 .values(validated_at=None, validation=None)
             )
         count = 0
+        progress = ProgressStep(name, "candidate", total_rows=len(payload),
+                                batch_count=(len(payload) + 499) // 500)
         # Bound key lookups and JSON inserts; never load all historical A rows.
         for offset in range(0, len(payload), 500):
             batch = payload[offset : offset + 500]
-            existing, bases = self._lookup(model, batch), self._lookup(model, batch, public=True)
+            index = offset // 500 + 1
+            progress.report("lookup_candidate", completed_rows=count, batch_index=index, log=True)
+            existing = self._lookup(model, batch)
+            progress.report("lookup_published", completed_rows=count, batch_index=index)
+            bases = self._lookup(model, batch, public=True)
+            progress.report("prepare", completed_rows=count, batch_index=index)
             now = self.db.scalar(select(func.now()))
             new_ids = iter(())
             if "id" in model.__table__.c:
@@ -309,8 +317,13 @@ class PublicationWorkspace:
                         entity_key=final.get("ts_code"),
                     )
                 )
+            progress.report("store", completed_rows=count, batch_index=index)
             self._store(staged)
             count += len(batch)
+            progress.report("batch_complete", completed_rows=count, batch_index=index,
+                            advanced=True, log=True)
+        progress.report("complete", completed_rows=count, batch_index=progress.batch_count,
+                        advanced=True, log=True)
         return count
 
     def _store(self, rows):
@@ -692,7 +705,10 @@ def finish_publication(db, job, status):
         db.add(ledger)
         return {"state": "NO_CHANGES", "identity": str(current.job_id)}
     checkpoint()
+    progress = ProgressStep("publication.verify", "validate")
+    progress.report("query", log=True)
     _verify_candidate(db, current)
+    progress.report("complete", advanced=True, log=True)
     owner = db.scalar(
         select(JobRun)
         .where(JobRun.id == current.job_id)
@@ -721,7 +737,9 @@ def finish_publication(db, job, status):
     parameters = {"root": current.job_id}
     counts = {}
     total = 0
+    progress = ProgressStep("publication.count", "validate", batch_count=len(REGISTRY))
     for name in REGISTRY:
+        progress.report("query", batch_index=len(counts) + 1, log=True)
         budget()
         amount = db.scalar(
             text(
@@ -737,7 +755,13 @@ def finish_publication(db, job, status):
         return {"state": "NO_CHANGES", "identity": str(current.job_id)}
     if total > int(scheduler_setting("data_publish_max_rows", 10000000)):
         raise ValueError("PUBLICATION_ROW_BUDGET_EXCEEDED")
-    for name, model in REGISTRY.items():
+    progress = ProgressStep("publication.tables", "publish", total_rows=total,
+                            batch_count=len(REGISTRY))
+    processed = 0
+    for index, (name, model) in enumerate(REGISTRY.items(), start=1):
+        progress.name = f"publication.{name}"
+        progress.report("lookup_published", completed_rows=processed,
+                        batch_index=index, log=True)
         budget()
         predicate = _publishable_sql(name)
         join = _qualified_keys(model, dialect=db.get_bind().dialect)
@@ -792,6 +816,8 @@ def finish_publication(db, job, status):
         )
         conflict = ",".join(f'"{col}"' for col in KEYS[name])
         budget()
+        progress.report("store", completed_rows=processed,
+                        batch_index=index, log=True)
         db.execute(
             text(f"""INSERT INTO public."{name}" ({quoted})
             SELECT {",".join(f'r."{col}"' for col in columns)}
@@ -801,6 +827,9 @@ def finish_publication(db, job, status):
             ON CONFLICT ({conflict}) DO UPDATE SET {updates}"""),
             parameters,
         )
+        processed += counts[name]
+        progress.report("batch_complete", completed_rows=processed,
+                        batch_index=index, advanced=True, log=True)
     # Retain real previous Job references without fabricating missing legacy jobs.
     budget()
     db.execute(
@@ -818,6 +847,8 @@ def finish_publication(db, job, status):
     ledger.published_at = datetime.now(UTC)
     ledger.row_counts = counts
     db.add(ledger)
+    progress.report("complete", completed_rows=processed, batch_index=len(REGISTRY),
+                    advanced=True, log=True)
     return {
         "state": "PUBLISHED",
         "identity": str(current.job_id),
