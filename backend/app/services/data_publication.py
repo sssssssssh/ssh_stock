@@ -179,14 +179,23 @@ class PublicationWorkspace:
             db.info.pop("publication_workspace", None)
             db.info.pop("calculation_job_id", None)
 
-    def register_source(self, identity):
+    def register_source(self, identity, *, invalidate=False):
         owner = self.db.get(JobRun, identity)
         if owner is None or (owner.id != self.job_id and owner.parent_job_id != self.job_id):
             raise JobOwnershipLost("PUBLICATION_SOURCE_NOT_OWNED")
         statement = insert(DataPublicationSource).values(
             publication_id=self.job_id, source_job_id=identity, role="CANDIDATE"
         )
-        self.db.execute(statement.on_conflict_do_nothing())
+        self.db.execute(statement.on_conflict_do_update(
+            index_elements=["publication_id", "source_job_id"],
+            set_={"validated_at": None, "validation": None},
+        ) if invalidate else statement.on_conflict_do_nothing())
+        if invalidate:
+            cached = self.db.identity_map.get(self.db.identity_key(
+                DataPublicationSource, (self.job_id, identity),
+            ))
+            if cached is not None:
+                self.db.expire(cached, ["validated_at", "validation"])
 
     def _lookup(self, model, payload, *, public=False):
         if not public:
@@ -228,6 +237,10 @@ class PublicationWorkspace:
             f'ELSE p."{col.name}" END AS "{col.name}"' for col in model.__table__.columns
         )
         key_columns = ",".join(f'i."{key}" AS "_key_{n}"' for n, key in enumerate(keys))
+        # Equal inclusive bounds on the non-NULL, totally ordered PK are a point
+        # lookup. Full PK ordering keeps the covering key access path even when
+        # empty-table statistics underestimate our own uncommitted candidates.
+        # Public OFFSET 0 retains its parameterized natural-key probe as well.
         statement = text(f"""WITH input_keys AS (
             SELECT * FROM jsonb_populate_recordset(NULL::public."{name}",CAST(:keys AS jsonb)))
             SELECT {key_columns},{selected},
@@ -235,10 +248,14 @@ class PublicationWorkspace:
                 ELSE p."{keys[0]}" IS NOT NULL END AS _has_current,
               to_jsonb(p) AS _publication_base,now() AS _transaction_now
             FROM input_keys i
-            LEFT JOIN public.data_publication_row c
-              ON c.publication_id=:publication AND c.table_name=:table_name
-              AND c.row_key=jsonb_build_array({key_sql})
-            LEFT JOIN public."{name}" p ON {join}
+            LEFT JOIN LATERAL (SELECT * FROM public.data_publication_row c
+              WHERE (c.publication_id,c.table_name,c.row_key) >=
+                (:publication,:table_name,jsonb_build_array({key_sql}))
+              AND (c.publication_id,c.table_name,c.row_key) <=
+                (:publication,:table_name,jsonb_build_array({key_sql}))
+              ORDER BY c.publication_id,c.table_name,c.row_key LIMIT 1) c ON true
+            LEFT JOIN LATERAL (SELECT * FROM public."{name}" p
+              WHERE {join} OFFSET 0) p ON true
             CROSS JOIN LATERAL jsonb_populate_record(NULL::public."{name}",c.row_data) r""")
         existing, bases, now = {}, {}, None
         for row in self.db.execute(statement, {
@@ -266,16 +283,7 @@ class PublicationWorkspace:
         if tuple(conflict_columns) != KEYS[name]:
             raise ValueError("PUBLICATION_CONFLICT_KEY_MISMATCH")
         source = self.db.info["calculation_job_id"]
-        self.register_source(source)
-        if name in CORE:
-            self.db.execute(
-                update(DataPublicationSource)
-                .where(
-                    DataPublicationSource.publication_id == self.job_id,
-                    DataPublicationSource.source_job_id == source,
-                )
-                .values(validated_at=None, validation=None)
-            )
+        self.register_source(source, invalidate=name in CORE)
         count = 0
         progress = ProgressStep(name, "candidate", total_rows=len(payload),
                                 batch_count=(len(payload) + 499) // 500)
@@ -284,11 +292,9 @@ class PublicationWorkspace:
             batch = payload[offset : offset + 500]
             index = offset // 500 + 1
             progress.report("lookup_candidate", completed_rows=count, batch_index=index, log=True)
-            existing = self._lookup(model, batch)
+            existing, bases, now = self._lookup_batch(model, batch)
             progress.report("lookup_published", completed_rows=count, batch_index=index)
-            bases = self._lookup(model, batch, public=True)
             progress.report("prepare", completed_rows=count, batch_index=index)
-            now = self.db.scalar(select(func.now()))
             new_ids = iter(())
             if "id" in model.__table__.c:
                 missing = sum(tuple(row[k] for k in KEYS[name]) not in existing for row in batch)
@@ -383,15 +389,19 @@ class PublicationWorkspace:
             self._store_batch(rows[offset : offset + 500])
 
     def _store_batch(self, rows):
-        statement = insert(DataPublicationRow).values(rows)
+        # One bounded JSON bind avoids thousands of scalar binds/SQL compilation.
+        # The native composite, regular INSERT and unchanged conflict allowlist
+        # retain constraints, audit triggers and first-observed base_row.
+        columns = ",".join(f'"{col.name}"' for col in DataPublicationRow.__table__.columns)
+        updates = ",".join(f'"{key}"=excluded."{key}"' for key in (
+            "row_data", "source_id", "is_deleted", "trade_date", "entity_key",
+        ))
         self.db.execute(
-            statement.on_conflict_do_update(
-                index_elements=["publication_id", "table_name", "row_key"],
-                set_={
-                    key: getattr(statement.excluded, key)
-                    for key in ("row_data", "source_id", "is_deleted", "trade_date", "entity_key")
-                },
-            )
+            text(f"""INSERT INTO public.data_publication_row ({columns})
+                SELECT {columns} FROM jsonb_populate_recordset(
+                  NULL::public.data_publication_row,CAST(:rows AS jsonb)) r
+                ON CONFLICT (publication_id,table_name,row_key) DO UPDATE SET {updates}"""),
+            {"rows": json.dumps(_json(rows), allow_nan=False)},
         )
 
     def delete_keys(self, model, keys):

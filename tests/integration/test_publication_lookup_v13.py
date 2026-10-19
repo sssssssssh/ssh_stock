@@ -5,10 +5,10 @@ from datetime import UTC, datetime
 
 import pytest
 from app.models import market_data as m
-from app.models.data_publication import DataPublicationRow
+from app.models.data_publication import DataPublicationRow, DataPublicationSource
 from app.repositories.job_run import update_job
 from app.services import data_publication as publication
-from sqlalchemy import select
+from sqlalchemy import event, select, text
 
 from scripts.publication_candidate_benchmark_v13 import baseline_class
 from tests.integration import test_data_publication as support
@@ -137,3 +137,63 @@ def test_lookup_uses_native_types_and_only_own_publication(publication_db):  # n
         assert isinstance(actual["calculated_at"], datetime)
         with factory() as reader:
             assert reader.scalar(select(m.StockFactorDaily.adj_close)) == 10
+
+
+def test_uncommitted_growth_with_empty_statistics_uses_candidate_primary_key(publication_db):  # noqa: F811
+    factory, engine = publication_db
+    with support.candidate(factory, engine) as (db, job):
+        db.execute(text("ANALYZE public.data_publication_row"))
+        ws = db.info["publication_workspace"]
+        rows = [
+            {**support.sample_row(m.StockTradeStatusDaily, job.id), "ts_code": f"V{n:06d}.SZ"}
+            for n in range(1000)
+        ]
+        ws.upsert(m.StockTradeStatusDaily, rows, ["trade_date", "ts_code"])
+        captured = []
+
+        def capture(conn, cursor, statement, parameters, context, many):
+            captured.append((statement, parameters))
+
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            found, _, _ = ws._lookup_batch(m.StockTradeStatusDaily, rows[:500])
+            assert len(found) == 500
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+        statement, parameters = captured[0]
+        with db.connection().connection.cursor() as cursor:
+            cursor.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + statement, parameters)
+            root = cursor.fetchone()[0][0]["Plan"]
+        nodes = []
+
+        def visit(node):
+            nodes.append(node)
+            for child in node.get("Plans", []):
+                visit(child)
+
+        visit(root)
+        probes = [n for n in nodes if n.get("Relation Name") == "data_publication_row"]
+        assert len(probes) == 1
+        assert probes[0]["Index Name"] == "pk_data_publication_row"
+        assert probes[0]["Actual Loops"] == 500
+        assert probes[0]["Actual Rows"] <= 1
+        assert probes[0].get("Rows Removed by Filter", 0) == 0
+
+
+def test_core_rewrite_invalidates_already_cached_quality_certificate(publication_db):  # noqa: F811
+    from types import SimpleNamespace
+
+    factory, engine = publication_db
+    with support.candidate(factory, engine) as (db, job):
+        support.record_validation(db, job.id, support.DAY, SimpleNamespace(has_error=False))
+        db.commit()
+        certificate = db.get(DataPublicationSource, (job.id, job.id))
+        assert certificate.validated_at is not None
+        ws = db.info["publication_workspace"]
+        ws.upsert(
+            m.StockTradeStatusDaily,
+            [support.sample_row(m.StockTradeStatusDaily, job.id)],
+            ["trade_date", "ts_code"],
+        )
+        assert certificate.validation is None
+        assert certificate.validated_at is None

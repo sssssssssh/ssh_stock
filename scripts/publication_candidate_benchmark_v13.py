@@ -249,6 +249,7 @@ def run(args, rows, repeat):
                         payload.append(item)
                     ws.upsert(Model, payload, KEYS[Model.__tablename__])
                 prepare_seconds = time.perf_counter() - started
+                operation_stats = {key: distribution(value) for key, value in timers.items()}
                 event.remove(engine, "before_cursor_execute", begin)
                 event.remove(engine, "after_cursor_execute", end)
                 staged = db.scalar(
@@ -267,7 +268,7 @@ def run(args, rows, repeat):
                 captured = []
 
                 def capture(conn, cursor, statement, parameters, context, many):
-                    if statement.lstrip().upper().startswith("SELECT"):
+                    if statement.lstrip().upper().startswith(("SELECT", "WITH")):
                         captured.append((statement, parameters))
 
                 event.listen(engine, "before_cursor_execute", capture)
@@ -309,7 +310,7 @@ def run(args, rows, repeat):
                     publish_seconds=None,
                     sql_count=len(sql_times),
                     sql=distribution(sql_times),
-                    operations={k: distribution(v) for k, v in timers.items()},
+                    operations=operation_stats,
                     candidate_digest=digest,
                     peak_process_rss_bytes=rss_bytes(),
                     wal_bytes=int(wal),
