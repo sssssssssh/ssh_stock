@@ -1,10 +1,12 @@
 """Explicit loopback PG17 experiment; never imports business settings before validation."""
 
 import argparse
+import importlib.metadata
 import importlib.util
 import json
 import os
 import platform
+import shutil
 import statistics
 import subprocess
 import sys
@@ -239,17 +241,26 @@ def run(args, rows, repeat):
 
                     patch.setattr(ws, name, measured)
                 started = time.perf_counter()
+                prepare_seconds = payload_build_seconds = 0.0
+                prototype = support.sample_row(Model, job.id, day=day)
                 for offset in range(0, rows, 5000):
+                    build_started = time.perf_counter()
                     payload = []
                     for n in range(offset, min(rows, offset + 5000)):
-                        item = support.sample_row(
-                            Model, job.id, day=day + timedelta(days=n // 5000)
-                        )
-                        item.update(ts_code=f"V{n % 5000 + 1:06d}.SZ", calculated_at=fixed_time)
+                        item = {
+                            **prototype,
+                            "trade_date": day + timedelta(days=n // 5000),
+                            "ts_code": f"V{n % 5000 + 1:06d}.SZ",
+                            "calculated_at": fixed_time,
+                        }
                         payload.append(item)
+                    payload_build_seconds += time.perf_counter() - build_started
+                    batch_started = time.perf_counter()
                     ws.upsert(Model, payload, KEYS[Model.__tablename__])
-                prepare_seconds = time.perf_counter() - started
+                    prepare_seconds += time.perf_counter() - batch_started
+                elapsed_seconds = time.perf_counter() - started
                 operation_stats = {key: distribution(value) for key, value in timers.items()}
+                sql_stats = distribution(sql_times)
                 event.remove(engine, "before_cursor_execute", begin)
                 event.remove(engine, "after_cursor_execute", end)
                 staged = db.scalar(
@@ -264,6 +275,46 @@ def run(args, rows, repeat):
                     WHERE publication_id=:job"""),
                     dict(job=job.id),
                 )
+                scope = None
+                if args.scope_probe:
+                    scope_started = time.perf_counter()
+                    rss_before = rss_bytes()
+                    end_day = day + timedelta(days=(max(rows, args.existing) + 4999) // 5000 - 1)
+                    existing_keys = set(
+                        db.execute(
+                            select(Model.trade_date, Model.ts_code).where(
+                                Model.trade_date >= day, Model.trade_date <= end_day
+                            )
+                        ).all()
+                    )
+                    existing_seconds = time.perf_counter() - scope_started
+                    current_keys = {
+                        (day + timedelta(days=n // 5000), f"V{n % 5000 + 1:06d}.SZ")
+                        for n in range(rows)
+                    }
+                    stale = existing_keys - current_keys
+                    difference_seconds = time.perf_counter() - scope_started - existing_seconds
+                    masks = sorted(stale)[:500]
+                    mask_started = time.perf_counter()
+                    event.listen(engine, "before_cursor_execute", begin)
+                    event.listen(engine, "after_cursor_execute", end)
+                    sql_before = len(sql_times)
+                    ws.delete_keys(Model, masks)
+                    event.remove(engine, "before_cursor_execute", begin)
+                    event.remove(engine, "after_cursor_execute", end)
+                    scope = dict(
+                        existing_keys=len(existing_keys),
+                        current_keys=len(current_keys),
+                        stale_keys=len(stale),
+                        existing_key_seconds=existing_seconds,
+                        difference_seconds=difference_seconds,
+                        mask_sample_rows=len(masks),
+                        mask_sample_seconds=time.perf_counter() - mask_started,
+                        mask_sql_count=len(sql_times) - sql_before,
+                        peak_rss_before_bytes=rss_before,
+                        peak_rss_after_bytes=rss_bytes(),
+                        full_mask_write_measured=False,
+                    )
                 # Capture the actual generated lookup, only with synthetic parameters.
                 captured = []
 
@@ -307,10 +358,13 @@ def run(args, rows, repeat):
                     existing_candidates=args.existing,
                     staged=staged,
                     prepare_seconds=prepare_seconds,
+                    input_build_seconds=payload_build_seconds,
+                    elapsed_seconds=elapsed_seconds,
                     publish_seconds=None,
-                    sql_count=len(sql_times),
-                    sql=distribution(sql_times),
+                    sql_count=sql_stats["count"],
+                    sql=sql_stats,
                     operations=operation_stats,
+                    scope=scope,
                     candidate_digest=digest,
                     peak_process_rss_bytes=rss_bytes(),
                     wal_bytes=int(wal),
@@ -338,6 +392,7 @@ def main():
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--existing", type=int, default=0)
+    parser.add_argument("--scope-probe", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     isolated_url()
@@ -352,6 +407,7 @@ def main():
     logger.remove()
     receipt = dict(
         schema_version="publication-candidate-v13",
+        measurement_version="v13-2-excludes-input-build",
         baseline_sha=BASELINE,
         head_sha=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         working_tree_dirty=bool(
@@ -361,6 +417,12 @@ def main():
             platform=platform.platform(),
             python=platform.python_version(),
             logical_cpus=os.cpu_count(),
+            processor=platform.processor(),
+            disk_free_bytes=shutil.disk_usage(ROOT).free,
+            packages={
+                name: importlib.metadata.version(name)
+                for name in ("pandas", "psycopg", "SQLAlchemy")
+            },
         ),
         results=[],
     )
