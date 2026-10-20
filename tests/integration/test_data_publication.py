@@ -213,9 +213,12 @@ def test_real_recalculation_and_quality_publish_without_synthetic_certificate(
         days = sorted(
             DAY - timedelta(days=n) for n in range(410) if (DAY - timedelta(days=n)).weekday() < 5
         )
+        # Verified input-window calendars include closed days and the full
+        # lookback before the first output chunk; Raw fixture remains unchanged.
+        db.add_all(m.TradeCalendar(cal_date=DAY-timedelta(days=n),
+                                   is_open=(DAY-timedelta(days=n)).weekday()<5)
+                   for n in range(1, 901))
         for day in days:
-            if day != DAY:
-                db.add(m.TradeCalendar(cal_date=day, is_open=True))
             db.add(
                 m.StockDaily(
                     trade_date=day,

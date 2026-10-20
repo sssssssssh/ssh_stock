@@ -1,6 +1,6 @@
 # A 股机会发现与趋势研究系统
 
-## V1.4 读路径专项（阶段 A 开发中）
+## V1.4 读路径专项（阶段 A 待审，性能 OPEN）
 
 补算 API 与 Worker 会先检查完整日历：确认休市返回 `NO_TRADING_DAYS`，
 日历缺失/不完整返回 `TRADE_CALENDAR_UNVERIFIED`，不创建候选、不启动预热。

@@ -46,6 +46,11 @@ def test_complete_calendar_not_price_presence(database, start, flags, expected):
         else:
             assert require_recalculation_days(db, start, end) == tuple(
                 start+timedelta(days=i) for i, flag in enumerate(flags) if flag)
+            # There are deliberately no prices. An open day can still be queued;
+            # its existing Raw prerequisite gate, not this guard, decides readiness.
+            result = enqueue_recalculate_job(RecalculateJobRequest(start=start, end=end), db)
+            assert result["data"]["status"] == "QUEUED"
+            assert db.scalar(select(func.count()).select_from(JobRun)) == 1
 
 
 def test_partial_calendar_and_reverse_range_refused(database):
@@ -83,3 +88,29 @@ def test_worker_rejects_old_queue_before_workspace(database, monkeypatch, has_ca
         assert db.get(JobRun, job.id).error_message == code
         assert db.scalar(select(func.count()).select_from(DataPublication)) == 0
         assert db.scalar(select(func.count()).select_from(DataPublicationRow)) == 0
+
+
+@pytest.mark.parametrize("field,code", [
+    ("V14_TEST_INSTANCE", "V14_PHYSICAL_INSTANCE_MARKER_MISMATCH"),
+    ("V14_TEST_SYSTEM_IDENTIFIER", "V14_PHYSICAL_INSTANCE_ID_MISMATCH"),
+])
+def test_wrong_server_identity_refused_before_create(monkeypatch, field, code):
+    from scripts.v14_test_database import verified_test_url
+
+    verified_test_url()
+    monkeypatch.setenv(field, "86d768c8-a3ad-447e-b33c-121bcaa76d42")
+    with pytest.raises(RuntimeError, match=code):
+        with isolated_v14_database(monkeypatch):
+            raise AssertionError("must never create a database on an unverified server")
+
+
+def test_target_verification_does_not_mutate_environment(monkeypatch):
+    import os
+
+    from scripts.v14_test_database import verified_test_url
+
+    monkeypatch.setenv("LLM_ENABLED", "true")
+    monkeypatch.setenv("TUSHARE_TOKEN", "sentinel-synthetic")
+    before = dict(os.environ)
+    verified_test_url()
+    assert dict(os.environ) == before

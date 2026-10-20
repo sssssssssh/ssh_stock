@@ -18,8 +18,8 @@ def verified_test_url():
     try:
         url = make_url(raw)
         uuid.UUID(marker)
-    except Exception as exc:
-        raise RuntimeError("V14_EXPLICIT_MARKED_PG17_REQUIRED") from exc
+    except Exception:
+        raise RuntimeError("V14_EXPLICIT_MARKED_PG17_REQUIRED") from None
     if (url.get_backend_name() != "postgresql" or url.host not in {"127.0.0.1", "localhost"}
             or not (url.database or "").endswith("_test")):
         raise RuntimeError("V14_EXPLICIT_MARKED_PG17_REQUIRED")
@@ -37,9 +37,6 @@ def verified_test_url():
                 raise RuntimeError("V14_PHYSICAL_INSTANCE_ID_MISMATCH")
     finally:
         engine.dispose()
-    os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
-    os.environ["TUSHARE_TOKEN"] = "synthetic-v14"
-    os.environ["LLM_ENABLED"] = "false"
     return url
 
 
@@ -47,6 +44,11 @@ def verified_test_url():
 def isolated_v14_database(monkeypatch):
     # Verify *before* CREATE, migration, settings imports, and again before DROP.
     url = verified_test_url()
+    # pytest owns restoration: no process-wide environment leak into unrelated
+    # configuration tests later in a full-suite run.
+    monkeypatch.setenv("DATABASE_URL", url.render_as_string(hide_password=False))
+    monkeypatch.setenv("TUSHARE_TOKEN", "synthetic-v14")
+    monkeypatch.setenv("LLM_ENABLED", "false")
     from alembic import command
     from alembic.config import Config
     from sqlalchemy.orm import sessionmaker

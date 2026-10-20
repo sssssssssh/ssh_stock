@@ -37,6 +37,40 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock
+      - name: V1.4 physically isolated and marked PG17
+        run: |
+          V14_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')
+          docker run -d --name v14-isolated-pg17 --label purpose=ssh-stock-v14-physical-test \
+            -e POSTGRES_DB=v14_test -e POSTGRES_USER=stock -e POSTGRES_PASSWORD=stock \
+            -p 127.0.0.1:55438:5432 postgres:17 -c "v14.test_instance=$V14_INSTANCE"
+          for attempt in $(seq 1 30); do
+            docker exec v14-isolated-pg17 pg_isready -U stock -d v14_test && break
+            sleep 1
+          done
+          docker exec v14-isolated-pg17 pg_isready -U stock -d v14_test
+          V14_SYSTEM_ID=$(docker exec v14-isolated-pg17 psql -U stock -d v14_test -Atc \
+            'SELECT system_identifier FROM pg_control_system()')
+          echo "V14_TEST_INSTANCE=$V14_INSTANCE" >> "$GITHUB_ENV"
+          echo "V14_TEST_SYSTEM_IDENTIFIER=$V14_SYSTEM_ID" >> "$GITHUB_ENV"
+          echo 'TEST_DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:55438/v14_test' >> "$GITHUB_ENV"
+      - name: V1.4 calendar and overlay read regressions
+        # Some legacy integration tests use the explicit parent synthetic DB.
+        # Migrate that parent too; all V14 cases still create their own UUID DB.
+        env:
+          DATABASE_URL: postgresql+psycopg://stock:stock@127.0.0.1:55438/v14_test
+        run: |
+          python -c 'from scripts.v14_test_database import verified_test_url; verified_test_url(); from alembic import command; from alembic.config import Config; command.upgrade(Config("alembic.ini"), "head")'
+          python -m pytest tests/integration/test_v14_calendar_guard.py tests/integration/test_ab_merge_read_v14.py tests/unit/test_v14_test_database.py tests/unit/test_ab_read_benchmark_v14.py -q --junitxml=.codex_tmp/v14-targeted.xml
+      - name: V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)
+        run: >-
+          python scripts/ab_read_benchmark_v14.py --variant all --readers 2
+          --output .codex_tmp/v14-read-ci-smoke.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v14-read-evidence
+          path: .codex_tmp/v14-*
+          if-no-files-found: error
       - run: python -m alembic upgrade head
       - run: python -m alembic downgrade 0019_research_source_lineage
       - run: python -m alembic upgrade head

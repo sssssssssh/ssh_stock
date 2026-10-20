@@ -88,7 +88,7 @@ def test_frozen_q0_all_columns_and_factor_types(database, monkeypatch, mode):
         actual = ABMergeReadRepository(db).read_trade_status(
             window=ReadWindow(params()["lo"], params()["hi"]),
             calc_version=params()["version"], config_hash=params()["hash"], window_days=None)
-        pd.testing.assert_frame_equal(sorted_frame(old), actual)
+        pd.testing.assert_frame_equal(sorted_frame(old), actual, check_exact=True)
         columns = tuple(Model.__table__.c.keys())
         full_old = read_calculation_frame(db, text(
             "SELECT * FROM stock_trade_status_daily WHERE trade_date BETWEEN :lo AND :hi "
@@ -97,7 +97,7 @@ def test_frozen_q0_all_columns_and_factor_types(database, monkeypatch, mode):
         statement = trade_status_statement(candidate=True, columns=columns)
         full_new = read_calculation_frame(db, statement
             .bindparams(**params(), root=job.id), name="test.full_new")
-        pd.testing.assert_frame_equal(sorted_frame(full_old), full_new)
+        pd.testing.assert_frame_equal(sorted_frame(full_old), full_new, check_exact=True)
         if mode in {"delete", "wrong_version", "wrong_hash", "empty"}:
             assert actual.empty  # no ghost A
         assert len(before) == len(list(db.scalars(select(DataPublicationRow).where(
@@ -199,8 +199,212 @@ def test_windows_preserve_full_keys_null_dtype_and_closed_day_rows(database, win
         actual = ABMergeReadRepository(db, observer=events.append).read_trade_status(
             window=ReadWindow(start, end), calc_version=bind["version"], config_hash=bind["hash"],
             window_days=window_days)
-        pd.testing.assert_frame_equal(sorted_frame(old), actual)
+        pd.testing.assert_frame_equal(sorted_frame(old), actual, check_exact=True)
         assert len(actual) == (end-start).days
         assert len([item for item in events if item["event"] == "window"]) > 1
         assert db.in_transaction()
         update_job(db, job, status="FAILED")
+
+
+@pytest.mark.parametrize("fault,expected", [
+    ("cancel", "CANCELLED"), ("timeout", "FAILED"), ("disconnect", "RUNNING"),
+])
+def test_real_worker_window_failure_keeps_public_a_and_execution_safety(
+    database, monkeypatch, fault, expected,
+):
+    from app.api.v1.jobs import cancel_job
+    from app.models.data_publication import DataPublication
+    from app.models.job import JobRun
+    from app.services.job_guard import create_queued_ingestion_job
+    from app.services.job_worker import claim_next_job, execute_claimed_job
+
+    factory, engine = database
+    support.seed_published(factory)
+    monkeypatch.setattr("app.services.job_worker.SessionLocal", factory)
+    with factory() as db:
+        before = db.scalar(text("SELECT jsonb_agg(to_jsonb(a)) FROM stock_trade_status_daily a"))
+        job = create_queued_ingestion_job(db, "recalculate", DAY, step="queued", metadata={
+            "start": str(DAY), "end": str(DAY), "evaluate_signals": False})
+        assert claim_next_job(db, "v14-fault-test") == job.id
+        db.refresh(job)
+        key, worker, token = job.id, job.worker_id, job.execution_token
+
+    def pipeline(db, job, *args, **kwargs):
+        # One committed B exists, but must remain invisible on all failures.
+        row = support.sample_row(Model, job.id)
+        row["is_st"] = True
+        workspace(db).upsert(Model, [row], ("trade_date", "ts_code"))
+        db.commit()
+        pid = db.scalar(text("SELECT pg_backend_pid()"))
+
+        def inject(metric):
+            if metric["event"] != "window":
+                return
+            if fault == "cancel":
+                with factory() as cancellation:
+                    cancel_job(job.id, cancellation)
+                from app.services.job_execution import checkpoint
+
+                checkpoint()
+            elif fault == "timeout":
+                db.execute(text("SET LOCAL statement_timeout='10ms'"))
+                db.execute(text("SELECT pg_sleep(0.1)"))
+            else:
+                with engine.begin() as controller:
+                    assert controller.scalar(text("SELECT pg_terminate_backend(:pid)"),
+                                             {"pid": pid})
+                db.execute(text("SELECT 1"))
+
+        ABMergeReadRepository(db, observer=inject).read_trade_status(
+            window=ReadWindow(DAY, DAY), calc_version="trade_status_v1",
+            config_hash=params()["hash"])
+        raise AssertionError("partial read must never reach success")
+
+    monkeypatch.setattr("app.services.job_worker.run_recalculation", pipeline)
+    with factory() as db:
+        execute_claimed_job(db, key, expected_worker=worker, expected_token=token)
+    with factory() as db:
+        job = db.get(JobRun, key)
+        assert job.status == expected
+        state = db.get(DataPublication, key).state
+        assert state == ("PREPARING" if fault == "disconnect" else "ABORTED")
+        after = db.scalar(text("SELECT jsonb_agg(to_jsonb(a)) FROM stock_trade_status_daily a"))
+        assert after == before
+        if fault == "disconnect":
+            assert job.job_metadata["execution_unconfirmed"]
+            assert claim_next_job(db, "other") is None
+        if fault == "timeout":
+            assert "57014" in job.error_message
+
+
+def test_real_engine_and_atomic_publication_equal_legacy_full_path(monkeypatch):
+    import json
+
+    from app.core.config import get_settings
+    from app.models.data_publication import DataPublication
+
+    outputs = []
+    for enabled in (False, True):
+        with monkeypatch.context() as patch:
+            patch.setattr(get_settings(), "ab_merge_read_enabled", enabled)
+            with isolated_v14_database(patch) as database:
+                factory, _ = database
+                support.test_real_recalculation_and_quality_publish_without_synthetic_certificate(
+                    database, patch, "absent", None)
+                with factory() as db:
+                    roots = set(db.scalars(select(DataPublication.job_id)))
+                    tables = {}
+                    for model in support.MODELS:
+                        rows = []
+                        for record in db.execute(select(model.__table__)).mappings():
+                            row = dict(record)
+                            for field in ("calculated_at", "created_at", "checked_at"):
+                                row.pop(field, None)  # independent run clock, not business columns
+                            for field in ("calc_run_id", "job_id"):
+                                if row.get(field) is not None:
+                                    row[field] = "ROOT" if row[field] in roots else "SEED"
+                            rows.append(json.dumps(row, default=str, sort_keys=True))
+                        tables[model.__tablename__] = sorted(rows)
+                    outputs.append(tables)
+    assert outputs[0] == outputs[1]
+
+
+def test_read_lock_allows_rr_public_reader_but_prevents_mid_window_old_writer(database):
+    from sqlalchemy.exc import DBAPIError
+
+    factory, engine = database
+    support.seed_published(factory)
+    with support.candidate(factory, engine) as (db, job):
+        row = support.sample_row(Model, job.id)
+        row["is_st"] = True
+        workspace(db).upsert(Model, [row], ("trade_date", "ts_code"))
+        db.commit()
+        ABMergeReadRepository(db).read_trade_status(window=ReadWindow(DAY, DAY),
+            calc_version="trade_status_v1", config_hash=params()["hash"])
+        with engine.connect().execution_options(isolation_level="REPEATABLE READ") as reader:
+            reader.execute(text("SET TRANSACTION READ ONLY"))
+            assert reader.scalar(text("SELECT is_st FROM public.stock_trade_status_daily")) is None
+        with factory() as writer:
+            writer.execute(text("SET LOCAL lock_timeout='20ms'"))
+            with pytest.raises(DBAPIError) as error:
+                writer.execute(update(Model).values(is_st=True))
+            assert error.value.orig.sqlstate == "55P03"
+            writer.rollback()
+        db.rollback()
+        update_job(db, job, status="FAILED")
+
+
+def test_actual_named_cursor_fetches_5000_and_closes(database):
+    from sqlalchemy import insert
+
+    factory, engine = database
+    support.seed_published(factory)
+    with factory() as db:
+        db.execute(insert(Model), [{**support.sample_row(Model, None), "ts_code": f"S{i:06}.SZ"}
+                                   for i in range(10001)])
+        db.commit()
+    with support.candidate(factory, engine) as (db, job):
+        events = []
+
+        def observed(metric):
+            events.append(metric)
+            if metric["event"] == "fetch":
+                assert db.scalar(text("""SELECT count(*) FROM pg_cursors WHERE
+                    statement LIKE '%stock_trade_status_daily%' AND NOT is_holdable""")) == 1
+
+        frame = ABMergeReadRepository(db, observer=observed).read_trade_status(
+            window=ReadWindow(DAY, DAY), calc_version="trade_status_v1",
+            config_hash=params()["hash"])
+        assert len(frame) == 10002
+        assert [m["rows"] for m in events if m["event"] == "fetch"] == [5000, 5000, 2]
+        assert events[-1]["first_5000_seconds"] is not None
+        assert 0 <= events[-1]["first_row_seconds"] <= events[-1]["first_5000_seconds"]
+        assert db.scalar(text("SELECT count(*) FROM pg_cursors")) == 0
+        update_job(db, job, status="FAILED")
+
+
+def test_wrong_execution_token_cannot_read_candidate(database):
+    from dataclasses import replace
+    from uuid import uuid4
+
+    from app.services.job_execution import JobOwnershipLost, current_execution
+
+    factory, engine = database
+    support.seed_published(factory)
+    with support.candidate(factory, engine) as (db, job):
+        token = current_execution.set(replace(current_execution.get(), token=uuid4()))
+        try:
+            with pytest.raises(JobOwnershipLost):
+                ABMergeReadRepository(db).read_trade_status(window=ReadWindow(DAY, DAY),
+                    calc_version="trade_status_v1", config_hash=params()["hash"])
+        finally:
+            current_execution.reset(token)
+        update_job(db, job, status="FAILED")
+
+
+def test_final_publication_checks_read_only_warmup_a_not_just_candidate_base(database):
+    from types import SimpleNamespace
+
+    from app.services.data_publication import record_validation
+
+    factory, engine = database
+    source = support.seed_published(factory)
+    warmup = DAY-timedelta(days=1)
+    with factory() as db:
+        db.add(Model(**support.sample_row(Model, source, day=warmup)))
+        db.commit()
+    with support.candidate(factory, engine) as (db, job):
+        ABMergeReadRepository(db).read_trade_status(window=ReadWindow(warmup, DAY),
+            calc_version="trade_status_v1", config_hash=params()["hash"], window_days=None)
+        db.commit()
+        support.stage_all(db, job)
+        record_validation(db, job.id, DAY, SimpleNamespace(has_error=False))
+        db.commit()
+        with factory.begin() as outsider:
+            outsider.execute(update(Model).where(
+                Model.trade_date == warmup).values(is_st=True))
+        with pytest.raises(ValueError, match="AB_READ_PUBLISHED_INPUT_CHANGED"):
+            update_job(db, job, status="SUCCESS")
+        db.rollback()
+        update_job(db, job, status="FAILED")
+        assert db.scalar(select(Model.is_st).where(Model.trade_date == warmup)) is True

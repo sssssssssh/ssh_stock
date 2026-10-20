@@ -255,6 +255,11 @@ def test_recalculation_gate_runs_before_trade_status(monkeypatch) -> None:
     transactions = []
     db = SimpleNamespace(
         add=lambda row: None, refresh=lambda row: None,
+        # This Raw-gate unit test supplies one verified open session for the
+        # new earlier calendar guard; real calendar failures are tested on PG17.
+        execute=lambda statement: SimpleNamespace(all=lambda: [
+            SimpleNamespace(cal_date=date(2026, 9, 10), is_open=True),
+        ]),
         rollback=lambda: transactions.append("rollback"),
         commit=lambda: transactions.append("commit"),
     )

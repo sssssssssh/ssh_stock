@@ -72,13 +72,19 @@ def read_calculation_windows(db: Session, statements, *, name: str, observer=Non
         progress.report("query", batch_index=index, completed_rows=len(rows), log=True)
         try:
             result = db.execute(statement.execution_options(yield_per=FETCH_ROWS))
-            first_row = monotonic()-started
-            batches = iter(result.mappings().partitions(FETCH_ROWS))
+            mappings = result.mappings()
+            first = mappings.fetchone()
+            first_row = monotonic()-started if first is not None else None
+            # Observe one delivered row, then put it back into the same 5000-row
+            # client batches. yield_per still bounds the named cursor buffer;
+            # dtype inference happens only after ALL windows have completed.
+            pending = [first] if first is not None else []
             while True:
                 fetch_started = monotonic()
-                batch = next(batches, None)
+                batch = pending + mappings.fetchmany(FETCH_ROWS-len(pending))
+                pending = []
                 elapsed = monotonic()-fetch_started
-                if batch is None:
+                if not batch:
                     break
                 checkpoint()
                 max_fetch = max(max_fetch, elapsed)
@@ -97,7 +103,7 @@ def read_calculation_windows(db: Session, statements, *, name: str, observer=Non
             if observer is not None:
                 observer(metric)
             logger.info("calculation window query={} window={}/{} rows={} elapsed_seconds={:.3f} "
-                        "first_row_seconds={:.3f} first_5000_seconds={} max_fetch_seconds={:.3f}",
+                        "first_row_seconds={} first_5000_seconds={} max_fetch_seconds={:.3f}",
                         name, index, len(statements), window_rows, metric["query_elapsed"],
                         first_row, first_5000, max_fetch)
             progress.report("batch_complete", batch_index=index,

@@ -90,7 +90,14 @@ def _prepare_candidate_read(db, current, window):
     # Never acquire a root row lock here (cancel endpoint must remain reachable).
     db.execute(text("LOCK TABLE public.stock_trade_status_daily IN SHARE MODE"))
     db.execute(text("LOCK TABLE public.data_publication_row IN SHARE MODE"))
-    verify_public_read_evidence(db, current)
+    evidence = dict(getattr(current, "ab_public_read_evidence", {}))
+    # Verify old ranges and capture the new range in ONE locked scan; overlapping
+    # rolling windows must not hash the same full public input twice per call.
+    start = min(window.start, min(evidence)) if evidence else window.start
+    end = max(window.end, max(evidence)) if evidence else window.end
+    actual = _public_fingerprints(db, start, end)
+    if any(actual.get(day) != digest for day, digest in evidence.items()):
+        raise ValueError("AB_READ_PUBLISHED_INPUT_CHANGED")
     # Validate ALL current B, including out-of-window tombstones. Otherwise a
     # corrupt redundant date could hide a mask from the bounded output branch.
     malformed = db.scalar(text("""SELECT EXISTS(SELECT 1 FROM public.data_publication_row s
@@ -105,10 +112,8 @@ def _prepare_candidate_read(db, current, window):
             nullif(s.row_data->>'config_hash','') IS NULL))))"""), {"root": current.job_id})
     if malformed:
         raise ValueError("AB_READ_CANDIDATE_INVALID")
-    actual = _public_fingerprints(db, window.start, window.end)
     from datetime import timedelta
 
-    evidence = dict(getattr(current, "ab_public_read_evidence", {}))
     day = window.start
     while day <= window.end:
         evidence[day] = actual.get(day)
@@ -128,6 +133,10 @@ class ABMergeReadRepository:
         current = workspace(self.db)
         if current is not None:
             _prepare_candidate_read(self.db, current, window)
+        else:
+            # Standalone calculation calls also must not combine two public
+            # generations across windows. No ledger or candidate is created.
+            self.db.execute(text("LOCK TABLE public.stock_trade_status_daily IN SHARE MODE"))
         windows = calendar_windows(self.db, window, window_days) if window_days else [window]
         statement = trade_status_statement(candidate=current is not None)
         statements = [statement.bindparams(
