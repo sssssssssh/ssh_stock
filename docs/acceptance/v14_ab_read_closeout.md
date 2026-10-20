@@ -170,3 +170,18 @@ stdout `.codex_tmp/v14-final-container-acceptance.log`，三个场景均最多 1
 无新迁移；PG17.11 / Alembic current=head=0058。没有连接业务云库，没有重提补算、
 启停业务进程或改变业务任务终态。测试工件不提交，独立测试实例结束后停止。
 最终结论仍是阶段 A 代码/本地回归通过、读性能与完整容量验收 OPEN，阶段 B/C 未开始。
+
+## 推送后的 CI 工件上传修复
+
+A3 `df281f2` 已推送，本地/远端一致且工作区干净。对应
+[CI 39433747959](https://github.com/sssssssssh/ssh_stock/actions/runs/39433747959)
+的 V1.4 物理标记 PG17、日历/合并读取专项、三路径游标 smoke 全部成功；
+随后上传 `.codex_tmp/v14-*` 报 No files found，中断后续主 CI。
+GitHub 官方 upload-artifact 默认排除点目录内文件，须显式 include-hidden-files；
+见 [官方迁移说明](https://github.com/actions/upload-artifact/blob/main/docs/MIGRATION.md#hidden-files)。
+不是数据库或新读路径测试失败，也不能将后续未执行步骤写成成功。
+
+修复仅在主 CI 和既有 V1.3 的显式 `.codex_tmp` 合成证据白名单上传处开启隐藏文件，
+不扩大为仓库上传、不上传 `.env`、不降低 if-no-files-found 门禁、不添加 continue-on-error。
+新增工作流回归先复现两份配置失败，再验证修复；应用代码、迁移及全部测试阈值不变。
+此前本地 2231 完整回归对应的应用实现未变，补充工作流测试独立记录；最终提交仍需重跑 CI。

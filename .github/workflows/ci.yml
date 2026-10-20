@@ -69,6 +69,7 @@ jobs:
         if: always()
         with:
           name: v14-read-evidence
+          include-hidden-files: true
           path: .codex_tmp/v14-*
           if-no-files-found: error
       - run: python -m alembic upgrade head
@@ -130,6 +131,7 @@ jobs:
         if: always()
         with:
           name: data-queue-container-acceptance
+          include-hidden-files: true
           path: .codex_tmp/data-queue-containers.json
           if-no-files-found: error
       - run: docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t
@@ -291,6 +293,7 @@ jobs:
         if: always()
         with:
           name: data-publication-reliability
+          include-hidden-files: true
           path: |
             .codex_tmp/data-publication-release.json
             .codex_tmp/data-publication-targeted.xml
@@ -303,18 +306,21 @@ jobs:
         if: always()
         with:
           name: m17-capacity-measurements
+          include-hidden-files: true
           path: .codex_tmp/m17_capacity.jsonl
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: m17-1-dependency-audit
+          include-hidden-files: true
           path: .codex_tmp/m17_1-dependency-audit.json
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: m17-1-1-retention-evidence
+          include-hidden-files: true
           path: |
             .codex_tmp/m17_1_1-retention.jsonl
             .codex_tmp/m17_1_1-release.json
@@ -323,6 +329,7 @@ jobs:
         if: always()
         with:
           name: m17-1-2-suspend-evidence
+          include-hidden-files: true
           path: |
             .codex_tmp/m17_1_2-targeted.xml
             .codex_tmp/m17_1_2-full.xml
