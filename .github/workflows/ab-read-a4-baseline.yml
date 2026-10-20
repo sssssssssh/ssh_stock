@@ -1,0 +1,74 @@
+name: A4-1 read baseline diagnosis
+
+"on":
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55439/a4_test
+      TEST_DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55439/a4_test
+      TUSHARE_TOKEN: synthetic-a4
+      LLM_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - name: Dedicated physical PG17, fixed resources, I/O and statement evidence
+        run: |
+          A4_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')
+          docker run -d --name a4-isolated-pg17 --label purpose=ssh-stock-a4-physical-test \
+            --cpus=2 --memory=3g -p 127.0.0.1:55439:5432 \
+            -e POSTGRES_DB=a4_test -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
+            postgres:17 -c "v14.test_instance=$A4_INSTANCE" \
+            -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \
+            -c track_wal_io_timing=on -c pg_stat_statements.track=all -c max_wal_size=1GB
+          for attempt in $(seq 1 30); do
+            docker exec a4-isolated-pg17 pg_isready -U synthetic -d a4_test && break
+            sleep 1
+          done
+          docker exec a4-isolated-pg17 pg_isready -U synthetic -d a4_test
+          A4_SYSTEM=$(docker exec a4-isolated-pg17 psql -U synthetic -d a4_test -Atc \
+            'SELECT system_identifier FROM pg_control_system()')
+          echo "V14_TEST_INSTANCE=$A4_INSTANCE" >> "$GITHUB_ENV"
+          echo "V14_TEST_SYSTEM_IDENTIFIER=$A4_SYSTEM" >> "$GITHUB_ENV"
+      - name: Observer regressions and frozen safety tests
+        run: |
+          python -c 'from scripts.v14_test_database import verified_test_url; verified_test_url(); from alembic import command; from alembic.config import Config; command.upgrade(Config("alembic.ini"), "head")'
+          python -m pytest tests/unit/test_ab_read_profile_v14_a4.py \
+            tests/integration/test_ab_profile_cursor_v14_a4.py \
+            tests/integration/test_ab_merge_read_v14.py \
+            tests/unit/test_v14_workflow_evidence.py --junitxml=.codex_tmp/v14-a4-targeted.xml
+          python -m ruff check backend tests migrations scripts
+      - name: Serial alternating 10k then 100k then million; never run concurrently
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/ab_read_profile_v14_a4.py --multitable --service-control --monthly \
+            --container a4-isolated-pg17 --output .codex_tmp/v14-a4-10k.json
+          python scripts/ab_read_profile_v14_a4.py --public-rows 100000 \
+            --candidate-rows 52529 --other-rows 108949 --multitable --service-control --monthly \
+            --container a4-isolated-pg17 --output .codex_tmp/v14-a4-100k.json
+          python scripts/ab_read_profile_v14_a4.py --public-rows 2570000 \
+            --candidate-rows 1350000 --other-rows 2800000 --multitable --service-control --monthly \
+            --container a4-isolated-pg17 --output .codex_tmp/v14-a4-million.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v14-a4-baseline-${{ github.sha }}
+          include-hidden-files: true
+          path: .codex_tmp/v14-a4-*
+          if-no-files-found: error

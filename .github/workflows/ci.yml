@@ -42,7 +42,9 @@ jobs:
           V14_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')
           docker run -d --name v14-isolated-pg17 --label purpose=ssh-stock-v14-physical-test \
             -e POSTGRES_DB=v14_test -e POSTGRES_USER=stock -e POSTGRES_PASSWORD=stock \
-            -p 127.0.0.1:55438:5432 postgres:17 -c "v14.test_instance=$V14_INSTANCE"
+            -p 127.0.0.1:55438:5432 postgres:17 -c "v14.test_instance=$V14_INSTANCE" \
+            -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \
+            -c pg_stat_statements.track=all
           for attempt in $(seq 1 30); do
             docker exec v14-isolated-pg17 pg_isready -U stock -d v14_test && break
             sleep 1

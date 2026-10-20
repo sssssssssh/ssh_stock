@@ -2,6 +2,12 @@
 
 ## V1.4 读路径专项（阶段 A 待审，性能 OPEN）
 
+A4-1 仅增加隔离基线诊断，不改生产读取、公式、发布或开关；
+测量/复现/剩余门禁见 [A4-1 性能定位](docs/acceptance/v14_a4_baseline.md)。
+专用 `A4-1 read baseline diagnosis` CI 串行执行 1 万、10 万、百万级，
+其 SUCCESS 只代表诊断及 Golden 完成，不表示尚未实施的优化已经通过性能门槛。
+最终主 CI 或专用 CI 未完成/失败时，代码验收仍 OPEN；本轮不进入 A4-2 或阶段 B/C。
+
 补算 API 与 Worker 会先检查完整日历：确认休市返回 `NO_TRADING_DAYS`，
 日历缺失/不完整返回 `TRADE_CALENDAR_UNVERIFIED`，不创建候选、不启动预热。
 旧队列执行时拒绝无效范围，保留 FAILED 原因，不伪报成功或发布。

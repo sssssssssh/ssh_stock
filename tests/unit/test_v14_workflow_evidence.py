@@ -6,7 +6,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize("filename", ["ci.yml", "publication-v13.yml"])
+@pytest.mark.parametrize("filename", ["ci.yml", "publication-v13.yml", "ab-read-a4-baseline.yml"])
 def test_hidden_synthetic_evidence_uploads_are_explicit(filename):
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / filename).read_text())
     hidden = []
