@@ -6,6 +6,8 @@
 日历缺失/不完整返回 `TRADE_CALENDAR_UNVERIFIED`，不创建候选、不启动预热。
 旧队列执行时拒绝无效范围，保留 FAILED 原因，不伪报成功或发布。
 隔离规则和冻结读基线见 [A0 记录](docs/acceptance/v14_read_baseline.md)。
+`AB_MERGE_READ_ENABLED` 默认 false；新读仓储先仅供 `factors.trade_status` 选择，
+语义/性能与门禁状态见 [阶段 A 审阅](docs/acceptance/v14_ab_read_closeout.md)。
 本轮不自动部署/重启服务/迁移/补算；Scheduler 继续保持停止，阶段 B 历史复用尚未开启。
 
 ## V1.3 候选写入整改

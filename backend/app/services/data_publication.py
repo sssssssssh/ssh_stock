@@ -770,6 +770,11 @@ def finish_publication(db, job, status):
     checkpoint()
     progress = ProgressStep("publication.verify", "validate")
     progress.report("query", log=True)
+    if getattr(current, "ab_public_read_evidence", None):
+        from app.repositories.ab_merge_read import verify_public_read_evidence
+
+        db.execute(text("LOCK TABLE public.stock_trade_status_daily IN SHARE MODE"))
+        verify_public_read_evidence(db, current)
     _verify_candidate(db, current)
     progress.report("complete", advanced=True, log=True)
     owner = db.scalar(

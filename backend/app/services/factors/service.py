@@ -110,6 +110,13 @@ class FactorService:
 
     def _read_trade_status(self, start: date, end: date) -> pd.DataFrame:
         hash_value = analysis_strategy_hash(self.settings.strategy)
+        if self.settings.ab_merge_read_enabled:
+            from app.repositories.ab_merge_read import ABMergeReadRepository, ReadWindow
+
+            return ABMergeReadRepository(self.db).read_trade_status(
+                window=ReadWindow(start, end), calc_version=TRADE_STATUS_CALC_VERSION,
+                config_hash=hash_value,
+            )
         stmt = select(
             StockTradeStatusDaily.trade_date,
             StockTradeStatusDaily.ts_code,

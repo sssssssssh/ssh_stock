@@ -160,6 +160,22 @@ def run(args):
                 stmt = q0_statement()
                 params = dict(lo=date(2024, 1, 1), hi=date(2024, 12, 31),
                               version="trade_status_v1", hash=data_queue_identity()["analysis"])
+                db.execute(text("SET statement_timeout='300s'"))
+                db.execute(text("SET lock_timeout='5s'"))
+                if args.variant == "q0":
+                    plan_stmt = stmt
+                else:
+                    from app.repositories.ab_merge_read import trade_status_statement
+
+                    plan_stmt = trade_status_statement(candidate=True)
+                    params["root"] = job.id
+                output["plans"] = {}
+                for label, prefix in (
+                    ("select_estimated", "EXPLAIN (FORMAT JSON) "),
+                    ("cursor_estimated", "EXPLAIN (FORMAT JSON) DECLARE v14_plan CURSOR FOR "),
+                    ("select_actual", "EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) "),
+                ):
+                    output["plans"][label] = db.scalar(text(prefix+str(plan_stmt)), params)
                 for _ in range(args.repeats):
                     started = perf_counter()
                     batches, rows = [], []
@@ -177,10 +193,11 @@ def run(args):
                     else:
                         from app.repositories.ab_merge_read import ABMergeReadRepository, ReadWindow
 
+                        extra = {"window_days": args.window_days} if args.variant == "q2" else {}
                         frame = ABMergeReadRepository(db).read_trade_status(
                             window=ReadWindow(params["lo"], params["hi"]),
                             calc_version=params["version"], config_hash=params["hash"],
-                            window_days=args.window_days if args.variant == "q2" else None,
+                            **extra,
                         )
                     from scripts.publication_candidate_benchmark_v13 import distribution, rss_bytes
 

@@ -35,6 +35,8 @@ def load_yaml_config(path: Path) -> dict[str, Any]:
 
 
 class Settings(BaseSettings):
+    # Stage A read path is opt-in until same-scale acceptance is reviewed.
+    ab_merge_read_enabled: bool = False
     model_config = SettingsConfigDict(
         env_file=ROOT_DIR / ".env",
         env_file_encoding="utf-8",
