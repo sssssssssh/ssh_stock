@@ -193,17 +193,23 @@ def run(args):
                     else:
                         from app.repositories.ab_merge_read import ABMergeReadRepository, ReadWindow
 
-                        extra = {"window_days": args.window_days} if args.variant == "q2" else {}
-                        frame = ABMergeReadRepository(db).read_trade_status(
+                        extra = {"window_days": args.window_days if args.variant == "q2" else None}
+                        metrics = []
+                        reader = ABMergeReadRepository(db, observer=metrics.append)
+                        frame = reader.read_trade_status(
                             window=ReadWindow(params["lo"], params["hi"]),
                             calc_version=params["version"], config_hash=params["hash"],
                             **extra,
                         )
+                        batches = [m["seconds"] for m in metrics if m["event"] == "fetch"]
                     from scripts.publication_candidate_benchmark_v13 import distribution, rss_bytes
 
                     output["runs"].append({"seconds": perf_counter()-started, "rows": len(frame),
                         "hash": frame_digest(frame), "dtypes": frame.dtypes.astype(str).to_dict(),
                         "fetch_seconds": distribution(batches), "peak_rss_bytes": rss_bytes()})
+                    if args.variant != "q0":
+                        output["runs"][-1]["windows"] = [
+                            m for m in metrics if m["event"] == "window"]
                 output["variant"] = args.variant
     finally:
         patch.undo()

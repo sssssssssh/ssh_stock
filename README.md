@@ -8,6 +8,7 @@
 隔离规则和冻结读基线见 [A0 记录](docs/acceptance/v14_read_baseline.md)。
 `AB_MERGE_READ_ENABLED` 默认 false；新读仓储先仅供 `factors.trade_status` 选择，
 语义/性能与门禁状态见 [阶段 A 审阅](docs/acceptance/v14_ab_read_closeout.md)。
+启用新读取时按完整日历拆 SQL 窗口，全部输入收齐后才计算；不会按 5 日分别算 RPS/均线。
 本轮不自动部署/重启服务/迁移/补算；Scheduler 继续保持停止，阶段 B 历史复用尚未开启。
 
 ## V1.3 候选写入整改

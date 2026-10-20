@@ -966,6 +966,7 @@ def test_diagnostic_is_read_only_and_never_proves_remote_process_exit(publicatio
 def test_cancelled_recalculation_keeps_previously_published_same_key(publication_db, monkeypatch):
     factory, _engine = publication_db
     with factory() as db:
+        db.add(m.TradeCalendar(cal_date=DAY, is_open=True))
         old = JobRun(job_type="recalculate", status="SUCCESS", job_metadata={})
         db.add(old)
         db.flush()

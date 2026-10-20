@@ -308,6 +308,15 @@ def test_real_monthly_recalculation_preserves_commit_and_reopens_dirty(database,
     monkeypatch.setattr(recalc, "validate_recalculation_raw_prerequisites", lambda *a, **kw: None)
     monkeypatch.setattr(worker, "SessionLocal", factory)
     with factory() as db:
+        from app.models.market_data import TradeCalendar
+
+        # The orchestration fixture must also satisfy the new real calendar
+        # boundary, not bypass it or weaken the cancellation assertions.
+        current = day
+        while current <= date(2026, 10, 1):
+            db.merge(TradeCalendar(cal_date=current, is_open=current.weekday()<5))
+            current += timedelta(days=1)
+        db.commit()
         execute_claimed_job(db, key)
     with factory() as db:
         assert db.get(JobRun, key).status == "CANCELLED"

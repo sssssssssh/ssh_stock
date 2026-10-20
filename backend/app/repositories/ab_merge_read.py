@@ -12,9 +12,10 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.market_data import StockTradeStatusDaily
-from app.repositories.calculation_frame import read_calculation_frame
+from app.repositories.calculation_frame import read_calculation_windows
 from app.services.data_publication import workspace
 from app.services.job_execution import JobOwnershipLost, checkpoint
+from app.services.trading_calendar_guard import verified_open_days
 
 FACTOR_COLUMNS = (
     "trade_date", "ts_code", "is_active", "is_suspended", "is_st", "st_status_unknown",
@@ -47,6 +48,7 @@ def trade_status_statement(*, candidate: bool, columns=FACTOR_COLUMNS):
             WHERE a.trade_date BETWEEN :lo AND :hi AND NOT EXISTS (
                 SELECT 1 FROM public.data_publication_row mask
                 WHERE mask.publication_id=:root AND mask.table_name='stock_trade_status_daily'
+                  AND mask.trade_date BETWEEN :lo AND :hi
                   AND mask.row_key=jsonb_build_array(a.trade_date,a.ts_code))"""
     else:
         union = "SELECT * FROM public.stock_trade_status_daily WHERE trade_date BETWEEN :lo AND :hi"
@@ -115,15 +117,37 @@ def _prepare_candidate_read(db, current, window):
 
 
 class ABMergeReadRepository:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, *, observer=None):
         self.db = db
+        self.observer = observer
 
     def read_trade_status(self, *, window: ReadWindow, calc_version: str,
-                          config_hash: str) -> pd.DataFrame:
+                          config_hash: str, window_days: int | None = 5) -> pd.DataFrame:
+        if window_days is not None and (type(window_days) is not int or window_days < 1):
+            raise ValueError("AB_READ_INVALID_WINDOW_SIZE")
         current = workspace(self.db)
         if current is not None:
             _prepare_candidate_read(self.db, current, window)
-        return read_calculation_frame(self.db, trade_status_statement(candidate=current is not None)
-            .bindparams(lo=window.start, hi=window.end, version=calc_version, hash=config_hash,
-                        **({"root": current.job_id} if current is not None else {})),
-            name="factors.trade_status")
+        windows = calendar_windows(self.db, window, window_days) if window_days else [window]
+        statement = trade_status_statement(candidate=current is not None)
+        statements = [statement.bindparams(
+            lo=part.start, hi=part.end, version=calc_version, hash=config_hash,
+            **({"root": current.job_id} if current is not None else {})) for part in windows]
+        return read_calculation_windows(self.db, statements, name="factors.trade_status",
+                                        observer=self.observer)
+
+
+def calendar_windows(db: Session, window: ReadWindow, trading_days: int) -> list[ReadWindow]:
+    from datetime import timedelta
+
+    # Include ALL calendar dates, not only open days: a closed-day stored row is
+    # still part of the frozen SELECT contract. Open days only determine splits.
+    days = verified_open_days(db, window.start, window.end)
+    cuts = days[trading_days-1:-1:trading_days]
+    result = []
+    start = window.start
+    for end in cuts:
+        result.append(ReadWindow(start, end))
+        start = end+timedelta(days=1)
+    result.append(ReadWindow(start, window.end))
+    return result

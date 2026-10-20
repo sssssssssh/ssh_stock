@@ -87,7 +87,7 @@ def test_frozen_q0_all_columns_and_factor_types(database, monkeypatch, mode):
         old = read_calculation_frame(db, q0_statement().bindparams(**params()), name="test.golden")
         actual = ABMergeReadRepository(db).read_trade_status(
             window=ReadWindow(params()["lo"], params()["hi"]),
-            calc_version=params()["version"], config_hash=params()["hash"])
+            calc_version=params()["version"], config_hash=params()["hash"], window_days=None)
         pd.testing.assert_frame_equal(sorted_frame(old), actual)
         columns = tuple(Model.__table__.c.keys())
         full_old = read_calculation_frame(db, text(
@@ -166,4 +166,41 @@ def test_public_input_changed_between_checkpoint_commits_is_rejected(database):
         db.rollback()
         with pytest.raises(ValueError, match="AB_READ_PUBLISHED_INPUT_CHANGED"):
             verify_public_read_evidence(db, workspace(db))
+        update_job(db, job, status="FAILED")
+
+
+@pytest.mark.parametrize("window_days", [1, 3, 5, 10, 20])
+def test_windows_preserve_full_keys_null_dtype_and_closed_day_rows(database, window_days):
+    from datetime import date
+
+    from app.models.market_data import TradeCalendar
+
+    factory, engine = database
+    support.seed_published(factory)
+    start, end = date(2024, 12, 20), date(2025, 2, 8)
+    with factory() as db:
+        day = start
+        while day <= end:
+            db.add(TradeCalendar(cal_date=day, is_open=day.weekday()<5 and day != date(2025, 1, 1)))
+            # Deliberately include closed-day stored values: do not silently drop.
+            row = support.sample_row(Model, None, day=day)
+            row["is_st"] = None if day < date(2025, 1, 5) else False
+            db.add(Model(**row))
+            day += timedelta(days=1)
+        db.commit()
+    with support.candidate(factory, engine) as (db, job):
+        row = support.sample_row(Model, job.id, day=date(2025, 1, 1))
+        workspace(db).upsert(Model, [row], ("trade_date", "ts_code"))
+        workspace(db).delete_keys(Model, [(date(2025, 1, 2), row["ts_code"])])
+        db.commit()
+        bind = {**params(), "lo": start, "hi": end}
+        old = read_calculation_frame(db, q0_statement().bindparams(**bind), name="test.golden")
+        events = []
+        actual = ABMergeReadRepository(db, observer=events.append).read_trade_status(
+            window=ReadWindow(start, end), calc_version=bind["version"], config_hash=bind["hash"],
+            window_days=window_days)
+        pd.testing.assert_frame_equal(sorted_frame(old), actual)
+        assert len(actual) == (end-start).days
+        assert len([item for item in events if item["event"] == "window"]) > 1
+        assert db.in_transaction()
         update_job(db, job, status="FAILED")
