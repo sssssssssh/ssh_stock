@@ -1,5 +1,13 @@
 # A 股机会发现与趋势研究系统
 
+## V1.4 读路径专项（阶段 A 开发中）
+
+补算 API 与 Worker 会先检查完整日历：确认休市返回 `NO_TRADING_DAYS`，
+日历缺失/不完整返回 `TRADE_CALENDAR_UNVERIFIED`，不创建候选、不启动预热。
+旧队列执行时拒绝无效范围，保留 FAILED 原因，不伪报成功或发布。
+隔离规则和冻结读基线见 [A0 记录](docs/acceptance/v14_read_baseline.md)。
+本轮不自动部署/重启服务/迁移/补算；Scheduler 继续保持停止，阶段 B 历史复用尚未开启。
+
 ## V1.3 候选写入整改
 
 本轮已交付精确键查询、有界集合写入、批次取消保护及回归工具；不自动部署、迁移、重启 Worker/Scheduler 或重提任务。

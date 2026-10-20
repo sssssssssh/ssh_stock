@@ -79,6 +79,8 @@ class _SuccessfulTrendService:
 
 
 def test_dirty_repair_failure_can_retry_and_resolve(monkeypatch) -> None:
+    monkeypatch.setattr(recalculation_module, "require_recalculation_days",
+                        lambda db, start, end: (end,))
     monkeypatch.setattr(
         recalculation_module,
         "validate_recalculation_raw_prerequisites",

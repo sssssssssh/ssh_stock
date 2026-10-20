@@ -26,6 +26,14 @@ class _FakeDb:
         self.rollbacks += 1
 
 
+@pytest.fixture(autouse=True)
+def complete_calendar_boundary(monkeypatch):
+    # This module isolates stage/failure orchestration with a non-SQL fake.
+    # Real missing/closed/partial calendars are covered by PG17 V14 regressions.
+    monkeypatch.setattr(recalculation_module, "require_recalculation_days",
+                        lambda db, start, end: (start,))
+
+
 @pytest.mark.parametrize("failure_record_unavailable", [False, True])
 def test_database_disconnect_rolls_back_and_preserves_first_error(
     monkeypatch, failure_record_unavailable,

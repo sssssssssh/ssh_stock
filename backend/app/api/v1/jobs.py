@@ -34,6 +34,7 @@ from app.services.portfolio.backtest_application import (
     BacktestApplicationService,
     BacktestConflictError,
 )
+from app.services.trading_calendar_guard import TradingCalendarError, require_recalculation_days
 
 router = APIRouter()
 CANCELLABLE_RUNNING_JOB_TYPES = {
@@ -231,6 +232,10 @@ def enqueue_recalculate_job(
         start = min(row.dirty_start_date for row in dirty_ranges)
         end = latest
         dirty_range_ids = [row.id for row in dirty_ranges]
+    try:
+        require_recalculation_days(db, start, end)
+    except TradingCalendarError as exc:
+        raise HTTPException(status_code=422, detail={"code": exc.code}) from exc
     settings = get_settings()
     hash_value = analysis_strategy_hash(settings.strategy)
     job = _enqueue_job(

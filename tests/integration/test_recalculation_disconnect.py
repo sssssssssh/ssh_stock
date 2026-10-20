@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 import sqlalchemy as sa
 from app.models.job import JobRun
-from app.models.market_data import DataQualityDaily
+from app.models.market_data import DataQualityDaily, TradeCalendar
 from app.services import recalculation
 from sqlalchemy.exc import OperationalError
 
@@ -18,6 +18,7 @@ def test_disconnect_rolls_back_before_recording_failure_and_preserves_committed_
     with isolated_contract_database(monkeypatch) as (factory, engine):
         day, job_id = date(2026, 9, 1), uuid4()
         with factory() as db:
+            db.add(TradeCalendar(cal_date=day, is_open=True))
             db.add(JobRun(id=job_id, job_type="recalculate", status="RUNNING",
                           row_count=0, job_metadata={}))
             db.commit()
@@ -58,6 +59,8 @@ def test_disconnect_rolls_back_before_recording_failure_and_preserves_committed_
 
 
 def test_dirty_failure_is_recorded_only_after_rollback(monkeypatch):
+    monkeypatch.setattr(recalculation, "require_recalculation_days",
+                        lambda db, start, end: (start,))
     events = []
     original = OperationalError("synthetic", {}, OSError("disconnected"))
     job = SimpleNamespace(id=uuid4(), job_metadata={})

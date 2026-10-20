@@ -246,6 +246,15 @@ def execute_claimed_job(
             )
             heartbeat_thread.start()
         checkpoint()
+        if job.job_type == "recalculate" and isinstance(db, Session):
+            # Refuse stale/invalid queued requests before even creating a ledger
+            # or a private candidate workspace. Catch-up/direct service calls
+            # are independently guarded in run_recalculation.
+            from app.services.trading_calendar_guard import require_recalculation_days
+
+            require_recalculation_days(
+                db, _metadata_date(metadata, "start"), _metadata_date(metadata, "end"),
+            )
         if (context_token is not None and isinstance(db, Session)
                 and job.job_type in {"daily", "recalculate", "catchup"}):
             from app.services.data_publication import PublicationWorkspace

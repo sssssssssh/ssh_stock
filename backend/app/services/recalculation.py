@@ -39,6 +39,7 @@ from app.services.research import SignalEvaluationService
 from app.services.sector import SectorService
 from app.services.theme import ThemeFactorService
 from app.services.trade_status import TradeStatusService
+from app.services.trading_calendar_guard import require_recalculation_days
 from app.services.trend import TrendService
 
 
@@ -81,6 +82,8 @@ def run_recalculation(
     total_rows = 0
     try:
         checkpoint()
+        metadata["stage"] = "trading_calendar"
+        require_recalculation_days(db, start, end)
         analysis_start = _factor_warmup_start(db, start)
         metadata["analysis_warmup_start"] = analysis_start.isoformat()
         metadata["factor_warmup_start"] = analysis_start.isoformat()
