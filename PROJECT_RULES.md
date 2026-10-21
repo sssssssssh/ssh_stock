@@ -1,5 +1,12 @@
 # 项目开发规则
 
+## V1.4 A4-2 隔离研究
+
+本轮基线 f8df915，只新增 scripts/tests/文档及独立 CI；backend、config、migrations 和 A4-1 证据冻结。
+安全等价必须区分现有 E0 观测契约与跨事务 ABA 的更强契约；未知能力不得标为安全等价。
+实验结论不能开启 AB_MERGE_READ_ENABLED、批准 A4-3 或推进历史复用 B/C；生产性能不宣称 PASS。
+禁止连接业务云库或操作实际 Worker/Scheduler。契约见 docs/acceptance/v14_a4_2_experiment_contract.md。
+
 ## V1.4 读路径专项
 
 A4-1 诊断冻结审阅提交 `4b158c10f22119374c2e0891308ba935ff91d4ca` 的生产读链路，
