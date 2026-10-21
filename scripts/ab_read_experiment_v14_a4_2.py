@@ -379,10 +379,11 @@ def run(args, output):
                 "default_statistics_target", "pg_stat_statements.max", "pg_stat_statements.track")}
             output["system_identifier"] = db.scalar(text(
                 "SELECT system_identifier::text FROM pg_control_system()"))
-            output["fixture"] = dict(a=args.public_rows, b=args.candidate_rows,
+            output["phase"] = "fixture_metadata"
+            fixture = output["fixture"] = dict(a=args.public_rows, b=args.candidate_rows,
                 other_b=args.other_rows, tombstone_percent=args.tombstones, coverage=args.coverage,
-                layout="frozen A4-1 stock-major/257 days; typed Factor other-root rows",
-                sizes=[dict(r) for r in db.execute(text("""SELECT relname,
+                layout="frozen A4-1 stock-major/257 days; typed Factor other-root rows")
+            fixture["sizes"] = [dict(r) for r in db.execute(text("""SELECT relname,
                 pg_table_size(relid) AS table_bytes,pg_indexes_size(relid) AS index_bytes,
                 pg_total_relation_size(relid) AS total_bytes,
                 (SELECT CASE WHEN reltoastrelid=0 THEN 0 ELSE
@@ -390,21 +391,24 @@ def run(args, output):
                 WHERE oid=relid) AS toast_bytes
                 FROM pg_stat_user_tables WHERE
                 relname IN ('stock_trade_status_daily','stock_factor_daily','data_publication_row')
-                """)).mappings()],
-                indexes=[dict(r) for r in db.execute(text(
+                """)).mappings()]
+            fixture["indexes"] = [dict(r) for r in db.execute(text(
                     "SELECT tablename,indexdef FROM pg_indexes "
                     "WHERE schemaname='public' AND tablename IN "
                     "('data_publication_row','stock_trade_status_daily','stock_factor_daily')"))
-                    .mappings()],
-                width_sample=dict(db.execute(text("SELECT count(*) AS sampled_rows,"
+                    .mappings()]
+            fixture["width_sample"] = dict(db.execute(text("SELECT count(*) AS sampled_rows,"
                     "avg(pg_column_size(s)) AS average_stored_bytes FROM "
-                    "public.data_publication_row s TABLESAMPLE SYSTEM(1)")).mappings().one()),
-                actual_counts=dict(db.execute(text("SELECT "
+                    "public.data_publication_row s TABLESAMPLE SYSTEM(1)")).mappings().one())
+            save(args.output, output)
+            output["phase"] = "fixture_count_verification"
+            fixture["actual_counts"] = dict(db.execute(text("SELECT "
                     "(SELECT count(*) FROM public.stock_trade_status_daily) AS a,"
                     "count(*) FILTER (WHERE publication_id=:root) AS b,"
                     "count(*) FILTER (WHERE publication_id<>:root) AS other_b "
-                    "FROM public.data_publication_row"), {"root":job.id}).mappings().one()))
+                    "FROM public.data_publication_row"), {"root":job.id}).mappings().one())
             db.commit()
+            output["phase"] = "timed_trials"
             params = dict(lo=date(2024, 1, 1), hi=date(2024, 12, 31),
                           version="trade_status_v1", hash=data_queue_identity()["analysis"])
             captured = {}
@@ -466,6 +470,7 @@ def run(args, output):
             if args.plans:
                 from scripts.ab_read_profile_v14_a4 import capture_plans, cursor_actual_plans
 
+                output["phase"] = "untimed_actual_plans"
                 for (variant, fraction, scope, days), statements in captured.items():
                     db.execute(text("SELECT set_config('cursor_tuple_fraction',:f,true)"),
                                {"f":fraction})
@@ -482,6 +487,7 @@ def run(args, output):
                 raise ValueError("A42_LABORATORY_SOURCE_CHANGED_DURING_TRIALS")
             output["experiment_complete"] = True
             output["summary"] = summarize(output)
+            output["phase"] = "complete"
             save(args.output, output)
 
 
@@ -525,6 +531,7 @@ def main():
         import traceback
 
         output["failure_type"] = type(error).__name__
+        output["failure_sqlstate"] = getattr(getattr(error, "orig", None), "sqlstate", None)
         output["failure_trace"] = [
             {"file": Path(f.filename).name, "line": f.lineno, "function": f.name}
             for f in traceback.extract_tb(error.__traceback__)]

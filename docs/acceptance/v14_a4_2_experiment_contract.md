@@ -11,6 +11,15 @@ the frozen profiler/summary and original acceptance/evidence. It separately reco
 checkout SHA256; Windows checkout line-ending conversion is not a source edit.
 The previous receipts and profiler will not be rewritten. Production flag stays false.
 
+The old A4-1 unit guard additionally compares raw checkout bytes with `git show`.
+On a Windows CRLF checkout it can fail even when Git blobs are identical. Run
+the frozen suite in a new disposable LF checkout (`git -c core.autocrlf=false
+clone --shared . <new-owned-lab-directory>`, then set that clone's local
+`core.autocrlf=false`); do not rewrite production files or weaken its assertion.
+Do not copy the business `.env` there. Use explicit synthetic DB/token settings.
+For full pytest, leave `LLM_ENABLED` unset: the default remains disabled while
+dotenv-priority tests may enable their mocked endpoint without an OS override.
+
 ## Dedicated Instance
 
 Before importing Settings or performing any DDL, `verified_environment()` invokes

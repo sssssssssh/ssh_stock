@@ -28,6 +28,50 @@ def prepare(db):
     ab._prepare_candidate_read(db, workspace(db), ab.ReadWindow(support.DAY, support.DAY))
 
 
+def test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt(
+    tmp_path, monkeypatch
+):
+    import json
+    import os
+    import sys
+
+    from loguru import logger
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    from scripts import ab_read_experiment_v14_a4_2 as experiment
+
+    class DriverError(Exception):
+        sqlstate = "57014"
+
+    original = Session.execute
+
+    def execute(self, statement, *args, **kwargs):
+        if "(SELECT count(*) FROM public.stock_trade_status_daily) AS a" in str(statement):
+            raise OperationalError("synthetic-count-probe", {}, DriverError("synthetic-timeout"))
+        return original(self, statement, *args, **kwargs)
+
+    path = tmp_path / "count-failure.json"
+    for name in ("DATABASE_URL","TUSHARE_TOKEN","LLM_ENABLED","AB_MERGE_READ_ENABLED"):
+        monkeypatch.setenv(name,os.environ.get(name,""))
+    monkeypatch.setattr(logger,"remove",lambda *args,**kwargs:None)
+    monkeypatch.setattr(Session,"execute",execute)
+    monkeypatch.setattr(sys,"argv",["a42","--public-rows","1000","--candidate-rows","500",
+                                  "--other-rows","1000","--output",str(path)])
+    with pytest.raises(SystemExit) as error:
+        experiment.main()
+    assert error.value.code == 1
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    assert receipt["phase"] == "fixture_count_verification"
+    assert receipt["failure_sqlstate"] == "57014"
+    assert receipt["fixture"]["a"] == 1000
+    assert {r["relname"] for r in receipt["fixture"]["sizes"]} == {
+        "stock_trade_status_daily","stock_factor_daily","data_publication_row"}
+    assert receipt["fixture"]["indexes"] and "actual_counts" not in receipt["fixture"]
+    assert receipt["runs"] == []
+    assert not receipt.get("experiment_complete")
+
+
 def test_e1_cached_sha_accepts_changed_intermediate_a_and_restored_final_a(database, monkeypatch):
     factory, engine = database
     support.seed_published(factory)

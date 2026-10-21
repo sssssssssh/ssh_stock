@@ -97,3 +97,33 @@ def test_partial_receipt_is_not_complete_even_if_observed_groups_have_three_runs
     assert result["measured_groups_complete"]
     assert not result["experiment_complete"]
     assert not result["authorize_a4_3"]
+
+
+def test_failure_receipt_keeps_sqlstate_but_never_driver_sql_or_parameters(tmp_path, monkeypatch):
+    import json
+
+    from sqlalchemy.exc import OperationalError
+
+    from scripts import ab_read_experiment_v14_a4_2 as experiment
+
+    class DriverError(Exception):
+        sqlstate = "57014"
+
+    def fail(args, output):
+        output["phase"] = "fixture_count_verification"
+        raise OperationalError("synthetic-private-sql", {"key":"synthetic-private-value"},
+                               DriverError("synthetic-private-message"))
+
+    path = tmp_path / "failure.json"
+    monkeypatch.setattr(sys, "argv", ["a42", "--output",str(path)])
+    monkeypatch.setattr(experiment,"verified_environment",lambda:None)
+    monkeypatch.setattr(experiment,"source_contract",lambda:{"synthetic":"hash"})
+    monkeypatch.setattr(experiment,"run",fail)
+    with pytest.raises(SystemExit) as error:
+        experiment.main()
+    assert error.value.code == 1
+    raw = path.read_text(encoding="utf-8")
+    receipt = json.loads(raw)
+    assert receipt["failure_sqlstate"] == "57014"
+    assert receipt["phase"] == "fixture_count_verification"
+    assert "synthetic-private-" not in raw

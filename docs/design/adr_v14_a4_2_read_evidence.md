@@ -57,9 +57,13 @@ invalidation, never silently treat such events as evidence of unchanged data.
    ordering, retaining full-frame Python ordering. Q0 raw/service lack protection
    and are not eligible winners. Same-scope p50/p95 and raw plans belong in the
    [results report](../acceptance/v14_a4_2_experiment_results.md), not estimates.
-3. **Stable at every scale?** Not yet established. Early 10k receipts are exploratory
-   and from earlier script bodies, not substitutes for 100k/million measurements.
-   All three alternating samples, regressions and failures must remain visible.
+   Current-code 100k S4 p50 is 6.4929/6.2960 seconds for fraction .1/1.0, against
+   Q1 6.6329/6.4471: only 2.11%/2.34% faster, not the 30% target. Each includes T8.
+3. **Stable at every scale?** Not established. Current-code 10k and 100k each have
+   177 completed reads, 59 actual-plan groups and exact golden equality. Some
+   alternatives regress at 10k; 100k gains are small. Million is still OPEN.
+   Earlier exploratory receipts remain labelled with their different script body.
+   All three alternating samples, regressions and failures remain visible.
 4. **Schema/index/event costs?** S3-S5 use existing indexes and need no schema change
    in this laboratory. A production rewrite still requires separate approval.
    E3 would add triggers, counter DML, WAL, a hot row and an expanded maintenance
@@ -73,6 +77,9 @@ invalidation, never silently treat such events as evidence of unchanged data.
    checkpoint cost. None/1/3/5/10/20 must include closed-day stored rows. A future
    view/index/sort audit may be proposed, but neither indexes nor the view are
    changed here; no independent small-window numerical engine is allowed.
+   At 100k fraction .1, S3 single-query total median is 6.7518 seconds versus
+   9.0441 for one-day windows, 6.9004 for five-day windows. This argues against
+   adding finer windows blindly, not for changing production before million/RR2.
 6. **Readers/writers/faults?** Existing Worker ownership, cancel, 57014, disconnect
    and unknown-commit slot rules are reused in real regression tests, not replaced.
    RR probes query public tables only. SHARE acquisition/hold and conflicting DML
