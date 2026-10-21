@@ -128,7 +128,12 @@ def failure(error):
     allowed = (isinstance(error, ReceiptError) or message.startswith(
         ("A42_", "A4_", "V14_", "PUBLICATION_", "RESOURCE_DEFERRED")))
     code = message if allowed and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", message) else None
+    budget_exhausted = (isinstance(error, BudgetExhausted)
+                        or getattr(error, "a421_budget_exhausted", False) is True)
+    if budget_exhausted:
+        code = "RESOURCE_DEFERRED"
     return dict(failure_type=type(error).__name__, failure_code=code,
+        budget_exhausted=budget_exhausted,
         sqlstate=getattr(getattr(error, "orig", error), "sqlstate", None),
         failure_trace=[dict(file=Path(f.filename).name, line=f.lineno, function=f.name)
                        for f in traceback.extract_tb(error.__traceback__)])
@@ -148,12 +153,22 @@ def deadline(seconds):
     require(hasattr(signal, "setitimer") and seconds > 0, "SOFT_DEADLINE_UNSUPPORTED")
     previous = signal.getsignal(signal.SIGALRM)
     require(signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0), "NESTED_DEADLINE_NOT_ALLOWED")
+    budget_exhausted = False
     def exhausted(signum, frame):
+        nonlocal budget_exhausted
+        budget_exhausted = True
         raise BudgetExhausted("RESOURCE_DEFERRED")
     signal.signal(signal.SIGALRM, exhausted)
     signal.setitimer(signal.ITIMER_REAL, seconds)
     try:
         yield
+    except BaseException as error:
+        # A driver rollback/close exception can replace the original SIGALRM.
+        # Preserve the terminal exception and its SQLSTATE, but retain proof
+        # from the timer itself; never infer resource exhaustion from elapsed time.
+        if budget_exhausted:
+            error.a421_budget_exhausted = True
+        raise
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous)

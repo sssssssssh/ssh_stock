@@ -1,0 +1,3950 @@
+{
+  "schema_version": "v14-a4-2.1-review-index-v1",
+  "recorded_at": "2026-10-21 23:43:25 UTC",
+  "validated_execution_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+  "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+  "scope_caveat": "This is evidence for the named execution SHA only, not for any subsequent commit or attempt. L2 remains OPEN and no production performance is claimed.",
+  "resource_policy": "User has no dedicated runner; retain RESOURCE_DEFERRED rather than purchasing resources, connecting business ECS, reducing scale or weakening checks.",
+  "aggregate_status": "OPEN",
+  "INFRASTRUCTURE_PASS": false,
+  "CORRECTNESS_PASS": false,
+  "READ_PERFORMANCE_PASS": false,
+  "production_read_authorized": false,
+  "authorize_a4_3": false,
+  "state": "A4_2_NO_SAFE_WINNER",
+  "lab_replay": {
+    "validated_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+    "jobs": 21,
+    "required_groups": 1002,
+    "actual_groups": 1008,
+    "all_golden": true,
+    "distinct_physical_ids": 21,
+    "manifest_summaries": [
+      {
+        "job_id": "a42-event-prototype",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 191.990809157,
+        "database_instance": "5ddd29e0-34ac-4b04-8891-57e5c5ce7480",
+        "physical_system_identifier": "7699235601834758188",
+        "started_at": "2026-10-21T21:26:22.877965+00:00",
+        "finished_at": "2026-10-21T21:29:34.824903+00:00"
+      },
+      {
+        "job_id": "a42-million-full-0",
+        "status": "COMPLETE",
+        "expected_groups": 30,
+        "completed_groups": 30,
+        "elapsed_seconds": 3637.2778663100003,
+        "database_instance": "3e099e30-73c1-4762-bd86-0fd26b8ddc58",
+        "physical_system_identifier": "7699200198094274604",
+        "started_at": "2026-10-21T19:08:59.605941+00:00",
+        "finished_at": "2026-10-21T20:09:36.839374+00:00"
+      },
+      {
+        "job_id": "a42-million-full-1",
+        "status": "COMPLETE",
+        "expected_groups": 30,
+        "completed_groups": 30,
+        "elapsed_seconds": 3013.6649988110003,
+        "database_instance": "e0b35a90-92a7-4f71-aa7f-dfba64eaa015",
+        "physical_system_identifier": "7699207518758842412",
+        "started_at": "2026-10-21T19:37:23.960595+00:00",
+        "finished_at": "2026-10-21T20:27:37.586558+00:00"
+      },
+      {
+        "job_id": "a42-million-monthly",
+        "status": "COMPLETE",
+        "expected_groups": 81,
+        "completed_groups": 81,
+        "elapsed_seconds": 8345.16162461,
+        "database_instance": "745409b9-7550-4e20-b556-cf9da8c0b37a",
+        "physical_system_identifier": "7699220636794257452",
+        "started_at": "2026-10-21T20:28:18.340547+00:00",
+        "finished_at": "2026-10-21T22:47:23.458517+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-full-0",
+        "status": "COMPLETE",
+        "expected_groups": 10,
+        "completed_groups": 10,
+        "elapsed_seconds": 1423.481270847,
+        "database_instance": "5b086bb8-0cc4-4bbc-8d88-bb8bec0da971",
+        "physical_system_identifier": "7699201236450861100",
+        "started_at": "2026-10-21T19:13:01.073705+00:00",
+        "finished_at": "2026-10-21T19:36:44.525545+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-full-1",
+        "status": "COMPLETE",
+        "expected_groups": 10,
+        "completed_groups": 10,
+        "elapsed_seconds": 1987.978414569,
+        "database_instance": "fadecc35-03f8-4de8-ab45-d9d58e4989d1",
+        "physical_system_identifier": "7699213437230420013",
+        "started_at": "2026-10-21T20:00:22.016303+00:00",
+        "finished_at": "2026-10-21T20:33:29.950719+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-monthly-0",
+        "status": "COMPLETE",
+        "expected_groups": 9,
+        "completed_groups": 9,
+        "elapsed_seconds": 2304.107233412,
+        "database_instance": "8f4e0435-4338-4e1d-a39b-b6fc72dacf69",
+        "physical_system_identifier": "7699222445114261548",
+        "started_at": "2026-10-21T20:35:19.376560+00:00",
+        "finished_at": "2026-10-21T21:13:43.439500+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-monthly-1",
+        "status": "COMPLETE",
+        "expected_groups": 9,
+        "completed_groups": 9,
+        "elapsed_seconds": 2102.806242893,
+        "database_instance": "8afc2247-d6a7-4f6a-92e2-c040df5684e9",
+        "physical_system_identifier": "7699224696307609643",
+        "started_at": "2026-10-21T20:44:04.454966+00:00",
+        "finished_at": "2026-10-21T21:19:07.224068+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-monthly-2",
+        "status": "COMPLETE",
+        "expected_groups": 9,
+        "completed_groups": 9,
+        "elapsed_seconds": 2100.0808679750003,
+        "database_instance": "11faa39e-20d3-414b-a1e7-a3fd8442ccd2",
+        "physical_system_identifier": "7699232490799927340",
+        "started_at": "2026-10-21T21:14:18.193436+00:00",
+        "finished_at": "2026-10-21T21:49:18.244543+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-window_matrix-0",
+        "status": "COMPLETE",
+        "expected_groups": 6,
+        "completed_groups": 6,
+        "elapsed_seconds": 1451.958882787,
+        "database_instance": "41f90488-d4cb-4ccb-b8c6-bc43e9346d26",
+        "physical_system_identifier": "7699205521181745197",
+        "started_at": "2026-10-21T19:29:39.240480+00:00",
+        "finished_at": "2026-10-21T19:53:51.156474+00:00"
+      },
+      {
+        "job_id": "a42-million-plans-window_matrix-1",
+        "status": "COMPLETE",
+        "expected_groups": 6,
+        "completed_groups": 6,
+        "elapsed_seconds": 1463.184058652,
+        "database_instance": "8c9df763-7762-4591-a6f5-38b0f741d258",
+        "physical_system_identifier": "7699215994774171692",
+        "started_at": "2026-10-21T20:10:17.558271+00:00",
+        "finished_at": "2026-10-21T20:34:40.695692+00:00"
+      },
+      {
+        "job_id": "a42-million-readers",
+        "status": "COMPLETE",
+        "expected_groups": 24,
+        "completed_groups": 24,
+        "elapsed_seconds": 3518.636488172,
+        "database_instance": "efdf1e48-c9a5-44b4-b2ff-63c9bebcb5ea",
+        "physical_system_identifier": "7699222150794825772",
+        "started_at": "2026-10-21T20:34:12.096449+00:00",
+        "finished_at": "2026-10-21T21:32:50.693284+00:00"
+      },
+      {
+        "job_id": "a42-million-window-0",
+        "status": "COMPLETE",
+        "expected_groups": 21,
+        "completed_groups": 21,
+        "elapsed_seconds": 3044.3142236109998,
+        "database_instance": "3aa3de85-0356-4872-83b1-02a684d499b4",
+        "physical_system_identifier": "7699200191449534508",
+        "started_at": "2026-10-21T19:08:58.223023+00:00",
+        "finished_at": "2026-10-21T19:59:42.493599+00:00"
+      },
+      {
+        "job_id": "a42-million-window-1",
+        "status": "COMPLETE",
+        "expected_groups": 21,
+        "completed_groups": 21,
+        "elapsed_seconds": 2924.998735343,
+        "database_instance": "7220ee3a-3588-40ca-a95c-b55110e6f9ca",
+        "physical_system_identifier": "7699211959659167789",
+        "started_at": "2026-10-21T19:54:39.086898+00:00",
+        "finished_at": "2026-10-21T20:43:24.045990+00:00"
+      },
+      {
+        "job_id": "a42-shapes-a_only",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 38.11407027,
+        "database_instance": "33e5cb69-1dbe-4adf-8a86-12772f98085c",
+        "physical_system_identifier": "7699234289443737645",
+        "started_at": "2026-10-21T21:21:18.138910+00:00",
+        "finished_at": "2026-10-21T21:21:56.212861+00:00"
+      },
+      {
+        "job_id": "a42-shapes-b_only",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 30.139565277999992,
+        "database_instance": "e924fbd3-353e-4d5c-842a-a6db987aa961",
+        "physical_system_identifier": "7699234658614349868",
+        "started_at": "2026-10-21T21:22:44.286233+00:00",
+        "finished_at": "2026-10-21T21:23:14.387890+00:00"
+      },
+      {
+        "job_id": "a42-shapes-high",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 41.914716295999995,
+        "database_instance": "98888c49-1c2d-4c5c-bcfc-7f7fcf452282",
+        "physical_system_identifier": "7699234970374438956",
+        "started_at": "2026-10-21T21:23:55.642715+00:00",
+        "finished_at": "2026-10-21T21:24:37.513784+00:00"
+      },
+      {
+        "job_id": "a42-shapes-mismatched",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 28.012309123999998,
+        "database_instance": "28ed9449-7ea2-4185-bcc3-bb5dd02d043f",
+        "physical_system_identifier": "7699235322391191596",
+        "started_at": "2026-10-21T21:25:17.293439+00:00",
+        "finished_at": "2026-10-21T21:25:45.277558+00:00"
+      },
+      {
+        "job_id": "a42-shapes-partial",
+        "status": "COMPLETE",
+        "expected_groups": 45,
+        "completed_groups": 45,
+        "elapsed_seconds": 42.05298918700001,
+        "database_instance": "52d5239c-595a-4343-8a9f-f9440f7c0d0d",
+        "physical_system_identifier": "7699233914356142123",
+        "started_at": "2026-10-21T21:19:49.964366+00:00",
+        "finished_at": "2026-10-21T21:20:31.974594+00:00"
+      },
+      {
+        "job_id": "a42-small-100k",
+        "status": "COMPLETE",
+        "expected_groups": 236,
+        "completed_groups": 236,
+        "elapsed_seconds": 1195.510611818,
+        "database_instance": "123087df-a929-48bf-9b6c-a17f4727aa16",
+        "physical_system_identifier": "7699200189030252588",
+        "started_at": "2026-10-21T19:08:57.701091+00:00",
+        "finished_at": "2026-10-21T19:28:53.167688+00:00"
+      },
+      {
+        "job_id": "a42-small-10k",
+        "status": "COMPLETE",
+        "expected_groups": 236,
+        "completed_groups": 236,
+        "elapsed_seconds": 204.30093915700002,
+        "database_instance": "8e38733c-4c57-4762-bf16-78a56e0d0661",
+        "physical_system_identifier": "7699200176491462700",
+        "started_at": "2026-10-21T19:08:54.562627+00:00",
+        "finished_at": "2026-10-21T19:12:18.818792+00:00"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 12373121481,
+        "zip_sha256": "28e67d12811878cae73b77efc9d0aa3ae258c41b6f2f3cfcf555ef37f0e3821e"
+      },
+      {
+        "id": 12373205592,
+        "zip_sha256": "ee468df542f0d245909e800b10853fb73aab45cc9a26c6264c6e1347585df428"
+      },
+      {
+        "id": 12375040797,
+        "zip_sha256": "734026273ecb4fcbf252da94ee362c5f81565e495c31f2e939c7c4cfab7f3d5d"
+      },
+      {
+        "id": 12376860255,
+        "zip_sha256": "57c9f575cbefcefae53a514a071b9822fd5e72a627c85c733aee5828f6c41212"
+      },
+      {
+        "id": 12377094541,
+        "zip_sha256": "6c8c78ad96ba040b4d33a97e244988b76bba1ff59395f5bfda0482287bce6b58"
+      },
+      {
+        "id": 12377663075,
+        "zip_sha256": "e98beb21132ba44d0baacf78f39c577a74bc79246055383696da4a9102fb0300"
+      },
+      {
+        "id": 12378704424,
+        "zip_sha256": "25e0fb61ce242e46bf460ff34b52b36b8e572e6c15ad1e41599e82168c11a29c"
+      },
+      {
+        "id": 12379000289,
+        "zip_sha256": "f0ef54757237218343c675c2fcc7218884cbdcd8033a8003543dc02f38f42faf"
+      },
+      {
+        "id": 12380160499,
+        "zip_sha256": "3f81db512739dc994ee899a4c8b93602bb89816f991563104c03eb50975eb790"
+      },
+      {
+        "id": 12380237997,
+        "zip_sha256": "26f041336c05e2b2b11c065597be85f26c8e992e9b52f8b2f071c60e0e7f13ab"
+      },
+      {
+        "id": 12380770392,
+        "zip_sha256": "ff73448525cf1cdd178f38db2017cdab914f62a36c6ed93a795d98b5ffd997b7"
+      },
+      {
+        "id": 12381378721,
+        "zip_sha256": "c14a4ec21c625b359e7089120f2e8107d9a80205ec02aa596001f381ecac3210"
+      },
+      {
+        "id": 12381569117,
+        "zip_sha256": "6fe5b9084785ad18ac3adf70c8088c6dba566fa49dce3d3aad3e68492cade9e2"
+      },
+      {
+        "id": 12382108392,
+        "zip_sha256": "5ac49405af3a51f0613ffb97cbaee51dda3920d1070abc5f90fa342d875f470e"
+      },
+      {
+        "id": 12382684393,
+        "zip_sha256": "a7a53b4167a7af4d56af8a63d060557fd6a9aa43d8701a633e381f5f3dfacfa6"
+      },
+      {
+        "id": 12382762987,
+        "zip_sha256": "498032361f488552334811e55912d8458d1827cb217d87883895457bf70b0079"
+      },
+      {
+        "id": 12382841958,
+        "zip_sha256": "70a66183bf3cb6923ba6d7366ee065e7ae4d6b17563925da34529d16e5740487"
+      },
+      {
+        "id": 12383311765,
+        "zip_sha256": "b76752dd78680e52cb56d01ec1c391b40d9daf3f798567af1113273fa906355e"
+      },
+      {
+        "id": 12383425327,
+        "zip_sha256": "8d61af4eab22bab80b80747d1497bcf73554f51fde3b5706bf4a1941344fcd0f"
+      },
+      {
+        "id": 12383591010,
+        "zip_sha256": "d6fe56abe8bd9b9a0c755951a9ccf86e83e07b1363754b2809eeeacc4634f5b1"
+      },
+      {
+        "id": 12384481878,
+        "zip_sha256": "f44b50d896177dd753365c5d9e60cd9dcb900a1fc355ec3fd1fcbd456d9ee462"
+      },
+      {
+        "id": 12387263351,
+        "zip_sha256": "a5b0dd280f23845b9b81c9f0a91c56ef25ed195657e6db62ed7c0a33ca8705af"
+      },
+      {
+        "id": 12388485015,
+        "zip_sha256": "086336d545177549373f0580b2bc7203acc5cb842757c576ec05204d1c9c597f"
+      }
+    ]
+  },
+  "execution": {
+    "lab_gate": {
+      "schema_version": "v14-a4-2.1-shard-v1",
+      "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+      "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+      "working_tree_dirty": false,
+      "job_id": "release-lab",
+      "attempt": "1",
+      "run_id": "39658114980",
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "production_read_authorized": false,
+      "authorize_a4_3": false,
+      "read_performance_pass": "NOT_CLAIMED",
+      "status": "COMPLETE",
+      "finished_at": "2026-10-21T22:47:34.409728+00:00",
+      "INFRASTRUCTURE_PASS": true,
+      "CORRECTNESS_PASS": true,
+      "READ_PERFORMANCE_PASS": false,
+      "state": "A4_2_NO_SAFE_WINNER",
+      "errors": [],
+      "safety_testcases": 338
+    },
+    "performance": {
+      "a42-million-full-0": [
+        {
+          "scope": "full",
+          "variant": "S3_KEYS",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 109.13190968099934,
+          "p95": 111.89237600819985,
+          "range": [
+            107.20604895799943,
+            112.19909448899989
+          ],
+          "samples": [
+            107.20604895799943,
+            109.13190968099934,
+            112.19909448899989
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 32.18152827199992,
+            "T4_candidate_validation_sql": 12.585003205000248,
+            "T8_verify_inclusive": 30.354736396000135,
+            "T2_lock_hold": 109.01918403700029,
+            "T6_frame": 7.6330563359999815,
+            "T6_sort": 0.44997540899998967,
+            "checkpoint": 0.8327581010034919
+          },
+          "fetch_p95": 0.004095157600113452,
+          "fetch_p99": 0.004514333880078994,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q0_LEGACY_RAW",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 29.853802163999717,
+          "p95": 53.8047179742001,
+          "range": [
+            29.07816589500044,
+            56.46593084200015
+          ],
+          "samples": [
+            29.07816589500044,
+            56.46593084200015,
+            29.853802163999717
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 7.617000681999798,
+            "T6_sort": 0,
+            "checkpoint": 0
+          },
+          "fetch_p95": 0.04440154480016645,
+          "fetch_p99": 0.07499004616000547,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S3_INLINE",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 107.12752225700069,
+          "p95": 109.76099029339937,
+          "range": [
+            99.15502751200006,
+            110.05359785299925
+          ],
+          "samples": [
+            99.15502751200006,
+            110.05359785299925,
+            107.12752225700069
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 30.829764147000333,
+            "T4_candidate_validation_sql": 12.59796398799972,
+            "T8_verify_inclusive": 31.94503907699982,
+            "T2_lock_hold": 107.0032711660001,
+            "T6_frame": 7.695671774999937,
+            "T6_sort": 0.4407827240002007,
+            "checkpoint": 0.8481254029961747
+          },
+          "fetch_p95": 0.004028292199927818,
+          "fetch_p99": 0.004354256479909963,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q0_SERVICE_CONTROL",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 28.166887289999977,
+          "p95": 28.982326752299855,
+          "range": [
+            27.61306686199987,
+            29.07293113699984
+          ],
+          "samples": [
+            28.166887289999977,
+            27.61306686199987,
+            29.07293113699984
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 7.6540799290000905,
+            "T6_sort": 0,
+            "checkpoint": 0.9663609749991338
+          },
+          "fetch_p95": 0.04312678460000825,
+          "fetch_p99": 0.06790166796004087,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q1_CURRENT",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 108.32326805200023,
+          "p95": 110.96263380369993,
+          "range": [
+            98.55977765,
+            111.25589666499991
+          ],
+          "samples": [
+            111.25589666499991,
+            98.55977765,
+            108.32326805200023
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 33.40951194700028,
+            "T4_candidate_validation_sql": 12.537762004999877,
+            "T8_verify_inclusive": 30.591706122999994,
+            "T2_lock_hold": 108.21589725000035,
+            "T6_frame": 7.62704517300017,
+            "T6_sort": 0.4546408060000431,
+            "checkpoint": 0.8144986689994766
+          },
+          "fetch_p95": 0.004162805999976626,
+          "fetch_p99": 0.004414800800022931,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S5",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 104.00220938899974,
+          "p95": 104.07779417629983,
+          "range": [
+            102.35346620400014,
+            104.08619248599985
+          ],
+          "samples": [
+            102.35346620400014,
+            104.00220938899974,
+            104.08619248599985
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 30.63756543699992,
+            "T4_candidate_validation_sql": 12.577484076000019,
+            "T8_verify_inclusive": 30.146088274999784,
+            "T2_lock_hold": 103.8856001109998,
+            "T6_frame": 7.674388974000067,
+            "T6_sort": 0.5986405909998211,
+            "checkpoint": 0.9223114910014374
+          },
+          "fetch_p95": 0.043539407000116624,
+          "fetch_p99": 0.07506394015992555,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S3",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 112.20864078500017,
+          "p95": 112.52593053799964,
+          "range": [
+            103.52710075200002,
+            112.56118495499959
+          ],
+          "samples": [
+            112.20864078500017,
+            103.52710075200002,
+            112.56118495499959
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 32.164529536000146,
+            "T4_candidate_validation_sql": 12.618104931000062,
+            "T8_verify_inclusive": 30.499108696999883,
+            "T2_lock_hold": 112.0867194330001,
+            "T6_frame": 7.730769237000004,
+            "T6_sort": 0.44571184400001584,
+            "checkpoint": 0.9005590350016064
+          },
+          "fetch_p95": 0.004150978000029682,
+          "fetch_p99": 0.004496459919969311,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q2_CURRENT",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 118.23254580700018,
+          "p95": 121.31752328829978,
+          "range": [
+            109.43283807899991,
+            121.66029856399973
+          ],
+          "samples": [
+            118.23254580700018,
+            121.66029856399973,
+            109.43283807899991
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 32.29337281999983,
+            "T4_candidate_validation_sql": 12.547457995000059,
+            "T8_verify_inclusive": 30.314884196000094,
+            "T2_lock_hold": 118.11154326999986,
+            "T6_frame": 7.865066518000049,
+            "T6_sort": 0.577186533999793,
+            "checkpoint": 0.9689500410011078
+          },
+          "fetch_p95": 0.4592245890499839,
+          "fetch_p99": 0.4684002026400628,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S4",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 108.04360657799998,
+          "p95": 110.09583915869986,
+          "range": [
+            107.59123191899994,
+            110.32386500099983
+          ],
+          "samples": [
+            107.59123191899994,
+            110.32386500099983,
+            108.04360657799998
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 32.09194154199986,
+            "T4_candidate_validation_sql": 12.605380169,
+            "T8_verify_inclusive": 30.725311479000084,
+            "T2_lock_hold": 107.9255212600001,
+            "T6_frame": 7.670947032000186,
+            "T6_sort": 0.45179037300022173,
+            "checkpoint": 0.8937485819974427
+          },
+          "fetch_p95": 0.004078217200094514,
+          "fetch_p99": 0.004390252239936672,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "repeats": 3,
+          "p50": 107.12141765500019,
+          "p95": 108.9474172545999,
+          "range": [
+            98.72996131900015,
+            109.15030609899986
+          ],
+          "samples": [
+            98.72996131900015,
+            107.12141765500019,
+            109.15030609899986
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 30.36659541300014,
+            "T4_candidate_validation_sql": 12.636842677999994,
+            "T8_verify_inclusive": 30.796660558999974,
+            "T2_lock_hold": 107.03451363800013,
+            "T6_frame": 7.6260278619997734,
+            "T6_sort": 0.5962395500000639,
+            "checkpoint": 0.98698556100112
+          },
+          "fetch_p95": 0.04309678239999357,
+          "fetch_p99": 0.06760033356002168,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        }
+      ],
+      "a42-million-full-1": [
+        {
+          "scope": "full",
+          "variant": "Q0_LEGACY_RAW",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 28.972698074000164,
+          "p95": 31.60975596739994,
+          "range": [
+            28.245631435999258,
+            31.902762399999915
+          ],
+          "samples": [
+            31.902762399999915,
+            28.972698074000164,
+            28.245631435999258
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 6.483085225000195,
+            "T6_sort": 0,
+            "checkpoint": 0
+          },
+          "fetch_p95": 0.05244910940018599,
+          "fetch_p99": 0.0849532414800251,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 82.9700644789998,
+          "p95": 89.61311109260012,
+          "range": [
+            78.96468957800005,
+            90.35122738300015
+          ],
+          "samples": [
+            78.96468957800005,
+            90.35122738300015,
+            82.9700644789998
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 24.552319216999877,
+            "T4_candidate_validation_sql": 4.884396578000064,
+            "T8_verify_inclusive": 23.301908496999886,
+            "T2_lock_hold": 82.879532531,
+            "T6_frame": 6.547615757999665,
+            "T6_sort": 0.6121896260001449,
+            "checkpoint": 0.6775159219987472
+          },
+          "fetch_p95": 0.037193666199982545,
+          "fetch_p99": 0.061630606439885015,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S3_KEYS",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 92.50214666200031,
+          "p95": 94.4930849776005,
+          "range": [
+            91.46501692200036,
+            94.71430034600053
+          ],
+          "samples": [
+            92.50214666200031,
+            94.71430034600053,
+            91.46501692200036
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 24.971684417000233,
+            "T4_candidate_validation_sql": 12.419713040999795,
+            "T8_verify_inclusive": 24.33112158599988,
+            "T2_lock_hold": 92.42492619400014,
+            "T6_frame": 6.561262210999985,
+            "T6_sort": 0.4386184210002284,
+            "checkpoint": 0.6279302709976946
+          },
+          "fetch_p95": 0.0033714462000716595,
+          "fetch_p99": 0.0036804649600344417,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q1_CURRENT",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 83.72805268799993,
+          "p95": 92.56916274059961,
+          "range": [
+            80.53867065999998,
+            93.55150830199955
+          ],
+          "samples": [
+            80.53867065999998,
+            93.55150830199955,
+            83.72805268799993
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 24.32941662600001,
+            "T4_candidate_validation_sql": 4.876290364999932,
+            "T8_verify_inclusive": 22.954589556999963,
+            "T2_lock_hold": 83.65166893599985,
+            "T6_frame": 6.511505095000302,
+            "T6_sort": 0.4396918130000813,
+            "checkpoint": 0.6177136220019293
+          },
+          "fetch_p95": 0.00338257699991118,
+          "fetch_p99": 0.003639986399989539,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S3_INLINE",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 90.54272984699969,
+          "p95": 94.36763560709994,
+          "range": [
+            79.50530855000011,
+            94.79262513599997
+          ],
+          "samples": [
+            79.50530855000011,
+            94.79262513599997,
+            90.54272984699969
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 22.61966738000001,
+            "T4_candidate_validation_sql": 12.437280131999614,
+            "T8_verify_inclusive": 24.075130007000098,
+            "T2_lock_hold": 90.45515718400043,
+            "T6_frame": 6.574913501000083,
+            "T6_sort": 0.4582321850000426,
+            "checkpoint": 0.6270100200031266
+          },
+          "fetch_p95": 0.003343742399965777,
+          "fetch_p99": 0.003583206440152935,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q2_CURRENT",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 93.07376593699996,
+          "p95": 96.22949697050015,
+          "range": [
+            82.9161934030002,
+            96.58013375200017
+          ],
+          "samples": [
+            96.58013375200017,
+            93.07376593699996,
+            82.9161934030002
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 23.29920798199987,
+            "T4_candidate_validation_sql": 12.389207475000148,
+            "T8_verify_inclusive": 22.317420588999994,
+            "T2_lock_hold": 92.98283574800007,
+            "T6_frame": 6.813123727999937,
+            "T6_sort": 0.620017211000004,
+            "checkpoint": 0.788186764000443
+          },
+          "fetch_p95": 0.3541818260999037,
+          "fetch_p99": 0.3699950223601536,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S5",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 88.85376743799998,
+          "p95": 88.87380700269983,
+          "range": [
+            88.19213776700008,
+            88.8760336209998
+          ],
+          "samples": [
+            88.8760336209998,
+            88.85376743799998,
+            88.19213776700008
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 24.68770013600033,
+            "T4_candidate_validation_sql": 12.401078806999976,
+            "T8_verify_inclusive": 23.604904710000028,
+            "T2_lock_hold": 88.7629054869999,
+            "T6_frame": 6.469109397000011,
+            "T6_sort": 0.6078455520000716,
+            "checkpoint": 0.6688788129995373
+          },
+          "fetch_p95": 0.03667499599987423,
+          "fetch_p99": 0.06254636972007574,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S3",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 88.95190852899987,
+          "p95": 93.3233783014003,
+          "range": [
+            82.5100328179999,
+            93.80909716500037
+          ],
+          "samples": [
+            82.5100328179999,
+            93.80909716500037,
+            88.95190852899987
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 22.907041083999957,
+            "T4_candidate_validation_sql": 12.42739795700004,
+            "T8_verify_inclusive": 22.18244453200009,
+            "T2_lock_hold": 88.8545113560001,
+            "T6_frame": 6.528624536000052,
+            "T6_sort": 0.43497191100004784,
+            "checkpoint": 0.6335587380062861
+          },
+          "fetch_p95": 0.003367077400071139,
+          "fetch_p99": 0.003580159399771219,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "Q0_SERVICE_CONTROL",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 26.943504945000313,
+          "p95": 31.763616632700142,
+          "range": [
+            26.07665807399985,
+            32.299184598000124
+          ],
+          "samples": [
+            26.943504945000313,
+            26.07665807399985,
+            32.299184598000124
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 6.566373956999996,
+            "T6_sort": 0,
+            "checkpoint": 0.6871811380010513
+          },
+          "fetch_p95": 0.039089275999958775,
+          "fetch_p99": 0.06484462699998403,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        },
+        {
+          "scope": "full",
+          "variant": "S4",
+          "window_days": null,
+          "cursor_fraction": "1.0",
+          "repeats": 3,
+          "p50": 91.61323520199949,
+          "p95": 93.60576477340018,
+          "range": [
+            90.82492012900002,
+            93.82715694800027
+          ],
+          "samples": [
+            90.82492012900002,
+            91.61323520199949,
+            93.82715694800027
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 22.746777133999785,
+            "T4_candidate_validation_sql": 12.3773448070001,
+            "T8_verify_inclusive": 24.995880956999827,
+            "T2_lock_hold": 91.52415009900051,
+            "T6_frame": 6.510006134999912,
+            "T6_sort": 0.4420737140001165,
+            "checkpoint": 0.6204084099999818
+          },
+          "fetch_p95": 0.0033601468001052126,
+          "fetch_p99": 0.0036383617999399577,
+          "reader_p95": null,
+          "timing_caveat": "Nested phase medians overlap; never add them"
+        }
+      ]
+    },
+    "core": {
+      "status": {
+        "schema_version": "v14-a4-2.1-shard-v1",
+        "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+        "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+        "working_tree_dirty": false,
+        "job_id": "core",
+        "attempt": "1",
+        "run_id": "39658115015",
+        "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+        "production_read_authorized": false,
+        "authorize_a4_3": false,
+        "read_performance_pass": "NOT_CLAIMED",
+        "status": "COMPLETE",
+        "finished_at": "2026-10-21T19:38:51.314295+00:00",
+        "workflow_job_status": "success",
+        "expected_files": [
+          ".codex_tmp/data-queue-containers.json",
+          "frontend/coverage/runtime-reliability-browser/result.json",
+          ".codex_tmp/data-publication-targeted.xml",
+          ".codex_tmp/m17_1_2-full.xml",
+          ".codex_tmp/cold-start-targeted.xml",
+          ".codex_tmp/cold-start-comparison.json"
+        ]
+      },
+      "junit": {
+        "tests": "2471",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "time": "1455.510"
+      },
+      "workers": {
+        "results": [
+          {
+            "workers": 1,
+            "completed": 6,
+            "max_top_level_running": 1,
+            "samples": 102,
+            "synthetic": true,
+            "atomic_publication": false
+          },
+          {
+            "workers": 2,
+            "completed": 6,
+            "max_top_level_running": 1,
+            "samples": 101,
+            "synthetic": true,
+            "atomic_publication": false
+          },
+          {
+            "workers": 2,
+            "completed": 7,
+            "max_top_level_running": 1,
+            "samples": 130,
+            "synthetic": true,
+            "atomic_publication": true
+          }
+        ],
+        "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+        "image_source_sha256": "b35cab8592374c3d11d1c2a1e90845a7e8164b2f1803a9d843a573d95f22a35f",
+        "working_tree_dirty": false,
+        "image_id": "sha256:2497f5d72a5e40e89f463831fce11dc0bdf99e2c7204e6bd322a8dfacdd48b80"
+      },
+      "browser_count": 28
+    },
+    "capacity": {
+      "L1": {
+        "schema_version": "v14-a4-2.1-shard-v1",
+        "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+        "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+        "working_tree_dirty": false,
+        "job_id": "capacity-L1",
+        "attempt": "1",
+        "run_id": "39658115015",
+        "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+        "production_read_authorized": false,
+        "authorize_a4_3": false,
+        "read_performance_pass": "NOT_CLAIMED",
+        "level": "L1",
+        "status": "COMPLETE",
+        "started_at": "2026-10-21T19:03:01.592406+00:00",
+        "finished_at": "2026-10-21T19:03:04.453928+00:00",
+        "expected_groups": 1,
+        "completed_groups": 1,
+        "database_instance": "ac61b419-761d-4a31-8e05-521ccdadcd6a",
+        "physical_system_identifier": "7699198660118945836",
+        "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+        "isolation": {
+          "verified": true,
+          "before_ddl": true,
+          "expected_marker": "ac61b419-761d-4a31-8e05-521ccdadcd6a",
+          "observed_marker": "ac61b419-761d-4a31-8e05-521ccdadcd6a",
+          "expected_system_identifier": "7699198660118945836",
+          "observed_system_identifier": "7699198660118945836"
+        },
+        "resources": {
+          "cpu_limit": 0,
+          "memory_bytes": 0
+        },
+        "image_id": "sha256:82903352d6faf8f8a318bc4353d1cb1db67d4a5ff968d2799b2718e2cb00afa2",
+        "configured_image": "postgres:17",
+        "resource_class": "capacity-dedicated-host",
+        "environment": {
+          "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+          "machine": "x86_64",
+          "python": "3.12.15",
+          "logical_cpus": 4
+        },
+        "failed_phase": null,
+        "results": [
+          {
+            "level": "L1",
+            "stocks": 10,
+            "days": 2,
+            "postgres": "17.11 (Debian 17.11-1.pgdg13+2)",
+            "rows": 164,
+            "write_seconds": 0.11702638500000262,
+            "rows_per_second": 1401.3933695379578,
+            "stage_seconds": {
+              "stock_trade_status_daily": 0.015149164999996856,
+              "stock_factor_daily": 0.014567757000008896,
+              "market_daily": 0.009192623000004119,
+              "sector_factor_daily": 0.011639120000012326,
+              "theme_factor_daily": 0.011685029999995322,
+              "stock_state_daily": 0.010428871000002005,
+              "stock_opportunity_daily": 0.011051242000007733,
+              "strategy_signal": 0.009976446999999666,
+              "signal_forward_eval": 0.011460049000007189,
+              "data_quality_daily": 0.006734498999989569
+            },
+            "stage_peak_process_rss_bytes": {
+              "stock_trade_status_daily": 198463488,
+              "stock_factor_daily": 198463488,
+              "market_daily": 198463488,
+              "sector_factor_daily": 198463488,
+              "theme_factor_daily": 198463488,
+              "stock_state_daily": 198463488,
+              "stock_opportunity_daily": 198463488,
+              "strategy_signal": 198463488,
+              "signal_forward_eval": 198463488,
+              "data_quality_daily": 198463488
+            },
+            "publish_seconds": 0.07012264800000878,
+            "rollback_probes": [
+              {
+                "mode": "row_budget",
+                "code": "PUBLICATION_ROW_BUDGET_EXCEEDED",
+                "elapsed_seconds": 0.04055193699998938,
+                "a_digest_unchanged": true,
+                "a_before": {
+                  "stock_trade_status_daily": "3a4e1eb10b94c7b955f82fe23b91ca44",
+                  "stock_factor_daily": "3f457f98849a3522eeff2590a4e0e84d",
+                  "market_daily": "8d817e36041b144af787706aeaf7d836",
+                  "sector_factor_daily": "1a4f7053f89920db3926ee1fa3544a1c",
+                  "theme_factor_daily": "b893e209ce47a3cff3275d01a92a4970",
+                  "stock_state_daily": "b7b81912aaee8d8f70e32c51041c7723",
+                  "stock_opportunity_daily": "625dd909c309d86844db0bd6b8932ac3",
+                  "strategy_signal": "6ed244ece9440c87bb73c52d1aa29367",
+                  "signal_forward_eval": "87986cd1da1be636e426067b8d6905a1",
+                  "data_quality_daily": "52e120fd91d3b14e6003e0c6c815d9f9"
+                },
+                "a_after": {
+                  "stock_trade_status_daily": "3a4e1eb10b94c7b955f82fe23b91ca44",
+                  "stock_factor_daily": "3f457f98849a3522eeff2590a4e0e84d",
+                  "market_daily": "8d817e36041b144af787706aeaf7d836",
+                  "sector_factor_daily": "1a4f7053f89920db3926ee1fa3544a1c",
+                  "theme_factor_daily": "b893e209ce47a3cff3275d01a92a4970",
+                  "stock_state_daily": "b7b81912aaee8d8f70e32c51041c7723",
+                  "stock_opportunity_daily": "625dd909c309d86844db0bd6b8932ac3",
+                  "strategy_signal": "6ed244ece9440c87bb73c52d1aa29367",
+                  "signal_forward_eval": "87986cd1da1be636e426067b8d6905a1",
+                  "data_quality_daily": "52e120fd91d3b14e6003e0c6c815d9f9"
+                },
+                "root_status": "RUNNING",
+                "ledger_state": "PREPARING",
+                "queue_slot_held": true,
+                "test_only_known_rollback": true
+              },
+              {
+                "mode": "sql_timeout_after_first_table",
+                "code": "PG_SQLSTATE_57014",
+                "elapsed_seconds": 0.03915834500000415,
+                "a_digest_unchanged": true,
+                "a_before": {
+                  "stock_trade_status_daily": "3a4e1eb10b94c7b955f82fe23b91ca44",
+                  "stock_factor_daily": "3f457f98849a3522eeff2590a4e0e84d",
+                  "market_daily": "8d817e36041b144af787706aeaf7d836",
+                  "sector_factor_daily": "1a4f7053f89920db3926ee1fa3544a1c",
+                  "theme_factor_daily": "b893e209ce47a3cff3275d01a92a4970",
+                  "stock_state_daily": "b7b81912aaee8d8f70e32c51041c7723",
+                  "stock_opportunity_daily": "625dd909c309d86844db0bd6b8932ac3",
+                  "strategy_signal": "6ed244ece9440c87bb73c52d1aa29367",
+                  "signal_forward_eval": "87986cd1da1be636e426067b8d6905a1",
+                  "data_quality_daily": "52e120fd91d3b14e6003e0c6c815d9f9"
+                },
+                "a_after": {
+                  "stock_trade_status_daily": "3a4e1eb10b94c7b955f82fe23b91ca44",
+                  "stock_factor_daily": "3f457f98849a3522eeff2590a4e0e84d",
+                  "market_daily": "8d817e36041b144af787706aeaf7d836",
+                  "sector_factor_daily": "1a4f7053f89920db3926ee1fa3544a1c",
+                  "theme_factor_daily": "b893e209ce47a3cff3275d01a92a4970",
+                  "stock_state_daily": "b7b81912aaee8d8f70e32c51041c7723",
+                  "stock_opportunity_daily": "625dd909c309d86844db0bd6b8932ac3",
+                  "strategy_signal": "6ed244ece9440c87bb73c52d1aa29367",
+                  "signal_forward_eval": "87986cd1da1be636e426067b8d6905a1",
+                  "data_quality_daily": "52e120fd91d3b14e6003e0c6c815d9f9"
+                },
+                "root_status": "RUNNING",
+                "ledger_state": "PREPARING",
+                "queue_slot_held": true,
+                "test_only_known_rollback": true
+              }
+            ],
+            "final_root_status": "SUCCESS",
+            "final_ledger_state": "PUBLISHED",
+            "peak_rss_bytes": 198987776,
+            "candidate": {
+              "rows": 164,
+              "json_bytes": 226948,
+              "average_candidate_json_bytes": "626.0000000000000000"
+            },
+            "preimage": {
+              "rows": 164,
+              "json_bytes": 124284
+            },
+            "database_before": {
+              "database_bytes": 13924019,
+              "table_and_index_bytes": 3661824,
+              "wal_lsn": "0/214FCC0"
+            },
+            "database_after": {
+              "database_bytes": 14882483,
+              "table_and_index_bytes": 4440064,
+              "wal_lsn": "0/223D4D8"
+            },
+            "wal_bytes": 972824,
+            "reader_samples": 13,
+            "reader_p95_ms": 161.15691599999593,
+            "reader_median_ms": 9.121028999999226,
+            "reader_errors": [],
+            "max_running": 1,
+            "max_lock_waiters": 0,
+            "production_capacity": "UNPROVEN",
+            "synthetic_quality_fixture": true,
+            "row_budget": 10000000,
+            "merge_timeout_ms": 300000
+          }
+        ]
+      },
+      "L2": {
+        "schema_version": "v14-a4-2.1-shard-v1",
+        "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+        "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+        "working_tree_dirty": false,
+        "job_id": "capacity-L2",
+        "attempt": "1",
+        "run_id": "39658115015",
+        "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+        "production_read_authorized": false,
+        "authorize_a4_3": false,
+        "read_performance_pass": "NOT_CLAIMED",
+        "level": "L2",
+        "status": "INCOMPLETE",
+        "started_at": "2026-10-21T19:03:04.751469+00:00",
+        "finished_at": "2026-10-21T23:33:08.363667+00:00",
+        "expected_groups": 1,
+        "completed_groups": 0,
+        "database_instance": "b679a400-f84e-4cfb-b4a0-99c11688a93e",
+        "physical_system_identifier": "7699198671993757741",
+        "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+        "isolation": {
+          "verified": true,
+          "before_ddl": true,
+          "expected_marker": "b679a400-f84e-4cfb-b4a0-99c11688a93e",
+          "observed_marker": "b679a400-f84e-4cfb-b4a0-99c11688a93e",
+          "expected_system_identifier": "7699198671993757741",
+          "observed_system_identifier": "7699198671993757741"
+        },
+        "resources": {
+          "cpu_limit": 0,
+          "memory_bytes": 0
+        },
+        "image_id": "sha256:82903352d6faf8f8a318bc4353d1cb1db67d4a5ff968d2799b2718e2cb00afa2",
+        "configured_image": "postgres:17",
+        "resource_class": "capacity-dedicated-host",
+        "environment": {
+          "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+          "machine": "x86_64",
+          "python": "3.12.15",
+          "logical_cpus": 4
+        },
+        "failed_phase": "capacity-L2",
+        "failure_type": "OperationalError",
+        "failure_code": null,
+        "sqlstate": null,
+        "failure_trace": [
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 615,
+            "function": "main"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 565,
+            "function": "run_cli"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 326,
+            "function": "run_level"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 158,
+            "function": "__exit__"
+          },
+          {
+            "file": "test_data_publication.py",
+            "line": 143,
+            "function": "candidate"
+          },
+          {
+            "file": "data_publication.py",
+            "line": 166,
+            "function": "close"
+          },
+          {
+            "file": "session.py",
+            "line": 1997,
+            "function": "rollback"
+          },
+          {
+            "file": "<string>",
+            "line": 2,
+            "function": "rollback"
+          },
+          {
+            "file": "state_changes.py",
+            "line": 137,
+            "function": "_go"
+          },
+          {
+            "file": "session.py",
+            "line": 1398,
+            "function": "rollback"
+          },
+          {
+            "file": "session.py",
+            "line": 1363,
+            "function": "rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2621,
+            "function": "rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2740,
+            "function": "_do_rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2723,
+            "function": "_close_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 2715,
+            "function": "_connection_rollback_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 1132,
+            "function": "_rollback_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 2365,
+            "function": "_handle_dbapi_exception"
+          },
+          {
+            "file": "base.py",
+            "line": 1130,
+            "function": "_rollback_impl"
+          },
+          {
+            "file": "default.py",
+            "line": 712,
+            "function": "do_rollback"
+          },
+          {
+            "file": "connection.py",
+            "line": 310,
+            "function": "rollback"
+          },
+          {
+            "file": "connection.py",
+            "line": 484,
+            "function": "wait"
+          },
+          {
+            "file": "waiting.pyx",
+            "line": 219,
+            "function": "psycopg_binary._psycopg.wait_c"
+          },
+          {
+            "file": "_connection_base.py",
+            "line": 610,
+            "function": "_rollback_gen"
+          },
+          {
+            "file": "_connection_base.py",
+            "line": 476,
+            "function": "_exec_command"
+          },
+          {
+            "file": "pgconn.pyx",
+            "line": 310,
+            "function": "psycopg_binary.pq.PGconn.send_query"
+          }
+        ],
+        "results": []
+      },
+      "L3-scaled-10pct": {
+        "schema_version": "v14-a4-2.1-shard-v1",
+        "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+        "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+        "working_tree_dirty": false,
+        "job_id": "capacity-L3-scaled-10pct",
+        "attempt": "1",
+        "run_id": "39658115015",
+        "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+        "production_read_authorized": false,
+        "authorize_a4_3": false,
+        "read_performance_pass": "NOT_CLAIMED",
+        "level": "L3-scaled-10pct",
+        "status": "COMPLETE",
+        "started_at": "2026-10-21T19:03:06.847545+00:00",
+        "finished_at": "2026-10-21T20:49:47.271766+00:00",
+        "expected_groups": 1,
+        "completed_groups": 1,
+        "database_instance": "68ce0db4-5dd6-4155-8bc2-3b27587667b1",
+        "physical_system_identifier": "7699198677031305260",
+        "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+        "isolation": {
+          "verified": true,
+          "before_ddl": true,
+          "expected_marker": "68ce0db4-5dd6-4155-8bc2-3b27587667b1",
+          "observed_marker": "68ce0db4-5dd6-4155-8bc2-3b27587667b1",
+          "expected_system_identifier": "7699198677031305260",
+          "observed_system_identifier": "7699198677031305260"
+        },
+        "resources": {
+          "cpu_limit": 0,
+          "memory_bytes": 0
+        },
+        "image_id": "sha256:82903352d6faf8f8a318bc4353d1cb1db67d4a5ff968d2799b2718e2cb00afa2",
+        "configured_image": "postgres:17",
+        "resource_class": "capacity-dedicated-host",
+        "environment": {
+          "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+          "machine": "x86_64",
+          "python": "3.12.15",
+          "logical_cpus": 4
+        },
+        "failed_phase": null,
+        "results": [
+          {
+            "level": "L3-scaled-10pct",
+            "stocks": 500,
+            "days": 120,
+            "postgres": "17.11 (Debian 17.11-1.pgdg13+2)",
+            "rows": 378240,
+            "write_seconds": 6326.282766735,
+            "rows_per_second": 59.78866483630323,
+            "stage_seconds": {
+              "stock_trade_status_daily": 13.322250767,
+              "stock_factor_daily": 797.160253397,
+              "market_daily": 2.036477800000057,
+              "sector_factor_daily": 92.7488892450001,
+              "theme_factor_daily": 4.5670940310000105,
+              "stock_state_daily": 868.6158195219999,
+              "stock_opportunity_daily": 1720.1573374349998,
+              "strategy_signal": 85.53417873200033,
+              "signal_forward_eval": 2736.226980691,
+              "data_quality_daily": 5.904134045999854
+            },
+            "stage_peak_process_rss_bytes": {
+              "stock_trade_status_daily": 195874816,
+              "stock_factor_daily": 205348864,
+              "market_daily": 205348864,
+              "sector_factor_daily": 205348864,
+              "theme_factor_daily": 205348864,
+              "stock_state_daily": 205348864,
+              "stock_opportunity_daily": 213389312,
+              "strategy_signal": 213651456,
+              "signal_forward_eval": 223481856,
+              "data_quality_daily": 223481856
+            },
+            "publish_seconds": 39.45742511499975,
+            "rollback_probes": [
+              {
+                "mode": "row_budget",
+                "code": "PUBLICATION_ROW_BUDGET_EXCEEDED",
+                "elapsed_seconds": 4.519231737999689,
+                "a_digest_unchanged": true,
+                "a_before": {
+                  "stock_trade_status_daily": "667d674fc7f0b8c5e3d4cf53b938ccc6",
+                  "stock_factor_daily": "b17566dd0b41c48f25bc80c661538627",
+                  "market_daily": "8a0480e8dc8dcdf00766c8e1cbf77d28",
+                  "sector_factor_daily": "34781858ae0d8e13703102c959de8905",
+                  "theme_factor_daily": "55b8b1e4aa5cc67dbaa3390ef348e9d8",
+                  "stock_state_daily": "15a1db330d0df76fd63e1f6a5e122220",
+                  "stock_opportunity_daily": "4bd28c3c94b9afc58cb3af7bfdd92f8b",
+                  "strategy_signal": "3a950a6a6ee6d18f88afbde22f64db9b",
+                  "signal_forward_eval": "eed03e0e87d77ee42349f8ec0b53dfaa",
+                  "data_quality_daily": "eb13b87038205310ab0284ba93217c0f"
+                },
+                "a_after": {
+                  "stock_trade_status_daily": "667d674fc7f0b8c5e3d4cf53b938ccc6",
+                  "stock_factor_daily": "b17566dd0b41c48f25bc80c661538627",
+                  "market_daily": "8a0480e8dc8dcdf00766c8e1cbf77d28",
+                  "sector_factor_daily": "34781858ae0d8e13703102c959de8905",
+                  "theme_factor_daily": "55b8b1e4aa5cc67dbaa3390ef348e9d8",
+                  "stock_state_daily": "15a1db330d0df76fd63e1f6a5e122220",
+                  "stock_opportunity_daily": "4bd28c3c94b9afc58cb3af7bfdd92f8b",
+                  "strategy_signal": "3a950a6a6ee6d18f88afbde22f64db9b",
+                  "signal_forward_eval": "eed03e0e87d77ee42349f8ec0b53dfaa",
+                  "data_quality_daily": "eb13b87038205310ab0284ba93217c0f"
+                },
+                "root_status": "RUNNING",
+                "ledger_state": "PREPARING",
+                "queue_slot_held": true,
+                "test_only_known_rollback": true
+              },
+              {
+                "mode": "sql_timeout_after_first_table",
+                "code": "PG_SQLSTATE_57014",
+                "elapsed_seconds": 11.87957857099991,
+                "a_digest_unchanged": true,
+                "a_before": {
+                  "stock_trade_status_daily": "667d674fc7f0b8c5e3d4cf53b938ccc6",
+                  "stock_factor_daily": "b17566dd0b41c48f25bc80c661538627",
+                  "market_daily": "8a0480e8dc8dcdf00766c8e1cbf77d28",
+                  "sector_factor_daily": "34781858ae0d8e13703102c959de8905",
+                  "theme_factor_daily": "55b8b1e4aa5cc67dbaa3390ef348e9d8",
+                  "stock_state_daily": "15a1db330d0df76fd63e1f6a5e122220",
+                  "stock_opportunity_daily": "4bd28c3c94b9afc58cb3af7bfdd92f8b",
+                  "strategy_signal": "3a950a6a6ee6d18f88afbde22f64db9b",
+                  "signal_forward_eval": "eed03e0e87d77ee42349f8ec0b53dfaa",
+                  "data_quality_daily": "eb13b87038205310ab0284ba93217c0f"
+                },
+                "a_after": {
+                  "stock_trade_status_daily": "667d674fc7f0b8c5e3d4cf53b938ccc6",
+                  "stock_factor_daily": "b17566dd0b41c48f25bc80c661538627",
+                  "market_daily": "8a0480e8dc8dcdf00766c8e1cbf77d28",
+                  "sector_factor_daily": "34781858ae0d8e13703102c959de8905",
+                  "theme_factor_daily": "55b8b1e4aa5cc67dbaa3390ef348e9d8",
+                  "stock_state_daily": "15a1db330d0df76fd63e1f6a5e122220",
+                  "stock_opportunity_daily": "4bd28c3c94b9afc58cb3af7bfdd92f8b",
+                  "strategy_signal": "3a950a6a6ee6d18f88afbde22f64db9b",
+                  "signal_forward_eval": "eed03e0e87d77ee42349f8ec0b53dfaa",
+                  "data_quality_daily": "eb13b87038205310ab0284ba93217c0f"
+                },
+                "root_status": "RUNNING",
+                "ledger_state": "PREPARING",
+                "queue_slot_held": true,
+                "test_only_known_rollback": true
+              }
+            ],
+            "final_root_status": "SUCCESS",
+            "final_ledger_state": "PUBLISHED",
+            "peak_rss_bytes": 223481856,
+            "candidate": {
+              "rows": 378240,
+              "json_bytes": 496866733,
+              "average_candidate_json_bytes": "595.1631847504230118"
+            },
+            "preimage": {
+              "rows": 378240,
+              "json_bytes": 271752210
+            },
+            "database_before": {
+              "database_bytes": 123688627,
+              "table_and_index_bytes": 113426432,
+              "wal_lsn": "0/DEE1010"
+            },
+            "database_after": {
+              "database_bytes": 1444837043,
+              "table_and_index_bytes": 1434157056,
+              "wal_lsn": "0/78D33E38"
+            },
+            "wal_bytes": 1793404456,
+            "reader_samples": 104342,
+            "reader_p95_ms": 43.251036000583554,
+            "reader_median_ms": 31.660584999826824,
+            "reader_errors": [],
+            "max_running": 1,
+            "max_lock_waiters": 0,
+            "production_capacity": "UNPROVEN",
+            "synthetic_quality_fixture": true,
+            "row_budget": 10000000,
+            "merge_timeout_ms": 300000
+          }
+        ]
+      }
+    },
+    "publication_gate": {
+      "schema_version": "v14-a4-2.1-shard-v1",
+      "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+      "head_sha": "c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478",
+      "working_tree_dirty": false,
+      "job_id": "release-publication",
+      "attempt": "1",
+      "run_id": "39658115015",
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "production_read_authorized": false,
+      "authorize_a4_3": false,
+      "read_performance_pass": "NOT_CLAIMED",
+      "status": "INCOMPLETE",
+      "finished_at": "2026-10-21T23:33:19.401643+00:00",
+      "INFRASTRUCTURE_PASS": false,
+      "CORRECTNESS_PASS": false,
+      "READ_PERFORMANCE_PASS": false,
+      "state": "A4_2_NO_SAFE_WINNER",
+      "errors": [
+        "UPSTREAM_NOT_SUCCESS"
+      ],
+      "failure_type": "ReceiptError"
+    }
+  },
+  "ci_jobs": {
+    "a42": [
+      {
+        "id": 119423682111,
+        "name": "contract-and-safety",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:02:31Z",
+        "completed_at": "2026-10-21T19:08:21Z",
+        "seconds": 350
+      },
+      {
+        "id": 119426673016,
+        "name": "laboratory (a42-million-full-0, million-full, million, 240, 0.1)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:08:23Z",
+        "completed_at": "2026-10-21T20:09:42Z",
+        "seconds": 3679
+      },
+      {
+        "id": 119426673020,
+        "name": "laboratory (a42-small-10k, small, 10k, 120)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:08:23Z",
+        "completed_at": "2026-10-21T19:12:22Z",
+        "seconds": 239
+      },
+      {
+        "id": 119426673048,
+        "name": "laboratory (a42-million-plans-full-0, million-plans, million, 240, 0.1, full)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:12:24Z",
+        "completed_at": "2026-10-21T19:36:49Z",
+        "seconds": 1465
+      },
+      {
+        "id": 119426673068,
+        "name": "laboratory (a42-small-100k, small, 100k, 120)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:08:23Z",
+        "completed_at": "2026-10-21T19:28:56Z",
+        "seconds": 1233
+      },
+      {
+        "id": 119426673081,
+        "name": "laboratory (a42-million-plans-full-1, million-plans, million, 240, 1.0, full)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:59:47Z",
+        "completed_at": "2026-10-21T20:33:33Z",
+        "seconds": 2026
+      },
+      {
+        "id": 119426673173,
+        "name": "laboratory (a42-million-plans-window_matrix-0, million-plans, million, 240, 0.1, window_matrix)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:28:59Z",
+        "completed_at": "2026-10-21T19:53:56Z",
+        "seconds": 1497
+      },
+      {
+        "id": 119426673177,
+        "name": "laboratory (a42-million-window-0, million-window, million, 240, 0.1)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:08:23Z",
+        "completed_at": "2026-10-21T19:59:46Z",
+        "seconds": 3083
+      },
+      {
+        "id": 119426673191,
+        "name": "laboratory (a42-million-full-1, million-full, million, 240, 1.0)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:36:51Z",
+        "completed_at": "2026-10-21T20:27:42Z",
+        "seconds": 3051
+      },
+      {
+        "id": 119426673221,
+        "name": "laboratory (a42-million-monthly, million-monthly, million, 300)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T20:27:45Z",
+        "completed_at": "2026-10-21T22:47:27Z",
+        "seconds": 8382
+      },
+      {
+        "id": 119426673287,
+        "name": "laboratory (a42-million-window-1, million-window, million, 240, 1.0)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:53:58Z",
+        "completed_at": "2026-10-21T20:43:28Z",
+        "seconds": 2970
+      },
+      {
+        "id": 119426673350,
+        "name": "laboratory (a42-million-plans-window_matrix-1, million-plans, million, 240, 1.0, window_matrix)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T20:09:44Z",
+        "completed_at": "2026-10-21T20:34:44Z",
+        "seconds": 1500
+      },
+      {
+        "id": 119426673355,
+        "name": "laboratory (a42-million-readers, million-readers, million, 240)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T20:33:35Z",
+        "completed_at": "2026-10-21T21:32:55Z",
+        "seconds": 3560
+      },
+      {
+        "id": 119426673384,
+        "name": "laboratory (a42-million-plans-monthly-0, million-plans, million, 240, 0.1, monthly, 0)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T20:34:46Z",
+        "completed_at": "2026-10-21T21:13:47Z",
+        "seconds": 2341
+      },
+      {
+        "id": 119426673408,
+        "name": "laboratory (a42-million-plans-monthly-1, million-plans, million, 240, 0.1, monthly, 1)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T20:43:30Z",
+        "completed_at": "2026-10-21T21:19:12Z",
+        "seconds": 2142
+      },
+      {
+        "id": 119426675634,
+        "name": "laboratory (a42-million-plans-monthly-2, million-plans, million, 240, 0.1, monthly, 2)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:13:48Z",
+        "completed_at": "2026-10-21T21:49:22Z",
+        "seconds": 2134
+      },
+      {
+        "id": 119426675712,
+        "name": "laboratory (a42-shapes-partial, supplemental-shapes, 10k, 120, partial)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:19:13Z",
+        "completed_at": "2026-10-21T21:20:35Z",
+        "seconds": 82
+      },
+      {
+        "id": 119426675907,
+        "name": "laboratory (a42-shapes-b_only, supplemental-shapes, 10k, 120, b_only)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:22:02Z",
+        "completed_at": "2026-10-21T21:23:19Z",
+        "seconds": 77
+      },
+      {
+        "id": 119426675923,
+        "name": "laboratory (a42-shapes-high, supplemental-shapes, 10k, 120, high)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:23:21Z",
+        "completed_at": "2026-10-21T21:24:43Z",
+        "seconds": 82
+      },
+      {
+        "id": 119426676196,
+        "name": "laboratory (a42-shapes-mismatched, supplemental-shapes, 10k, 120, mismatched)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:24:44Z",
+        "completed_at": "2026-10-21T21:25:49Z",
+        "seconds": 65
+      },
+      {
+        "id": 119426676265,
+        "name": "laboratory (a42-event-prototype, event-prototype, 100k, 120)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:25:50Z",
+        "completed_at": "2026-10-21T21:29:38Z",
+        "seconds": 228
+      },
+      {
+        "id": 119426676345,
+        "name": "laboratory (a42-shapes-a_only, supplemental-shapes, 10k, 120, a_only)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T21:20:36Z",
+        "completed_at": "2026-10-21T21:22:00Z",
+        "seconds": 84
+      },
+      {
+        "id": 119530240824,
+        "name": "a42-acceptance-gate",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T22:47:29Z",
+        "completed_at": "2026-10-21T22:47:38Z",
+        "seconds": 9
+      }
+    ],
+    "core_capacity": [
+      {
+        "id": 119423683239,
+        "name": "test",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:02:31Z",
+        "completed_at": "2026-10-21T19:39:00Z",
+        "seconds": 2189
+      },
+      {
+        "id": 119423683315,
+        "name": "capacity (L3-scaled-10pct)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:02:31Z",
+        "completed_at": "2026-10-21T20:49:49Z",
+        "seconds": 6438
+      },
+      {
+        "id": 119423683555,
+        "name": "capacity (L2)",
+        "status": "completed",
+        "conclusion": "failure",
+        "started_at": "2026-10-21T19:02:31Z",
+        "completed_at": "2026-10-21T23:33:11Z",
+        "seconds": 16240
+      },
+      {
+        "id": 119423683646,
+        "name": "capacity (L1)",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T19:02:32Z",
+        "completed_at": "2026-10-21T19:03:08Z",
+        "seconds": 36
+      },
+      {
+        "id": 119423685891,
+        "name": "ui-visual-acceptance",
+        "status": "completed",
+        "conclusion": "skipped",
+        "started_at": "2026-10-21T19:02:29Z",
+        "completed_at": "2026-10-21T19:02:29Z",
+        "seconds": 0
+      },
+      {
+        "id": 119547305998,
+        "name": "publication-release-gate",
+        "status": "completed",
+        "conclusion": "failure",
+        "started_at": "2026-10-21T23:33:14Z",
+        "completed_at": "2026-10-21T23:33:22Z",
+        "seconds": 8
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "id": 12388485015,
+      "name": "a421-a42-million-monthly-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "086336d545177549373f0580b2bc7203acc5cb842757c576ec05204d1c9c597f",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12388485015",
+      "size_in_bytes": 4124466
+    },
+    {
+      "id": 12387263351,
+      "name": "a421-gate-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "a5b0dd280f23845b9b81c9f0a91c56ef25ed195657e6db62ed7c0a33ca8705af",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12387263351",
+      "size_in_bytes": 42839
+    },
+    {
+      "id": 12384481878,
+      "name": "a421-a42-million-plans-monthly-2-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "f44b50d896177dd753365c5d9e60cd9dcb900a1fc355ec3fd1fcbd456d9ee462",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12384481878",
+      "size_in_bytes": 159660
+    },
+    {
+      "id": 12383591010,
+      "name": "a421-a42-event-prototype-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "d6fe56abe8bd9b9a0c755951a9ccf86e83e07b1363754b2809eeeacc4634f5b1",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12383591010",
+      "size_in_bytes": 373562
+    },
+    {
+      "id": 12383425327,
+      "name": "a421-a42-shapes-high-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "8d61af4eab22bab80b80747d1497bcf73554f51fde3b5706bf4a1941344fcd0f",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12383425327",
+      "size_in_bytes": 286217
+    },
+    {
+      "id": 12383311765,
+      "name": "a421-a42-million-readers-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "b76752dd78680e52cb56d01ec1c391b40d9daf3f798567af1113273fa906355e",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12383311765",
+      "size_in_bytes": 1224558
+    },
+    {
+      "id": 12382841958,
+      "name": "a421-a42-million-plans-monthly-1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "70a66183bf3cb6923ba6d7366ee065e7ae4d6b17563925da34529d16e5740487",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12382841958",
+      "size_in_bytes": 132326
+    },
+    {
+      "id": 12382762987,
+      "name": "a421-a42-shapes-partial-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "498032361f488552334811e55912d8458d1827cb217d87883895457bf70b0079",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12382762987",
+      "size_in_bytes": 285880
+    },
+    {
+      "id": 12382684393,
+      "name": "a421-a42-shapes-a_only-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "a7a53b4167a7af4d56af8a63d060557fd6a9aa43d8701a633e381f5f3dfacfa6",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12382684393",
+      "size_in_bytes": 285307
+    },
+    {
+      "id": 12382108392,
+      "name": "a421-a42-shapes-b_only-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "5ac49405af3a51f0613ffb97cbaee51dda3920d1070abc5f90fa342d875f470e",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12382108392",
+      "size_in_bytes": 282303
+    },
+    {
+      "id": 12381569117,
+      "name": "a421-a42-shapes-mismatched-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "6fe5b9084785ad18ac3adf70c8088c6dba566fa49dce3d3aad3e68492cade9e2",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12381569117",
+      "size_in_bytes": 280054
+    },
+    {
+      "id": 12381378721,
+      "name": "a421-a42-million-plans-monthly-0-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "c14a4ec21c625b359e7089120f2e8107d9a80205ec02aa596001f381ecac3210",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12381378721",
+      "size_in_bytes": 157351
+    },
+    {
+      "id": 12380770392,
+      "name": "a421-a42-million-plans-window_matrix-1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "ff73448525cf1cdd178f38db2017cdab914f62a36c6ed93a795d98b5ffd997b7",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12380770392",
+      "size_in_bytes": 64242
+    },
+    {
+      "id": 12380237997,
+      "name": "a421-a42-million-window-1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "26f041336c05e2b2b11c065597be85f26c8e992e9b52f8b2f071c60e0e7f13ab",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12380237997",
+      "size_in_bytes": 1362834
+    },
+    {
+      "id": 12380160499,
+      "name": "a421-a42-million-full-1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "3f81db512739dc994ee899a4c8b93602bb89816f991563104c03eb50975eb790",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12380160499",
+      "size_in_bytes": 1422453
+    },
+    {
+      "id": 12379000289,
+      "name": "a421-a42-million-full-0-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "f0ef54757237218343c675c2fcc7218884cbdcd8033a8003543dc02f38f42faf",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12379000289",
+      "size_in_bytes": 1422892
+    },
+    {
+      "id": 12378704424,
+      "name": "a421-a42-million-plans-full-1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "25e0fb61ce242e46bf460ff34b52b36b8e572e6c15ad1e41599e82168c11a29c",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12378704424",
+      "size_in_bytes": 163708
+    },
+    {
+      "id": 12377663075,
+      "name": "a421-a42-million-plans-window_matrix-0-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "e98beb21132ba44d0baacf78f39c577a74bc79246055383696da4a9102fb0300",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12377663075",
+      "size_in_bytes": 64263
+    },
+    {
+      "id": 12377094541,
+      "name": "a421-a42-million-window-0-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "6c8c78ad96ba040b4d33a97e244988b76bba1ff59395f5bfda0482287bce6b58",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12377094541",
+      "size_in_bytes": 1364020
+    },
+    {
+      "id": 12376860255,
+      "name": "a421-a42-million-plans-full-0-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "57c9f575cbefcefae53a514a071b9822fd5e72a627c85c733aee5828f6c41212",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12376860255",
+      "size_in_bytes": 165250
+    },
+    {
+      "id": 12375040797,
+      "name": "a421-a42-small-100k-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "734026273ecb4fcbf252da94ee362c5f81565e495c31f2e939c7c4cfab7f3d5d",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12375040797",
+      "size_in_bytes": 2527910
+    },
+    {
+      "id": 12373205592,
+      "name": "a421-contract-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "ee468df542f0d245909e800b10853fb73aab45cc9a26c6264c6e1347585df428",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12373205592",
+      "size_in_bytes": 86058
+    },
+    {
+      "id": 12373121481,
+      "name": "a421-a42-small-10k-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "28e67d12811878cae73b77efc9d0aa3ae258c41b6f2f3cfcf555ef37f0e3821e",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658114980/artifacts/12373121481",
+      "size_in_bytes": 2194218
+    },
+    {
+      "id": 12390041601,
+      "name": "a421-capacity-L2-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "403bef1f79e0625400cebd1fc0f84babcec83934db3a2caa386705f85400b0f3",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658115015/artifacts/12390041601",
+      "size_in_bytes": 1856
+    },
+    {
+      "id": 12389403415,
+      "name": "a421-publication-release-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "c58c78c627fd91ad24795bdd73d69d72db0268b81c53c91e0be43186ff651882",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658115015/artifacts/12389403415",
+      "size_in_bytes": 632
+    },
+    {
+      "id": 12380239119,
+      "name": "a421-capacity-L3-scaled-10pct-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "f2db05f035e9476f9c287af95aa09386586415ef6dee5d1d6853eb9350a0eeb4",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658115015/artifacts/12380239119",
+      "size_in_bytes": 4363
+    },
+    {
+      "id": 12377070461,
+      "name": "a421-core-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "adfeeaa862fbbc22da9a95781956de8df655f2f38fd511067e626902f52a013c",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658115015/artifacts/12377070461",
+      "size_in_bytes": 61428
+    },
+    {
+      "id": 12372453263,
+      "name": "a421-capacity-L1-c4f7d3e7a08fc084cbb8afdb8d36ac88980b5478-attempt1",
+      "zip_sha256": "cb3480e9e0dadd6308e557d869db9251ea0ff74aa04d4db518ca426bc1773731",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39658115015/artifacts/12372453263",
+      "size_in_bytes": 3862
+    }
+  ],
+  "l2_review": {
+    "stage_checkpoints": [
+      {
+        "at": "2026-10-21T19:03:55.6378536Z",
+        "level": "L2",
+        "stage": "stock_trade_status_daily",
+        "rows": 100000
+      },
+      {
+        "at": "2026-10-21T20:08:01.1540859Z",
+        "level": "L2",
+        "stage": "stock_factor_daily",
+        "rows": 200000
+      },
+      {
+        "at": "2026-10-21T20:08:02.0793777Z",
+        "level": "L2",
+        "stage": "market_daily",
+        "rows": 200020
+      },
+      {
+        "at": "2026-10-21T20:08:45.6488057Z",
+        "level": "L2",
+        "stage": "sector_factor_daily",
+        "rows": 201020
+      },
+      {
+        "at": "2026-10-21T20:08:46.6354668Z",
+        "level": "L2",
+        "stage": "theme_factor_daily",
+        "rows": 203020
+      },
+      {
+        "at": "2026-10-21T21:13:03.4909830Z",
+        "level": "L2",
+        "stage": "stock_state_daily",
+        "rows": 303020
+      },
+      {
+        "at": "2026-10-21T23:27:20.5974048Z",
+        "level": "L2",
+        "stage": "stock_opportunity_daily",
+        "rows": 403020
+      },
+      {
+        "at": "2026-10-21T23:28:27.2342730Z",
+        "level": "L2",
+        "stage": "strategy_signal",
+        "rows": 503020
+      }
+    ],
+    "last_successful_stage": {
+      "at": "2026-10-21T23:28:27.2342730Z",
+      "level": "L2",
+      "stage": "strategy_signal",
+      "rows": 503020
+    },
+    "disposition": "RESOURCE_DEFERRED",
+    "raw_receipt_failure_type": "OperationalError",
+    "raw_receipt_failure_code": null,
+    "soft_budget_minutes": 270,
+    "elapsed_seconds": 16203.612,
+    "interpretation": "Expiry is inferred from the configured timer and exact 270-minute boundary; the old receipt lost the initiating error during rollback. Original artifact bytes are retained, never backfilled with a missing timer flag.",
+    "followup": "The deadline wrapper now records actual timer expiry on the escaping exception, preserving OperationalError/sqlstate while failure_code becomes RESOURCE_DEFERRED only when the timer truly fired. The new regression fails on c4f7d3e and passes after the fix."
+  },
+  "additional_comparisons": {
+    "a42-million-monthly": {
+      "372429c4a81d0bf36e38179b61be145058a084c85edaf877e4ac2743027e46b7": {
+        "tables": [
+          {
+            "scope": "month_2",
+            "variant": "Q1_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.61431893099962,
+            "p95": 81.76117469490009,
+            "range": [
+              69.06732968099959,
+              81.77749200200014
+            ],
+            "samples": [
+              69.06732968099959,
+              81.61431893099962,
+              81.77749200200014
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 32.17759082900011,
+              "T4_candidate_validation_sql": 12.62866922899957,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.59857324699988,
+              "T6_frame": 7.679407838000316,
+              "T6_sort": 0.4627413580001303,
+              "checkpoint": 0.7158077299909564
+            },
+            "fetch_p95": 0.003946371799793269,
+            "fetch_p99": 0.004209173039944289,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "S5",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 109.71787525999935,
+            "p95": 112.6202492609008,
+            "range": [
+              109.02401587900022,
+              112.94273526100096
+            ],
+            "samples": [
+              112.94273526100096,
+              109.02401587900022,
+              109.71787525999935
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 32.01589389000037,
+              "T4_candidate_validation_sql": 12.681206152999948,
+              "T8_verify_inclusive": 30.683910706999995,
+              "T2_lock_hold": 109.61288040099953,
+              "T6_frame": 7.744396711999798,
+              "T6_sort": 0.657027995000135,
+              "checkpoint": 0.983422043997507
+            },
+            "fetch_p95": 0.04331904240007134,
+            "fetch_p99": 0.07140909196070425,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "Q0_SERVICE_CONTROL",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 31.239668814000197,
+            "p95": 32.41515614999994,
+            "range": [
+              30.7390262839981,
+              32.54576585399991
+            ],
+            "samples": [
+              30.7390262839981,
+              31.239668814000197,
+              32.54576585399991
+            ],
+            "protection": "NOT_EQUIVALENT",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 0,
+              "T4_candidate_validation_sql": 0,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 0,
+              "T6_frame": 7.7396540140000525,
+              "T6_sort": 0,
+              "checkpoint": 0.8341871080001511
+            },
+            "fetch_p95": 0.0444610831999853,
+            "fetch_p99": 0.07677886160000526,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "Q1_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 111.31497238800011,
+            "p95": 113.75611196790028,
+            "range": [
+              95.0055034259999,
+              114.0273496990003
+            ],
+            "samples": [
+              111.31497238800011,
+              95.0055034259999,
+              114.0273496990003
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.081896057999984,
+              "T4_candidate_validation_sql": 12.665807605000282,
+              "T8_verify_inclusive": 32.004335984000136,
+              "T2_lock_hold": 111.21087030399985,
+              "T6_frame": 7.621284838000065,
+              "T6_sort": 0.4568279420000181,
+              "checkpoint": 0.7044544810003117
+            },
+            "fetch_p95": 0.003922730200429214,
+            "fetch_p99": 0.004220132639966323,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "S3_INLINE",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 80.76617471699956,
+            "p95": 81.46316847329967,
+            "range": [
+              79.34525543900054,
+              81.54061222399969
+            ],
+            "samples": [
+              79.34525543900054,
+              81.54061222399969,
+              80.76617471699956
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.10149775300033,
+              "T4_candidate_validation_sql": 12.661177506999593,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 80.748523622,
+              "T6_frame": 7.712724164000065,
+              "T6_sort": 0.4495372139999745,
+              "checkpoint": 0.7329273239838585
+            },
+            "fetch_p95": 0.003927115600345132,
+            "fetch_p99": 0.004133314839982631,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "Q2_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 115.22255801200026,
+            "p95": 115.75887962830002,
+            "range": [
+              110.4674409600002,
+              115.81847091899999
+            ],
+            "samples": [
+              115.22255801200026,
+              115.81847091899999,
+              110.4674409600002
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.81997488800016,
+              "T4_candidate_validation_sql": 12.665671493000445,
+              "T8_verify_inclusive": 32.02435098199976,
+              "T2_lock_hold": 115.11220802300068,
+              "T6_frame": 7.8800782030002665,
+              "T6_sort": 0.5722482330002094,
+              "checkpoint": 0.8493793149987141
+            },
+            "fetch_p95": 0.4016235222000887,
+            "fetch_p99": 0.42033786669006984,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "S4",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 80.32440925499941,
+            "p95": 82.78484551349975,
+            "range": [
+              79.46158176599965,
+              83.05822731999979
+            ],
+            "samples": [
+              80.32440925499941,
+              79.46158176599965,
+              83.05822731999979
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.761422664000747,
+              "T4_candidate_validation_sql": 12.661659551000412,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 80.3075289390008,
+              "T6_frame": 7.645626790999813,
+              "T6_sort": 0.4454736090001461,
+              "checkpoint": 0.7111878970031285
+            },
+            "fetch_p95": 0.003906670400101575,
+            "fetch_p99": 0.004130057559923444,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "S3_KEYS",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.91980649200013,
+            "p95": 82.02650961180034,
+            "range": [
+              80.08635677500024,
+              82.03836551400036
+            ],
+            "samples": [
+              82.03836551400036,
+              81.91980649200013,
+              80.08635677500024
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.66576400500071,
+              "T4_candidate_validation_sql": 12.661699380999835,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.90143608000017,
+              "T6_frame": 7.6799315589996695,
+              "T6_sort": 0.44753178900009516,
+              "checkpoint": 0.6966083809957127
+            },
+            "fetch_p95": 0.00393359639983828,
+            "fetch_p99": 0.004198030040315643,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 77.97356933799983,
+            "p95": 78.74839123509938,
+            "range": [
+              66.45884997000007,
+              78.83448255699932
+            ],
+            "samples": [
+              77.97356933799983,
+              78.83448255699932,
+              66.45884997000007
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.42087789499965,
+              "T4_candidate_validation_sql": 12.656575669000631,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 77.95675485900028,
+              "T6_frame": 7.745244710999941,
+              "T6_sort": 0.6565750999998272,
+              "checkpoint": 0.8477868139907514
+            },
+            "fetch_p95": 0.04152059379998718,
+            "fetch_p99": 0.07031358780026493,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 76.97399228500035,
+            "p95": 78.31961225500027,
+            "range": [
+              70.12323621900003,
+              78.46912558500026
+            ],
+            "samples": [
+              78.46912558500026,
+              76.97399228500035,
+              70.12323621900003
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.116456710999955,
+              "T4_candidate_validation_sql": 12.665354452000429,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 76.95703658300044,
+              "T6_frame": 7.684259153999847,
+              "T6_sort": 0.6556906299992988,
+              "checkpoint": 0.8739170719964022
+            },
+            "fetch_p95": 0.041469131599887986,
+            "fetch_p99": 0.07080168140000297,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 109.03273486799935,
+            "p95": 110.84032603319937,
+            "range": [
+              95.63950951599998,
+              111.04116949599938
+            ],
+            "samples": [
+              109.03273486799935,
+              111.04116949599938,
+              95.63950951599998
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 29.9548066870002,
+              "T4_candidate_validation_sql": 12.667782084000464,
+              "T8_verify_inclusive": 30.8913547129996,
+              "T2_lock_hold": 108.92630346500118,
+              "T6_frame": 7.753690948999065,
+              "T6_sort": 0.6687067189996014,
+              "checkpoint": 0.9428417530021989
+            },
+            "fetch_p95": 0.041780824000306895,
+            "fetch_p99": 0.07133772251990195,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "S3_KEYS",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.3726405389998,
+            "p95": 81.77862820169894,
+            "range": [
+              79.61189464000017,
+              81.82373794199884
+            ],
+            "samples": [
+              81.3726405389998,
+              79.61189464000017,
+              81.82373794199884
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.266066598999714,
+              "T4_candidate_validation_sql": 12.671958734999862,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.3547978759998,
+              "T6_frame": 7.642340401000183,
+              "T6_sort": 0.4559770050000225,
+              "checkpoint": 0.7738855079933273
+            },
+            "fetch_p95": 0.003925531599998066,
+            "fetch_p99": 0.004128355200246006,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "S3",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.45507570599966,
+            "p95": 83.04794226570047,
+            "range": [
+              74.67070416899992,
+              83.22492743900057
+            ],
+            "samples": [
+              74.67070416899992,
+              83.22492743900057,
+              81.45507570599966
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 32.1783669739998,
+              "T4_candidate_validation_sql": 12.647356654000305,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.43853579300003,
+              "T6_frame": 7.6832804570003645,
+              "T6_sort": 0.4410810950000723,
+              "checkpoint": 0.6929748980051045
+            },
+            "fetch_p95": 0.003903142399940407,
+            "fetch_p99": 0.004169774120528018,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "S3",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.49150213300072,
+            "p95": 83.37828050559992,
+            "range": [
+              80.60289356099975,
+              83.58792254699983
+            ],
+            "samples": [
+              80.60289356099975,
+              83.58792254699983,
+              81.49150213300072
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.38226892900002,
+              "T4_candidate_validation_sql": 12.681744079000055,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.47346613300033,
+              "T6_frame": 7.636605959000008,
+              "T6_sort": 0.4482291060003263,
+              "checkpoint": 0.7218886949983698
+            },
+            "fetch_p95": 0.003929586599770119,
+            "fetch_p99": 0.004177433000368182,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "S3",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 113.70466279499942,
+            "p95": 115.71079296569982,
+            "range": [
+              112.37890092399903,
+              115.93369631799987
+            ],
+            "samples": [
+              115.93369631799987,
+              113.70466279499942,
+              112.37890092399903
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.797850622999704,
+              "T4_candidate_validation_sql": 12.645980369999961,
+              "T8_verify_inclusive": 32.269845840000016,
+              "T2_lock_hold": 113.5962217160004,
+              "T6_frame": 7.66558422900016,
+              "T6_sort": 0.449107983000431,
+              "checkpoint": 0.6989171869959137
+            },
+            "fetch_p95": 0.003921477599851642,
+            "fetch_p99": 0.004128716640325365,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "Q0_SERVICE_CONTROL",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 34.11038844700033,
+            "p95": 35.50281920529996,
+            "range": [
+              33.89514793699891,
+              35.65753373399991
+            ],
+            "samples": [
+              35.65753373399991,
+              33.89514793699891,
+              34.11038844700033
+            ],
+            "protection": "NOT_EQUIVALENT",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 0,
+              "T4_candidate_validation_sql": 0,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 0,
+              "T6_frame": 7.743599486999301,
+              "T6_sort": 0,
+              "checkpoint": 0.8718093219758885
+            },
+            "fetch_p95": 0.042477278200044565,
+            "fetch_p99": 0.07288459283995508,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "S4",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 113.4922748199997,
+            "p95": 114.4035274750001,
+            "range": [
+              112.25239890899957,
+              114.50477777000015
+            ],
+            "samples": [
+              112.25239890899957,
+              113.4922748199997,
+              114.50477777000015
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.955092782000065,
+              "T4_candidate_validation_sql": 12.678489526000249,
+              "T8_verify_inclusive": 31.864006060000065,
+              "T2_lock_hold": 113.3861184819998,
+              "T6_frame": 7.675475885999731,
+              "T6_sort": 0.4521033749997514,
+              "checkpoint": 0.7454770379949878
+            },
+            "fetch_p95": 0.003931004200148891,
+            "fetch_p99": 0.0041123992401480795,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "Q2_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 84.02266870100084,
+            "p95": 84.29256776420107,
+            "range": [
+              70.26808960700032,
+              84.32255654900109
+            ],
+            "samples": [
+              70.26808960700032,
+              84.32255654900109,
+              84.02266870100084
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.537804813999173,
+              "T4_candidate_validation_sql": 12.647555316999842,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 84.00608669699977,
+              "T6_frame": 7.825912697000149,
+              "T6_sort": 0.5650604109998767,
+              "checkpoint": 0.8567510800053242
+            },
+            "fetch_p95": 0.3976728410498936,
+            "fetch_p99": 0.42037558890934634,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "S5",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 78.83927359900008,
+            "p95": 80.61916847740022,
+            "range": [
+              78.79367357400042,
+              80.81693457500023
+            ],
+            "samples": [
+              78.83927359900008,
+              78.79367357400042,
+              80.81693457500023
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.799725551000392,
+              "T4_candidate_validation_sql": 12.669112989000496,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 78.822911406,
+              "T6_frame": 7.721901968000111,
+              "T6_sort": 0.657997372999489,
+              "checkpoint": 0.9777940069943725
+            },
+            "fetch_p95": 0.0431355293998422,
+            "fetch_p99": 0.07149289483990287,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "Q2_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 85.20439107900074,
+            "p95": 85.37433991230064,
+            "range": [
+              70.39178677199993,
+              85.39322311600063
+            ],
+            "samples": [
+              85.20439107900074,
+              70.39178677199993,
+              85.39322311600063
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 32.1135335099998,
+              "T4_candidate_validation_sql": 12.664302022999891,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 85.18661124499977,
+              "T6_frame": 7.875764613999763,
+              "T6_sort": 0.5573928410003646,
+              "checkpoint": 0.8550989670038689
+            },
+            "fetch_p95": 0.3982603388000257,
+            "fetch_p99": 0.4164006441993115,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "Q0_SERVICE_CONTROL",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 30.937582982000094,
+            "p95": 31.055409135200442,
+            "range": [
+              30.806707275000008,
+              31.068500930000482
+            ],
+            "samples": [
+              30.937582982000094,
+              30.806707275000008,
+              31.068500930000482
+            ],
+            "protection": "NOT_EQUIVALENT",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 0,
+              "T4_candidate_validation_sql": 0,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 0,
+              "T6_frame": 7.696389460000091,
+              "T6_sort": 0,
+              "checkpoint": 0.8394001209708222
+            },
+            "fetch_p95": 0.04184219739997843,
+            "fetch_p99": 0.06945555068003159,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "S4",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.33163347400023,
+            "p95": 83.53738861899983,
+            "range": [
+              79.43458001299996,
+              83.78247252399979
+            ],
+            "samples": [
+              83.78247252399979,
+              79.43458001299996,
+              81.33163347400023
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.860306118999688,
+              "T4_candidate_validation_sql": 12.646753832000286,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.31524607400024,
+              "T6_frame": 7.647968936000325,
+              "T6_sort": 0.450587311000163,
+              "checkpoint": 0.7053887810020569
+            },
+            "fetch_p95": 0.003942083200126944,
+            "fetch_p99": 0.004236917679754697,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "Q1_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 80.15360039900042,
+            "p95": 80.61294675499994,
+            "range": [
+              68.01612811500001,
+              80.66398523899989
+            ],
+            "samples": [
+              80.15360039900042,
+              80.66398523899989,
+              68.01612811500001
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.307322528999975,
+              "T4_candidate_validation_sql": 12.660813082000004,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 80.13706989099956,
+              "T6_frame": 7.747873678999895,
+              "T6_sort": 0.4707540989993504,
+              "checkpoint": 0.7287872590077313
+            },
+            "fetch_p95": 0.0039952849994733695,
+            "fetch_p99": 0.004201793479696789,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_1",
+            "variant": "S5",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 78.68363016799958,
+            "p95": 80.14946583440042,
+            "range": [
+              78.11833797200052,
+              80.31233646400051
+            ],
+            "samples": [
+              78.11833797200052,
+              78.68363016799958,
+              80.31233646400051
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.661350414000026,
+              "T4_candidate_validation_sql": 12.693915459999516,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 78.66691321200005,
+              "T6_frame": 7.66361184499965,
+              "T6_sort": 0.6311977499999557,
+              "checkpoint": 0.9850680409927008
+            },
+            "fetch_p95": 0.04241278439967573,
+            "fetch_p99": 0.07142248388012376,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "S3_INLINE",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 113.48328192300141,
+            "p95": 114.40048843800028,
+            "range": [
+              112.41987737399995,
+              114.50240027300015
+            ],
+            "samples": [
+              112.41987737399995,
+              114.50240027300015,
+              113.48328192300141
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 32.049511231,
+              "T4_candidate_validation_sql": 12.680220155000825,
+              "T8_verify_inclusive": 32.27999125000042,
+              "T2_lock_hold": 113.37593957099944,
+              "T6_frame": 7.695728499999859,
+              "T6_sort": 0.450557875999948,
+              "checkpoint": 0.8025188870005877
+            },
+            "fetch_p95": 0.003931093200480973,
+            "fetch_p99": 0.004134311919806351,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_2",
+            "variant": "S3_INLINE",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 81.09638675699989,
+            "p95": 82.74463009530012,
+            "range": [
+              79.78998997999861,
+              82.92776824400016
+            ],
+            "samples": [
+              81.09638675699989,
+              79.78998997999861,
+              82.92776824400016
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.461162736000006,
+              "T4_candidate_validation_sql": 12.694554377999339,
+              "T8_verify_inclusive": 0,
+              "T2_lock_hold": 81.07818315800068,
+              "T6_frame": 7.644539232999932,
+              "T6_sort": 0.44913315499979944,
+              "checkpoint": 0.7167375850012832
+            },
+            "fetch_p95": 0.0038998699999865495,
+            "fetch_p99": 0.004169863400129543,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "month_3",
+            "variant": "S3_KEYS",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 112.2009033280001,
+            "p95": 114.03594693670075,
+            "range": [
+              111.53692625900021,
+              114.23984067100082
+            ],
+            "samples": [
+              114.23984067100082,
+              111.53692625900021,
+              112.2009033280001
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.865436603000035,
+              "T4_candidate_validation_sql": 12.672650688999965,
+              "T8_verify_inclusive": 30.279006259999733,
+              "T2_lock_hold": 112.09544428500067,
+              "T6_frame": 7.7065203420002035,
+              "T6_sort": 0.4464457920003042,
+              "checkpoint": 0.7102240679996612
+            },
+            "fetch_p95": 0.003922635799972341,
+            "fetch_p99": 0.0041115692397579555,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          }
+        ],
+        "golden": "PASS",
+        "monthly_chain_tables": [
+          {
+            "variant": "Q1_CURRENT",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 273.5932765579996,
+            "p95": 275.72192554580073,
+            "samples": [
+              232.0889612219995,
+              273.5932765579996,
+              275.95844210000087
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "S5",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 269.8547468070019,
+            "p95": 270.74790634980025,
+            "samples": [
+              269.8547468070019,
+              266.5469196459999,
+              270.8471462990001
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "Q0_SERVICE_CONTROL",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 96.41855819100101,
+            "p95": 98.75086199579994,
+            "samples": [
+              95.5717572029971,
+              96.41855819100101,
+              99.01000686299983
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "S3_INLINE",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 275.34584339700086,
+            "p95": 278.60828700660005,
+            "samples": [
+              271.5551227929991,
+              278.970780741,
+              275.34584339700086
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "Q2_CURRENT",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 284.7495056400021,
+            "p95": 285.18587702640156,
+            "samples": [
+              284.7495056400021,
+              285.23436273600146,
+              251.12731733900046
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "S4",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 275.14831754899933,
+            "p95": 278.69862063259916,
+            "samples": [
+              275.14831754899933,
+              279.09309875299914,
+              273.40093954899976
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "S3_KEYS",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 274.1109980449992,
+            "p95": 277.1901587363006,
+            "samples": [
+              273.18718641300075,
+              277.53228770200076,
+              274.1109980449992
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 264.841209709999,
+            "p95": 267.2195989480994,
+            "samples": [
+              267.4838644189995,
+              264.841209709999,
+              232.22159570500008
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          },
+          {
+            "variant": "S3",
+            "cursor_fraction": "0.1",
+            "protocol": "ROOT_TAIL_ONLY",
+            "repeats": 3,
+            "p50": 274.43687019099843,
+            "p95": 278.0226701494005,
+            "samples": [
+              274.1923230339996,
+              274.43687019099843,
+              278.4210923670007
+            ],
+            "scope": "Sum actual monthly read/commit/final spans under the labelled protocol; not sum of monthly medians; excludes numerical engines, golden oracle and harness persistence"
+          }
+        ],
+        "monthly_chains_complete": true,
+        "experiment_complete": true,
+        "event_install_seconds": null,
+        "measured_groups_complete": true,
+        "state": "A4_2_NO_SAFE_WINNER",
+        "read_performance_pass": "NOT_CLAIMED",
+        "authorize_a4_3": false,
+        "reason": "No candidate authorized; E0 SQL needs scale/resource review; E1/E2 rejected and E3 rollback/privileged gaps remain",
+        "cloud": "NOT_AUTHORIZED_NOT_PERFORMED",
+        "all_slow_samples_retained": true
+      }
+    },
+    "a42-million-readers": {
+      "1f891a8ac0f5066850c874297f924084b97f42ba9116bae6a2119db86cdad073": {
+        "tables": [
+          {
+            "scope": "full",
+            "variant": "Q1_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 120.82559670299975,
+            "p95": 120.87510463469984,
+            "range": [
+              118.52679289800017,
+              120.88060551599983
+            ],
+            "samples": [
+              120.88060551599983,
+              120.82559670299975,
+              118.52679289800017
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.493010196999876,
+              "T4_candidate_validation_sql": 23.722364733000177,
+              "T8_verify_inclusive": 30.081293885999912,
+              "T2_lock_hold": 120.70803262300001,
+              "T6_frame": 7.475732669000081,
+              "T6_sort": 0.5158933870000055,
+              "checkpoint": 1.0322938210038046
+            },
+            "fetch_p95": 0.00546463039995615,
+            "fetch_p99": 0.03505410663990915,
+            "reader_p95": 1.0834480236499986,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "S5",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 114.71983164899984,
+            "p95": 116.24587391969978,
+            "range": [
+              110.13471611199998,
+              116.41543417199978
+            ],
+            "samples": [
+              114.71983164899984,
+              116.41543417199978,
+              110.13471611199998
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 29.76289486099995,
+              "T4_candidate_validation_sql": 23.918444143999977,
+              "T8_verify_inclusive": 29.87981648699997,
+              "T2_lock_hold": 114.6048759600003,
+              "T6_frame": 7.502181757000017,
+              "T6_sort": 0.6844459940000434,
+              "checkpoint": 1.1272590209999862
+            },
+            "fetch_p95": 0.06368504000006396,
+            "fetch_p99": 0.21021753420002823,
+            "reader_p95": 1.0919658615500225,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "Q1_CURRENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 116.02849630200035,
+            "p95": 117.14822299770017,
+            "range": [
+              112.1006868909999,
+              117.27263707500015
+            ],
+            "samples": [
+              117.27263707500015,
+              116.02849630200035,
+              112.1006868909999
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 29.417601857999898,
+              "T4_candidate_validation_sql": 24.015332916000034,
+              "T8_verify_inclusive": 29.0507251250001,
+              "T2_lock_hold": 115.91899195200017,
+              "T6_frame": 7.5311865619999026,
+              "T6_sort": 0.5107862730001216,
+              "checkpoint": 0.9929324339996128
+            },
+            "fetch_p95": 0.0055299903999866725,
+            "fetch_p99": 0.03386199836011656,
+            "reader_p95": 1.0789299300999005,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "S3_KEYS",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 118.82795400899977,
+            "p95": 119.25395317889998,
+            "range": [
+              117.28935855500049,
+              119.30128642
+            ],
+            "samples": [
+              119.30128642,
+              118.82795400899977,
+              117.28935855500049
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.389519893999932,
+              "T4_candidate_validation_sql": 24.081922639999902,
+              "T8_verify_inclusive": 29.654585276000034,
+              "T2_lock_hold": 118.70773631100019,
+              "T6_frame": 7.61528959799989,
+              "T6_sort": 0.5131072839999433,
+              "checkpoint": 1.1522978350001267
+            },
+            "fetch_p95": 0.005343585600030565,
+            "fetch_p99": 0.035297748080029126,
+            "reader_p95": 1.1953868594000823,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 118.46635488600032,
+            "p95": 121.73295921899994,
+            "range": [
+              115.04521724599999,
+              122.0959152559999
+            ],
+            "samples": [
+              118.46635488600032,
+              115.04521724599999,
+              122.0959152559999
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.28754202799996,
+              "T4_candidate_validation_sql": 23.941081778999887,
+              "T8_verify_inclusive": 29.510596606999798,
+              "T2_lock_hold": 118.35196521700027,
+              "T6_frame": 7.421951511000088,
+              "T6_sort": 0.6834756709999965,
+              "checkpoint": 1.1759120990006977
+            },
+            "fetch_p95": 0.08048430079993522,
+            "fetch_p99": 0.14359739128005458,
+            "reader_p95": 1.0330248148000236,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 114.01172086299994,
+            "p95": 115.90533688569977,
+            "range": [
+              110.26423483200006,
+              116.11573866599974
+            ],
+            "samples": [
+              110.26423483200006,
+              116.11573866599974,
+              114.01172086299994
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 29.51134700900002,
+              "T4_candidate_validation_sql": 23.870219059999954,
+              "T8_verify_inclusive": 30.265738344000056,
+              "T2_lock_hold": 113.90422261999993,
+              "T6_frame": 7.56595792600001,
+              "T6_sort": 0.690539273000013,
+              "checkpoint": 1.193332123995333
+            },
+            "fetch_p95": 0.06280766279996897,
+            "fetch_p99": 0.1934305390001282,
+            "reader_p95": 1.1082060916000387,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "S5",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 114.59680689900006,
+            "p95": 115.48796438819969,
+            "range": [
+              114.4980701049999,
+              115.58698188699964
+            ],
+            "samples": [
+              114.59680689900006,
+              115.58698188699964,
+              114.4980701049999
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.485162615000036,
+              "T4_candidate_validation_sql": 23.678883606,
+              "T8_verify_inclusive": 29.577916927999922,
+              "T2_lock_hold": 114.48112784900013,
+              "T6_frame": 7.441997610000271,
+              "T6_sort": 0.7555950170001324,
+              "checkpoint": 1.1655779899847403
+            },
+            "fetch_p95": 0.06339761500003079,
+            "fetch_p99": 0.20735998608000955,
+            "reader_p95": 0.9161798817501676,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "S3_KEYS",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 115.86503551999976,
+            "p95": 116.6136868769,
+            "range": [
+              113.07787587899998,
+              116.69687036100004
+            ],
+            "samples": [
+              113.07787587899998,
+              115.86503551999976,
+              116.69687036100004
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 28.83609694500001,
+              "T4_candidate_validation_sql": 23.918966073000092,
+              "T8_verify_inclusive": 30.042866538,
+              "T2_lock_hold": 115.76109133100044,
+              "T6_frame": 7.550348529000075,
+              "T6_sort": 0.520570318999944,
+              "checkpoint": 0.9003001700000368
+            },
+            "fetch_p95": 0.005470143400020788,
+            "fetch_p99": 0.03577432020003471,
+            "reader_p95": 1.072932264650035,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          }
+        ],
+        "golden": "PASS",
+        "monthly_chain_tables": [],
+        "monthly_chains_complete": false,
+        "experiment_complete": true,
+        "event_install_seconds": null,
+        "measured_groups_complete": true,
+        "state": "A4_2_NO_SAFE_WINNER",
+        "read_performance_pass": "NOT_CLAIMED",
+        "authorize_a4_3": false,
+        "reason": "No candidate authorized; E0 SQL needs scale/resource review; E1/E2 rejected and E3 rollback/privileged gaps remain",
+        "cloud": "NOT_AUTHORIZED_NOT_PERFORMED",
+        "all_slow_samples_retained": true
+      }
+    },
+    "a42-million-window-0": {
+      "372429c4a81d0bf36e38179b61be145058a084c85edaf877e4ac2743027e46b7": {
+        "tables": [
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 3,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 108.1816766879997,
+            "p95": 115.1094748406998,
+            "range": [
+              100.57201889200019,
+              115.8792301909998
+            ],
+            "samples": [
+              108.1816766879997,
+              100.57201889200019,
+              115.8792301909998
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 31.125115799000014,
+              "T4_candidate_validation_sql": 5.248816232999957,
+              "T8_verify_inclusive": 31.290883203999783,
+              "T2_lock_hold": 108.06106545099988,
+              "T6_frame": 7.983048398999927,
+              "T6_sort": 0.5604199150000113,
+              "checkpoint": 0.983072221998782
+            },
+            "fetch_p95": 0.24130670719999897,
+            "fetch_p99": 0.2457189730199184,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 10,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 105.64099636900005,
+            "p95": 117.89652448299987,
+            "range": [
+              97.05706436300034,
+              119.25824982899985
+            ],
+            "samples": [
+              105.64099636900005,
+              97.05706436300034,
+              119.25824982899985
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.687373707999996,
+              "T4_candidate_validation_sql": 5.229326110999864,
+              "T8_verify_inclusive": 32.27326019999987,
+              "T2_lock_hold": 105.53705359799983,
+              "T6_frame": 7.997488468000029,
+              "T6_sort": 0.5499436139998579,
+              "checkpoint": 0.8369416069990621
+            },
+            "fetch_p95": 0.0042306880499495495,
+            "fetch_p99": 0.7147317075099773,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 112.81548307499952,
+            "p95": 116.14683860280009,
+            "range": [
+              103.42710269199983,
+              116.51698921700017
+            ],
+            "samples": [
+              116.51698921700017,
+              103.42710269199983,
+              112.81548307499952
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 33.30701823499976,
+              "T4_candidate_validation_sql": 12.60778842200034,
+              "T8_verify_inclusive": 34.14945186199975,
+              "T2_lock_hold": 112.73355080700003,
+              "T6_frame": 7.755995901999995,
+              "T6_sort": 0.6270366659999809,
+              "checkpoint": 0.9055284090022724
+            },
+            "fetch_p95": 0.042091546399842625,
+            "fetch_p99": 0.07020959355984814,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 1,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 118.57478054900002,
+            "p95": 120.24294584630006,
+            "range": [
+              104.69762679899998,
+              120.42829754600007
+            ],
+            "samples": [
+              118.57478054900002,
+              104.69762679899998,
+              120.42829754600007
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.45547393200013,
+              "T4_candidate_validation_sql": 12.574795406000248,
+              "T8_verify_inclusive": 30.359617956999955,
+              "T2_lock_hold": 118.45922219700014,
+              "T6_frame": 8.198445565000043,
+              "T6_sort": 0.5390048790000037,
+              "checkpoint": 1.3439947160059091
+            },
+            "fetch_p95": 0.09362675699974261,
+            "fetch_p99": 0.0955576234399723,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": null,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 113.51606194799979,
+            "p95": 117.34523356320001,
+            "range": [
+              109.45898180899985,
+              117.77069707600003
+            ],
+            "samples": [
+              117.77069707600003,
+              113.51606194799979,
+              109.45898180899985
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 33.377165862999846,
+              "T4_candidate_validation_sql": 12.58500929999991,
+              "T8_verify_inclusive": 30.632953541999996,
+              "T2_lock_hold": 113.40121716299996,
+              "T6_frame": 7.769873621999977,
+              "T6_sort": 0.4483293030000368,
+              "checkpoint": 0.7773667719986861
+            },
+            "fetch_p95": 0.004041089399970587,
+            "fetch_p99": 0.004492423479841818,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 5,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 104.69044193200011,
+            "p95": 119.31802503370028,
+            "range": [
+              98.21786185199994,
+              120.94331204500031
+            ],
+            "samples": [
+              120.94331204500031,
+              98.21786185199994,
+              104.69044193200011
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 30.162646116000133,
+              "T4_candidate_validation_sql": 5.2002937809998,
+              "T8_verify_inclusive": 30.564055244999963,
+              "T2_lock_hold": 104.58138524700007,
+              "T6_frame": 7.991076748000069,
+              "T6_sort": 0.5757586019999508,
+              "checkpoint": 0.9216205519896903
+            },
+            "fetch_p95": 0.3730430303500725,
+            "fetch_p99": 0.38350875094003073,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 20,
+            "cursor_fraction": "0.1",
+            "repeats": 3,
+            "p50": 113.37112890399999,
+            "p95": 115.7718792343,
+            "range": [
+              111.05601942300018,
+              116.03862927099999
+            ],
+            "samples": [
+              116.03862927099999,
+              113.37112890399999,
+              111.05601942300018
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 33.86518746599995,
+              "T4_candidate_validation_sql": 12.572577646999889,
+              "T8_verify_inclusive": 32.53215646600029,
+              "T2_lock_hold": 113.33467176699992,
+              "T6_frame": 8.012022261000084,
+              "T6_sort": 0.5399779919998764,
+              "checkpoint": 0.8334550159947867
+            },
+            "fetch_p95": 0.004077185550067952,
+            "fetch_p99": 1.3787200728700737,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          }
+        ],
+        "golden": "PASS",
+        "monthly_chain_tables": [],
+        "monthly_chains_complete": false,
+        "experiment_complete": true,
+        "event_install_seconds": null,
+        "measured_groups_complete": true,
+        "state": "A4_2_NO_SAFE_WINNER",
+        "read_performance_pass": "NOT_CLAIMED",
+        "authorize_a4_3": false,
+        "reason": "No candidate authorized; E0 SQL needs scale/resource review; E1/E2 rejected and E3 rollback/privileged gaps remain",
+        "cloud": "NOT_AUTHORIZED_NOT_PERFORMED",
+        "all_slow_samples_retained": true
+      }
+    },
+    "a42-million-window-1": {
+      "372429c4a81d0bf36e38179b61be145058a084c85edaf877e4ac2743027e46b7": {
+        "tables": [
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 1,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 115.5146371550004,
+            "p95": 141.19020486260015,
+            "range": [
+              111.20821214899979,
+              144.04304571900013
+            ],
+            "samples": [
+              115.5146371550004,
+              111.20821214899979,
+              144.04304571900013
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 26.532143460000043,
+              "T4_candidate_validation_sql": 19.92469642700007,
+              "T8_verify_inclusive": 27.30653759200004,
+              "T2_lock_hold": 115.41479602899972,
+              "T6_frame": 7.319743054000014,
+              "T6_sort": 0.705770305000442,
+              "checkpoint": 1.3550521409999874
+            },
+            "fetch_p95": 0.10252362620003623,
+            "fetch_p99": 0.5974670595199768,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 20,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 107.55341801400027,
+            "p95": 109.7667077925,
+            "range": [
+              104.76659956200024,
+              110.01262887899998
+            ],
+            "samples": [
+              104.76659956200024,
+              107.55341801400027,
+              110.01262887899998
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 26.986851430000115,
+              "T4_candidate_validation_sql": 19.926903476000007,
+              "T8_verify_inclusive": 25.8886712540002,
+              "T2_lock_hold": 107.45811658599996,
+              "T6_frame": 7.258415376999892,
+              "T6_sort": 0.5977830910001103,
+              "checkpoint": 0.8717345739960365
+            },
+            "fetch_p95": 0.00364739579996467,
+            "fetch_p99": 1.2677659626001196,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "full",
+            "variant": "Q0_SAFETY_EQUIVALENT",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 106.13352117499971,
+            "p95": 116.27909731339994,
+            "range": [
+              105.09485192999978,
+              117.40638355099998
+            ],
+            "samples": [
+              105.09485192999978,
+              117.40638355099998,
+              106.13352117499971
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 26.81851544700021,
+              "T4_candidate_validation_sql": 19.951007781000044,
+              "T8_verify_inclusive": 27.374206664999974,
+              "T2_lock_hold": 106.03725240399945,
+              "T6_frame": 7.0833467150000615,
+              "T6_sort": 0.6714804730000878,
+              "checkpoint": 0.9091839870018816
+            },
+            "fetch_p95": 0.04109303080003883,
+            "fetch_p99": 0.11223160732000906,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": null,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 109.89744143200028,
+            "p95": 113.79706476820053,
+            "range": [
+              109.66230279299998,
+              114.23035625000057
+            ],
+            "samples": [
+              109.89744143200028,
+              109.66230279299998,
+              114.23035625000057
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 26.62777738600016,
+              "T4_candidate_validation_sql": 19.888260346999914,
+              "T8_verify_inclusive": 26.73235748900015,
+              "T2_lock_hold": 109.82176846399989,
+              "T6_frame": 7.094806370000015,
+              "T6_sort": 0.49355815700005223,
+              "checkpoint": 0.7916651849973277
+            },
+            "fetch_p95": 0.003501611399951798,
+            "fetch_p99": 0.004061868239914474,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 5,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 93.52747875199998,
+            "p95": 105.98022392899992,
+            "range": [
+              89.33089861400003,
+              107.3638622819999
+            ],
+            "samples": [
+              93.52747875199998,
+              89.33089861400003,
+              107.3638622819999
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 24.628233014999978,
+              "T4_candidate_validation_sql": 5.604419550999864,
+              "T8_verify_inclusive": 24.924796886999957,
+              "T2_lock_hold": 93.43251528000019,
+              "T6_frame": 7.219962922000036,
+              "T6_sort": 0.6574717280000186,
+              "checkpoint": 0.9244419379954252
+            },
+            "fetch_p95": 0.34194495705002625,
+            "fetch_p99": 0.356802683660012,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 10,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 91.7119338880002,
+            "p95": 108.19044256449997,
+            "range": [
+              86.71494619200007,
+              110.02138797299995
+            ],
+            "samples": [
+              91.7119338880002,
+              86.71494619200007,
+              110.02138797299995
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 24.98070438400009,
+              "T4_candidate_validation_sql": 5.275194662999866,
+              "T8_verify_inclusive": 26.504575698000053,
+              "T2_lock_hold": 91.63245987799996,
+              "T6_frame": 7.280958914000166,
+              "T6_sort": 0.6104046359999984,
+              "checkpoint": 0.8401416180003025
+            },
+            "fetch_p95": 0.0038196351499550476,
+            "fetch_p99": 0.6571645381802886,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          },
+          {
+            "scope": "window_matrix",
+            "variant": "S3",
+            "window_days": 3,
+            "cursor_fraction": "1.0",
+            "repeats": 3,
+            "p50": 102.24321621400009,
+            "p95": 109.1209001436994,
+            "range": [
+              94.01088500800006,
+              109.88508724699932
+            ],
+            "samples": [
+              102.24321621400009,
+              94.01088500800006,
+              109.88508724699932
+            ],
+            "protection": "E0",
+            "nested_phase_p50": {
+              "T3_fingerprint_inclusive": 27.388984145999984,
+              "T4_candidate_validation_sql": 5.45060228300008,
+              "T8_verify_inclusive": 27.12352908799994,
+              "T2_lock_hold": 102.15560916900017,
+              "T6_frame": 7.384096359000068,
+              "T6_sort": 0.6583290050000414,
+              "checkpoint": 1.0364342289976776
+            },
+            "fetch_p95": 0.2189384390998157,
+            "fetch_p99": 0.22556622129996867,
+            "reader_p95": null,
+            "timing_caveat": "Nested phase medians overlap; never add them"
+          }
+        ],
+        "golden": "PASS",
+        "monthly_chain_tables": [],
+        "monthly_chains_complete": false,
+        "experiment_complete": true,
+        "event_install_seconds": null,
+        "measured_groups_complete": true,
+        "state": "A4_2_NO_SAFE_WINNER",
+        "read_performance_pass": "NOT_CLAIMED",
+        "authorize_a4_3": false,
+        "reason": "No candidate authorized; E0 SQL needs scale/resource review; E1/E2 rejected and E3 rollback/privileged gaps remain",
+        "cloud": "NOT_AUTHORIZED_NOT_PERFORMED",
+        "all_slow_samples_retained": true
+      }
+    }
+  }
+}

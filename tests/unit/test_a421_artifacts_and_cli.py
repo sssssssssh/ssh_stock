@@ -177,6 +177,56 @@ def test_budget_stop_does_not_start_next_group_or_report_complete(tmp_path):
         writer.finish()
 
 
+def test_capacity_deadline_survives_rollback_error_without_claiming_success(tmp_path, monkeypatch):
+    import signal
+    import time
+
+    from sqlalchemy.exc import OperationalError
+
+    from scripts import a42_artifacts as artifacts
+    from scripts import data_publication_capacity_v12 as capacity
+
+    if not hasattr(signal, "setitimer"):
+        return  # The existing unsupported-deadline test verifies fail-closed behavior.
+    original_deadline = artifacts.deadline
+    monkeypatch.setattr(artifacts, "deadline", lambda seconds: original_deadline(0.02))
+    monkeypatch.setattr(artifacts, "install_signals", lambda: None)
+    monkeypatch.setenv("A421_CAPACITY_BUDGET_MINUTES", "270")
+
+    def interrupted_workload(args, result):
+        try:
+            time.sleep(0.2)
+        finally:
+            # Reproduce the driver exception that masked SIGALRM in real L2.
+            raise OperationalError("private SQL", {"token": "private-bind"},
+                                   RuntimeError("private connection details"))
+
+    monkeypatch.setattr(capacity, "run_cli", interrupted_workload)
+    path = tmp_path/"capacity.json"
+    with pytest.raises(SystemExit) as error:
+        capacity.main(["--confirm-synthetic", "--level", "L2", "--output", str(path)])
+    assert error.value.code == 1
+    receipt = json.loads(path.read_text())
+    assert receipt["status"] == "INCOMPLETE" and receipt["completed_groups"] == 0
+    assert receipt["results"] == []
+    assert receipt["failure_code"] == "RESOURCE_DEFERRED"
+    assert receipt["failure_type"] == "OperationalError"  # Keep the cleanup failure too.
+    assert receipt["budget_exhausted"] is True
+    assert not receipt["production_read_authorized"]
+    assert "private" not in path.read_text()
+
+
+def test_unrelated_database_error_is_not_mislabeled_resource_deferred():
+    from sqlalchemy.exc import OperationalError
+
+    from scripts.a42_artifacts import failure
+
+    receipt = failure(OperationalError("private SQL", {}, RuntimeError("private connection")))
+    assert receipt["failure_type"] == "OperationalError"
+    assert receipt["failure_code"] is None
+    assert not receipt.get("budget_exhausted")
+
+
 def test_cancel_keeps_completed_files_but_cannot_pass_manifest(tmp_path):
     group = Group("10k", "read", "Q1_CURRENT", "0.1", "full", repeat=0)
     writer = Writer(tmp_path/"manifest.json", "unit-cancel", {group}, minutes=120)

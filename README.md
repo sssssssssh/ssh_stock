@@ -3,7 +3,8 @@
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 
 执行结果与未关闭项见 [P3 执行报告](docs/acceptance/v14_a4_2_1_closeout.md)。
-本地完整回归 2468 项、阶段 CI 核心/1万/10万及部分百万分片已通过，不代表最终 HEAD 全矩阵或 L2/L3 已完成。
+c4f7d3e 的实验 1002 必需组（另 6 对照）、主 CI 2471 项、L1/L3 已完成；L2 资源延期，发布 gate 正确失败。
+用户暂无独立 Runner，超预算保留 RESOURCE_DEFERRED，不采购、不降规模。追补提交的 exact-SHA CI 仍须独立验收。
 真实计划只在非计时探针关闭完整参数日志；中断保留 INCOMPLETE profile，不能补成成功。
 以 master `02c69c612786` 冻结生产实现，仅无损拆分实验/容量 CI 和加强工件门禁。
 P1 设计与 1002 组测试契约见 [验收矩阵](docs/acceptance/v14_a4_2_1_matrix.md)。
@@ -12,7 +13,8 @@ P2 新入口例：`python scripts/ab_read_experiment_v14_a4_2.py --scope million
 容量可用 `--confirm-synthetic --level L1`（或 L2/L3-scaled-10pct），与旧 `--levels` 互斥；默认仍 all。
 所有实验/容量均必须显式提供双重身份核验的独立 PG17，普通 localhost 或 `_test` 不足以放行。
 完整组各存一次 gzip JSON；manifest/setup/status 同步上传。独立 summary 只是诊断，必须由 release gate 验收。
-尚未完成新 HEAD 的百万级与完整 CI，不宣称提速或生产通过；不进入 A4-3/B/C，不连接云端业务库。
+软截止保存真实定时器触发标记，防止 rollback 清理异常遮蔽 RESOURCE_DEFERRED；不把普通数据库错误冒充资源不足。
+整体验收仍 OPEN，不宣称提速或生产通过；不进入 A4-3/B/C，不连接云端业务库。
 
 ## V1.4 A4-2 实验（不改变生产）
 
