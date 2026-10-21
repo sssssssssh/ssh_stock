@@ -91,7 +91,8 @@ def validate_group(receipt, group, *, head, attempt, job_id, model_hash):
         validate_plan(result)
         return
     require(result.get("variant") == group.variant and result.get("repeat") == group.repeat
-            and result.get("cursor_fraction") == group.fraction, "RESULT_KEY_MISMATCH")
+            and result.get("cursor_fraction") == group.fraction
+            and result.get("window_days") == group.window_days, "RESULT_KEY_MISMATCH")
     cursors = result.get("cursors", [])
     require(bool(cursors), "CURSOR_MISSING")
     require(sum(cursor(c) for c in cursors) == result.get("rows"), "FETCH_COUNT_MISMATCH")
@@ -135,12 +136,14 @@ def validate_group(receipt, group, *, head, attempt, job_id, model_hash):
 
 def validate_plan(result):
     queries = result.get("select_and_cursor_estimate", {})
-    require(bool(queries) and all(p.get("select_actual") and p.get("cursor_estimated")
+    require(bool(queries.get("T5_declare")) and all(entries for entries in queries.values())
+        and all(p.get("select_actual") and p.get("cursor_estimated")
         for entries in queries.values() for p in entries), "SELECT_OR_DECLARE_PLAN_MISSING")
     actual = [p for p in result.get("actual_cursor_untimed", [])
               if "DECLARE" in p.get("Query Text", "").upper()]
     cursors = result.get("probe_cursors", [])
     require(len(actual) == len(cursors) == result.get("expected_cursor_plans")
+            == len(queries["T5_declare"])
             and bool(actual), "ACTUAL_CURSOR_PLAN_MISSING")
     require(all("Actual Rows" in p.get("Plan", {}) and "Actual Loops" in p["Plan"]
                 and "Shared Read Blocks" in p["Plan"] for p in actual),
@@ -203,6 +206,9 @@ def validate_capacity(result, level):
     require(result.get("row_budget") == 10000000 and result.get("merge_timeout_ms") == 300000
             and 0 < result.get("rows", 0) < 10000000
             and 0 <= result.get("publish_seconds", 301) < 300, "CAPACITY_BUDGET_CHANGED")
+    expected_rows = result["days"] * (6*result["stocks"]
+        + min(50,result["stocks"]) + min(100,result["stocks"]) + 2)
+    require(result["rows"] == expected_rows, "CAPACITY_ROW_SCALE_CHANGED")
     probes = result.get("rollback_probes", [])
     require(len(probes) == 2 and {p.get("mode") for p in probes}
             == {"row_budget", "sql_timeout_after_first_table"}, "CAPACITY_ROLLBACK_PROBES_MISSING")
@@ -210,19 +216,26 @@ def validate_capacity(result, level):
                 and p.get("a_before") == p.get("a_after") and p.get("a_before")
                 and p.get("root_status") == "RUNNING" and p.get("ledger_state") == "PREPARING"
                 for p in probes), "CAPACITY_ROLLBACK_CHANGED_A")
+    require(all(p.get("code") == ("PUBLICATION_ROW_BUDGET_EXCEEDED" if p["mode"]=="row_budget"
+                else "PG_SQLSTATE_57014") and p.get("test_only_known_rollback") is True
+                for p in probes), "CAPACITY_ROLLBACK_FAILURE_CODE_MISSING")
 
 
 def merge_capacity(receipts, *, head, attempt, model_hash):
     from scripts.a42_ci_contract import CAPACITY_LEVELS
 
-    results = {}
+    results, systems = {}, set()
     for receipt in receipts:
         level = receipt.get("level")
         require(level in CAPACITY_LEVELS and level not in results, "DUPLICATE_OR_UNKNOWN_CAPACITY")
         identity(receipt, head=head, attempt=attempt, job_id="capacity-"+level)
         physical(receipt)
+        require(receipt["physical_system_identifier"] not in systems, "CAPACITY_INSTANCE_REUSED")
+        systems.add(receipt["physical_system_identifier"])
         require(receipt.get("model_hash") == model_hash and receipt.get("status") == "COMPLETE"
-                and not receipt.get("failure_type") and not receipt.get("sqlstate"),
+                and not receipt.get("failure_type") and not receipt.get("sqlstate")
+                and not receipt.get("failed_phase")
+                and not receipt.get("working_tree_dirty", False),
                 "CAPACITY_INCOMPLETE")
         require(len(receipt.get("results", [])) == 1, "CAPACITY_LEVEL_NOT_UNIQUE")
         validate_capacity(receipt["results"][0], level)

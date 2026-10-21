@@ -161,3 +161,14 @@ def as_json():
                 mandatory_group_count=len(legacy_groups()),
                 auxiliary_group_count=sum(g.auxiliary for v in matrix().values() for g in v),
                 capacity={k: dict(stocks=v[0], days=v[1]) for k,v in CAPACITY_LEVELS.items()})
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Dump every versioned required key and owner")
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
+    from scripts.a42_artifacts import atomic
+
+    atomic(args.output, as_json())

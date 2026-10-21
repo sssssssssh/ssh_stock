@@ -55,6 +55,9 @@ def alternate(items, repeats):
 
 
 def save(path, output):
+    if getattr(output, "writer", None) is not None:
+        output.writer.checkpoint(output)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(output, default=str, allow_nan=False, indent=2) + "\n",
@@ -65,7 +68,9 @@ def save(path, output):
 def laboratory_sources():
     return {name:hashlib.sha256((ROOT / "scripts" / name).read_bytes()).hexdigest()
             for name in ("ab_read_experiment_v14_a4_2.py","ab_read_resources_v14_a4_2.py",
-                         "ab_read_evidence_v14_a4_2.py","ab_read_experiment_summary_v14_a4_2.py")}
+                         "ab_read_evidence_v14_a4_2.py","ab_read_experiment_summary_v14_a4_2.py",
+                         "a42_scope.py", "a42_artifacts.py", "a42_ci_contract.py",
+                         "a42_receipt_contract.py", "a42_gate_io.py")}
 
 
 def database_snapshot(db):
@@ -318,6 +323,9 @@ def measure(db, engine, variant, params, *, window_days=None, carry=False, conta
         "read_plus_final_seconds": seconds + commit_seconds + final_seconds,
         "client_cpu_seconds": client_cpu, "rows": len(frame),
         "hash": frame_digest(frame), "dtypes": frame.dtypes.astype(str).to_dict(),
+        "key_hash": frame_digest(frame[["trade_date", "ts_code"]]),
+        "null_counts": {k:int(v) for k,v in frame.isna().sum().items()},
+        "duplicate_keys": int(frame.duplicated(["trade_date", "ts_code"]).sum()),
         "columns": list(frame.columns), "window_days": window_days,
         "previous_read_set_dates": previous_dates,
         "current_read_set_dates": len(current.ab_public_read_evidence),
@@ -372,7 +380,10 @@ def run(args, output):
         host=dict(platform=platform.platform(), python=platform.python_version(),
                   logical_cpus=os.cpu_count(), ram_bytes=host_memory_bytes()), runs=[], plans={},
         orders=alternate(tuple(args.variants), args.repeats), monthly=[], windows=[])
+    setup_started = perf_counter()
     with pytest.MonkeyPatch.context() as patch, isolated_v14_database(patch) as (factory, engine):
+        output["setup_timings"] = dict(schema_seconds=perf_counter()-setup_started)
+        fixture_started = perf_counter()
         with factory() as db:
             db.execute(text("CREATE EXTENSION pg_stat_statements"))
             _, other = seed(db, public_rows=args.public_rows, candidate_rows=0, other_rows=0)
@@ -386,6 +397,8 @@ def run(args, output):
                 db.execute(text("UPDATE public.stock_trade_status_daily "
                                 "SET trade_date=trade_date+366"))
                 db.commit()
+        output["setup_timings"]["public_and_other_seed_seconds"] = perf_counter()-fixture_started
+        candidate_started = perf_counter()
         patch.setattr(support, "PublicationWorkspace", frozen_q0()[0])
         job_end = date(2025 if args.coverage=="a_only" else 2024,12,31)
         with support.candidate(factory, engine, start=date(2024, 1, 1),
@@ -409,9 +422,13 @@ def run(args, output):
                 SELECT d::date,extract(isodow FROM d)<6,'SSE'
                 FROM generate_series('2023-01-01'::date,'2025-12-31'::date,'1 day') d
                 ON CONFLICT DO NOTHING"""))
+            output["setup_timings"]["current_candidate_seed_seconds"] = (
+                perf_counter()-candidate_started)
+            analyze_started = perf_counter()
             for table in ("stock_trade_status_daily", "stock_factor_daily", "data_publication_row"):
                 db.execute(text(f"ANALYZE public.{table}"))
             db.commit()
+            output["setup_timings"]["analyze_seconds"] = perf_counter()-analyze_started
             db.execute(text("SET statement_timeout='300s'"))
             db.execute(text("SET lock_timeout='5s'"))
             output["settings"] = {key: db.scalar(text(f"SHOW {key}")) for key in (
@@ -445,6 +462,7 @@ def run(args, output):
             save(args.output, output)
             output["phase"] = "fixture_count_verification"
             fixture["actual_counts"] = fixture_census(db,job.id,fixture)
+            output["setup_timings"]["census_seconds"] = fixture["census"]["seconds"]
             if fixture["actual_counts"] != dict(a=args.public_rows,b=args.candidate_rows,
                                                 other_b=args.other_rows):
                 raise ValueError("A42_FIXTURE_ACTUAL_COUNT_MISMATCH")
@@ -480,6 +498,15 @@ def run(args, output):
                 print(json.dumps({k:record[k] for k in (
                     "variant", "scope", "repeat", "rows", "read_plus_final_seconds")}), flush=True)
                 return record
+
+            if getattr(args, "shard", None) is not None:
+                from scripts.a42_scope import execute
+
+                execute(args, output, db, engine, job, params, trial, captured)
+                source_contract()
+                if laboratory_sources() != output["laboratory_sources"]:
+                    raise ValueError("A42_LABORATORY_SOURCE_CHANGED_DURING_TRIALS")
+                return
 
             for repeat, order in enumerate(output["orders"]):
                 for fraction in args.cursor_fractions:
@@ -536,6 +563,10 @@ def run(args, output):
 
 
 def main():
+    if any(a.split("=", 1)[0] in {"--scope", "--job-id"} for a in sys.argv[1:]):
+        from scripts.a42_scope import main as scoped_main
+
+        return scoped_main()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--contract-only", action="store_true")
     parser.add_argument("--output", type=Path, required=True)

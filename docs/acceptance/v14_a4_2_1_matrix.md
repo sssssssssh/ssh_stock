@@ -1,6 +1,6 @@
 # V1.4 A4-2.1 验收矩阵
 
-状态：P1 契约建立，P2/P3 OPEN。基线 `02c69c612786`。不授权生产或下一阶段。
+状态：P1 契约建立，P2 实现就绪，P3 完整实测 OPEN。基线 `02c69c612786`。不授权生产或下一阶段。
 设计见 [ADR](../design/adr_v14_a4_2_1_ci_partition.md)；机器键定义见 `scripts/a42_ci_contract.py`。
 自动测试从基线代码独立生成 1002 个 required keys，要求新分片 exact set equality；额外 6 个 auxiliary 明示。
 
@@ -55,3 +55,22 @@ primary 原 ZIP SHA256：`f7e7983dfe5293415f5042ea7fa66430bf69f26e8d86f740365c4b
 
 日志/原 ZIP 留在忽略的本地取证目录，不提交潜在私有运行细节；可追溯的公开 run/job/artifact 元数据及 digest
 见 [历史索引](evidence/v14_a4_2_1_history.json)。历史记录永不填补新 SHA 缺失组。
+
+## P2 实现与本地证据
+
+新增 `a42_scope` 复用原实验 fixture/trial，旧默认 CLI 不变；三容量级可单级调用，原 run_level AST 不变。
+`a42_artifacts` 在任何实验前记录 NOT_STARTED，独立保存完整 gzip 组文件和 SHA256；
+当前组失败保留 INCOMPLETE，预算不足不启动下一组；不自动恢复旧 HEAD/attempt 的结果。
+`a42_gate_io` 与 `ci_release_gate_v14_a4_2_1` 检查上游状态、物理身份、完整键、Golden、实际计划和容量安全。
+原主 CI 除移出容量与提取发布断言外，所有步骤保持；自动 AST 测试证明原发布断言完整保留。
+
+本地新建的专属 PG17（不是任何业务数据库）已完成：六档窗口、三月链、完整 EOF/close、
+原生游标 actual rows/loops/buffers、取消后保留先前组、L1 十表发布与两个回滚探针，以及错 marker/system ID 拒绝。
+扩大定向回归 301 项通过（544.52 秒）；后增门禁控制与冻结检查另计，P3 再执行全量回归。
+另一次重复集成验证曾与扩大回归误并行共用本地测试实例，因另一测试创建/移除子库而使数据库集合比对失败；
+没有放松断言，改为串行复核。CI 各工作负载使用独立物理实例，不共用该本地环境。
+最终 P2 定向串行复核 100 passed（24.34 秒），此前并行测试的集合比对问题未再出现。
+前端 `npm ci` / coverage / build 通过：23 文件、162 测试、行/语句覆盖率 87.27%。
+依赖审计仍报告 11 个既有漏洞（4 moderate / 3 high / 4 critical），本轮没有越界升级依赖。
+Alembic 在该专属 PG17 升级成功，`current=heads=0058_data_publication`。
+这些是适配器/安全回归，不替代真实百万/L2/L3 或最终 exact-SHA CI；INFRASTRUCTURE/CORRECTNESS 总体验收均 OPEN。

@@ -10,7 +10,6 @@ import json
 import os
 import platform
 import statistics
-import subprocess
 import sys
 import threading
 import time
@@ -19,7 +18,6 @@ from pathlib import Path
 import pandas as pd
 import pytest
 from sqlalchemy import event, func, select, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -503,21 +501,36 @@ def run_level(stocks, count, label):
             assert not any(thread.is_alive() for thread in threads)
 
 
-if __name__ == "__main__":
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--confirm-synthetic", action="store_true", required=True)
-    parser.add_argument("--levels", choices=["smoke", "all"], default="all")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--levels", choices=["smoke", "all"], default="all")
+    selection.add_argument("--level", choices=["L1", "L2", "L3-scaled-10pct"])
     parser.add_argument("--output", type=Path, default=Path(".codex_tmp/cold-start-capacity.json"))
-    args = parser.parse_args()
-    if not os.environ.get("TEST_DATABASE_URL"):
-        raise SystemExit("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED")
-    url = make_url(os.environ["TEST_DATABASE_URL"])
-    allowed_database = (url.database or "").endswith("_test") or (
-        os.environ.get("CI") == "true" and url.database == "stock_db"
-    )
-    if url.host not in {"127.0.0.1", "localhost"} or not allowed_database:
-        raise SystemExit("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED")
-    os.environ["DATABASE_URL"] = url.render_as_string(hide_password=False)
+    return parser.parse_args(argv)
+
+
+def selected_levels(args):
+    from scripts.a42_ci_contract import CAPACITY_LEVELS
+
+    names = [args.level] if args.level else list(CAPACITY_LEVELS)[:1 if args.levels=="smoke" else 3]
+    return [(*CAPACITY_LEVELS[name], name) for name in names]
+
+
+def run_cli(args, result):
+    global m, DataPublicationRow, JobRun, update_job, KEYS, MODELS, record_validation
+    global get_settings, isolated_contract_database, candidate, sample_row
+
+    from scripts.a42_artifacts import container_receipt, isolation
+    from scripts.v14_test_database import isolated_v14_database, verified_test_url
+
+    result.update(isolation())  # Physical proof BEFORE all DDL and application imports.
+    if os.environ.get("A421_CONTAINER"):
+        result.update(container_receipt(os.environ["A421_CONTAINER"]))
+    url = verified_test_url()
+    os.environ.update(DATABASE_URL=url.render_as_string(hide_password=False), LLM_ENABLED="false",
+                      AB_MERGE_READ_ENABLED="false")
     os.environ["TUSHARE_TOKEN"] = "synthetic-capacity-fixture"
     # Validate and override the explicit URL BEFORE importing application models,
     # Settings or app.core.db; never even construct an engine from business .env.
@@ -528,26 +541,14 @@ if __name__ == "__main__":
     from app.repositories.job_run import update_job
     from app.services.data_publication import KEYS, MODELS, record_validation
 
-    from tests.integration.m16_6_support import isolated_contract_database
     from tests.integration.test_data_publication import candidate, sample_row
 
+    isolated_contract_database = isolated_v14_database
     get_settings.cache_clear()
     from loguru import logger
 
     logger.remove()
-    levels = (
-        [(10, 2, "L1")]
-        if args.levels == "smoke"
-        else [
-            (10, 2, "L1"),
-            (5000, 20, "L2"),
-            (500, 120, "L3-scaled-10pct"),
-        ]
-    )
-    result = dict(
-        head_sha=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-        working_tree_dirty=bool(subprocess.check_output(["git", "status", "--porcelain"])),
-        results=[],
+    result.update(
         environment=dict(
             platform=platform.platform(),
             machine=platform.machine(),
@@ -555,9 +556,15 @@ if __name__ == "__main__":
             logical_cpus=os.cpu_count(),
         ),
     )
-    for stocks, days, level in levels:
+    from scripts.a42_artifacts import atomic, now
+    from scripts.a42_receipt_contract import validate_capacity
+
+    for stocks, days, level in selected_levels(args):
+        result.update(status="INCOMPLETE", failed_phase="capacity-"+level)
+        atomic(args.output, result)
         result["results"].append(run_level(stocks, days, level))
         measurement = result["results"][-1]
+        validate_capacity(measurement, level)
         print(
             json.dumps(
                 {
@@ -584,6 +591,30 @@ if __name__ == "__main__":
             ),
             flush=True,
         )
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(result, default=str, allow_nan=False, indent=2) + "\n")
+        result["completed_groups"] = len(result["results"])
+        atomic(args.output, result)
+    result.update(status="COMPLETE", finished_at=now(), failed_phase=None)
+    atomic(args.output, result)
     print(json.dumps(dict(output=str(args.output), levels=len(result["results"]))))
+
+
+def main(argv=None):
+    from scripts.a42_artifacts import atomic, header, install_signals, now
+
+    args = parse_args(argv)
+    result = dict(**header("capacity-"+(args.level or args.levels)),
+        level=args.level, results=[], status="NOT_STARTED", started_at=now(),
+        finished_at=None, expected_groups=len(selected_levels(args)), completed_groups=0)
+    atomic(args.output, result)
+    install_signals()
+    try:
+        run_cli(args, result)
+    except BaseException as error:
+        result.update(status="INCOMPLETE", finished_at=now(), failure_type=type(error).__name__,
+            sqlstate=getattr(getattr(error, "orig", error), "sqlstate", None))
+        atomic(args.output, result)
+        raise SystemExit(1) from None
+
+
+if __name__ == "__main__":
+    main()

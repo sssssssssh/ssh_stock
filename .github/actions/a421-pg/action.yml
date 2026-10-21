@@ -1,0 +1,41 @@
+name: A4-2.1 dedicated marked PostgreSQL 17
+description: Own physical instance, dual identity before DDL; never reads a business env file
+inputs:
+  resource-class:
+    description: read is fixed 2 CPU/3 GiB; capacity is independently recorded host class
+    default: read
+outputs:
+  container:
+    description: Owned test container only
+    value: a421-pg17
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        RESOURCE_CLASS: ${{ inputs.resource-class }}
+      run: |
+        marker=$(python -c 'import uuid; print(uuid.uuid4())')
+        limits=()
+        if [ "$RESOURCE_CLASS" = read ]; then limits=(--cpus=2 --memory=3g); fi
+        docker run -d --name a421-pg17 --label purpose=ssh-stock-a421-physical-test \
+          "${limits[@]}" -p 127.0.0.1:55440:5432 \
+          -e POSTGRES_DB=a421_test -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
+          postgres:17 -c "v14.test_instance=$marker" \
+          -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all \
+          -c track_io_timing=on -c track_wal_io_timing=on -c max_wal_size=1GB
+        for attempt in $(seq 1 40); do
+          if docker exec a421-pg17 pg_isready -U synthetic -d a421_test; then break; fi
+          sleep 1
+        done
+        docker exec a421-pg17 pg_isready -U synthetic -d a421_test
+        system=$(docker exec a421-pg17 sh -c 'LC_ALL=C pg_controldata "$PGDATA"' | awk '/Database system identifier:/ {print $NF}')
+        test -n "$system"
+        echo "V14_TEST_INSTANCE=$marker" >> "$GITHUB_ENV"
+        echo "V14_TEST_SYSTEM_IDENTIFIER=$system" >> "$GITHUB_ENV"
+        echo "TEST_DATABASE_URL=postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test" >> "$GITHUB_ENV"
+        echo "DATABASE_URL=postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test" >> "$GITHUB_ENV"
+        echo "TUSHARE_TOKEN=synthetic-a421" >> "$GITHUB_ENV"
+        echo "AB_MERGE_READ_ENABLED=false" >> "$GITHUB_ENV"
+        echo "A421_CONTAINER=a421-pg17" >> "$GITHUB_ENV"
+        python -c 'import os; from scripts.v14_test_database import verified_test_url; os.environ.update(TEST_DATABASE_URL="postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test",V14_TEST_INSTANCE="'"$marker"'",V14_TEST_SYSTEM_IDENTIFIER="'"$system"'"); verified_test_url()'

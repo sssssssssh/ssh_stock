@@ -2,6 +2,7 @@
 
 import ctypes
 import os
+import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -24,6 +25,9 @@ def host_memory_bytes():
 
 
 def current_rss_bytes():
+    if sys.platform == "darwin":
+        return int(subprocess.check_output(
+            ["ps", "-o", "rss=", "-p", str(os.getpid())], text=True, timeout=5).strip())*1024
     if sys.platform != "win32":
         return int(Path("/proc/self/statm").read_text().split()[1])*os.sysconf("SC_PAGE_SIZE")
     from ctypes import wintypes
@@ -47,6 +51,23 @@ def current_rss_bytes():
 
 
 def cpu_sample(pid):
+    if sys.platform == "darwin":
+        # Mach HOST_CPU_LOAD_INFO gives real cumulative host ticks; ps is scoped
+        # to the requested process, not ru_maxrss or whole-host process totals.
+        mach = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+        mach.mach_host_self.restype = ctypes.c_uint
+        ticks = (ctypes.c_uint*4)()
+        count = ctypes.c_uint(4)
+        if mach.host_statistics(mach.mach_host_self(), 3, ticks, ctypes.byref(count)) != 0:
+            raise OSError("A42_HOST_CPU_SAMPLE_FAILED")
+        value = subprocess.check_output(["ps", "-o", "time=", "-p", str(pid)],
+                                         text=True, timeout=5).strip()
+        days, value = value.split("-", 1) if "-" in value else ("0", value)
+        parts = list(map(float, value.split(":")))
+        seconds = int(days)*86400 + sum(n*60**i for i,n in enumerate(reversed(parts)))
+        rate = os.sysconf("SC_CLK_TCK")
+        return dict(backend_cpu_seconds=seconds, host_idle_seconds=ticks[2]/rate,
+                    host_total_seconds=sum(ticks)/rate)
     if sys.platform == "win32":
         from ctypes import wintypes
 

@@ -136,10 +136,17 @@ def test_upstream_success_is_mandatory_even_when_other_artifact_is_complete(stat
 
 def capacity(level, stocks, days):
     receipt = envelope("capacity-"+level)
+    system = {"L1":"123456", "L2":"234567", "L3-scaled-10pct":"345678"}[level]
+    receipt["physical_system_identifier"] = system
+    receipt["isolation"].update(
+        expected_system_identifier=system, observed_system_identifier=system)
     receipt.update(level=level, results=[dict(level=level, stocks=stocks, days=days,
         final_root_status="SUCCESS", final_ledger_state="PUBLISHED", reader_errors=[],
         reader_samples=3, max_running=1, row_budget=10000000, merge_timeout_ms=300000,
-        rows=200, publish_seconds=1, rollback_probes=[dict(mode=mode,
+        rows=days*(6*stocks+min(50,stocks)+min(100,stocks)+2), publish_seconds=1,
+        rollback_probes=[dict(mode=mode,
+            code="PUBLICATION_ROW_BUDGET_EXCEEDED" if mode=="row_budget" else "PG_SQLSTATE_57014",
+            test_only_known_rollback=True,
             a_digest_unchanged=True, queue_slot_held=True, a_before={"table":"digest"},
             a_after={"table":"digest"}, root_status="RUNNING", ledger_state="PREPARING")
             for mode in ("row_budget", "sql_timeout_after_first_table")])])

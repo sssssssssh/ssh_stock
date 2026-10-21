@@ -3,7 +3,10 @@
 import argparse
 import json
 import statistics
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def percentile(values, p):
@@ -106,13 +109,41 @@ def summarize(output):
             "cloud": "NOT_AUTHORIZED_NOT_PERFORMED", "all_slow_samples_retained": True}
 
 
+def summarize_shard(receipts):
+    """Only validated groups; keep fixtures/jobs separate, never pool runners.
+
+    The strict gate validates every original required key before calling this.
+    Monthly chains are still summed per repeat before taking percentiles.
+    """
+    fixtures = {}
+    for receipt in receipts:
+        if receipt["group"]["kind"] != "read":
+            continue
+        run = dict(receipt["result"])
+        scope = receipt["group"]["scope"].removeprefix("event_")
+        run["scope"] = "full" if scope in {"window_baseline", "shape", "readers"} else scope
+        fixtures.setdefault(receipt["fixture_digest"], []).append(run)
+    return {key:summarize(dict(runs=runs, experiment_complete=True,
+            monthly_verification_protocol="ROOT_TAIL_ONLY")) for key,runs in fixtures.items()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("receipts", type=Path, nargs="+")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    results = [{"receipt": p.name, **summarize(json.loads(p.read_text(encoding="utf-8")))}
-               for p in args.receipts]
+    results = []
+    for path in args.receipts:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if "entries" in data:
+            # Standalone summary is intentionally not acceptance. Only the gate
+            # validates jobs/HEAD/attempt/model/complete matrix and authorizes PASS.
+            from scripts.a42_gate_io import load_groups
+
+            results.append(dict(receipt=path.name, acceptance="NOT_CLAIMED_USE_RELEASE_GATE",
+                                comparisons=summarize_shard(load_groups(path, data))))
+        else:
+            results.append(dict(receipt=path.name, **summarize(data)))
     args.output.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 
 

@@ -5,6 +5,8 @@
 基线 master `02c69c612786`，P1/P2/P3 分阶段提交。仅脚本/CI/测试/Markdown，生产与 A4-1 证据不变。
 矩阵必须与旧必需 1002 组精确相等；每组原子收据、同 HEAD/attempt/model/fixture、EOF 与真实计划不可省略。
 容量三个等级保留原 workload 与预算，主 CI 和全部容量成功才允许 release gate 成功。
+原容量 `run_level` 与发布 release assertions 有 AST/步骤冻结测试，不能借拆 CI 降低保护。
+受控 scope 不接受行数/轮次/variant override；独立 summary 不授权验收，缺物理证明禁止任何 DDL。
 取消/缺证据失败关闭，性能与正确性分开；不授权 A4-3、B/C 或生产读取。
 
 ## V1.4 A4-2 隔离研究

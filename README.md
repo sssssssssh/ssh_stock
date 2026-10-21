@@ -4,6 +4,11 @@
 
 以 master `02c69c612786` 冻结生产实现，仅无损拆分实验/容量 CI 和加强工件门禁。
 P1 设计与 1002 组测试契约见 [验收矩阵](docs/acceptance/v14_a4_2_1_matrix.md)。
+P2 新入口例：`python scripts/ab_read_experiment_v14_a4_2.py --scope million-full --job-id a42-million-full-0 --container a421-pg17 --output .codex_tmp/a421/a42-million-full-0/manifest.json`。
+各 job 参数/规模由版本化矩阵决定，不能另传较小行数。旧无 scope CLI 保持兼容。
+容量可用 `--confirm-synthetic --level L1`（或 L2/L3-scaled-10pct），与旧 `--levels` 互斥；默认仍 all。
+所有实验/容量均必须显式提供双重身份核验的独立 PG17，普通 localhost 或 `_test` 不足以放行。
+完整组各存一次 gzip JSON；manifest/setup/status 同步上传。独立 summary 只是诊断，必须由 release gate 验收。
 尚未完成新 HEAD 的百万级与完整 CI，不宣称提速或生产通过；不进入 A4-3/B/C，不连接云端业务库。
 
 ## V1.4 A4-2 实验（不改变生产）
