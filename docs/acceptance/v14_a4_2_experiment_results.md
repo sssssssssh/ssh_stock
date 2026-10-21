@@ -65,6 +65,7 @@ Counts from separate invocations overlap and must not be added as unique tests.
 | Latest summary/contract/resource units | 15 passed | `.codex_tmp/a42-latest-summary.xml` |
 | Failure SQLSTATE/catalog snapshot regression | 2 passed, fault injection | `.codex_tmp/a42-failure-receipt.xml` |
 | Final laboratory suite plus dotenv isolation | 117 passed, 100 warnings | `.codex_tmp/a42-final-targeted.xml` |
+| Final census/root-tail protocol suite plus dotenv | 124 passed, 103 warnings, 1009.59 seconds | `.codex_tmp/a42-final-protocol-tests.xml` |
 | First full pytest | 2353 passed, 2 environment failures | `.codex_tmp/a42-full.xml` / `a42-full.log` |
 | LF checkout/environment recheck | 32 passed, including both failures | `.codex_tmp/a42-environment-recheck.xml` |
 | Full pytest in clean LF checkout | 2361 passed, 591 warnings, 4034.00 seconds | `.codex_tmp/a42-full-clean.xml` / `a42-full-clean.log` |
@@ -73,7 +74,8 @@ Counts from separate invocations overlap and must not be added as unique tests.
 
 The first full collection had 2355 items. Six supplemental cases were included
 in the clean 2361-item rerun. Two later failure-receipt regressions ran separately
-and are included in the 117-item final laboratory/ dotenv suite. Counts overlap;
+and are included in the 117-item laboratory/dotenv suite. Seven later protocol/
+census cases are included in the 124-item final suite. Counts overlap;
 do not add them as unique tests. Final CI collects the final tree afresh.
 Alembic parent `current` and `heads` both confirmed `0058_data_publication`.
 No migration was added and no user-data downgrade test was run.
@@ -111,6 +113,26 @@ replaced by those 32 tests.
   This synthetic regression does not establish the original failure's SQLSTATE.
 - The primary shell stopped and its dependent local supplemental queue refused
   to run on an incomplete million receipt. No skipped matrix cell became PASS.
+- `a42-retry-million.json` at 63f289e: FAILED again before timed reads, now with
+  SQLSTATE **57014** and `phase=fixture_count_verification`. The full catalog was
+  preserved: candidate table **5,984,976,896 bytes**, indexes **1,055,498,240**,
+  total **7,040,475,136**; public A table **679,362,560**, indexes **159,416,320**.
+  These are verified physical sizes, not completed cardinality or read metrics.
+  SQLSTATE proves QueryCanceled at the census, not a business-path root cause.
+- The final harness replaces only this setup aggregate with an exact full
+  single-snapshot named-cursor census, retaining the same 300-second per-statement
+  budget. Independent aggregate equality and interrupted-census regressions pass.
+  Full-scale final-head execution remains a CI gate; setup time is not read gain.
+- All 15 local distribution/deletion cells passed at 63f289e, **225 complete
+  reads**: A-only/B-only/partial/high/mismatched times tombstone 0/1/10%.
+  These use small fixtures and prove equality, not distribution-scale performance.
+- E3 local 100k control passed 45 complete reads at 63f289e. It retains the old
+  periodic-final monthly protocol, not the corrected one-tail root lifecycle.
+  Full-read fraction .1 p50/p95: Q0 safety 7.1012/8.1214, Q1 7.0806/8.5532,
+  E3 7.9148/10.7228 seconds. E3 is slower here and remains UNPROVEN regardless.
+  Trigger installation was .1430 seconds; six zero-row statement probes used
+  0 WAL bytes without events and 672 with events (whole-instance attribution,
+  lower-bound probe, NOT writer-throughput evidence).
 
 ### Small-Scale Results At a6679c8
 
@@ -152,7 +174,9 @@ All windows retain closed dates. Smaller FETCH tail alone is not lower total cos
 Q2 uses its intrinsic five-day policy even though the generic receipt's supplied
 `window_days` argument is None for full Q2 controls; raw metrics retain each window.
 
-100k real monthly input caller, carried evidence across commits, p50 seconds:
+Earlier 100k monthly input control at a6679c8, p50 seconds: evidence is carried
+across commits, but a separate T8 follows EVERY read. This is NOT the cost of a
+true root with only one final verification and must not be summed as that job.
 
 | Path | Jan 2025 | Feb 2025 | Mar 2025 |
 | --- | ---: | ---: | ---: |
@@ -162,6 +186,12 @@ Q2 uses its intrinsic five-day policy even though the generic receipt's supplied
 | S3 narrow | 6.8472 | 6.8796 | 6.5855 |
 | S4 | 6.5916 | 6.5100 | 7.1805 |
 | S5 | 7.1209 | 6.5075 | 7.7676 |
+
+The subsequent root-chain correction verifies only at the third month's tail,
+without removing next-read E0 validation. New receipts explicitly declare
+`ROOT_TAIL_ONLY` and record `final_verification_applied`; chain totals are summed
+per actual repeat before median/p95. Old periodic-final receipts remain unchanged
+and are not silently reinterpreted. Final CI must execute the corrected chain.
 
 Host: Windows 10, Python 3.12.11, 8 logical CPUs, 34,271,772,672 bytes RAM,
 uncapped. At 100k the candidate table is 232,980,480 bytes plus 40,026,112 index
@@ -174,6 +204,7 @@ Measured full receipts SHA256:
 a42-final-10k.json   a793b05922ecdc7300540b1f7e35556758da5c3efd6f15de84563ba96604c83c
 a42-final-100k.json  54f756e8852ed3aef7bd741dffb9481fc2b0bcf6e5145fb8a24bb4ae7b148816
 a42-final-million.json (failed setup) d68ca509a84197315db845ec0f2589844e36f49c4131f003cc96c77f61379921
+a42-retry-million.json (failed setup) 587fd16d10a41fbae4cc587a40d71ac4d70f1518426cdb524b2b0afca063165a
 ```
 
 LF laboratory source SHA256 (all raw receipts also store Git/checkout hashes):
@@ -239,9 +270,9 @@ OPEN/UNPROVEN are not silently converted into completed matrix coverage.
 | T22 | PASS | Warmup source mutation aborts original publication |
 | T23 | OPEN | RR2 probe implemented; latest million reader run pending |
 | T24 | PARTIAL | Real lock probe available; final matrix hold/reader comparison pending |
-| T25 | PARTIAL | Exploratory complete FETCH and EOF/close checks passed; final scale pending |
+| T25 | PARTIAL | Small controls/shapes complete FETCH and EOF/close passed; million read gate pending |
 | T26 | OPEN | 10k/100k passed; local million failed before timings; independent CI required |
-| T27 | PARTIAL | Actual service caller with 430-day bounds, carried root evidence; scale pending |
+| T27 | PARTIAL | Real caller/430-day bounds; corrected one-tail chain regressions pass, final scale pending |
 | T28 | PARTIAL | Actual cursors in earlier receipt; latest-code scale plans pending |
 | T29 | PASS | Frozen source/schema/config; default flag unchanged |
 | T30 | PASS | Wrong marker/system ID refused before child CREATE |
@@ -264,6 +295,8 @@ timeouts or reducing datasets. Primary validation requires every three-repeat
 variant/fraction/window/month cell and its actual cursor plans, not just one plan.
 
 OPEN: final exact-SHA main/A4-2 CI, complete scale/resource/reader matrix, final
-regression and measured tables. UNPROVEN: strict all-writer event evidence,
+head full regression and measured tables. Local full baseline 2361 and final
+related 124-item suite are separate executions, not a fake final-head full PASS.
+UNPROVEN: strict all-writer event evidence,
 production/cloud latency, controlled cold cache and cloud resource budgets.
 Keep production off. Do not propose A4-3 on exploratory 10k results.

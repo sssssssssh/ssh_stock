@@ -57,13 +57,16 @@ def test_slow_outlier_is_kept_and_no_automatic_production_permission():
     assert not result["authorize_a4_3"]
 
 
-@pytest.mark.parametrize("damage", ["rows","hash","dtypes","columns","closed","eof"])
+@pytest.mark.parametrize("damage", ["rows","hash","dtypes","columns","closed","eof",
+                                   "safety_final"])
 def test_summary_refuses_incomplete_cursor_or_different_output(damage):
     rows = [trial(1),trial(2),trial(3)]
     if damage in {"rows","hash","dtypes","columns"}:
         rows[-1][damage] = "corrupted"
     elif damage=="closed":
         rows[-1]["cursors"][0]["closed"] = False
+    elif damage=="safety_final":
+        rows[-1]["final_verification_applied"] = False
     else:
         rows[-1]["cursors"][0].pop("until_eof_seconds")
     with pytest.raises(ValueError):
@@ -127,3 +130,64 @@ def test_failure_receipt_keeps_sqlstate_but_never_driver_sql_or_parameters(tmp_p
     assert receipt["failure_sqlstate"] == "57014"
     assert receipt["phase"] == "fixture_count_verification"
     assert "synthetic-private-" not in raw
+
+
+def monthly_trials():
+    runs = []
+    for repeat in range(3):
+        for month in range(3):
+            row = trial(100 if month==repeat else 10)
+            row.update(scope=f"month_{month+1}",repeat=repeat,
+                       final_verification_applied=month==2)
+            runs.append(row)
+    return runs
+
+
+def test_monthly_totals_sum_actual_samples_before_taking_the_median():
+    result = summarize({"runs":monthly_trials(),"monthly_verification_protocol":"ROOT_TAIL_ONLY"})
+    assert result["monthly_chains_complete"]
+    chain = result["monthly_chain_tables"][0]
+    assert chain["protocol"] == "ROOT_TAIL_ONLY"
+    assert chain["p50"] == 120
+    assert chain["samples"] == [120,120,120]
+    assert sum(t["p50"] for t in result["tables"]) == 30  # Deliberately not the chain median.
+
+
+def test_extra_monthly_final_check_is_rejected_not_hidden_or_rewritten():
+    runs = monthly_trials()
+    runs[0]["final_verification_applied"] = True
+    with pytest.raises(ValueError, match="A42_MONTHLY_FINAL_VERIFY_PROTOCOL"):
+        summarize({"runs":runs,"monthly_verification_protocol":"ROOT_TAIL_ONLY"})
+    legacy = summarize({"runs":runs})
+    assert any(t["protocol"]=="LEGACY_PERIODIC_OR_UNRECORDED"
+               for t in legacy["monthly_chain_tables"])
+    assert legacy["read_performance_pass"] == "NOT_CLAIMED"
+
+
+def test_interrupted_fixture_census_never_becomes_an_actual_count():
+    from types import SimpleNamespace
+
+    from scripts.ab_read_experiment_v14_a4_2 import fixture_census
+
+    class Result:
+        cursor = SimpleNamespace(name="synthetic-unit-cursor")
+        closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self,*args):
+            self.closed = True
+
+        def partitions(self,size):
+            assert size == 5000
+            yield [(False,None),(True,"root")]
+            raise RuntimeError("synthetic interrupted census")
+
+    fixture = {}
+    db = SimpleNamespace(execute=lambda statement:Result())
+    with pytest.raises(RuntimeError,match="synthetic interrupted census"):
+        fixture_census(db,"root",fixture)
+    assert fixture["census"]["rows"] == 2
+    assert fixture["census"]["cursor_closed"] and not fixture["census"]["complete"]
+    assert "actual_counts" not in fixture

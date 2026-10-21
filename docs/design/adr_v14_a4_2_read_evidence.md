@@ -38,6 +38,12 @@ They cannot win by silently deleting T8. Installing triggers, initial full valid
 all new date fingerprints and full B revalidation after changed events must be reported.
 No persistent certificate is shared with a future root or any historical result.
 
+Read-only monthly fixtures leave B unchanged. Actual factor staging writes the
+same publication-row table between months, advancing E3's coarse global B counter
+even when trade-status rows are unchanged. That forces full revalidation and can
+erase idealized cache savings. Zero-row DML/WAL probes are lower bounds, not proof
+of writer throughput or a real job's performance under concurrent mutation.
+
 PostgreSQL [lock semantics](https://www.postgresql.org/docs/17/explicit-locking.html)
 allow a transaction's own DML despite its SHARE lock, so a same-tx certificate also
 needs mutation evidence; locking alone does not make local state immutable.

@@ -32,7 +32,11 @@ def source_contract():
     entries = subprocess.check_output(["git", "ls-tree", "-r", BASELINE,
         "backend", "migrations", "config", "scripts/ab_read_profile_v14_a4.py",
         "scripts/ab_read_profile_summary_v14_a4.py", "docs/acceptance/v14_a4_baseline.md",
-        "docs/acceptance/evidence"], cwd=ROOT, text=True).splitlines()
+        "docs/acceptance/evidence", "scripts/ab_read_benchmark_v14.py",
+        "scripts/v14_test_database.py", "scripts/publication_candidate_benchmark_v13.py",
+        "tests/integration/test_data_publication.py",
+        "tests/integration/test_ab_merge_read_v14.py",
+        "tests/integration/m16_6_support.py"], cwd=ROOT, text=True).splitlines()
     paths = [entry.split("\t", 1)[1] for entry in entries]
     hashes = subprocess.check_output(["git", "hash-object", "--stdin-paths"],
         input="\n".join(paths)+"\n", cwd=ROOT, text=True).splitlines()
@@ -106,6 +110,42 @@ def verified_environment():
     return url
 
 
+def fixture_census(db, root, fixture):
+    """Exact setup-only census: one snapshot, all A/B rows, bounded named FETCH."""
+    from sqlalchemy import text
+
+    counts = dict(a=0,b=0,other_b=0)
+    proof = fixture["census"] = dict(method="single_snapshot_named_cursor_all_rows",
+        rows=0,batches=0,complete=False,cursor_closed=False)
+    statement = text("""SELECT false AS candidate_row,NULL::uuid AS publication_id
+        FROM public.stock_trade_status_daily UNION ALL
+        SELECT true,publication_id FROM public.data_publication_row""").execution_options(
+            yield_per=5000,a42_fixture_census=True)
+    result,started = None,perf_counter()
+    try:
+        with db.execute(statement) as result:
+            proof["cursor_name"] = getattr(result.cursor,"name",None)
+            if not proof["cursor_name"]:
+                raise ValueError("A42_FIXTURE_CENSUS_REQUIRES_NAMED_CURSOR")
+            for batch in result.partitions(5000):
+                for candidate,publication in batch:
+                    if candidate is False:
+                        counts["a"] += 1
+                    elif candidate is True and publication is not None:
+                        counts["b" if publication==root else "other_b"] += 1
+                    else:
+                        raise ValueError("A42_FIXTURE_CENSUS_INVALID_ROW")
+                proof["rows"] += len(batch)
+                proof["batches"] += 1
+        if not result.closed or proof["rows"] != sum(counts.values()):
+            raise ValueError("A42_FIXTURE_CENSUS_INCOMPLETE")
+        proof["complete"] = True
+        return counts
+    finally:
+        proof["seconds"] = perf_counter()-started
+        proof["cursor_closed"] = bool(result is not None and result.closed)
+
+
 def sql(variant, columns=None):
     from app.models.market_data import StockTradeStatusDaily as Model
     from app.repositories.ab_merge_read import FACTOR_COLUMNS
@@ -171,7 +211,8 @@ def observe(profile):
 
 
 def measure(db, engine, variant, params, *, window_days=None, carry=False, container=None,
-            cursor_fraction="0.1", service_call=False, readers=0, reader_pause=2):
+            cursor_fraction="0.1", service_call=False, readers=0, reader_pause=2,
+            verify_final=True):
     from app.repositories import ab_merge_read as ab
     from app.repositories.calculation_frame import read_calculation_frame, read_calculation_windows
     from app.services.data_publication import workspace
@@ -257,7 +298,7 @@ def measure(db, engine, variant, params, *, window_days=None, carry=False, conta
         db.commit()
         commit_seconds = perf_counter()-commit_start
         verify_start = perf_counter()
-        if protected:
+        if protected and verify_final:
             db.execute(text("LOCK TABLE public.stock_trade_status_daily IN SHARE MODE"))
             if variant == "E3":
                 current.a42_events.verify(db)
@@ -273,6 +314,7 @@ def measure(db, engine, variant, params, *, window_days=None, carry=False, conta
         "final_transaction_seconds": final_seconds,
         "safe_total_seconds": seconds + commit_seconds + final_seconds,
         "read_commit_seconds": commit_seconds,
+        "final_verification_applied": protected and verify_final,
         "read_plus_final_seconds": seconds + commit_seconds + final_seconds,
         "client_cpu_seconds": client_cpu, "rows": len(frame),
         "hash": frame_digest(frame), "dtypes": frame.dtypes.astype(str).to_dict(),
@@ -402,11 +444,10 @@ def run(args, output):
                     "public.data_publication_row s TABLESAMPLE SYSTEM(1)")).mappings().one())
             save(args.output, output)
             output["phase"] = "fixture_count_verification"
-            fixture["actual_counts"] = dict(db.execute(text("SELECT "
-                    "(SELECT count(*) FROM public.stock_trade_status_daily) AS a,"
-                    "count(*) FILTER (WHERE publication_id=:root) AS b,"
-                    "count(*) FILTER (WHERE publication_id<>:root) AS other_b "
-                    "FROM public.data_publication_row"), {"root":job.id}).mappings().one())
+            fixture["actual_counts"] = fixture_census(db,job.id,fixture)
+            if fixture["actual_counts"] != dict(a=args.public_rows,b=args.candidate_rows,
+                                                other_b=args.other_rows):
+                raise ValueError("A42_FIXTURE_ACTUAL_COUNT_MISMATCH")
             db.commit()
             output["phase"] = "timed_trials"
             params = dict(lo=date(2024, 1, 1), hi=date(2024, 12, 31),
@@ -453,20 +494,23 @@ def run(args, output):
             if args.monthly:
                 from app.services.recalculation import _month_chunks
 
+                chunks = list(_month_chunks(date(2025,1,1),date(2025,3,31)))
+                output["monthly_verification_protocol"] = "ROOT_TAIL_ONLY"
                 variants = tuple(v for v in args.variants if v != "Q0_LEGACY_RAW")
                 for repeat, order in enumerate(alternate(variants, args.repeats)):
                     for variant in order:
-                        for index,(lo,hi) in enumerate(_month_chunks(
-                                date(2025,1,1),date(2025,3,31))):
+                        for index,(lo,hi) in enumerate(chunks):
                             record = trial(variant, scope=f"month_{lo.month}", repeat=repeat,
                                 values={**params,"lo":lo-timedelta(days=430),"hi":hi},
-                                carry=index>0, service_call=True)
+                                carry=index>0, service_call=True,
+                                verify_final=index==len(chunks)-1)
                             record.update(input_start=str(lo-timedelta(days=430)),
                                           input_end=str(hi),chunk_start=str(lo),chunk_end=str(hi))
                             output["monthly"].append(record)
                 output["monthly_scope"] = (
                     "Actual FactorService._read_trade_status called with original 430-day bounds; "
-                    "process-local transport substitution only; no numerical engine/Raw writes")
+                    "process-local transport substitution only; no numerical engine/Raw writes; "
+                    "read commits each month, original final verification once at root tail")
             if args.plans:
                 from scripts.ab_read_profile_v14_a4 import capture_plans, cursor_actual_plans
 
@@ -514,7 +558,7 @@ def main():
                         default="partial")
     args = parser.parse_args()
     output = {"schema": "a42-contract-v1", "baseline": BASELINE,
-              "measurement_version":"a42-v2-grouped-cumulative-counters",
+              "measurement_version":"a42-v3-full-census-tail-final",
               "laboratory_sources":laboratory_sources(),
               "script_sha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "production_path_changes": "NONE", "read_performance_pass": "NOT_CLAIMED"}

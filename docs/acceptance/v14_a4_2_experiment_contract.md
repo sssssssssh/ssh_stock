@@ -29,6 +29,18 @@ Wrong identity must fail before CREATE and before cleanup DROP. Each experiment
 uses the existing UUID child-database/migration/finally-cleanup fixture.
 No connection to the cloud business database is authorized, including diagnostics.
 
+Fixture cardinality uses a single-snapshot named cursor over ALL published A and
+ALL B rows, not LIMIT/first-batch sampling. The client counts A/current-root B/
+other-root B through EOF with 5000-row bounded transport, then requires exact
+agreement with requested cardinalities. Receipt proof includes cursor name,
+closure, rows, batches, completion and total census time. A failure never returns
+partial counters as actual counts. The original aggregate census failed locally
+at the unchanged 300-second budget; its failed receipts are retained. This
+setup-only transport change neither changes benchmark SQL/T3/T4/T8 nor raises
+timeouts or reduces data. Census time is NOT credited as a read-performance gain.
+It also warms caches; every control follows the same census with cache resets
+UNCONTROLLED. Source hashes additionally freeze the reused seed/gate/golden helpers.
+
 Taskbook path mapping: the unit file is named
 `tests/unit/test_ab_read_experiment_contract_v14_a4_2.py`; integration retains
 `tests/integration/test_ab_read_experiment_v14_a4_2.py`. Identical basenames collide
@@ -60,3 +72,12 @@ are attribution only, never added to wall-clock totals. Alternate trial order;
 retain every slow run and negative experiment. No increased timeout or reduced
 fixture can produce a performance PASS. Monthly reads preserve overlapping input
 and root evidence across commits, without invoking or changing financial engines.
+
+Single-read and window controls always include their final verification. A true
+Jan/Feb/Mar root chain commits each read but verifies the whole read set only at
+the March tail, matching the unchanged publication lifecycle. Each next read
+still runs the original E0 A/B guards. Sum the three actual sample spans first,
+then compute chain medians; never add three independent monthly medians. Earlier
+a6679c8/63f289e periodic-final controls remain labelled legacy receipts, not a
+measurement of this one-tail root lifecycle. Final CI rejects missing T8 in a
+protected full/window read and extra/missing T8 in a new monthly chain.

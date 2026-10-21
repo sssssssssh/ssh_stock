@@ -134,6 +134,17 @@ jobs:
                   assert data['summary']['measured_groups_complete']
                   assert data['read_performance_pass'] == 'NOT_CLAIMED'
                   assert data['summary']['authorize_a4_3'] is False
+                  census = data['fixture']['census']
+                  assert census['complete'] and census['cursor_closed'] and census['cursor_name']
+                  assert census['rows']==sum(data['fixture']['actual_counts'].values())
+                  assert all(r.get('final_verification_applied') is True for r in data['runs']
+                             if r['scope'] in ('full','window_matrix')
+                             and r['protection']!='NOT_EQUIVALENT')
+                  if data.get('monthly'):
+                      assert data['monthly_verification_protocol']=='ROOT_TAIL_ONLY'
+                      assert data['summary']['monthly_chains_complete']
+                      assert all(c['protocol']=='ROOT_TAIL_ONLY' and c['repeats']==3
+                                 for c in data['summary']['monthly_chain_tables'])
                   comparisons.append(dict(receipt=path.name,**summarize(data)))
           Path('.codex_tmp/a42-comparison.json').write_text(json.dumps(comparisons,indent=2))
           if os.environ['A42_PHASE']=='primary':

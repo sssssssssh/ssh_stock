@@ -47,7 +47,8 @@ def test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt(
     original = Session.execute
 
     def execute(self, statement, *args, **kwargs):
-        if "(SELECT count(*) FROM public.stock_trade_status_daily) AS a" in str(statement):
+        options = getattr(statement,"get_execution_options",lambda:{})()
+        if options.get("a42_fixture_census"):
             raise OperationalError("synthetic-count-probe", {}, DriverError("synthetic-timeout"))
         return original(self, statement, *args, **kwargs)
 
@@ -70,6 +71,92 @@ def test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt(
     assert receipt["fixture"]["indexes"] and "actual_counts" not in receipt["fixture"]
     assert receipt["runs"] == []
     assert not receipt.get("experiment_complete")
+
+
+def test_full_fixture_census_matches_independent_aggregate_counts(tmp_path,monkeypatch):
+    import json
+    import os
+    import sys
+
+    from loguru import logger
+
+    from scripts import ab_read_experiment_v14_a4_2 as experiment
+
+    observed = []
+
+    def stop_after_independent_count(db,engine,variant,params,**kwargs):
+        observed.append(dict(db.execute(text("SELECT "
+            "(SELECT count(*) FROM public.stock_trade_status_daily) AS a,"
+            "count(*) FILTER (WHERE publication_id=:root) AS b,"
+            "count(*) FILTER (WHERE publication_id<>:root) AS other_b "
+            "FROM public.data_publication_row"), {"root":workspace(db).job_id}).mappings().one()))
+        raise RuntimeError("synthetic stop after independent census verification")
+
+    for name in ("DATABASE_URL","TUSHARE_TOKEN","LLM_ENABLED","AB_MERGE_READ_ENABLED"):
+        monkeypatch.setenv(name,os.environ.get(name,""))
+    monkeypatch.setattr(logger,"remove",lambda *args,**kwargs:None)
+    monkeypatch.setattr(experiment,"measure",stop_after_independent_count)
+    path = tmp_path / "census-proof.json"
+    monkeypatch.setattr(sys,"argv",["a42","--public-rows","1000","--candidate-rows","500",
+                                  "--other-rows","1000","--output",str(path)])
+    with pytest.raises(SystemExit):
+        experiment.main()
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    assert observed == [dict(a=1000,b=500,other_b=1000)]
+    assert receipt["fixture"]["actual_counts"] == observed[0]
+    proof = receipt["fixture"]["census"]
+    assert proof["rows"] == 2500 and proof["complete"] and proof["cursor_closed"]
+    assert proof["cursor_name"] and receipt["runs"] == []
+
+
+def test_monthly_reads_carry_evidence_but_apply_final_verification_only_at_tail(
+    database, monkeypatch
+):
+    from scripts.ab_read_experiment_v14_a4_2 import measure
+
+    factory, engine = database
+    support.seed_published(factory)
+    with factory.begin() as db:
+        db.execute(text("CREATE EXTENSION pg_stat_statements"))
+    calls = []
+    original = ab.verify_public_read_evidence
+
+    def verify(db, current):
+        calls.append(current.job_id)
+        return original(db,current)
+
+    monkeypatch.setattr(ab,"verify_public_read_evidence",verify)
+    with support.candidate(factory,engine) as (db,job):
+        workspace(db).upsert(Model,[support.sample_row(Model,job.id)],("trade_date","ts_code"))
+        db.commit()
+        params = dict(lo=support.DAY,hi=support.DAY,version="trade_status_v1",
+                      hash=support.data_queue_identity()["analysis"])
+        first,_ = measure(db,engine,"Q0_SAFETY_EQUIVALENT",params,verify_final=False)
+        assert not calls and not first["final_verification_applied"]
+        assert first["current_read_set_dates"] == 1
+        last,_ = measure(db,engine,"Q0_SAFETY_EQUIVALENT",params,carry=True,verify_final=True)
+        assert calls == [job.id] and last["final_verification_applied"]
+        assert last["previous_read_set_dates"] == 1
+        assert first["rows"] == last["rows"] == 1 and first["hash"] == last["hash"]
+
+
+def test_omitting_intermediate_final_check_does_not_skip_next_e0_source_check(database):
+    from scripts.ab_read_experiment_v14_a4_2 import measure
+
+    factory, engine = database
+    support.seed_published(factory)
+    with factory.begin() as db:
+        db.execute(text("CREATE EXTENSION pg_stat_statements"))
+    with support.candidate(factory,engine) as (db,job):
+        workspace(db).upsert(Model,[support.sample_row(Model,job.id)],("trade_date","ts_code"))
+        db.commit()
+        params = dict(lo=support.DAY,hi=support.DAY,version="trade_status_v1",
+                      hash=support.data_queue_identity()["analysis"])
+        measure(db,engine,"Q0_SAFETY_EQUIVALENT",params,verify_final=False)
+        with factory.begin() as outsider:
+            outsider.execute(text("UPDATE public.stock_trade_status_daily SET is_st=true"))
+        with pytest.raises(ValueError,match="AB_READ_PUBLISHED_INPUT_CHANGED"):
+            measure(db,engine,"Q0_SAFETY_EQUIVALENT",params,carry=True,verify_final=False)
 
 
 def test_e1_cached_sha_accepts_changed_intermediate_a_and_restored_final_a(database, monkeypatch):

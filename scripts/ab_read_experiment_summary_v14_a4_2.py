@@ -23,6 +23,10 @@ def summarize(output):
     goldens = {}
     for run in output.get("runs", []):
         scope = run.get("scope", "full")
+        if (scope in {"full","window_matrix"} and run["protection"]!="NOT_EQUIVALENT"
+                and "final_verification_applied" in run
+                and run["final_verification_applied"] is not True):
+            raise ValueError("A42_PROTECTED_READ_REQUIRES_FINAL_VERIFY")
         if run.get("telemetry", {}).get("reader_errors"):
             raise ValueError("A42_RR_READER_ERROR")
         golden = (run["rows"], run["hash"], run["dtypes"], run["columns"])
@@ -60,7 +64,37 @@ def summarize(output):
                        "fetch_p95":percentile(fetches,95),"fetch_p99":percentile(fetches,99),
                        "reader_p95":percentile(readers,95),
                        "timing_caveat":"Nested phase medians overlap; never add them"})
+    chains = {}
+    for run in output.get("runs", []):
+        if run.get("scope") in {"month_1","month_2","month_3"}:
+            chains.setdefault((run["variant"],run.get("cursor_fraction","0.1"),
+                               run["repeat"]),[]).append(run)
+    chain_groups = {}
+    chains_complete = bool(chains)
+    for (variant,fraction,repeat), runs in chains.items():
+        if sorted(r["scope"] for r in runs) != ["month_1","month_2","month_3"]:
+            chains_complete = False
+            continue
+        ordered = sorted(runs,key=lambda r:r["scope"])
+        finals = [r.get("final_verification_applied") for r in ordered]
+        protected = ordered[0]["protection"] != "NOT_EQUIVALENT"
+        expected = [False,False,True] if protected else [False,False,False]
+        tail_only = all(actual is wanted for actual,wanted in zip(finals,expected,strict=True))
+        if output.get("monthly_verification_protocol")=="ROOT_TAIL_ONLY" and not tail_only:
+            raise ValueError("A42_MONTHLY_FINAL_VERIFY_PROTOCOL")
+        protocol = "ROOT_TAIL_ONLY" if tail_only else "LEGACY_PERIODIC_OR_UNRECORDED"
+        chain_groups.setdefault((variant,fraction,protocol),[]).append(
+            dict(repeat=repeat,seconds=sum(r["read_plus_final_seconds"] for r in ordered)))
+    chain_tables = []
+    for (variant,fraction,protocol), runs in chain_groups.items():
+        values = [r["seconds"] for r in runs]
+        chain_tables.append(dict(variant=variant,cursor_fraction=fraction,protocol=protocol,
+            repeats=len(runs),p50=statistics.median(values),p95=percentile(values,95),samples=values,
+            scope="Sum actual monthly read/commit/final spans under the labelled protocol; "
+                "not sum of monthly medians; "
+                "excludes numerical engines, golden oracle and harness persistence"))
     return {"tables": tables, "golden": "PASS" if groups else "UNPROVEN",
+            "monthly_chain_tables":chain_tables,"monthly_chains_complete":chains_complete,
             "experiment_complete": bool(output.get("experiment_complete"))
                 and not output.get("failure_type"),
             "event_install_seconds":output.get("event_install_seconds"),
