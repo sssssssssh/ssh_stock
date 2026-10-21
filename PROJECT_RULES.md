@@ -6,6 +6,9 @@
 安全等价必须区分现有 E0 观测契约与跨事务 ABA 的更强契约；未知能力不得标为安全等价。
 实验结论不能开启 AB_MERGE_READ_ENABLED、批准 A4-3 或推进历史复用 B/C；生产性能不宣称 PASS。
 禁止连接业务云库或操作实际 Worker/Scheduler。契约见 docs/acceptance/v14_a4_2_experiment_contract.md。
+E1 指纹记忆与 E2 调用方代次证书已有反例；E3 事务计数还存在特权绕过和回滚后代次复用问题，
+不得作为可信失效或历史血缘凭据。SQL 黄金相同仅证明沿用 E0 的读取语义，不证明全事件可观测。
+逐项门禁与未完成项见 docs/acceptance/v14_a4_2_experiment_results.md；否定性 ADR 不自动放行后续阶段。
 
 ## V1.4 读路径专项
 

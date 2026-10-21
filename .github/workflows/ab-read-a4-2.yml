@@ -13,6 +13,11 @@ jobs:
   laboratory:
     runs-on: ubuntu-latest
     timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        phase: [primary, supplemental]
     env:
       DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a42_test
       TEST_DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a42_test
@@ -66,6 +71,7 @@ jobs:
           --junitxml=.codex_tmp/a42-targeted.xml
       - run: python -m ruff check backend tests migrations scripts
       - name: Serial 10k then 100k, complete fetch and actual plans
+        if: matrix.phase == 'primary'
         run: |
           python scripts/ab_read_experiment_v14_a4_2.py --plans --monthly --window-matrix \
             --container a42-pg17 --output .codex_tmp/a42-10k.json
@@ -73,11 +79,13 @@ jobs:
             --candidate-rows 52529 --other-rows 108949 --plans --monthly --window-matrix \
             --container a42-pg17 --output .codex_tmp/a42-100k.json
       - name: Frozen million fixture, same complete safety costs
+        if: matrix.phase == 'primary'
         run: >-
           python scripts/ab_read_experiment_v14_a4_2.py --public-rows 2570000
           --candidate-rows 1350000 --other-rows 2800000 --plans --monthly --window-matrix
           --container a42-pg17 --output .codex_tmp/a42-million.json
       - name: Distribution and tombstone matrix, not a reduced-size performance claim
+        if: matrix.phase == 'supplemental'
         run: |
           for coverage in partial a_only b_only high mismatched; do
             for tombstones in 0 1 10; do
@@ -88,25 +96,35 @@ jobs:
             done
           done
       - name: Event prototype timing is UNPROVEN, never eligible for production
+        if: matrix.phase == 'supplemental'
         run: >-
           python scripts/ab_read_experiment_v14_a4_2.py --public-rows 100000
           --candidate-rows 52529 --other-rows 108949 --variants Q0_SAFETY_EQUIVALENT Q1_CURRENT E3
           --monthly --container a42-pg17 --output .codex_tmp/a42-events.json
       - name: Two repeatable-read public readers, same million fixture
+        if: matrix.phase == 'supplemental'
         run: >-
           python scripts/ab_read_experiment_v14_a4_2.py --public-rows 2570000
           --candidate-rows 1350000 --other-rows 2800000 --readers 2 --reader-pause 5
           --variants Q0_SAFETY_EQUIVALENT Q1_CURRENT S3_KEYS S5
           --container a42-pg17 --output .codex_tmp/a42-million-readers.json
       - name: Validate exact HEAD receipts, never authorize A4-3
+        env:
+          A42_PHASE: ${{ matrix.phase }}
         run: |
-          python scripts/ab_read_experiment_summary_v14_a4_2.py .codex_tmp/a42-10k.json \
-            .codex_tmp/a42-100k.json .codex_tmp/a42-million.json .codex_tmp/a42-events.json \
-            .codex_tmp/a42-million-readers.json --output .codex_tmp/a42-comparison.json
           python - <<'PY'
           import json, os
           from pathlib import Path
+          from scripts.ab_read_experiment_summary_v14_a4_2 import summarize
+          from scripts.ab_read_experiment_v14_a4_2 import CONTROLS, SQL_VARIANTS
+          required = (['a42-10k.json','a42-100k.json','a42-million.json']
+              if os.environ['A42_PHASE']=='primary' else
+              ['a42-events.json','a42-million-readers.json'] +
+              [f'a42-shape-{c}-{t}.json' for c in
+               ('partial','a_only','b_only','high','mismatched') for t in (0,1,10)])
+          assert all(Path('.codex_tmp',name).is_file() for name in required)
           receipts = list(Path('.codex_tmp').glob('a42-*.json'))
+          comparisons = []
           for path in receipts:
               data = json.loads(path.read_text())
               if isinstance(data, dict) and data.get('schema') == 'a42-experiment-v1':
@@ -116,10 +134,25 @@ jobs:
                   assert data['summary']['measured_groups_complete']
                   assert data['read_performance_pass'] == 'NOT_CLAIMED'
                   assert data['summary']['authorize_a4_3'] is False
-          primary = json.loads(Path('.codex_tmp/a42-million.json').read_text())
-          assert primary['fixture']['actual_counts'] == dict(a=2570000, b=1350000, other_b=2800000)
-          assert all(r['rows'] == 3104443 for r in primary['runs'])
-          assert primary['plans'] and primary['lock_probe_outside_timed_trials']
+                  comparisons.append(dict(receipt=path.name,**summarize(data)))
+          Path('.codex_tmp/a42-comparison.json').write_text(json.dumps(comparisons,indent=2))
+          if os.environ['A42_PHASE']=='primary':
+              primary = json.loads(Path('.codex_tmp/a42-million.json').read_text())
+              assert primary['fixture']['actual_counts'] == dict(a=2570000, b=1350000, other_b=2800000)
+              assert all(r['rows'] == 3104443 for r in primary['runs'])
+              variants = set(CONTROLS+SQL_VARIANTS)
+              expected = {(v,f,'full',None) for v in variants for f in ('0.1','1.0')}
+              expected |= {('S3',f,'window_matrix',w) for f in ('0.1','1.0')
+                           for w in (None,1,3,5,10,20)}
+              expected |= {(v,'0.1',f'month_{m}',None) for v in variants-{'Q0_LEGACY_RAW'}
+                           for m in (1,2,3)}
+              observed = {}
+              for r in primary['runs']:
+                  key = (r['variant'],r['cursor_fraction'],r['scope'],r['window_days'])
+                  observed.setdefault(key,[]).append(r['repeat'])
+              assert set(observed)==expected and all(sorted(v)==[0,1,2] for v in observed.values())
+              assert len(primary['plans'])==len(expected) and primary['lock_probe_outside_timed_trials']
+              assert all(p['actual_cursor_untimed'] for p in primary['plans'].values())
           PY
       - name: Explicit final status including early failure
         if: always()
@@ -129,7 +162,7 @@ jobs:
           import json, os
           from pathlib import Path
           Path('.codex_tmp/a42-status.json').write_text(json.dumps(dict(
-              head=os.environ['GITHUB_SHA'], job_status='${{ job.status }}',
+              head=os.environ['GITHUB_SHA'], phase='${{ matrix.phase }}', job_status='${{ job.status }}',
               run_url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
               production_path_changes='NONE', read_performance_pass='NOT_CLAIMED',
               authorize_a4_3=False, cloud='NOT_AUTHORIZED_NOT_PERFORMED',
@@ -138,7 +171,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: a42-experiments-${{ github.sha }}
+          name: a42-experiments-${{ matrix.phase }}-${{ github.sha }}
           include-hidden-files: true
           path: |
             .codex_tmp/a42-*.json

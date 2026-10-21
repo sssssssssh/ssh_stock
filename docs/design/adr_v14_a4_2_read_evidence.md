@@ -1,6 +1,6 @@
 # ADR: A4-2 Read Evidence and SQL Experiments
 
-Status: experiments in progress; no production candidate selected.
+Status: A4_2_NO_SAFE_WINNER; no production candidate selected. Scale acceptance OPEN.
 Baseline: f8df915. Production changes: NONE. A4-3/B/C: NOT AUTHORIZED.
 
 ## Safety Experiments
@@ -45,9 +45,57 @@ needs mutation evidence; locking alone does not make local state immutable.
 fire even for zero-row statements, so these counters deliberately accept false
 invalidation, never silently treat such events as evidence of unchanged data.
 
-## SQL, Window and Resource Decision
+## Decision Questions
 
-Pending complete cursor measurements. No estimate-only winner. Final report must
-answer all eight taskbook decision questions and preserve negative experiments.
-Until those receipts exist the overall state is A4_2_NO_SAFE_WINNER,
-READ_PERFORMANCE_PASS=NOT_CLAIMED; this is not authorization to change production.
+1. **Cheaper equivalent evidence?** None proved. E0 preserves the current observed
+   read-set contract, including direct A changes present at the next check. It is
+   not an all-mutations audit. E1/E2 have executable counterexamples and E3 is
+   UNPROVEN. A correct SQL variant retaining E0 does not cure E3 or strengthen E0.
+2. **Preferred SQL and measured gain?** No selection before complete-scale results.
+   S3/S3_INLINE isolate CTE materialization; S3_KEYS separates narrow masking keys
+   from full native decoding; S4 compares typed anti-join; S5 removes only SQL
+   ordering, retaining full-frame Python ordering. Q0 raw/service lack protection
+   and are not eligible winners. Same-scope p50/p95 and raw plans belong in the
+   [results report](../acceptance/v14_a4_2_experiment_results.md), not estimates.
+3. **Stable at every scale?** Not yet established. Early 10k receipts are exploratory
+   and from earlier script bodies, not substitutes for 100k/million measurements.
+   All three alternating samples, regressions and failures must remain visible.
+4. **Schema/index/event costs?** S3-S5 use existing indexes and need no schema change
+   in this laboratory. A production rewrite still requires separate approval.
+   E3 would add triggers, counter DML, WAL, a hot row and an expanded maintenance
+   contract. Installing triggers requires table locks; a transactionally reverted
+   generation cannot safely be treated as a globally unique certificate. Legacy
+   rows would need initial full validation. A rollback design cannot silently
+   disable events while leaving trusted certificates alive. No production DDL,
+   migration or cache has been delivered or authorized.
+5. **Windows or one bounded SELECT?** Retain current behavior until measured.
+   Windowing does not remove global T3/T4/T8 and can multiply DECLARE/FETCH and
+   checkpoint cost. None/1/3/5/10/20 must include closed-day stored rows. A future
+   view/index/sort audit may be proposed, but neither indexes nor the view are
+   changed here; no independent small-window numerical engine is allowed.
+6. **Readers/writers/faults?** Existing Worker ownership, cancel, 57014, disconnect
+   and unknown-commit slot rules are reused in real regression tests, not replaced.
+   RR probes query public tables only. SHARE acquisition/hold and conflicting DML
+   probes are recorded separately. Measured read-stage hold is a lower bound:
+   actual factor computation/staging can keep the same transaction open longer.
+   No claim about production writer latency or cloud lock budgets follows.
+7. **No safe winner, next action?** Stop at A4-2. Keep the flag false and report
+   READ_PERFORMANCE_PASS=NOT_CLAIMED. Do not relax timeout/identity/quality or hide
+   slower trials. Only after review may a separate statistics/index audit or
+   evidence/data-model discussion be scoped; there is no automatic A4-3 approval.
+8. **Future stage B?** Historical reuse must independently prove Raw revision
+   lineage, complete RPS cross-sections and trend checkpoints under the frozen
+   version/config/source identity. A process-local SHA or E3 event counter is not
+   a reusable historical artifact. No stage B/C implementation is included.
+
+## Acceptance Boundary
+
+Correctness tests proving a counterexample PASS when the unsafe shortcut is
+detected. They do not make the shortcut SAFE_EQUIVALENT. In particular T15 is
+UNPROVEN for unobserved ABA under the existing E0 contract, and E3 does not close
+all bypass/rollback paths. All-I01-I10 production authorization is therefore not
+claimed. This remains distinct from measured SQL equality under unchanged E0.
+
+Exact-SHA CI, resource/scale coverage and any deferred matrix cells are reported
+explicitly in the results report. A green diagnostic job is not production
+performance acceptance. Next phase authorization requested: NO.

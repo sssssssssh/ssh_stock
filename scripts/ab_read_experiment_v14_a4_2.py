@@ -429,7 +429,8 @@ def run(args, output):
                     raise
                 record.update(repeat=repeat, scope=scope)
                 output["runs"].append(record)
-                captured.setdefault((variant, record["cursor_fraction"]), statements)
+                captured.setdefault((variant, record["cursor_fraction"], scope,
+                                     record["window_days"]), statements)
                 save(args.output, output)
                 print(json.dumps({k:record[k] for k in (
                     "variant", "scope", "repeat", "rows", "read_plus_final_seconds")}), flush=True)
@@ -465,10 +466,11 @@ def run(args, output):
             if args.plans:
                 from scripts.ab_read_profile_v14_a4 import capture_plans, cursor_actual_plans
 
-                for (variant, fraction), statements in captured.items():
+                for (variant, fraction, scope, days), statements in captured.items():
                     db.execute(text("SELECT set_config('cursor_tuple_fraction',:f,true)"),
                                {"f":fraction})
-                    output["plans"][variant+"_"+fraction] = {
+                    output["plans"][f"{variant}_{fraction}_{scope}_window_{days}"] = {
+                        "scope":scope,"window_days":days,"cursor_fraction":fraction,
                         "select_and_cursor_estimate": capture_plans(db, statements),
                         "actual_cursor_untimed": cursor_actual_plans(db, statements)}
                     save(args.output, output)

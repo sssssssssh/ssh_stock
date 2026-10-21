@@ -27,6 +27,9 @@ first-row/5000/EOF times, close state, per-window metrics and all slow samples.
 Supplemental untimed probes preserve SELECT ANALYZE BUFFERS, DECLARE estimates and
 auto_explain actual DECLARE/full-FETCH plans (actual rows/loops/buffers/temp I/O).
 Plan probes run after alternating timed trials, never as a substitute for FETCH.
+Plan groups retain scope, cursor fraction and window width separately; full reads
+do not replace window/month plans. The frozen plan helper samples first/middle/
+last DECLARE for a multi-window group, with all timed cursors still preserved.
 Planner comparisons use only transaction-local cursor_tuple_fraction 0.1/1.0.
 No production indexes, temporary caches, planner defaults or timeout are changed.
 

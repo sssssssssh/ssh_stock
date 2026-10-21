@@ -6,6 +6,10 @@
 实验目标必须同时验证 PG17 随机标记和物理 ID；Windows 运行冻结脚本时设置 `PYTHONUTF8=1`。
 范围与公平对照见 [实验契约](docs/acceptance/v14_a4_2_experiment_contract.md)。
 仅完成诊断不代表读取超时已修复；后续 A4-3、历史复用 B/C 均须再次批准。
+安全反例与逐项验收见 [A4-2 结果](docs/acceptance/v14_a4_2_experiment_results.md) 和
+[ADR](docs/design/adr_v14_a4_2_read_evidence.md)。E1/E2 淘汰，E3 未证明；
+当前结论 `A4_2_NO_SAFE_WINNER`，不表示生产读取性能已通过，未完成测量仍明确列为 OPEN。
+独立 A4-2 CI 使用专属 PG17；不能用旧提交的绿色 CI 代替最终 HEAD 结果。
 
 ## V1.4 读路径专项（阶段 A 待审，性能 OPEN）
 
