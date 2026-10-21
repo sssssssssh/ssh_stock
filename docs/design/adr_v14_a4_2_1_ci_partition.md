@@ -55,6 +55,8 @@ partial+tombstone=1 黄金输出 3,104,443。PG17 读取实验固定 2 CPU / 3 G
 
 每个新组前检查剩余预算，预留清理与上传；不足时停止并标记 INCOMPLETE，不提高 SQL 超时。
 SIGTERM/异常只保留实际完成组，当前组失败信息脱敏；SIGKILL/宿主丢失无法保证上传，缺工件本身阻断。
+另有覆盖 fixture 导入及计划探针的整项软截止；读取分片预留 15 分钟、容量 CI 270 分钟主动退出，
+给清理和 always 上传留出余量。任何软截止均标 INCOMPLETE/RESOURCE_DEFERRED，不改变 SQL 300 秒。
 `always()` 上传不是完成证据，不能把取消、空文件、旧 HEAD 或部分收据当成功。
 
 ## 主 CI 与容量
@@ -74,3 +76,12 @@ release job `needs` 核心与全部容量，`always()` 执行、失败也产生�
 P1：本 ADR、矩阵、纯契约与负向单测。P2：接入脚本/原子工件/CI，不宣称 CI 已成功。
 P3：最终 SHA 真实完整验收、原始工件及性能对照。代码通过与证据通过分别报告；
 READ_PERFORMANCE_PASS=false/NOT_CLAIMED、production_read_authorized=false、authorize_a4_3=false。
+
+## P2 真实 CI 反馈与兼容性修复
+
+`5593d58` 的 contract-and-safety 通过，但真实 scope job 在读取前失败；下载 INCOMPLETE 工件并复现，
+原因是新容器 purpose 标签不符合冻结 A4-1 resource_snapshot 的精确要求。
+不修改冻结采样器：改为保留 `purpose=ssh-stock-a4-physical-test`，额外增加 `stage=A4-2.1`，
+新容器校验同时要求二者。真实容器资源采样加入 scope 集成测试，十种 full 变体均执行。
+主 CI 原 CLI 安全回归还发现旧安全拒绝 stderr 文案丢失；恢复原文案，仍执行更严格的物理双验证。
+失败运行与部分工件保留，不作为新代码通过证据；新增了原生计划缺失、跨 run、单组计数及软截止反例。

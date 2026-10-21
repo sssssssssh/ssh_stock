@@ -33,13 +33,14 @@ def envelope(job):
 def sample(group):
     receipt = envelope("job")
     recipe = fixture_recipe(group)
-    rows = 3104443 if group.scale == "million" else 9471
+    rows = {"10k":9471, "100k":120592, "million":3104443}[group.scale]
     batches, tail = divmod(rows, 5000)
     fetches = [dict(rows=5000) for _ in range(batches)]
     if tail:
         fetches.append(dict(rows=tail))
     fetches.append(dict(rows=0))
     receipt.update(group=asdict(group), group_id=group.id, fixture=recipe,
+        expected_groups=1, completed_groups=1,
         fixture_digest=digest(recipe), resources=dict(cpu_limit=2, memory_bytes=3*1024**3),
         settings=dict(statement_timeout_ms=300000, read_flag=False),
         census=dict(complete=True, cursor_closed=True, cursor_name="census",
@@ -140,7 +141,8 @@ def capacity(level, stocks, days):
     receipt["physical_system_identifier"] = system
     receipt["isolation"].update(
         expected_system_identifier=system, observed_system_identifier=system)
-    receipt.update(level=level, results=[dict(level=level, stocks=stocks, days=days,
+    receipt.update(level=level, expected_groups=1, completed_groups=1,
+        results=[dict(level=level, stocks=stocks, days=days,
         final_root_status="SUCCESS", final_ledger_state="PUBLISHED", reader_errors=[],
         reader_samples=3, max_running=1, row_budget=10000000, merge_timeout_ms=300000,
         rows=days*(6*stocks+min(50,stocks)+min(100,stocks)+2), publish_seconds=1,
@@ -174,3 +176,48 @@ def test_capacity_cannot_rename_smoke_as_l2_or_drop_rollback_probe():
             broken[1]["results"][0]["rollback_probes"].pop()
         with pytest.raises(ReceiptError):
             merge_capacity(broken, head=HEAD, attempt=1, model_hash=MODEL)
+
+
+@pytest.mark.parametrize("damage", ["select", "estimate", "actual", "loops", "buffers",
+                                   "close", "eof", "fetch", "expected", "group_counts"])
+def test_native_cursor_plan_proofs_cannot_be_substituted_or_partial(damage):
+    group = Group("million", "plan", "Q1_CURRENT", "0.1", "full")
+    receipt = sample(group)
+    proof = dict(select_and_cursor_estimate={"T5_declare":[dict(
+        select_actual=[{"Plan":{"Node Type":"Synthetic Unit"}}],
+        cursor_estimated=[{"Plan":{"Node Type":"Synthetic Unit"}}])]},
+        actual_cursor_untimed=[{"Query Text":"DECLARE synthetic CURSOR FOR SELECT fixture",
+            "Plan":{"Actual Rows":3104443,"Actual Loops":1,"Shared Read Blocks":0}}],
+        expected_cursor_plans=1, probe_cursors=receipt["result"]["cursors"])
+    receipt["result"] = proof
+    validate_group(receipt, group, head=HEAD, attempt=1, job_id="job", model_hash=MODEL)
+    if damage in {"select", "estimate"}:
+        key = "select_actual" if damage=="select" else "cursor_estimated"
+        proof["select_and_cursor_estimate"]["T5_declare"][0].pop(key)
+    elif damage=="actual":
+        proof["actual_cursor_untimed"].clear()
+    elif damage in {"loops", "buffers"}:
+        proof["actual_cursor_untimed"][0]["Plan"].pop(
+            "Actual Loops" if damage=="loops" else "Shared Read Blocks")
+    elif damage=="close":
+        proof["probe_cursors"][0]["closed"] = False
+    elif damage=="eof":
+        proof["probe_cursors"][0]["fetches"].pop()
+    elif damage=="fetch":
+        proof["probe_cursors"][0]["fetches"][0]["rows"] -= 1
+    elif damage=="expected":
+        proof["expected_cursor_plans"] += 1
+    else:
+        receipt["completed_groups"] = 0
+    with pytest.raises(ReceiptError):
+        validate_group(receipt, group, head=HEAD, attempt=1, job_id="job", model_hash=MODEL)
+
+
+@pytest.mark.parametrize("field,value", [("head_sha","0"*40), ("attempt",2),
+    ("model_hash","wrong"), ("status","INCOMPLETE"), ("sqlstate","57014"),
+    ("working_tree_dirty",True)])
+def test_capacity_merge_rejects_incompatible_identity_and_partial_level(field,value):
+    receipts = [capacity("L1",10,2),capacity("L2",5000,20),capacity("L3-scaled-10pct",500,120)]
+    receipts[1][field] = value
+    with pytest.raises(ReceiptError):
+        merge_capacity(receipts, head=HEAD, attempt=1, model_hash=MODEL)

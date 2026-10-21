@@ -21,6 +21,7 @@ def load_groups(path, manifest):
         require(hashlib.sha256(data).hexdigest() == entry.get("sha256"), "ARTIFACT_DIGEST_MISMATCH")
         receipt = json.loads(gzip.decompress(data))
         require(receipt.get("group_id") == group_id, "ARTIFACT_KEY_MISMATCH")
+        require(receipt.get("run_id") == manifest.get("run_id"), "GROUP_RUN_MISMATCH")
         result.append(receipt)
     return result
 

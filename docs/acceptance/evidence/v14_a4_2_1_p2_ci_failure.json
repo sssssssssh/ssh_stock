@@ -1,0 +1,36 @@
+{
+  "schema_version": "a421-development-feedback-v1",
+  "head_sha": "5593d58246f573a5d90d45416c7904c212bdc5a4",
+  "acceptance": "FAILED_NOT_ELIGIBLE_FOR_NEW_HEAD",
+  "a42_run": "https://github.com/sssssssssh/ssh_stock/actions/runs/39644754726",
+  "core_run": "https://github.com/sssssssssh/ssh_stock/actions/runs/39644754862",
+  "contract_and_safety": "success",
+  "capacity_l1": "success",
+  "small_10k": {
+    "job_id": 119381064906,
+    "artifact_id": 12366214140,
+    "artifact_sha256": "43c81aa550f62200aa8c4a5a317f2727e9cd5a9030650b59debe78dcbf3663c4",
+    "status": "INCOMPLETE",
+    "expected_groups": 236,
+    "completed_groups": 0,
+    "last_phase": "scoped_trials",
+    "failed_variant": "Q0_LEGACY_RAW",
+    "failure_type": "ValueError",
+    "locally_reproduced_code": "A4_RESOURCE_CONTAINER_NOT_MARKED",
+    "root_cause": "Provisioning purpose label disagreed with frozen A4-1 resource sampler",
+    "fix": "Preserve frozen purpose label and additionally require stage=A4-2.1; sampler unchanged"
+  },
+  "core_failure": {
+    "job_id": 119377255719,
+    "step": "Cold start engines and zero-write CLI regressions",
+    "test": "test_capacity_cli_rejects_nonisolated_target_before_loading_business_settings",
+    "failed_parameters": 3,
+    "expected_stderr": "EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED",
+    "observed_stderr": "",
+    "fix": "Restore safe legacy rejection text without relaxing physical isolation guard"
+  },
+  "production_path_changed": false,
+  "read_performance_pass": "NOT_CLAIMED",
+  "production_read_authorized": false,
+  "authorize_a4_3": false
+}

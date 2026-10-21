@@ -73,10 +73,14 @@ def gate(args):
             identity(safety, head=head, attempt=attempt, job_id="contract-and-safety")
             physical(safety)
             require(safety.get("status") == "COMPLETE" and not safety["working_tree_dirty"]
-                    and safety["model_hash"] == model_hash(), "SAFETY_INCOMPLETE")
+                    and safety["model_hash"] == model_hash()
+                    and safety.get("run_id") == os.environ["GITHUB_RUN_ID"], "SAFETY_INCOMPLETE")
             result["safety_testcases"] = junit(safety_files[0].parent/"a42-targeted.xml")
             result["matrix"] = validate_lab(args.input, head=head, attempt=attempt,
                                            model_hash=model_hash(), needs=needs)
+            for path in args.input.rglob("manifest.json"):
+                require(json.loads(path.read_text()).get("run_id") == os.environ["GITHUB_RUN_ID"],
+                        "MANIFEST_RUN_MISMATCH")
         else:
             require_jobs(needs, {"test", "capacity"})
             core_files = list(args.input.rglob("core/status.json"))
@@ -84,9 +88,13 @@ def gate(args):
             core = json.loads(core_files[0].read_text())
             identity(core, head=head, attempt=attempt, job_id="core")
             require(core.get("status") == "COMPLETE" and not core["working_tree_dirty"]
-                    and core["model_hash"] == model_hash(), "CORE_INCOMPLETE")
+                    and core["model_hash"] == model_hash()
+                    and core.get("run_id") == os.environ["GITHUB_RUN_ID"], "CORE_INCOMPLETE")
             files = list(args.input.rglob("capacity.json"))
-            capacity = merge_capacity([json.loads(p.read_text()) for p in files],
+            receipts = [json.loads(p.read_text()) for p in files]
+            require(all(r.get("run_id") == os.environ["GITHUB_RUN_ID"] for r in receipts),
+                    "CAPACITY_RUN_MISMATCH")
+            capacity = merge_capacity(receipts,
                                       head=head, attempt=attempt, model_hash=model_hash())
             atomic(args.output.parent/"cold-start-capacity.json", capacity)
             from scripts.publication_release_checks_v14_a4_2_1 import validate

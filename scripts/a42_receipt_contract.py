@@ -66,6 +66,8 @@ def base_scope(scope):
 def validate_group(receipt, group, *, head, attempt, job_id, model_hash):
     identity(receipt, head=head, attempt=attempt, job_id=job_id)
     require(receipt.get("status") == "COMPLETE", "GROUP_INCOMPLETE")
+    require(receipt.get("expected_groups") == receipt.get("completed_groups") == 1,
+            "GROUP_COMPLETENESS_COUNTS_MISSING")
     require(not any(receipt.get(k) for k in ("failure_type", "sqlstate", "failed_phase")),
             "GROUP_FAILURE")
     require(receipt.get("group") == asdict(group) and receipt.get("group_id") == group.id,
@@ -121,8 +123,9 @@ def validate_group(receipt, group, *, head, attempt, job_id, model_hash):
                 and phases.get("T3_fingerprint_inclusive", {}).get("count", 0) >= 1,
                 "E0_PREPARE_MISSING")
         require(phases.get("T8_verify_inclusive", {}).get("count", 0) == int(final), "T8_MISSING")
-    if group.scale == "million" and group.coverage == "partial" and group.tombstones == 1:
-        require(result.get("rows") == 3104443, "MILLION_GOLDEN_CARDINALITY")
+    if group.coverage == "partial" and group.tombstones == 1:
+        require(result.get("rows") == {"10k":9471, "100k":120592, "million":3104443}[group.scale],
+                "FROZEN_GOLDEN_CARDINALITY")
     if monthly:
         require(bool(result.get("logical_root"))
                 and result.get("monthly_protocol") == "ROOT_TAIL_ONLY",
@@ -238,6 +241,8 @@ def merge_capacity(receipts, *, head, attempt, model_hash):
                 and not receipt.get("working_tree_dirty", False),
                 "CAPACITY_INCOMPLETE")
         require(len(receipt.get("results", [])) == 1, "CAPACITY_LEVEL_NOT_UNIQUE")
+        require(receipt.get("expected_groups") == receipt.get("completed_groups") == 1,
+                "CAPACITY_COMPLETENESS_COUNTS_MISSING")
         validate_capacity(receipt["results"][0], level)
         results[level] = receipt["results"][0]
     require(set(results) == set(CAPACITY_LEVELS), "CAPACITY_LEVEL_MISSING")

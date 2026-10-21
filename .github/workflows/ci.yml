@@ -297,6 +297,7 @@ jobs:
     env:
       PYTHONUNBUFFERED: "1"
       LLM_ENABLED: "false"
+      A421_CAPACITY_BUDGET_MINUTES: "270"
     steps:
       - uses: actions/checkout@v4
         with:

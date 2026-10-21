@@ -18,7 +18,8 @@ runs:
         marker=$(python -c 'import uuid; print(uuid.uuid4())')
         limits=()
         if [ "$RESOURCE_CLASS" = read ]; then limits=(--cpus=2 --memory=3g); fi
-        docker run -d --name a421-pg17 --label purpose=ssh-stock-a421-physical-test \
+        docker run -d --name a421-pg17 --label purpose=ssh-stock-a4-physical-test \
+          --label stage=A4-2.1 \
           "${limits[@]}" -p 127.0.0.1:55440:5432 \
           -e POSTGRES_DB=a421_test -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
           postgres:17 -c "v14.test_instance=$marker" \

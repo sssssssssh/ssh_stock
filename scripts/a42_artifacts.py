@@ -4,9 +4,11 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import signal
 import subprocess
 import time
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -76,8 +78,9 @@ def container_receipt(name, *, read=False):
     from sqlalchemy.engine import make_url
 
     info = json.loads(subprocess.check_output(["docker", "inspect", name], text=True))[0]
-    require(info.get("Config", {}).get("Labels", {}).get("purpose")
-            == "ssh-stock-a421-physical-test", "NOT_AN_OWNED_A421_INSTANCE")
+    labels = info.get("Config", {}).get("Labels", {})
+    require(labels.get("purpose") == "ssh-stock-a4-physical-test"
+            and labels.get("stage") == "A4-2.1", "NOT_AN_OWNED_A421_INSTANCE")
     port = str(make_url(os.environ["TEST_DATABASE_URL"]).port)
     require(any(p.get("HostIp") == "127.0.0.1" and p.get("HostPort") == port
                 for p in info["NetworkSettings"]["Ports"].get("5432/tcp", [])),
@@ -99,8 +102,44 @@ class JobCancelled(BaseException):
     pass
 
 
+def failure(error):
+    import traceback
+
+    from scripts.a42_receipt_contract import ReceiptError
+
+    message = str(error)
+    allowed = (isinstance(error, ReceiptError) or message.startswith(
+        ("A42_", "A4_", "V14_", "PUBLICATION_", "RESOURCE_DEFERRED")))
+    code = message if allowed and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", message) else None
+    return dict(failure_type=type(error).__name__, failure_code=code,
+        sqlstate=getattr(getattr(error, "orig", error), "sqlstate", None),
+        failure_trace=[dict(file=Path(f.filename).name, line=f.lineno, function=f.name)
+                       for f in traceback.extract_tb(error.__traceback__)])
+
+
 def interrupted(signum, frame):
     raise JobCancelled()
+
+
+@contextmanager
+def deadline(seconds):
+    """Whole-workload soft deadline, including seed/probes; SQL budgets unchanged.
+
+    CI Linux supports setitimer. Do not promise an interruptible budget on an
+    unsupported runner, and do not leave a timer/handler in subsequent tests.
+    """
+    require(hasattr(signal, "setitimer") and seconds > 0, "SOFT_DEADLINE_UNSUPPORTED")
+    previous = signal.getsignal(signal.SIGALRM)
+    require(signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0), "NESTED_DEADLINE_NOT_ALLOWED")
+    def exhausted(signum, frame):
+        raise BudgetExhausted("RESOURCE_DEFERRED")
+    signal.signal(signal.SIGALRM, exhausted)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def install_signals():
@@ -156,6 +195,7 @@ class Writer:
         receipt = {**{k:v for k,v in self.manifest.items() if k not in (
             "entries", "expected_groups", "completed_groups", "last_phase", "failed_phase")},
             "group_id":group.id, "group":asdict(group), "status":"COMPLETE",
+            "expected_groups":1, "completed_groups":1,
             "started_at":self.manifest["entries"][group.id]["started_at"], "finished_at":now(),
             "fixture":fixture, "fixture_digest":digest(fixture),
             "census":{**output["fixture"]["census"],
@@ -169,7 +209,8 @@ class Writer:
                 attempt=self.manifest["attempt"], job_id=self.manifest["job_id"],
                 model_hash=self.manifest["model_hash"])
         except BaseException as error:
-            receipt.update(status="INCOMPLETE", failure_type=type(error).__name__)
+            receipt.update(status="INCOMPLETE", completed_groups=0,
+                           failure_type=type(error).__name__)
             atomic(self.path.parent/(group.id+".incomplete.json.gz"), receipt, compressed=True)
             raise
         name = group.id+".json.gz"
@@ -190,8 +231,7 @@ class Writer:
 
     def fail(self, error):
         self.manifest.update(status="INCOMPLETE", finished_at=now(),
-            failure_type=type(error).__name__,
-            sqlstate=getattr(getattr(error, "orig", error), "sqlstate", None),
+            **failure(error),
             failed_phase=self.manifest.get("last_phase", "initialization"))
         self.flush()
 

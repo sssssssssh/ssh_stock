@@ -12,6 +12,7 @@ from scripts.a42_artifacts import (
     ScopedOutput,
     Writer,
     container_receipt,
+    deadline,
     install_signals,
     isolation,
 )
@@ -114,14 +115,10 @@ def execute(args, output, db, engine, job, params, trial, captured):
     writer.checkpoint(output)
 
 
-def main(argv=None):
+def run_scoped(args, groups, writer):
     from scripts.ab_read_experiment_v14_a4_2 import laboratory_sources, run, source_contract
 
-    args = parse(argv)
-    groups = expected_groups(args.shard)
-    writer = Writer(args.output, args.job_id, groups, minutes=args.shard.timeout_minutes-5)
-    install_signals()
-    try:
+    with deadline((args.shard.timeout_minutes-15)*60):
         writer.manifest.update(container_receipt(args.container, read=True))
         writer.manifest.update(isolation())
         source_contract()
@@ -151,6 +148,15 @@ def main(argv=None):
         require(writer.manifest["head_sha"] == subprocess.check_output([
             "git", "rev-parse", "HEAD"], text=True).strip(), "HEAD_CHANGED_DURING_JOB")
         writer.finish()
+
+
+def main(argv=None):
+    args = parse(argv)
+    groups = expected_groups(args.shard)
+    writer = Writer(args.output, args.job_id, groups, minutes=args.shard.timeout_minutes-5)
+    install_signals()
+    try:
+        run_scoped(args, groups, writer)
     except BaseException as error:
         writer.fail(error)
         raise SystemExit(1) from None

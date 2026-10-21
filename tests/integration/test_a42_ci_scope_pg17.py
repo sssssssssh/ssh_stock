@@ -7,7 +7,7 @@ import pytest
 
 from scripts import ab_read_experiment_v14_a4_2 as experiment
 from scripts.a42_artifacts import JobCancelled, ScopedOutput, Writer, isolation
-from scripts.a42_ci_contract import Group
+from scripts.a42_ci_contract import VARIANTS, Group
 from scripts.a42_gate_io import load_groups
 from scripts.a42_receipt_contract import validate_set
 
@@ -25,9 +25,9 @@ def exercise(tmp_path, monkeypatch, groups):
     output = ScopedOutput(writer, laboratory_sources=experiment.laboratory_sources())
     args = SimpleNamespace(shard=True, active_groups=groups, output=writer.path,
         public_rows=10000, candidate_rows=5253, other_rows=10895, tombstones=1,
-        coverage="partial", variants=("Q0_SAFETY_EQUIVALENT", "Q1_CURRENT"),
+        coverage="partial", variants=tuple(sorted({g.variant for g in groups})),
         repeats=3, readers=0, reader_pause=5, cursor_fractions=["0.1", "1.0"],
-        monthly=False, window_matrix=False, plans=False, container=None)
+        monthly=False, window_matrix=False, plans=False, container=os.environ.get("A421_CONTAINER"))
     try:
         experiment.run(args, output)
     except BaseException as error:
@@ -37,7 +37,7 @@ def exercise(tmp_path, monkeypatch, groups):
 
 
 def test_real_scoped_fetch_windows_month_root_and_actual_plan(tmp_path, monkeypatch):
-    groups = {Group("10k", "read", "Q0_SAFETY_EQUIVALENT", "0.1", "full", repeat=0)}
+    groups = {Group("10k", "read", v, "0.1", "full", repeat=0) for v in VARIANTS}
     groups |= {Group("10k", "read", "S3", "0.1", "window_matrix", d, 0)
                for d in (None,1,3,5,10,20)}
     groups |= {Group("10k", "read", "Q1_CURRENT", "0.1", f"month_{m}", repeat=0)
@@ -49,7 +49,7 @@ def test_real_scoped_fetch_windows_month_root_and_actual_plan(tmp_path, monkeypa
         attempt=writer.manifest["attempt"], job_id=writer.manifest["job_id"],
         model_hash=writer.manifest["model_hash"])
     writer.finish()
-    assert writer.manifest["completed_groups"] == 11
+    assert writer.manifest["completed_groups"] == 20
     plan = next(r for r in receipts if r["group"]["kind"]=="plan")
     assert plan["result"]["actual_cursor_untimed"][0]["Plan"]["Actual Rows"] > 0
 

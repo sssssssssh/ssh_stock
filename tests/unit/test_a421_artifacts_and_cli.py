@@ -77,6 +77,16 @@ def test_original_core_steps_and_every_release_assertion_are_preserved():
         "L1", "L2", "L3-scaled-10pct"]
 
 
+def test_provisioning_keeps_the_frozen_resource_sampler_marker_contract():
+    source = subprocess.check_output([
+        "git", "show", "02c69c612786:scripts/ab_read_profile_v14_a4.py"], text=True)
+    purpose = "ssh-stock-a4-physical-test"
+    assert purpose in source
+    action = Path(".github/actions/a421-pg/action.yml").read_text()
+    assert "--label purpose="+purpose in action
+    assert "--label stage=A4-2.1" in action
+
+
 def test_successful_gate_still_never_claims_production_performance(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
@@ -111,6 +121,25 @@ def test_atomic_files_do_not_leave_partial_json(tmp_path):
     atomic(path, {"status":"INCOMPLETE"})
     assert json.loads(path.read_text()) == {"status":"INCOMPLETE"}
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_whole_workload_deadline_unwinds_and_restores_handler():
+    import signal
+    import time
+
+    from scripts.a42_artifacts import deadline
+
+    if not hasattr(signal, "setitimer"):
+        with pytest.raises(ReceiptError, match="UNSUPPORTED"):
+            with deadline(1):
+                pytest.fail("unsupported runner must not enter timed workload")
+        return
+    previous = signal.getsignal(signal.SIGALRM)
+    with pytest.raises(BudgetExhausted):
+        with deadline(0.02):
+            time.sleep(0.2)
+    assert signal.getsignal(signal.SIGALRM) == previous
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
 
 
 def test_budget_stop_does_not_start_next_group_or_report_complete(tmp_path):

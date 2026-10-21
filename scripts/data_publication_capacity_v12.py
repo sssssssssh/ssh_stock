@@ -599,7 +599,9 @@ def run_cli(args, result):
 
 
 def main(argv=None):
-    from scripts.a42_artifacts import atomic, header, install_signals, now
+    from contextlib import nullcontext
+
+    from scripts.a42_artifacts import atomic, deadline, failure, header, install_signals, now
 
     args = parse_args(argv)
     result = dict(**header("capacity-"+(args.level or args.levels)),
@@ -608,11 +610,14 @@ def main(argv=None):
     atomic(args.output, result)
     install_signals()
     try:
-        run_cli(args, result)
+        budget = os.environ.get("A421_CAPACITY_BUDGET_MINUTES")
+        with deadline(int(budget)*60) if budget else nullcontext():
+            run_cli(args, result)
     except BaseException as error:
-        result.update(status="INCOMPLETE", finished_at=now(), failure_type=type(error).__name__,
-            sqlstate=getattr(getattr(error, "orig", error), "sqlstate", None))
+        result.update(status="INCOMPLETE", finished_at=now(), **failure(error))
         atomic(args.output, result)
+        if result.get("failure_code") == "V14_EXPLICIT_MARKED_PG17_REQUIRED":
+            print("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED", file=sys.stderr)
         raise SystemExit(1) from None
 
 

@@ -72,5 +72,11 @@ primary 原 ZIP SHA256：`f7e7983dfe5293415f5042ea7fa66430bf69f26e8d86f740365c4b
 最终 P2 定向串行复核 100 passed（24.34 秒），此前并行测试的集合比对问题未再出现。
 前端 `npm ci` / coverage / build 通过：23 文件、162 测试、行/语句覆盖率 87.27%。
 依赖审计仍报告 11 个既有漏洞（4 moderate / 3 high / 4 critical），本轮没有越界升级依赖。
+
+P2 首次真实 CI 的兼容性失败与工件索引见 [失败冻结](evidence/v14_a4_2_1_p2_ci_failure.json)。
+修复后新增真实容器采样、全部十种 full 变体、原 CLI 安全拒绝回归；定向 131 项通过（33.32 秒），
+随后追加的 provisioning 冻结契约单测也通过。原计划 actual/loops/buffers/EOF/close 十类损坏与容量错身份六类反例均拒绝。
+初次本地全量在修复过程中主动中止，仅 155 项完成，不计作全量通过；修复代码冻结后重新执行。
+最终 CI 尚未成功，不能放行，也不以 L1 success 代替 L2/L3 或整个 release gate。
 Alembic 在该专属 PG17 升级成功，`current=heads=0058_data_publication`。
 这些是适配器/安全回归，不替代真实百万/L2/L3 或最终 exact-SHA CI；INFRASTRUCTURE/CORRECTNESS 总体验收均 OPEN。

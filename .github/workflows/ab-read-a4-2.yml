@@ -45,6 +45,7 @@ jobs:
           python -m pytest tests/unit/test_ab_read_experiment_contract_v14_a4_2.py
           tests/unit/test_a42_ci_partition_contract.py tests/unit/test_a42_receipt_gate.py
           tests/unit/test_a421_artifacts_and_cli.py
+          tests/unit/test_cli_derived_safety.py
           tests/integration/test_ab_read_experiment_v14_a4_2.py
           tests/integration/test_ab_merge_read_v14.py
           tests/integration/test_ab_profile_cursor_v14_a4.py
