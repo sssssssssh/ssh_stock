@@ -100,6 +100,7 @@ def gate(args):
             from scripts.publication_release_checks_v14_a4_2_1 import validate
 
             result["publication"] = validate(core_files[0].parent, capacity, head)
+            atomic(args.output.parent/"data-publication-release.json", result["publication"])
         result.update(report(successful=True), status="COMPLETE")
     except BaseException as error:
         result.update(report(successful=False, errors=[str(error) if isinstance(error, ValueError)

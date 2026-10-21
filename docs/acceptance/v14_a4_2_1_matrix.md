@@ -78,5 +78,17 @@ P2 首次真实 CI 的兼容性失败与工件索引见 [失败冻结](evidence/
 随后追加的 provisioning 冻结契约单测也通过。原计划 actual/loops/buffers/EOF/close 十类损坏与容量错身份六类反例均拒绝。
 初次本地全量在修复过程中主动中止，仅 155 项完成，不计作全量通过；修复代码冻结后重新执行。
 最终 CI 尚未成功，不能放行，也不以 L1 success 代替 L2/L3 或整个 release gate。
+
+## P3 工件审查与执行
+
+本地 `7f5857e` 全量 2468 passed（2417.46 秒），后端覆盖率 89.28%，原 70% 门槛未改。
+该提交的远程核心也成功：真实三组单/双 Worker、十表原子发布、28 个 runtime browser 场景均完成。
+实验阶段实际通过 10k/100k 各 236 组、百万 full .1 的 30 组、window .1 的 21 组及两个百万计划分片。
+这些是旧阶段诊断，不能填入下一提交的最终矩阵。
+
+P3 审查补充关闭了 auto_explain 完整参数输出、探针 57014 时丢弃可用 profile、未引用旧 gzip 混入、
+原独立 publication release 文件未输出的问题。声明、实际计划计数和 EOF/close 不省略；生产 SQL 不变。
+P3 增量定向验证 129 unit + 6 PG17 integration passed。完整结果、工件索引、预算及 OPEN 项见
+[执行报告](v14_a4_2_1_closeout.md)；未获新 Runner，也未操作业务云环境。
 Alembic 在该专属 PG17 升级成功，`current=heads=0058_data_publication`。
 这些是适配器/安全回归，不替代真实百万/L2/L3 或最终 exact-SHA CI；INFRASTRUCTURE/CORRECTNESS 总体验收均 OPEN。

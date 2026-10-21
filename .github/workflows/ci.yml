@@ -358,6 +358,7 @@ jobs:
           path: |
             .codex_tmp/a421-publication-gate.json
             .codex_tmp/cold-start-capacity.json
+            .codex_tmp/data-publication-release.json
           include-hidden-files: true
           if-no-files-found: error
 

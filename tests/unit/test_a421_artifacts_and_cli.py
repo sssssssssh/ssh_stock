@@ -123,6 +123,28 @@ def test_atomic_files_do_not_leave_partial_json(tmp_path):
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_parameter_redaction_retains_native_query_and_actual_plan_counters(tmp_path):
+    value = {"nested":[{"Query Text":"DECLARE synthetic CURSOR FOR SELECT $1",
+        "Query Parameters":"sensitive-bind-values-must-not-be-written",
+        "Plan":{"Actual Rows":10,"Actual Loops":1,"Shared Read Blocks":2}}]}
+    path = tmp_path/"plan.json"
+    atomic(path, value)
+    data = json.loads(path.read_text())
+    assert "sensitive-bind-values" not in path.read_text()
+    assert data["nested"][0]["Query Text"] == value["nested"][0]["Query Text"]
+    assert data["nested"][0]["Plan"] == value["nested"][0]["Plan"]
+
+
+def test_unreferenced_old_gzip_cannot_be_mixed_into_complete_shard(tmp_path):
+    key = "a"*64
+    name = key+".json.gz"
+    checksum = atomic(tmp_path/name, {"group_id":key}, compressed=True)
+    atomic(tmp_path/"old-head.json.gz", {"head_sha":"old"}, compressed=True)
+    manifest = {"entries":{key:dict(status="COMPLETE", file=name, sha256=checksum)}}
+    with pytest.raises(ReceiptError, match="UNREFERENCED_GROUP_ARTIFACT"):
+        load_groups(tmp_path/"manifest.json", manifest)
+
+
 def test_whole_workload_deadline_unwinds_and_restores_handler():
     import signal
     import time

@@ -2,6 +2,9 @@
 
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 
+执行结果与未关闭项见 [P3 执行报告](docs/acceptance/v14_a4_2_1_closeout.md)。
+本地完整回归 2468 项、阶段 CI 核心/1万/10万及部分百万分片已通过，不代表最终 HEAD 全矩阵或 L2/L3 已完成。
+真实计划只在非计时探针关闭完整参数日志；中断保留 INCOMPLETE profile，不能补成成功。
 以 master `02c69c612786` 冻结生产实现，仅无损拆分实验/容量 CI 和加强工件门禁。
 P1 设计与 1002 组测试契约见 [验收矩阵](docs/acceptance/v14_a4_2_1_matrix.md)。
 P2 新入口例：`python scripts/ab_read_experiment_v14_a4_2.py --scope million-full --job-id a42-million-full-0 --container a421-pg17 --output .codex_tmp/a421/a42-million-full-0/manifest.json`。

@@ -21,10 +21,27 @@ def now():
     return datetime.now(UTC).isoformat()
 
 
+def without_query_parameters(value):
+    """Strip bind-value blocks, never plan nodes/counters or DECLARE evidence."""
+    if isinstance(value, dict):
+        return {k:without_query_parameters(v) for k,v in value.items() if k != "Query Parameters"}
+    if isinstance(value, (list, tuple)):
+        return [without_query_parameters(v) for v in value]
+    return value
+
+
+def contains_query_parameters(value):
+    if isinstance(value, dict):
+        return ("Query Parameters" in value
+                or any(contains_query_parameters(v) for v in value.values()))
+    return isinstance(value, (list, tuple)) and any(contains_query_parameters(v) for v in value)
+
+
 def atomic(path, value, *, compressed=False):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    raw = (json.dumps(value, default=str, allow_nan=False, separators=(",", ":"))+"\n").encode()
+    raw = (json.dumps(without_query_parameters(value), default=str, allow_nan=False,
+                      separators=(",", ":"))+"\n").encode()
     data = gzip.compress(raw, mtime=0) if compressed else raw
     temporary = path.with_suffix(path.suffix+".tmp")
     with temporary.open("wb") as stream:
@@ -201,7 +218,8 @@ class Writer:
             "census":{**output["fixture"]["census"],
                       "actual_counts":output["fixture"]["actual_counts"]},
             "settings":dict(statement_timeout_ms=300000, read_flag=False),
-            "resources":dict(cpu_limit=2, memory_bytes=3*1024**3), "result":result}
+            "resources":dict(cpu_limit=2, memory_bytes=3*1024**3),
+            "result":without_query_parameters(result)}
         from scripts.a42_receipt_contract import validate_group
 
         try:
@@ -233,6 +251,16 @@ class Writer:
         self.manifest.update(status="INCOMPLETE", finished_at=now(),
             **failure(error),
             failed_phase=self.manifest.get("last_phase", "initialization"))
+        profile = getattr(error, "a42_profile", None)
+        if self.current and profile is not None:
+            entry = self.manifest["entries"][self.current]
+            name = self.current+".incomplete.json.gz"
+            partial = {**{k:v for k,v in self.manifest.items() if k != "entries"}, **failure(error),
+                "status":"INCOMPLETE", "group_id":self.current, "group":entry["group"],
+                "expected_groups":1, "completed_groups":0, "started_at":entry["started_at"],
+                "finished_at":now(), "partial_profile":profile}
+            checksum = atomic(self.path.parent/name, partial, compressed=True)
+            entry.update(partial_file=name, partial_sha256=checksum)
         self.flush()
 
 

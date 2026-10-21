@@ -85,3 +85,13 @@ READ_PERFORMANCE_PASS=false/NOT_CLAIMED、production_read_authorized=false、aut
 新容器校验同时要求二者。真实容器资源采样加入 scope 集成测试，十种 full 变体均执行。
 主 CI 原 CLI 安全回归还发现旧安全拒绝 stderr 文案丢失；恢复原文案，仍执行更严格的物理双验证。
 失败运行与部分工件保留，不作为新代码通过证据；新增了原生计划缺失、跨 run、单组计数及软截止反例。
+
+## P3 工件隐私与故障证据
+
+PG17 auto_explain 默认为完整参数日志。只在非计时原生计划探针设置 log_parameter_max_length=0，
+仍调用冻结的 native cursor probe，保留 DECLARE / actual rows / loops / buffers；写盘递归去除参数块，门禁拒绝含参数块的计划。
+该日志配置不改变 SQL、规划参数或保护预算，旧阶段原始档案保持不动，不能改写历史 ZIP 的摘要。
+中断探针的可用 profile 单独写 INCOMPLETE gzip，保留已完成组、原始 HEAD/attempt/物理身份与 57014。
+计划预热、实际探针、结果校验和锁探针分别标阶段；未引用旧 gzip 自动阻断。
+发布门禁同时写出原独立 publication release JSON，原断言仍逐条保留。
+实际验证与尚未关闭项见 docs/acceptance/v14_a4_2_1_closeout.md；本轮不宣称最终验收完成。

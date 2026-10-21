@@ -52,6 +52,10 @@ def test_real_scoped_fetch_windows_month_root_and_actual_plan(tmp_path, monkeypa
     assert writer.manifest["completed_groups"] == 20
     plan = next(r for r in receipts if r["group"]["kind"]=="plan")
     assert plan["result"]["actual_cursor_untimed"][0]["Plan"]["Actual Rows"] > 0
+    assert plan["result"]["log_parameter_max_length"] == 0
+    from scripts.a42_artifacts import contains_query_parameters
+
+    assert not contains_query_parameters(plan["result"])
 
 
 def test_cancel_after_real_complete_read_keeps_only_that_evidence(tmp_path, monkeypatch):
@@ -70,3 +74,35 @@ def test_cancel_after_real_complete_read_keeps_only_that_evidence(tmp_path, monk
     manifest = json.loads((tmp_path/"manifest.json").read_text())
     assert manifest["completed_groups"] == 1 and manifest["status"] == "INCOMPLETE"
     assert len(list(tmp_path.glob("*.json.gz"))) == 1
+
+
+def test_actual_plan_sql_timeout_keeps_partial_native_profile_and_completed_read(
+    tmp_path, monkeypatch
+):
+    # Fault injection only, never used by the performance CLI. Real 57014 in a
+    # named FETCH; do not decrease the actual experiment's 300s SQL budget.
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    def timeout_probe(db, statements):
+        db.execute(text("SET LOCAL statement_timeout='1ms'"))
+        with db.execute(text("SELECT i,pg_sleep(0.01) FROM generate_series(1,1000) i")
+                        .execution_options(yield_per=5000)) as result:
+            for _ in result.partitions(5000):
+                pass
+        pytest.fail("real PostgreSQL timeout required")
+    monkeypatch.setattr(experiment, "cursor_plans_without_parameters", timeout_probe)
+    groups = {Group("10k", "read", "Q0_SAFETY_EQUIVALENT", "0.1", "full", repeat=0),
+              Group("10k", "plan", "Q1_CURRENT", "0.1", "full")}
+    with pytest.raises(OperationalError):
+        exercise(tmp_path, monkeypatch, groups)
+    import gzip
+    import json
+
+    manifest = json.loads((tmp_path/"manifest.json").read_text())
+    assert manifest["status"] == "INCOMPLETE" and manifest["completed_groups"] == 1
+    assert manifest["sqlstate"] == "57014" and manifest["failed_phase"] == "untimed_actual_plans"
+    partial = json.loads(gzip.decompress(next(tmp_path.glob("*.incomplete.json.gz")).read_bytes()))
+    assert partial["status"] == "INCOMPLETE" and partial["completed_groups"] == 0
+    assert partial["sqlstate"] == "57014" and partial["partial_profile"]["cursors"]
+    assert not partial["partial_profile"]["cursors"][0].get("until_eof_seconds")

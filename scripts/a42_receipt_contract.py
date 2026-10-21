@@ -138,6 +138,10 @@ def validate_group(receipt, group, *, head, attempt, job_id, model_hash):
 
 
 def validate_plan(result):
+    from scripts.a42_artifacts import contains_query_parameters
+
+    require(not contains_query_parameters(result) and result.get("log_parameter_max_length") == 0,
+            "UNSAFE_PARAMETER_LOGGING")
     queries = result.get("select_and_cursor_estimate", {})
     require(bool(queries.get("T5_declare")) and all(entries for entries in queries.values())
         and all(p.get("select_actual") and p.get("cursor_estimated")

@@ -188,7 +188,8 @@ def test_native_cursor_plan_proofs_cannot_be_substituted_or_partial(damage):
         cursor_estimated=[{"Plan":{"Node Type":"Synthetic Unit"}}])]},
         actual_cursor_untimed=[{"Query Text":"DECLARE synthetic CURSOR FOR SELECT fixture",
             "Plan":{"Actual Rows":3104443,"Actual Loops":1,"Shared Read Blocks":0}}],
-        expected_cursor_plans=1, probe_cursors=receipt["result"]["cursors"])
+        expected_cursor_plans=1, log_parameter_max_length=0,
+        probe_cursors=receipt["result"]["cursors"])
     receipt["result"] = proof
     validate_group(receipt, group, head=HEAD, attempt=1, job_id="job", model_hash=MODEL)
     if damage in {"select", "estimate"}:

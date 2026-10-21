@@ -49,11 +49,10 @@ def ordered(groups):
 def execute(args, output, db, engine, job, params, trial, captured):
     from sqlalchemy import text
 
-    from scripts.ab_read_experiment_v14_a4_2 import observe
+    from scripts.ab_read_experiment_v14_a4_2 import cursor_plans_without_parameters, observe
     from scripts.ab_read_profile_v14_a4 import (
         Profile,
         capture_plans,
-        cursor_actual_plans,
         lock_probe,
     )
 
@@ -62,6 +61,8 @@ def execute(args, output, db, engine, job, params, trial, captured):
     output["phase"] = "scoped_trials"
     for group in ordered(groups):
         writer.begin(group)
+        output["phase"] = "untimed_plan_warmup" if group.kind=="plan" else "timed_trials"
+        writer.checkpoint(output)
         scope = group.scope.removeprefix("event_")
         is_month = scope.startswith("month_")
 
@@ -101,16 +102,21 @@ def execute(args, output, db, engine, job, params, trial, captured):
             db.execute(text("SELECT set_config('cursor_tuple_fraction',:f,true)"),
                        {"f":group.fraction})
             started = perf_counter()
+            output["phase"] = "untimed_actual_plans"
+            writer.checkpoint(output)
             select = capture_plans(db, statements)
             profile = Profile(db, engine)
             with observe(profile):
-                actual = cursor_actual_plans(db, statements)
+                actual = cursor_plans_without_parameters(db, statements)
             cursors = profile.receipt()["cursors"]
             declared = [p for p in actual if "DECLARE" in p.get("Query Text", "").upper()]
             record = dict(select_and_cursor_estimate=select, actual_cursor_untimed=declared,
                 probe_cursors=cursors, expected_cursor_plans=len(cursors),
-                untimed_plan_seconds=perf_counter()-started)
+                untimed_plan_seconds=perf_counter()-started, log_parameter_max_length=0)
+        writer.manifest["last_phase"] = "group_result_validation"
         writer.complete(group, record, output)
+    output["phase"] = "lock_probe_outside_timed_trials"
+    writer.checkpoint(output)
     output["lock_probe_outside_timed_trials"] = lock_probe(db, engine)
     writer.checkpoint(output)
 

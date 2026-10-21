@@ -13,16 +13,20 @@ def load_groups(path, manifest):
     entries = manifest.get("entries", {})
     require(isinstance(entries, dict) and bool(entries), "MANIFEST_ENTRIES_MISSING")
     result = []
+    referenced = set()
     for group_id, entry in entries.items():
         require(entry.get("status") == "COMPLETE", "MANIFEST_GROUP_INCOMPLETE")
         name = entry.get("file", "")
         require(name == group_id+".json.gz", "INVALID_GROUP_FILE")
         data = (Path(path).parent/name).read_bytes()
+        referenced.add(name)
         require(hashlib.sha256(data).hexdigest() == entry.get("sha256"), "ARTIFACT_DIGEST_MISMATCH")
         receipt = json.loads(gzip.decompress(data))
         require(receipt.get("group_id") == group_id, "ARTIFACT_KEY_MISMATCH")
         require(receipt.get("run_id") == manifest.get("run_id"), "GROUP_RUN_MISMATCH")
         result.append(receipt)
+    require(referenced == {p.name for p in Path(path).parent.glob("*.json.gz")},
+            "UNREFERENCED_GROUP_ARTIFACT")
     return result
 
 

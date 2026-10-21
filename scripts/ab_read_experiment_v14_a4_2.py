@@ -60,7 +60,10 @@ def save(path, output):
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(output, default=str, allow_nan=False, indent=2) + "\n",
+    from scripts.a42_artifacts import without_query_parameters
+
+    temporary.write_text(json.dumps(without_query_parameters(output),
+                         default=str, allow_nan=False, indent=2) + "\n",
                          encoding="utf-8")
     temporary.replace(path)
 
@@ -71,6 +74,20 @@ def laboratory_sources():
                          "ab_read_evidence_v14_a4_2.py","ab_read_experiment_summary_v14_a4_2.py",
                          "a42_scope.py", "a42_artifacts.py", "a42_ci_contract.py",
                          "a42_receipt_contract.py", "a42_gate_io.py")}
+
+
+def cursor_plans_without_parameters(db, statements):
+    """Untimed only: preserve the frozen native probe, disable bind-value logging."""
+    from sqlalchemy import text
+
+    from scripts.a42_artifacts import without_query_parameters
+    from scripts.ab_read_profile_v14_a4 import cursor_actual_plans
+
+    db.execute(text("LOAD 'auto_explain'"))
+    db.execute(text("SET auto_explain.log_parameter_max_length='0'"))
+    if db.scalar(text("SHOW auto_explain.log_parameter_max_length")) != "0":
+        raise ValueError("A42_PARAMETER_LOGGING_NOT_DISABLED")
+    return without_query_parameters(cursor_actual_plans(db, statements))
 
 
 def database_snapshot(db):
@@ -539,7 +556,7 @@ def run(args, output):
                     "process-local transport substitution only; no numerical engine/Raw writes; "
                     "read commits each month, original final verification once at root tail")
             if args.plans:
-                from scripts.ab_read_profile_v14_a4 import capture_plans, cursor_actual_plans
+                from scripts.ab_read_profile_v14_a4 import capture_plans
 
                 output["phase"] = "untimed_actual_plans"
                 for (variant, fraction, scope, days), statements in captured.items():
@@ -548,7 +565,7 @@ def run(args, output):
                     output["plans"][f"{variant}_{fraction}_{scope}_window_{days}"] = {
                         "scope":scope,"window_days":days,"cursor_fraction":fraction,
                         "select_and_cursor_estimate": capture_plans(db, statements),
-                        "actual_cursor_untimed": cursor_actual_plans(db, statements)}
+                        "actual_cursor_untimed": cursor_plans_without_parameters(db, statements)}
                     save(args.output, output)
             from scripts.ab_read_profile_v14_a4 import lock_probe
 

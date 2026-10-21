@@ -2,6 +2,8 @@
 
 ## V1.4 A4-2.1 CI 整改边界
 
+本轮执行报告仍为验收 OPEN；阶段绿色不能填充最终 HEAD 缺组或替代 L2/L3。
+计划证据不得写入完整绑定参数；只在非计时探针关闭参数日志，DECLARE/实际计数/EOF/close 不减。
 基线 master `02c69c612786`，P1/P2/P3 分阶段提交。仅脚本/CI/测试/Markdown，生产与 A4-1 证据不变。
 矩阵必须与旧必需 1002 组精确相等；每组原子收据、同 HEAD/attempt/model/fixture、EOF 与真实计划不可省略。
 容量三个等级保留原 workload 与预算，主 CI 和全部容量成功才允许 release gate 成功。

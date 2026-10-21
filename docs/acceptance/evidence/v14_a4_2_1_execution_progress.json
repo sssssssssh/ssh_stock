@@ -1,0 +1,1854 @@
+{
+  "schema_version": "a421-stage2-diagnostic-index-v1",
+  "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+  "evidence_code_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+  "snapshot_utc": "2026-10-21 18:51:15 UTC",
+  "final_head_acceptance_eligible": false,
+  "note": "Stage-2 diagnostics only; never fill missing final-SHA groups. Final transport removes bind-value blocks and requires new receipts.",
+  "mandatory_group_count": 1002,
+  "auxiliary_group_count": 6,
+  "local_backend": {
+    "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+    "passed": 2468,
+    "warnings": 597,
+    "elapsed_seconds": 2417.46,
+    "coverage_percent": 89.28,
+    "required_coverage_percent": 70
+  },
+  "frontend": {
+    "passed": 162,
+    "files": 23,
+    "statements_percent": 87.27,
+    "build": "PASS",
+    "dependency_vulnerabilities": 11
+  },
+  "local_p3_delta": {
+    "unit_passed": 129,
+    "integration_passed": 6,
+    "note": "P3 working tree, not final HEAD CI acceptance"
+  },
+  "observed_jobs": {
+    "39646797331": [
+      {
+        "id": 119384378631,
+        "name": "contract-and-safety",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119384378631",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:46:42Z",
+        "completed_at": "2026-10-21T17:54:03Z",
+        "duration_seconds": 441
+      },
+      {
+        "id": 119388173427,
+        "name": "laboratory (a42-million-plans-window_matrix-0, million-plans, million, 240, 0.1, window_matrix)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173427",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T18:06:29Z",
+        "completed_at": "2026-10-21T18:28:38Z",
+        "duration_seconds": 1329
+      },
+      {
+        "id": 119388173491,
+        "name": "laboratory (a42-million-plans-full-0, million-plans, million, 240, 0.1, full)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173491",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:57:58Z",
+        "completed_at": "2026-10-21T18:28:10Z",
+        "duration_seconds": 1812
+      },
+      {
+        "id": 119388173527,
+        "name": "laboratory (a42-million-window-0, million-window, million, 240, 0.1)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173527",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:54:05Z",
+        "completed_at": "2026-10-21T18:45:41Z",
+        "duration_seconds": 3096
+      },
+      {
+        "id": 119388173540,
+        "name": "laboratory (a42-million-readers, million-readers, million, 240)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173540",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173558,
+        "name": "laboratory (a42-million-plans-window_matrix-1, million-plans, million, 240, 1.0, window_matrix)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173558",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T18:45:43Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173578,
+        "name": "laboratory (a42-million-full-1, million-full, million, 240, 1.0)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173578",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T18:28:13Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173590,
+        "name": "laboratory (a42-million-full-0, million-full, million, 240, 0.1)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173590",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:54:05Z",
+        "completed_at": "2026-10-21T18:43:55Z",
+        "duration_seconds": 2990
+      },
+      {
+        "id": 119388173591,
+        "name": "laboratory (a42-million-window-1, million-window, million, 240, 1.0)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173591",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T18:28:39Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173676,
+        "name": "laboratory (a42-small-100k, small, 100k, 120)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173676",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:54:05Z",
+        "completed_at": "2026-10-21T18:06:27Z",
+        "duration_seconds": 742
+      },
+      {
+        "id": 119388173679,
+        "name": "laboratory (a42-small-10k, small, 10k, 120)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173679",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:54:05Z",
+        "completed_at": "2026-10-21T17:57:56Z",
+        "duration_seconds": 231
+      },
+      {
+        "id": 119388173787,
+        "name": "laboratory (a42-million-plans-monthly-1, million-plans, million, 240, 0.1, monthly, 1)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173787",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173822,
+        "name": "laboratory (a42-million-plans-monthly-0, million-plans, million, 240, 0.1, monthly, 0)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173822",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388173840,
+        "name": "laboratory (a42-million-plans-full-1, million-plans, million, 240, 1.0, full)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388173840",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T18:43:57Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388174125,
+        "name": "laboratory (a42-million-monthly, million-monthly, million, 300)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388174125",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388175963,
+        "name": "laboratory (a42-million-plans-monthly-2, million-plans, million, 240, 0.1, monthly, 2)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388175963",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176273,
+        "name": "laboratory (a42-shapes-b_only, supplemental-shapes, 10k, 120, b_only)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176273",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176310,
+        "name": "laboratory (a42-shapes-partial, supplemental-shapes, 10k, 120, partial)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176310",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:03Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176402,
+        "name": "laboratory (a42-shapes-a_only, supplemental-shapes, 10k, 120, a_only)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176402",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:04Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176537,
+        "name": "laboratory (a42-shapes-mismatched, supplemental-shapes, 10k, 120, mismatched)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176537",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:04Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176545,
+        "name": "laboratory (a42-shapes-high, supplemental-shapes, 10k, 120, high)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176545",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:04Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119388176793,
+        "name": "laboratory (a42-event-prototype, event-prototype, 100k, 120)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/job/119388176793",
+        "status": "queued",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:54:04Z",
+        "completed_at": null,
+        "duration_seconds": null
+      }
+    ],
+    "39646797296": [
+      {
+        "id": 119384378516,
+        "name": "capacity (L1)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/job/119384378516",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:46:41Z",
+        "completed_at": "2026-10-21T17:47:23Z",
+        "duration_seconds": 42
+      },
+      {
+        "id": 119384378882,
+        "name": "test",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/job/119384378882",
+        "status": "completed",
+        "conclusion": "success",
+        "started_at": "2026-10-21T17:46:42Z",
+        "completed_at": "2026-10-21T18:22:58Z",
+        "duration_seconds": 2176
+      },
+      {
+        "id": 119384379026,
+        "name": "capacity (L2)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/job/119384379026",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:46:42Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119384379035,
+        "name": "capacity (L3-scaled-10pct)",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/job/119384379035",
+        "status": "in_progress",
+        "conclusion": null,
+        "started_at": "2026-10-21T17:46:42Z",
+        "completed_at": null,
+        "duration_seconds": null
+      },
+      {
+        "id": 119384380172,
+        "name": "ui-visual-acceptance",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/job/119384380172",
+        "status": "completed",
+        "conclusion": "skipped",
+        "started_at": "2026-10-21T17:46:40Z",
+        "completed_at": "2026-10-21T17:46:39Z",
+        "duration_seconds": null
+      }
+    ]
+  },
+  "artifacts": {
+    "39646797331": [
+      {
+        "id": 12371231266,
+        "name": "a421-a42-million-window-0-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 1361551,
+        "sha256": "sha256:18aadaf1db0c851ae50e325ded06d23e152e655382ac60ecab5929bef2168960",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12371231266"
+      },
+      {
+        "id": 12369602512,
+        "name": "a421-a42-million-plans-window_matrix-0-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 64696,
+        "sha256": "sha256:328d43f7319adda12e87f24c30a9a1536d4bf4a6bdf1c1765df108c8a0284fc2",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12369602512"
+      },
+      {
+        "id": 12369474448,
+        "name": "a421-a42-million-full-0-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 1405724,
+        "sha256": "sha256:c4ffbe980e97bd4860b064463dfb2c5e25b7ac3402051a420851d288f03a76e0",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12369474448"
+      },
+      {
+        "id": 12369308922,
+        "name": "a421-a42-million-plans-full-0-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 165977,
+        "sha256": "sha256:4bd731c34a31f16a13bf6b849b982d2805be01847dd029b88b611f1591d15b2e",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12369308922"
+      },
+      {
+        "id": 12368680659,
+        "name": "a421-a42-small-10k-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 2188584,
+        "sha256": "sha256:0d65f303b13b60624bde66b50d3210da57419cb621c8761eb1d070e6d007c7ab",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12368680659"
+      },
+      {
+        "id": 12368099365,
+        "name": "a421-a42-small-100k-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 2506536,
+        "sha256": "sha256:307fc8133c81ecbd3cf4a479faa3ce8ae52269fe49a1ad756497bea636e565b4",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12368099365"
+      },
+      {
+        "id": 12366859655,
+        "name": "a421-contract-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 85918,
+        "sha256": "sha256:22b24c58a175fd702a049e94c841b1543a93d4fa93d6ed5df1d6aca952c3e099",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797331/artifacts/12366859655"
+      }
+    ],
+    "39646797296": [
+      {
+        "id": 12370507134,
+        "name": "runtime-reliability-synthetic-browser",
+        "size_in_bytes": 5528763,
+        "sha256": "sha256:7924ec8ac2608e4cdf69e816fbeaab55c7d0b50b2fffc229a8fb3a9c6a68b003",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12370507134"
+      },
+      {
+        "id": 12370407234,
+        "name": "m17-capacity-measurements",
+        "size_in_bytes": 8269,
+        "sha256": "sha256:1d7c72cd32fe27eb0f132ef0b9133e21a96f7b5c63241104c6d37627df7527d7",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12370407234"
+      },
+      {
+        "id": 12370157082,
+        "name": "m17-1-2-suspend-evidence",
+        "size_in_bytes": 52889,
+        "sha256": "sha256:7719e8d43ff8449a044c5d9fa6261fdb76cbff3484364444eb72e0c3927efc30",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12370157082"
+      },
+      {
+        "id": 12369872315,
+        "name": "m17-1-1-retention-evidence",
+        "size_in_bytes": 8942,
+        "sha256": "sha256:b2908736c930ce03e205e99966a368b8a51d4993c4e65423406487f9e8f4f430",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12369872315"
+      },
+      {
+        "id": 12369521658,
+        "name": "data-queue-container-acceptance",
+        "size_in_bytes": 487,
+        "sha256": "sha256:2b53ace91b042a7e82893fbb01b5256f69e5129e24a551e5a142545170afcdfd",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12369521658"
+      },
+      {
+        "id": 12369228028,
+        "name": "m16-6-synthetic-browser",
+        "size_in_bytes": 1788443,
+        "sha256": "sha256:76883c6c24596d406fb9d856f22e6f8635935cccbaf0fef7ae8acb4c63ce5eaf",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12369228028"
+      },
+      {
+        "id": 12369128151,
+        "name": "m17-1-dependency-audit",
+        "size_in_bytes": 3407,
+        "sha256": "sha256:0455602f7919c8067b9a03dced1cd815a8d05bc9dfadd7d61dcd4d181dac52ad",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12369128151"
+      },
+      {
+        "id": 12369073158,
+        "name": "a421-core-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 61437,
+        "sha256": "sha256:d919529a9bfd27e7af8a1b84434598fc7826a6e1a65e9ff680b71bc65fe7fba6",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12369073158"
+      },
+      {
+        "id": 12368958380,
+        "name": "data-publication-reliability",
+        "size_in_bytes": 60261,
+        "sha256": "sha256:934e1f30291519c62592069416102b452818dc28394931360b48ecdf1fc352b5",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12368958380"
+      },
+      {
+        "id": 12368116041,
+        "name": "a421-capacity-L1-7f5857ee08000fd77d5ddb4ce2e59146ad150008-attempt1",
+        "size_in_bytes": 3874,
+        "sha256": "sha256:69fa772b4e17fea5148257ca9f9b841a721f145e6419e494c8e01eebe83e533b",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12368116041"
+      },
+      {
+        "id": 12368001485,
+        "name": "v14-read-evidence",
+        "size_in_bytes": 15475,
+        "sha256": "sha256:ece59ffdafb9244897dd49a834f292f54694cdc645af9240c610b6c72c3fbd51",
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39646797296/artifacts/12368001485"
+      }
+    ]
+  },
+  "verified_stage2_shards": [
+    {
+      "archive": "a421-ci-small-7f.zip",
+      "archive_sha256": "0d65f303b13b60624bde66b50d3210da57419cb621c8761eb1d070e6d007c7ab",
+      "job_id": "a42-small-10k",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 236,
+      "completed_groups": 236,
+      "elapsed_seconds": 196.36778745000004,
+      "group_kinds": {
+        "read": 177,
+        "plan": 59
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699181031906045996",
+      "database_instance": "6b6babe3-19d7-4456-811d-b4227b33c692",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 236,
+        "golden": "PASS"
+      },
+      "full_read_tables": [
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "cursor_fraction": "1.0",
+          "p50": 0.09913624299997537,
+          "p95": 0.10028437929999257,
+          "samples": [
+            0.09885386999997081,
+            0.10041194999999448,
+            0.09913624299997537
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.023680988000023717,
+            "T6_sort": 0,
+            "checkpoint": 0.004017484000030436
+          }
+        },
+        {
+          "variant": "S3_KEYS",
+          "cursor_fraction": "1.0",
+          "p50": 0.33550679999990507,
+          "p95": 0.33782949209997354,
+          "samples": [
+            0.33550679999990507,
+            0.3351025330000539,
+            0.33808756899998116
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10670688499999414,
+            "T4_candidate_validation_sql": 0.010904530999994222,
+            "T8_verify_inclusive": 0.10696657300002244,
+            "T2_lock_hold": 0.31930170999999063,
+            "T6_frame": 0.023698988000006693,
+            "T6_sort": 0.0021349140000097577,
+            "checkpoint": 0.005448282999964249
+          }
+        },
+        {
+          "variant": "S4",
+          "cursor_fraction": "0.1",
+          "p50": 0.32896896099998685,
+          "p95": 0.33554644269999584,
+          "samples": [
+            0.3270648619999861,
+            0.32896896099998685,
+            0.33627727399999685
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10631921300000613,
+            "T4_candidate_validation_sql": 0.010677619000006189,
+            "T8_verify_inclusive": 0.10602847699999529,
+            "T2_lock_hold": 0.3131005960000266,
+            "T6_frame": 0.023518545999991147,
+            "T6_sort": 0.0020882659999870157,
+            "checkpoint": 0.005561643000021377
+          }
+        },
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "cursor_fraction": "1.0",
+          "p50": 0.09473158200000853,
+          "p95": 0.09708745710000244,
+          "samples": [
+            0.09734922100000176,
+            0.09448861600003511,
+            0.09473158200000853
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.023166248999984873,
+            "T6_sort": 0,
+            "checkpoint": 0
+          }
+        },
+        {
+          "variant": "S3_KEYS",
+          "cursor_fraction": "0.1",
+          "p50": 0.34042529299998137,
+          "p95": 0.3424830448999927,
+          "samples": [
+            0.337208234000002,
+            0.34271168399999397,
+            0.34042529299998137
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10662375100000077,
+            "T4_candidate_validation_sql": 0.010822750000016867,
+            "T8_verify_inclusive": 0.10748582700000497,
+            "T2_lock_hold": 0.32301419800000986,
+            "T6_frame": 0.024153630000000703,
+            "T6_sort": 0.002168436999994583,
+            "checkpoint": 0.005842539999974861
+          }
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "cursor_fraction": "0.1",
+          "p50": 0.3388269429999866,
+          "p95": 0.3392617186000081,
+          "samples": [
+            0.3303285960000153,
+            0.3388269429999866,
+            0.33931002700001045
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10755457399997681,
+            "T4_candidate_validation_sql": 0.011096059999999852,
+            "T8_verify_inclusive": 0.10774848999997744,
+            "T2_lock_hold": 0.31551544000001286,
+            "T6_frame": 0.02387406100001499,
+            "T6_sort": 0.002556032000001096,
+            "checkpoint": 0.006663454999994656
+          }
+        },
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "cursor_fraction": "0.1",
+          "p50": 0.09992112099996575,
+          "p95": 0.1022533755999973,
+          "samples": [
+            0.1025125150000008,
+            0.09881726499997967,
+            0.09992112099996575
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.02337521999999126,
+            "T6_sort": 0,
+            "checkpoint": 0.004543069999982663
+          }
+        },
+        {
+          "variant": "S5",
+          "cursor_fraction": "1.0",
+          "p50": 0.3287462699999537,
+          "p95": 0.3390283145999888,
+          "samples": [
+            0.3287462699999537,
+            0.3282789690000527,
+            0.3401707639999927
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10640264600004912,
+            "T4_candidate_validation_sql": 0.010902867999988075,
+            "T8_verify_inclusive": 0.10589846999999963,
+            "T2_lock_hold": 0.3127548539999907,
+            "T6_frame": 0.023478146000002198,
+            "T6_sort": 0.002471984999999677,
+            "checkpoint": 0.005206693000047835
+          }
+        },
+        {
+          "variant": "S3",
+          "cursor_fraction": "0.1",
+          "p50": 0.3389911360000042,
+          "p95": 0.3436665577000014,
+          "samples": [
+            0.3389911360000042,
+            0.34418604900000105,
+            0.3388939920000098
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10667822700000329,
+            "T4_candidate_validation_sql": 0.010761530999957358,
+            "T8_verify_inclusive": 0.1072746929999937,
+            "T2_lock_hold": 0.3229498110000293,
+            "T6_frame": 0.023431447999996635,
+            "T6_sort": 0.0021282719999931032,
+            "checkpoint": 0.005575792999962914
+          }
+        },
+        {
+          "variant": "S4",
+          "cursor_fraction": "1.0",
+          "p50": 0.32842988799995965,
+          "p95": 0.3366864097000217,
+          "samples": [
+            0.32842988799995965,
+            0.32724290999993855,
+            0.3376038010000286
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10699684799999432,
+            "T4_candidate_validation_sql": 0.011124612999992678,
+            "T8_verify_inclusive": 0.10658833700000514,
+            "T2_lock_hold": 0.3122186049999982,
+            "T6_frame": 0.023613357999977325,
+            "T6_sort": 0.0021601109999664914,
+            "checkpoint": 0.005561766000028001
+          }
+        },
+        {
+          "variant": "Q1_CURRENT",
+          "cursor_fraction": "1.0",
+          "p50": 0.33349454599999717,
+          "p95": 0.33893036869999094,
+          "samples": [
+            0.3328944710000883,
+            0.33349454599999717,
+            0.33953434899999024
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10649869000002354,
+            "T4_candidate_validation_sql": 0.010677418000000216,
+            "T8_verify_inclusive": 0.10673042099998042,
+            "T2_lock_hold": 0.31755000999999083,
+            "T6_frame": 0.024235454000006484,
+            "T6_sort": 0.002183716000018876,
+            "checkpoint": 0.005338398000020561
+          }
+        },
+        {
+          "variant": "S3_INLINE",
+          "cursor_fraction": "0.1",
+          "p50": 0.3395417259999647,
+          "p95": 0.36925641670001424,
+          "samples": [
+            0.3395417259999647,
+            0.3331474549999598,
+            0.37255804900001976
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10693018500001017,
+            "T4_candidate_validation_sql": 0.010784049999983836,
+            "T8_verify_inclusive": 0.10629100099998823,
+            "T2_lock_hold": 0.322724189999974,
+            "T6_frame": 0.02338194500001123,
+            "T6_sort": 0.0021556439999983468,
+            "checkpoint": 0.005367290999998886
+          }
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "cursor_fraction": "1.0",
+          "p50": 0.32796760400003677,
+          "p95": 0.33340501970001524,
+          "samples": [
+            0.32612164599996163,
+            0.33400917700001287,
+            0.32796760400003677
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.1065096269999799,
+            "T4_candidate_validation_sql": 0.010729697000016358,
+            "T8_verify_inclusive": 0.10609987599997339,
+            "T2_lock_hold": 0.312309641000013,
+            "T6_frame": 0.02334762899999987,
+            "T6_sort": 0.002483846999950856,
+            "checkpoint": 0.005599877000008746
+          }
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 0.5795386589999794,
+          "p95": 0.5866240079999983,
+          "samples": [
+            0.5763353890000076,
+            0.5874112690000004,
+            0.5795386589999794
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10706817000001934,
+            "T4_candidate_validation_sql": 0.010804484000004777,
+            "T8_verify_inclusive": 0.10743146199996545,
+            "T2_lock_hold": 0.5631786399999896,
+            "T6_frame": 0.026041908000024705,
+            "T6_sort": 0.0026369729999942138,
+            "checkpoint": 0.11335035099989454
+          }
+        },
+        {
+          "variant": "Q1_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 0.3341591049999977,
+          "p95": 0.33633139539998635,
+          "samples": [
+            0.3332911699999386,
+            0.3365727609999851,
+            0.3341591049999977
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.1070625449999909,
+            "T4_candidate_validation_sql": 0.010912575000020297,
+            "T8_verify_inclusive": 0.10664811399999508,
+            "T2_lock_hold": 0.31778826200002186,
+            "T6_frame": 0.023274366999999074,
+            "T6_sort": 0.00216708400000698,
+            "checkpoint": 0.00591087600002993
+          }
+        },
+        {
+          "variant": "S3",
+          "cursor_fraction": "1.0",
+          "p50": 0.33752745599997525,
+          "p95": 0.3446064330000297,
+          "samples": [
+            0.33752745599997525,
+            0.336972344000003,
+            0.34539298600003576
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10660978300001034,
+            "T4_candidate_validation_sql": 0.010767995999970026,
+            "T8_verify_inclusive": 0.10629647100000739,
+            "T2_lock_hold": 0.32163607100000036,
+            "T6_frame": 0.023302724000018316,
+            "T6_sort": 0.002149623999969208,
+            "checkpoint": 0.005379658000094878
+          }
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "cursor_fraction": "1.0",
+          "p50": 0.577394537999993,
+          "p95": 0.5835690491999742,
+          "samples": [
+            0.5741487809999626,
+            0.577394537999993,
+            0.5842551059999721
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10672339399999942,
+            "T4_candidate_validation_sql": 0.010983632000005628,
+            "T8_verify_inclusive": 0.10687503200000492,
+            "T2_lock_hold": 0.5617367609999917,
+            "T6_frame": 0.026168681999990895,
+            "T6_sort": 0.0026853140000184794,
+            "checkpoint": 0.11215884900002493
+          }
+        },
+        {
+          "variant": "S5",
+          "cursor_fraction": "0.1",
+          "p50": 0.33109710399997994,
+          "p95": 0.3341019007,
+          "samples": [
+            0.32627928199997314,
+            0.3344357670000022,
+            0.33109710399997994
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.1061357570000041,
+            "T4_candidate_validation_sql": 0.010788856999994323,
+            "T8_verify_inclusive": 0.10644459299999198,
+            "T2_lock_hold": 0.3151020889999927,
+            "T6_frame": 0.02358276699999351,
+            "T6_sort": 0.002453479999985575,
+            "checkpoint": 0.00522578799996154
+          }
+        },
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "cursor_fraction": "0.1",
+          "p50": 0.09531443200003764,
+          "p95": 0.09711881050001522,
+          "samples": [
+            0.09731929700001274,
+            0.09327476200002138,
+            0.09531443200003764
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.02349372700001595,
+            "T6_sort": 0,
+            "checkpoint": 0
+          }
+        },
+        {
+          "variant": "S3_INLINE",
+          "cursor_fraction": "1.0",
+          "p50": 0.33443530800002463,
+          "p95": 0.34122055919996797,
+          "samples": [
+            0.3305431560000329,
+            0.33443530800002463,
+            0.34197447599996167
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.10654579699996702,
+            "T4_candidate_validation_sql": 0.011202502999992703,
+            "T8_verify_inclusive": 0.10690639199998486,
+            "T2_lock_hold": 0.3182294169999409,
+            "T6_frame": 0.023412018999977136,
+            "T6_sort": 0.002099527999973816,
+            "checkpoint": 0.005262963999996373
+          }
+        }
+      ],
+      "resource_comparison": []
+    },
+    {
+      "archive": "a421-ci-100k-7f.zip",
+      "archive_sha256": "307fc8133c81ecbd3cf4a479faa3ce8ae52269fe49a1ad756497bea636e565b4",
+      "job_id": "a42-small-100k",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 236,
+      "completed_groups": 236,
+      "elapsed_seconds": 709.196689703,
+      "group_kinds": {
+        "read": 177,
+        "plan": 59
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699181018033037355",
+      "database_instance": "45ab88e1-0ea5-4835-a0cf-426c39171c88",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 236,
+        "golden": "PASS"
+      },
+      "full_read_tables": [
+        {
+          "variant": "Q1_CURRENT",
+          "cursor_fraction": "1.0",
+          "p50": 2.131839194999884,
+          "p95": 2.175512586899953,
+          "samples": [
+            2.0124894619999623,
+            2.131839194999884,
+            2.1803651859999604
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5415736219999872,
+            "T4_candidate_validation_sql": 0.07663997600002403,
+            "T8_verify_inclusive": 0.5348278470000309,
+            "T2_lock_hold": 2.1167221260000133,
+            "T6_frame": 0.20992478499999834,
+            "T6_sort": 0.013806869999996252,
+            "checkpoint": 0.022903186000121423
+          }
+        },
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "cursor_fraction": "1.0",
+          "p50": 0.8553758860000471,
+          "p95": 0.9255170989000362,
+          "samples": [
+            0.840397715999984,
+            0.8553758860000471,
+            0.933310567000035
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.2051469270000439,
+            "T6_sort": 0,
+            "checkpoint": 0.02215878500010149
+          }
+        },
+        {
+          "variant": "S3",
+          "cursor_fraction": "1.0",
+          "p50": 2.143747120000171,
+          "p95": 2.175727955800016,
+          "samples": [
+            2.179281381999999,
+            2.0456108650000147,
+            2.143747120000171
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5369876139999405,
+            "T4_candidate_validation_sql": 0.07549673399995527,
+            "T8_verify_inclusive": 0.5365793099999792,
+            "T2_lock_hold": 2.129289205999953,
+            "T6_frame": 0.206024149999962,
+            "T6_sort": 0.015291079000007812,
+            "checkpoint": 0.022492247000286625
+          }
+        },
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "cursor_fraction": "0.1",
+          "p50": 0.8410117010000704,
+          "p95": 0.8896009667000442,
+          "samples": [
+            0.8212449929999934,
+            0.8949997740000413,
+            0.8410117010000704
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.2034611029999951,
+            "T6_sort": 0,
+            "checkpoint": 0
+          }
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 2.240241101999999,
+          "p95": 2.408859346499972,
+          "samples": [
+            2.240241101999999,
+            2.2023558410000987,
+            2.427594706999969
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5415869839999914,
+            "T4_candidate_validation_sql": 0.0749766829999885,
+            "T8_verify_inclusive": 0.5368904950000228,
+            "T2_lock_hold": 2.2260242019999907,
+            "T6_frame": 0.21033491000002869,
+            "T6_sort": 0.015838207999991027,
+            "checkpoint": 0.08084649099978947
+          }
+        },
+        {
+          "variant": "S3_INLINE",
+          "cursor_fraction": "1.0",
+          "p50": 2.1216081600000507,
+          "p95": 2.133589087800016,
+          "samples": [
+            2.0070020220000515,
+            2.134920302000012,
+            2.1216081600000507
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5396321229999899,
+            "T4_candidate_validation_sql": 0.07548687099995277,
+            "T8_verify_inclusive": 0.5366257590000032,
+            "T2_lock_hold": 2.1071802210000214,
+            "T6_frame": 0.20694833999999673,
+            "T6_sort": 0.01409483099996578,
+            "checkpoint": 0.022103082999933577
+          }
+        },
+        {
+          "variant": "S4",
+          "cursor_fraction": "1.0",
+          "p50": 2.113276524000071,
+          "p95": 2.1712247690999447,
+          "samples": [
+            2.113276524000071,
+            2.111645711000051,
+            2.1776634629999307
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5326375939999934,
+            "T4_candidate_validation_sql": 0.08048240200002965,
+            "T8_verify_inclusive": 0.5387359650000008,
+            "T2_lock_hold": 2.0989110519999485,
+            "T6_frame": 0.20595853200001102,
+            "T6_sort": 0.012572509999927206,
+            "checkpoint": 0.021731351999846993
+          }
+        },
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "cursor_fraction": "1.0",
+          "p50": 0.8959695510000074,
+          "p95": 0.9132586166999659,
+          "samples": [
+            0.9151796239999612,
+            0.7821237580000684,
+            0.8959695510000074
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.20925059000001056,
+            "T6_sort": 0,
+            "checkpoint": 0
+          }
+        },
+        {
+          "variant": "S4",
+          "cursor_fraction": "0.1",
+          "p50": 2.141190183000049,
+          "p95": 2.362380100500002,
+          "samples": [
+            2.1049447000000328,
+            2.3869567579999966,
+            2.141190183000049
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5412202339999794,
+            "T4_candidate_validation_sql": 0.07551609699999062,
+            "T8_verify_inclusive": 0.5364369860000124,
+            "T2_lock_hold": 2.1266841539999746,
+            "T6_frame": 0.20398902699997734,
+            "T6_sort": 0.01383652199996277,
+            "checkpoint": 0.02445580900001687
+          }
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "cursor_fraction": "0.1",
+          "p50": 2.0692413770000258,
+          "p95": 2.0827193072000227,
+          "samples": [
+            1.8975722829999881,
+            2.0842168550000224,
+            2.0692413770000258
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5336071430000402,
+            "T4_candidate_validation_sql": 0.07492970399994192,
+            "T8_verify_inclusive": 0.5333535280000206,
+            "T2_lock_hold": 2.0547084890000065,
+            "T6_frame": 0.20434754699999758,
+            "T6_sort": 0.017815055999960805,
+            "checkpoint": 0.025362613999391215
+          }
+        },
+        {
+          "variant": "S3_INLINE",
+          "cursor_fraction": "0.1",
+          "p50": 2.1776598300000103,
+          "p95": 2.183919136499989,
+          "samples": [
+            2.1846146149999868,
+            2.053053195000018,
+            2.1776598300000103
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5379581189999953,
+            "T4_candidate_validation_sql": 0.07442469299996901,
+            "T8_verify_inclusive": 0.5734958029999575,
+            "T2_lock_hold": 2.1623117079999474,
+            "T6_frame": 0.20537945000000946,
+            "T6_sort": 0.01396033699995769,
+            "checkpoint": 0.022197863999792844
+          }
+        },
+        {
+          "variant": "Q1_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 2.0706780660000845,
+          "p95": 2.1474737825999966,
+          "samples": [
+            2.064895159999992,
+            2.156006639999987,
+            2.0706780660000845
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5343230369999787,
+            "T4_candidate_validation_sql": 0.07531698799999731,
+            "T8_verify_inclusive": 0.531090076000055,
+            "T2_lock_hold": 2.056200782000019,
+            "T6_frame": 0.20513984600000867,
+            "T6_sort": 0.01516351200001509,
+            "checkpoint": 0.02494450099993628
+          }
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "cursor_fraction": "1.0",
+          "p50": 2.298893052999915,
+          "p95": 2.4100739491000125,
+          "samples": [
+            2.4224273820000235,
+            2.216820044999963,
+            2.298893052999915
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.53835694899999,
+            "T4_candidate_validation_sql": 0.07697295600002008,
+            "T8_verify_inclusive": 0.5356522829999903,
+            "T2_lock_hold": 2.2841996099999733,
+            "T6_frame": 0.2140450489999921,
+            "T6_sort": 0.02366882199999054,
+            "checkpoint": 0.07278605300018626
+          }
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "cursor_fraction": "1.0",
+          "p50": 2.0261911479999526,
+          "p95": 2.1286157676999777,
+          "samples": [
+            2.0261911479999526,
+            2.0218064940000886,
+            2.1399962809999806
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5453563990000134,
+            "T4_candidate_validation_sql": 0.07424131400000533,
+            "T8_verify_inclusive": 0.5385934829999997,
+            "T2_lock_hold": 2.011617986000033,
+            "T6_frame": 0.2044138109999949,
+            "T6_sort": 0.01614624600000525,
+            "checkpoint": 0.02432082199999286
+          }
+        },
+        {
+          "variant": "S3_KEYS",
+          "cursor_fraction": "1.0",
+          "p50": 2.119028433000153,
+          "p95": 2.1644168199000204,
+          "samples": [
+            2.119028433000153,
+            2.169459974000006,
+            2.028656513000044
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5383355129999927,
+            "T4_candidate_validation_sql": 0.07523076600000422,
+            "T8_verify_inclusive": 0.5492156919999616,
+            "T2_lock_hold": 2.10470778399997,
+            "T6_frame": 0.20508742800006985,
+            "T6_sort": 0.015745064999975966,
+            "checkpoint": 0.021557989000143607
+          }
+        },
+        {
+          "variant": "S5",
+          "cursor_fraction": "1.0",
+          "p50": 2.212057290999951,
+          "p95": 2.4814176358000113,
+          "samples": [
+            2.511346563000018,
+            2.212057290999951,
+            2.133689311000012
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.598903101000019,
+            "T4_candidate_validation_sql": 0.08359245200006171,
+            "T8_verify_inclusive": 0.5432629279999901,
+            "T2_lock_hold": 2.196996837000029,
+            "T6_frame": 0.20852527299996382,
+            "T6_sort": 0.01868112099998598,
+            "checkpoint": 0.030065308000132518
+          }
+        },
+        {
+          "variant": "S3",
+          "cursor_fraction": "0.1",
+          "p50": 2.131430874999978,
+          "p95": 2.1441617296000004,
+          "samples": [
+            2.145576269000003,
+            2.0588199050000355,
+            2.131430874999978
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5385292210000046,
+            "T4_candidate_validation_sql": 0.07437813500001766,
+            "T8_verify_inclusive": 0.537779842999953,
+            "T2_lock_hold": 2.1169555110000147,
+            "T6_frame": 0.20984684300003664,
+            "T6_sort": 0.014330767999979344,
+            "checkpoint": 0.021781683000199337
+          }
+        },
+        {
+          "variant": "S3_KEYS",
+          "cursor_fraction": "0.1",
+          "p50": 2.128177048999987,
+          "p95": 2.1859256317999836,
+          "samples": [
+            2.128177048999987,
+            2.090263764000156,
+            2.1923421409999833
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5395952269999498,
+            "T4_candidate_validation_sql": 0.07574258700003611,
+            "T8_verify_inclusive": 0.5355047200000058,
+            "T2_lock_hold": 2.113800399000013,
+            "T6_frame": 0.20527621200000112,
+            "T6_sort": 0.012648252000019511,
+            "checkpoint": 0.023475610000218694
+          }
+        },
+        {
+          "variant": "S5",
+          "cursor_fraction": "0.1",
+          "p50": 2.1126415210000005,
+          "p95": 2.9402988198999536,
+          "samples": [
+            2.1126415210000005,
+            2.0622841879999214,
+            3.0322607419999486
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0.5351806190000161,
+            "T4_candidate_validation_sql": 0.07444867599997451,
+            "T8_verify_inclusive": 0.5392166830000065,
+            "T2_lock_hold": 2.098495503000038,
+            "T6_frame": 0.20329624499999,
+            "T6_sort": 0.020817217999933746,
+            "checkpoint": 0.028148739999949157
+          }
+        },
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "cursor_fraction": "0.1",
+          "p50": 0.9584628169999974,
+          "p95": 0.962453735599982,
+          "samples": [
+            0.9584628169999974,
+            0.9628971709999803,
+            0.8485612299999161
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 0.21323119199996654,
+            "T6_sort": 0,
+            "checkpoint": 0.029692838999977766
+          }
+        }
+      ],
+      "resource_comparison": []
+    },
+    {
+      "archive": "a421-million-full0-7f.zip",
+      "archive_sha256": "c4ffbe980e97bd4860b064463dfb2c5e25b7ac3402051a420851d288f03a76e0",
+      "job_id": "a42-million-full-0",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 30,
+      "completed_groups": 30,
+      "elapsed_seconds": 2943.068244761,
+      "group_kinds": {
+        "read": 30,
+        "plan": 0
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699181069501284396",
+      "database_instance": "35e459cc-808a-4aee-8327-f962be63185a",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 30,
+        "golden": "PASS"
+      },
+      "full_read_tables": [
+        {
+          "variant": "S3_INLINE",
+          "cursor_fraction": "0.1",
+          "p50": 84.84293589500021,
+          "p95": 85.39418658710001,
+          "samples": [
+            80.42055416499988,
+            85.45543666399999,
+            84.84293589500021
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 21.71328882800003,
+            "T4_candidate_validation_sql": 15.43217657499963,
+            "T8_verify_inclusive": 20.191828127999997,
+            "T2_lock_hold": 84.4539087459998,
+            "T6_frame": 6.079860249000376,
+            "T6_sort": 0.3570671370000582,
+            "checkpoint": 0.6137355000021216
+          }
+        },
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "cursor_fraction": "0.1",
+          "p50": 23.17598483100005,
+          "p95": 24.603210026700207,
+          "samples": [
+            22.37981278199959,
+            24.761790604000225,
+            23.17598483100005
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 6.047144991999858,
+            "T6_sort": 0,
+            "checkpoint": 0.7374864270005901
+          }
+        },
+        {
+          "variant": "Q1_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 81.29538886900002,
+          "p95": 86.49408387009971,
+          "samples": [
+            81.29538886900002,
+            87.07171664799966,
+            80.75978963600028
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 20.207074876000206,
+            "T4_candidate_validation_sql": 15.217275999999856,
+            "T8_verify_inclusive": 22.30335082800002,
+            "T2_lock_hold": 81.28161666300002,
+            "T6_frame": 6.019230469000149,
+            "T6_sort": 0.3566512390000298,
+            "checkpoint": 0.6218172779997531
+          }
+        },
+        {
+          "variant": "S4",
+          "cursor_fraction": "0.1",
+          "p50": 81.99617656199985,
+          "p95": 83.98364045009983,
+          "samples": [
+            84.20446977099982,
+            78.71423376200005,
+            81.99617656199985
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 20.94636538000009,
+            "T4_candidate_validation_sql": 14.860958810999819,
+            "T8_verify_inclusive": 20.092638938999926,
+            "T2_lock_hold": 81.90269001599995,
+            "T6_frame": 6.0290212229999725,
+            "T6_sort": 0.352717875000053,
+            "checkpoint": 0.5614544220002244
+          }
+        },
+        {
+          "variant": "S3_KEYS",
+          "cursor_fraction": "0.1",
+          "p50": 82.30573621799999,
+          "p95": 84.6863364779999,
+          "samples": [
+            80.83821396800022,
+            82.30573621799999,
+            84.9508476179999
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 21.26373996999996,
+            "T4_candidate_validation_sql": 12.91483864699967,
+            "T8_verify_inclusive": 20.14920634499981,
+            "T2_lock_hold": 82.08772909899994,
+            "T6_frame": 6.0116364079999585,
+            "T6_sort": 0.3505970230000912,
+            "checkpoint": 0.5889817650020177
+          }
+        },
+        {
+          "variant": "S5",
+          "cursor_fraction": "0.1",
+          "p50": 81.73097127999995,
+          "p95": 82.14367506669998,
+          "samples": [
+            82.18953104299999,
+            81.73097127999995,
+            80.08790502700003
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 21.763948600000276,
+            "T4_candidate_validation_sql": 14.45109697199996,
+            "T8_verify_inclusive": 21.401398642000004,
+            "T2_lock_hold": 81.63321863099986,
+            "T6_frame": 6.018375206999963,
+            "T6_sort": 0.5049954349997279,
+            "checkpoint": 0.6756125110000539
+          }
+        },
+        {
+          "variant": "S3",
+          "cursor_fraction": "0.1",
+          "p50": 90.00142844300035,
+          "p95": 92.7355362137001,
+          "samples": [
+            90.00142844300035,
+            93.03932596600009,
+            87.42831805000014
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 20.10187368400011,
+            "T4_candidate_validation_sql": 14.317957127,
+            "T8_verify_inclusive": 21.1043009440001,
+            "T2_lock_hold": 89.90751077799996,
+            "T6_frame": 5.999824058000286,
+            "T6_sort": 0.3583741560000817,
+            "checkpoint": 0.6575245269990546
+          }
+        },
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "cursor_fraction": "0.1",
+          "p50": 25.201408065000123,
+          "p95": 61.59534978299995,
+          "samples": [
+            23.08807294899998,
+            65.63912108499994,
+            25.201408065000123
+          ],
+          "protection": "NOT_EQUIVALENT",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 0,
+            "T4_candidate_validation_sql": 0,
+            "T8_verify_inclusive": 0,
+            "T2_lock_hold": 0,
+            "T6_frame": 5.998531508999804,
+            "T6_sort": 0,
+            "checkpoint": 0
+          }
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "cursor_fraction": "0.1",
+          "p50": 93.68203736399983,
+          "p95": 96.37760353829977,
+          "samples": [
+            93.68203736399983,
+            90.57470226599992,
+            96.67711089099976
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 22.24038885600021,
+            "T4_candidate_validation_sql": 14.792720868000288,
+            "T8_verify_inclusive": 20.590766794000047,
+            "T2_lock_hold": 93.58521381499986,
+            "T6_frame": 6.22639286499998,
+            "T6_sort": 0.4822062570001435,
+            "checkpoint": 0.7577688409996881
+          }
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "cursor_fraction": "0.1",
+          "p50": 92.54902812699993,
+          "p95": 93.73762663599999,
+          "samples": [
+            81.80519201499988,
+            92.54902812699993,
+            93.86969313700001
+          ],
+          "protection": "E0",
+          "nested_phase_p50": {
+            "T3_fingerprint_inclusive": 22.407807491000312,
+            "T4_candidate_validation_sql": 22.759714572999656,
+            "T8_verify_inclusive": 21.685970845000156,
+            "T2_lock_hold": 92.47032198999977,
+            "T6_frame": 6.041367356999899,
+            "T6_sort": 0.5058114799999203,
+            "checkpoint": 0.7151974240011896
+          }
+        }
+      ],
+      "resource_comparison": [
+        {
+          "variant": "Q0_LEGACY_RAW",
+          "client_cpu_seconds_p50": 13.525708363000035,
+          "sampled_client_rss_lower_bound_max_bytes": 1902948352,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "client_cpu_seconds_p50": 14.470420607000051,
+          "sampled_client_rss_lower_bound_max_bytes": 1903120384,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "Q0_SERVICE_CONTROL",
+          "client_cpu_seconds_p50": 14.156708277999996,
+          "sampled_client_rss_lower_bound_max_bytes": 1902759936,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "Q1_CURRENT",
+          "client_cpu_seconds_p50": 14.328139816999993,
+          "sampled_client_rss_lower_bound_max_bytes": 1902501888,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "Q2_CURRENT",
+          "client_cpu_seconds_p50": 15.169515334999971,
+          "sampled_client_rss_lower_bound_max_bytes": 1923153920,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "S3",
+          "client_cpu_seconds_p50": 14.410921379000001,
+          "sampled_client_rss_lower_bound_max_bytes": 1921118208,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "S3_INLINE",
+          "client_cpu_seconds_p50": 14.342522491000011,
+          "sampled_client_rss_lower_bound_max_bytes": 1903349760,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "S3_KEYS",
+          "client_cpu_seconds_p50": 14.139908483999989,
+          "sampled_client_rss_lower_bound_max_bytes": 1903628288,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "S4",
+          "client_cpu_seconds_p50": 14.064031580000005,
+          "sampled_client_rss_lower_bound_max_bytes": 1903493120,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        },
+        {
+          "variant": "S5",
+          "client_cpu_seconds_p50": 14.502628212000019,
+          "sampled_client_rss_lower_bound_max_bytes": 1901826048,
+          "frame_bytes_p50": 422443175,
+          "whole_instance_wal_bytes_p50": 0
+        }
+      ]
+    },
+    {
+      "archive": "a421-plans-full0-7f.zip",
+      "archive_sha256": "4bd731c34a31f16a13bf6b849b982d2805be01847dd029b88b611f1591d15b2e",
+      "job_id": "a42-million-plans-full-0",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 10,
+      "completed_groups": 10,
+      "elapsed_seconds": 1766.211581865,
+      "group_kinds": {
+        "read": 0,
+        "plan": 10
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699182072600440876",
+      "database_instance": "87242f75-e2d0-4b3f-b007-cc4af10119fc",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 10,
+        "golden": "PASS"
+      },
+      "full_read_tables": [],
+      "resource_comparison": []
+    },
+    {
+      "archive": "a421-plans-window0-7f.zip",
+      "archive_sha256": "328d43f7319adda12e87f24c30a9a1536d4bf4a6bdf1c1765df108c8a0284fc2",
+      "job_id": "a42-million-plans-window_matrix-0",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 6,
+      "completed_groups": 6,
+      "elapsed_seconds": 1291.96705297,
+      "group_kinds": {
+        "read": 0,
+        "plan": 6
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699184232534364204",
+      "database_instance": "f18c0705-a9d7-478a-b032-7f1714918178",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 6,
+        "golden": "PASS"
+      },
+      "full_read_tables": [],
+      "resource_comparison": []
+    },
+    {
+      "archive": "a421-window0-7f.zip",
+      "archive_sha256": "18aadaf1db0c851ae50e325ded06d23e152e655382ac60ecab5929bef2168960",
+      "job_id": "a42-million-window-0",
+      "head_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "attempt": "1",
+      "status": "COMPLETE",
+      "expected_groups": 21,
+      "completed_groups": 21,
+      "elapsed_seconds": 3060.261489386,
+      "group_kinds": {
+        "read": 21,
+        "plan": 0
+      },
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "physical_system_identifier": "7699181035834302508",
+      "database_instance": "8bb2773f-e011-4143-a4cb-16293c070850",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "resources": {
+        "cpu_limit": 2,
+        "memory_bytes": 3221225472
+      },
+      "versioned_verifier_sha": "7f5857ee08000fd77d5ddb4ce2e59146ad150008",
+      "verification": {
+        "groups": 21,
+        "golden": "PASS"
+      },
+      "full_read_tables": [
+        {
+          "variant": "Q0_SAFETY_EQUIVALENT",
+          "scope": "full",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "p50": 106.97961096900008,
+          "p95": 107.57643062400017,
+          "samples": [
+            106.97961096900008,
+            107.64274391900017,
+            101.61119706599999
+          ],
+          "protection": "E0"
+        }
+      ],
+      "window_read_tables": [
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": 1,
+          "cursor_fraction": "0.1",
+          "p50": 116.59261691300026,
+          "p95": 118.43581546310023,
+          "samples": [
+            118.64061530200024,
+            111.71284598000011,
+            116.59261691300026
+          ],
+          "protection": "E0"
+        },
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": 10,
+          "cursor_fraction": "0.1",
+          "p50": 112.9897913550003,
+          "p95": 113.06981958180009,
+          "samples": [
+            112.9897913550003,
+            105.98474001900001,
+            113.07871160700006
+          ],
+          "protection": "E0"
+        },
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": 5,
+          "cursor_fraction": "0.1",
+          "p50": 112.58351979499957,
+          "p95": 112.87673214050017,
+          "samples": [
+            108.54571323100004,
+            112.90931129000023,
+            112.58351979499957
+          ],
+          "protection": "E0"
+        },
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": 20,
+          "cursor_fraction": "0.1",
+          "p50": 111.99078449599983,
+          "p95": 120.32987657899986,
+          "samples": [
+            110.03914900899986,
+            111.99078449599983,
+            121.25644236599987
+          ],
+          "protection": "E0"
+        },
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": null,
+          "cursor_fraction": "0.1",
+          "p50": 108.40574814999991,
+          "p95": 111.10192112860004,
+          "samples": [
+            107.75416436399996,
+            108.40574814999991,
+            111.40149590400006
+          ],
+          "protection": "E0"
+        },
+        {
+          "variant": "S3",
+          "scope": "window_matrix",
+          "window_days": 3,
+          "cursor_fraction": "0.1",
+          "p50": 115.61251028400056,
+          "p95": 118.01851643519984,
+          "samples": [
+            110.72841746899996,
+            118.28585045199975,
+            115.61251028400056
+          ],
+          "protection": "E0"
+        }
+      ],
+      "resource_comparison": []
+    }
+  ],
+  "INFRASTRUCTURE_PASS": false,
+  "CORRECTNESS_PASS": false,
+  "READ_PERFORMANCE_PASS": false,
+  "production_read_authorized": false,
+  "authorize_a4_3": false,
+  "state": "A4_2_NO_SAFE_WINNER",
+  "verified_stage2_total_groups": 539,
+  "verified_stage2_required_groups": 536,
+  "verified_stage2_auxiliary_groups": 3
+}
