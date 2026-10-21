@@ -1,0 +1,771 @@
+{
+  "schema_version": "a421-historical-index-v1",
+  "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+  "historical_only": true,
+  "eligible_for_new_head": false,
+  "runs": [
+    {
+      "id": 39561947935,
+      "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "cancelled",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39561947935",
+      "started_at": "2026-10-21T07:26:09Z",
+      "updated_at": "2026-10-21T14:32:48Z",
+      "jobs": [
+        {
+          "id": 119095051479,
+          "name": "laboratory (supplemental)",
+          "conclusion": "success",
+          "started_at": "2026-10-21T13:17:07Z",
+          "completed_at": "2026-10-21T14:29:17Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:08Z",
+              "completed_at": "2026-10-21T13:17:09Z"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:09Z",
+              "completed_at": "2026-10-21T13:17:10Z"
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:10Z",
+              "completed_at": "2026-10-21T13:17:13Z"
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:13Z",
+              "completed_at": "2026-10-21T13:17:32Z"
+            },
+            {
+              "name": "Own physical PG17, never business or shared service DB",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:32Z",
+              "completed_at": "2026-10-21T13:17:41Z"
+            },
+            {
+              "name": "Freeze source and prove physical target before migration",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:41Z",
+              "completed_at": "2026-10-21T13:17:45Z"
+            },
+            {
+              "name": "Negative proofs, SQL golden, actual Worker and frozen publication regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:45Z",
+              "completed_at": "2026-10-21T13:23:40Z"
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:23:40Z",
+              "completed_at": "2026-10-21T13:23:41Z"
+            },
+            {
+              "name": "Serial 10k then 100k, complete fetch and actual plans",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:23:41Z",
+              "completed_at": "2026-10-21T13:23:41Z"
+            },
+            {
+              "name": "Frozen million fixture, same complete safety costs",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:23:41Z",
+              "completed_at": "2026-10-21T13:23:41Z"
+            },
+            {
+              "name": "Distribution and tombstone matrix, not a reduced-size performance claim",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:23:41Z",
+              "completed_at": "2026-10-21T13:27:18Z"
+            },
+            {
+              "name": "Event prototype timing is UNPROVEN, never eligible for production",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:27:18Z",
+              "completed_at": "2026-10-21T13:30:18Z"
+            },
+            {
+              "name": "Two repeatable-read public readers, same million fixture",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:30:18Z",
+              "completed_at": "2026-10-21T14:29:10Z"
+            },
+            {
+              "name": "Validate exact HEAD receipts, never authorize A4-3",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:10Z",
+              "completed_at": "2026-10-21T14:29:10Z"
+            },
+            {
+              "name": "Explicit final status including early failure",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:10Z",
+              "completed_at": "2026-10-21T14:29:10Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:10Z",
+              "completed_at": "2026-10-21T14:29:13Z"
+            },
+            {
+              "name": "Remove only this job's isolated instance",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:13Z",
+              "completed_at": "2026-10-21T14:29:13Z"
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:13Z",
+              "completed_at": "2026-10-21T14:29:13Z"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:13Z",
+              "completed_at": "2026-10-21T14:29:13Z"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T14:29:13Z",
+              "completed_at": "2026-10-21T14:29:13Z"
+            }
+          ]
+        },
+        {
+          "id": 119095051829,
+          "name": "laboratory (primary)",
+          "conclusion": "cancelled",
+          "started_at": "2026-10-21T07:26:12Z",
+          "completed_at": "2026-10-21T13:17:05Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:13Z",
+              "completed_at": "2026-10-21T07:26:14Z"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:14Z",
+              "completed_at": "2026-10-21T07:26:16Z"
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:16Z",
+              "completed_at": "2026-10-21T07:26:19Z"
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:19Z",
+              "completed_at": "2026-10-21T07:26:39Z"
+            },
+            {
+              "name": "Own physical PG17, never business or shared service DB",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:39Z",
+              "completed_at": "2026-10-21T07:26:48Z"
+            },
+            {
+              "name": "Freeze source and prove physical target before migration",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:48Z",
+              "completed_at": "2026-10-21T07:26:52Z"
+            },
+            {
+              "name": "Negative proofs, SQL golden, actual Worker and frozen publication regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:52Z",
+              "completed_at": "2026-10-21T07:33:02Z"
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:33:02Z",
+              "completed_at": "2026-10-21T07:33:02Z"
+            },
+            {
+              "name": "Serial 10k then 100k, complete fetch and actual plans",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:33:02Z",
+              "completed_at": "2026-10-21T07:53:19Z"
+            },
+            {
+              "name": "Frozen million fixture, same complete safety costs",
+              "conclusion": "cancelled",
+              "started_at": "2026-10-21T07:53:19Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Distribution and tombstone matrix, not a reduced-size performance claim",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Event prototype timing is UNPROVEN, never eligible for production",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Two repeatable-read public readers, same million fixture",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Validate exact HEAD receipts, never authorize A4-3",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Explicit final status including early failure",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:16:57Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:16:57Z",
+              "completed_at": "2026-10-21T13:17:01Z"
+            },
+            {
+              "name": "Remove only this job's isolated instance",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:01Z",
+              "completed_at": "2026-10-21T13:17:02Z"
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:17:02Z",
+              "completed_at": "2026-10-21T13:17:02Z"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:02Z",
+              "completed_at": "2026-10-21T13:17:02Z"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:17:02Z",
+              "completed_at": "2026-10-21T13:17:02Z"
+            }
+          ]
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 12354045698,
+          "name": "a42-experiments-supplemental-02c69c6127860f72adaf79071a9a11930b69e411",
+          "size_in_bytes": 3532565,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12354045698",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12354045698/zip",
+          "expired": false,
+          "created_at": "2026-10-21T14:29:12Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T14:29:12Z",
+          "digest": "sha256:f2c4d51d508016b9aed637a5c0b089ed9f3cfaf8cfc4d33620103ea0407e330f",
+          "workflow_run": {
+            "id": 39561947935,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        },
+        {
+          "id": 12348745742,
+          "name": "a42-experiments-primary-02c69c6127860f72adaf79071a9a11930b69e411",
+          "size_in_bytes": 19998838,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12348745742",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12348745742/zip",
+          "expired": false,
+          "created_at": "2026-10-21T13:17:01Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T13:17:01Z",
+          "digest": "sha256:f7e7983dfe5293415f5042ea7fa66430bf69f26e8d86f740365c4b11cb93d4d1",
+          "workflow_run": {
+            "id": 39561947935,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        }
+      ]
+    },
+    {
+      "id": 39561948002,
+      "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "cancelled",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39561948002",
+      "started_at": "2026-10-21T07:26:09Z",
+      "updated_at": "2026-10-21T13:26:44Z",
+      "jobs": [
+        {
+          "id": 119095053006,
+          "name": "test",
+          "conclusion": "cancelled",
+          "started_at": "2026-10-21T07:26:12Z",
+          "completed_at": "2026-10-21T13:26:43Z",
+          "steps": [
+            {
+              "name": "Set up job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:13Z",
+              "completed_at": "2026-10-21T07:26:14Z"
+            },
+            {
+              "name": "Initialize containers",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:14Z",
+              "completed_at": "2026-10-21T07:26:26Z"
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:26Z",
+              "completed_at": "2026-10-21T07:26:27Z"
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:27Z",
+              "completed_at": "2026-10-21T07:26:29Z"
+            },
+            {
+              "name": "Run python -m pip install --upgrade pip",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:29Z",
+              "completed_at": "2026-10-21T07:26:31Z"
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:31Z",
+              "completed_at": "2026-10-21T07:26:50Z"
+            },
+            {
+              "name": "V1.4 physically isolated and marked PG17",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:50Z",
+              "completed_at": "2026-10-21T07:26:52Z"
+            },
+            {
+              "name": "V1.4 calendar and overlay read regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:26:52Z",
+              "completed_at": "2026-10-21T07:28:05Z"
+            },
+            {
+              "name": "V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:05Z",
+              "completed_at": "2026-10-21T07:28:11Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:11Z",
+              "completed_at": "2026-10-21T07:28:12Z"
+            },
+            {
+              "name": "Run python -m alembic upgrade head",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:12Z",
+              "completed_at": "2026-10-21T07:28:14Z"
+            },
+            {
+              "name": "Run python -m alembic downgrade 0019_research_source_lineage",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:14Z",
+              "completed_at": "2026-10-21T07:28:16Z"
+            },
+            {
+              "name": "Run python -m alembic upgrade head",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:16Z",
+              "completed_at": "2026-10-21T07:28:18Z"
+            },
+            {
+              "name": "M17.1.2 suspension schema and ingestion regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:18Z",
+              "completed_at": "2026-10-21T07:28:51Z"
+            },
+            {
+              "name": "M17.1 targeted dirty dependency regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:28:51Z",
+              "completed_at": "2026-10-21T07:29:34Z"
+            },
+            {
+              "name": "Data publication and schedule compensation regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:29:34Z",
+              "completed_at": "2026-10-21T07:31:04Z"
+            },
+            {
+              "name": "Cold start engines and zero-write CLI regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:31:04Z",
+              "completed_at": "2026-10-21T07:31:27Z"
+            },
+            {
+              "name": "Cold start baseline golden and missing-input comparison",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:31:27Z",
+              "completed_at": "2026-10-21T07:31:30Z"
+            },
+            {
+              "name": "M17.1.1 reference-aware retention regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:31:30Z",
+              "completed_at": "2026-10-21T07:33:28Z"
+            },
+            {
+              "name": "M17.1 isolated PAPER continuity regressions",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:33:28Z",
+              "completed_at": "2026-10-21T07:35:43Z"
+            },
+            {
+              "name": "Run python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70 --junitxml=.codex_tmp/m17_1_2-full.xml",
+              "conclusion": "success",
+              "started_at": "2026-10-21T07:35:43Z",
+              "completed_at": "2026-10-21T08:02:14Z"
+            },
+            {
+              "name": "M16.6 capture capacity measurements",
+              "conclusion": "success",
+              "started_at": "2026-10-21T08:02:14Z",
+              "completed_at": "2026-10-21T08:02:28Z"
+            },
+            {
+              "name": "Run python -m alembic current",
+              "conclusion": "success",
+              "started_at": "2026-10-21T08:02:28Z",
+              "completed_at": "2026-10-21T08:02:29Z"
+            },
+            {
+              "name": "Run python -m alembic heads",
+              "conclusion": "success",
+              "started_at": "2026-10-21T08:02:29Z",
+              "completed_at": "2026-10-21T08:02:29Z"
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "conclusion": "success",
+              "started_at": "2026-10-21T08:02:29Z",
+              "completed_at": "2026-10-21T08:02:30Z"
+            },
+            {
+              "name": "Cold start L1 L2 L3 isolated publication capacity",
+              "conclusion": "cancelled",
+              "started_at": "2026-10-21T08:02:30Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run cp .env.example .env",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run docker compose config",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run docker compose build",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Data queue single/two Worker and atomic publication acceptance",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "failure",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run actions/setup-node@v4",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run npm ci",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "M17.1 dependency risk inventory (not an upgrade)",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run npm run test:coverage",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run npm run build",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "M16.6 browser acceptance (isolated runner tooling)",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "M17.1.1 and M17.1.2 exact HEAD and migration receipts",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:37Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:37Z",
+              "completed_at": "2026-10-21T13:26:38Z"
+            },
+            {
+              "name": "Runtime reliability desktop and narrow-screen synthetic acceptance",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:38Z",
+              "completed_at": "2026-10-21T13:26:38Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "failure",
+              "started_at": "2026-10-21T13:26:38Z",
+              "completed_at": "2026-10-21T13:26:38Z"
+            },
+            {
+              "name": "Data publication exact SHA release receipt",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:38Z",
+              "completed_at": "2026-10-21T13:26:38Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:38Z",
+              "completed_at": "2026-10-21T13:26:39Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:39Z",
+              "completed_at": "2026-10-21T13:26:40Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:40Z",
+              "completed_at": "2026-10-21T13:26:40Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:40Z",
+              "completed_at": "2026-10-21T13:26:41Z"
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:41Z",
+              "completed_at": "2026-10-21T13:26:41Z"
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "conclusion": "skipped",
+              "started_at": "2026-10-21T13:26:41Z",
+              "completed_at": "2026-10-21T13:26:41Z"
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:41Z",
+              "completed_at": "2026-10-21T13:26:42Z"
+            },
+            {
+              "name": "Stop containers",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:42Z",
+              "completed_at": "2026-10-21T13:26:42Z"
+            },
+            {
+              "name": "Complete job",
+              "conclusion": "success",
+              "started_at": "2026-10-21T13:26:42Z",
+              "completed_at": "2026-10-21T13:26:42Z"
+            }
+          ]
+        },
+        {
+          "id": 119095054383,
+          "name": "ui-visual-acceptance",
+          "conclusion": "skipped",
+          "started_at": "2026-10-21T07:26:10Z",
+          "completed_at": "2026-10-21T07:26:10Z",
+          "steps": []
+        }
+      ],
+      "artifacts": [
+        {
+          "id": 12349865761,
+          "name": "m17-capacity-measurements",
+          "size_in_bytes": 8233,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349865761",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349865761/zip",
+          "expired": false,
+          "created_at": "2026-10-21T13:26:39Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T13:26:39Z",
+          "digest": "sha256:84850fb1deed9b500b07487e190a804b4a6cfd60f6dbc2ca4a2d6714589a1f49",
+          "workflow_run": {
+            "id": 39561948002,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        },
+        {
+          "id": 12349346556,
+          "name": "m17-1-2-suspend-evidence",
+          "size_in_bytes": 50840,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349346556",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349346556/zip",
+          "expired": false,
+          "created_at": "2026-10-21T13:26:41Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T13:26:41Z",
+          "digest": "sha256:5179c4882b6641b8e17b78620303c4fdaa7be169573cd7d617a8591ffb10f463",
+          "workflow_run": {
+            "id": 39561948002,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        },
+        {
+          "id": 12349226697,
+          "name": "data-publication-reliability",
+          "size_in_bytes": 61450,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349226697",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349226697/zip",
+          "expired": false,
+          "created_at": "2026-10-21T13:26:39Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T13:26:39Z",
+          "digest": "sha256:d40b373e11cac5cf06bd4fdbb7081439542c603d4dd51b58c2f00616e42a585e",
+          "workflow_run": {
+            "id": 39561948002,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        },
+        {
+          "id": 12349191844,
+          "name": "m17-1-1-retention-evidence",
+          "size_in_bytes": 8506,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349191844",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12349191844/zip",
+          "expired": false,
+          "created_at": "2026-10-21T13:26:41Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T13:26:41Z",
+          "digest": "sha256:8b040d35ddc215f0e7032ccb5b779f3f043e8586e43329a5c0ef96b072554b22",
+          "workflow_run": {
+            "id": 39561948002,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        },
+        {
+          "id": 12327589919,
+          "name": "v14-read-evidence",
+          "size_in_bytes": 15351,
+          "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12327589919",
+          "archive_download_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12327589919/zip",
+          "expired": false,
+          "created_at": "2026-10-21T07:28:11Z",
+          "expires_at": "2027-01-19T07:26:10Z",
+          "updated_at": "2026-10-21T07:28:11Z",
+          "digest": "sha256:54434dc952905934ce7c64e482d646f39106c277ec41ea035c75e2fe001d2725",
+          "workflow_run": {
+            "id": 39561948002,
+            "repository_id": 1349401053,
+            "head_repository_id": 1349401053,
+            "head_branch": "master",
+            "head_sha": "02c69c6127860f72adaf79071a9a11930b69e411"
+          }
+        }
+      ]
+    }
+  ],
+  "primary_log_read_counts": {
+    "by_scope": {
+      "full": 180,
+      "window_matrix": 108,
+      "month_1": 81,
+      "month_2": 81,
+      "month_3": 81
+    },
+    "by_output_rows": {
+      "9471": 177,
+      "120592": 177,
+      "3104443": 177
+    },
+    "note": "531 records span 10k/100k/million, not 531 million reads; no cursor fraction in log lines. Historical only."
+  }
+}
