@@ -3,12 +3,14 @@
 import argparse
 import gc
 import hashlib
+import importlib.metadata
 import json
 import os
 import platform
 import subprocess
 import sys
-from datetime import date
+from contextlib import contextmanager
+from datetime import date, timedelta
 from pathlib import Path
 from time import perf_counter, process_time
 
@@ -17,11 +19,16 @@ sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
 BASELINE = "f8df915febe24bce3f3bcdb8a52ae2f3a5b78e62"
 CONTROLS = ("Q0_LEGACY_RAW", "Q0_SERVICE_CONTROL", "Q0_SAFETY_EQUIVALENT",
             "Q1_CURRENT", "Q2_CURRENT")
-SQL_VARIANTS = ("S3", "S3_INLINE", "S4", "S5")
+SQL_VARIANTS = ("S3", "S3_INLINE", "S3_KEYS", "S4", "S5")
 
 
 def source_contract():
     """Git blob identities handle Windows checkout line endings, without edits."""
+    for command in (["git","diff","--name-only",BASELINE,"--","backend","migrations","config"],
+                    ["git","ls-files","--others","--exclude-standard","--",
+                     "backend","migrations","config"]):
+        if subprocess.check_output(command,cwd=ROOT):
+            raise ValueError("A42_PRODUCTION_TREE_CHANGED")
     entries = subprocess.check_output(["git", "ls-tree", "-r", BASELINE,
         "backend", "migrations", "config", "scripts/ab_read_profile_v14_a4.py",
         "scripts/ab_read_profile_summary_v14_a4.py", "docs/acceptance/v14_a4_baseline.md",
@@ -45,8 +52,42 @@ def alternate(items, repeats):
 
 def save(path, output):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(output, default=str, allow_nan=False, indent=2) + "\n",
-                    encoding="utf-8")
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(output, default=str, allow_nan=False, indent=2) + "\n",
+                         encoding="utf-8")
+    temporary.replace(path)
+
+
+def database_snapshot(db):
+    from sqlalchemy import text
+
+    # Never repeat thousands of cumulative FETCH utility query texts per trial.
+    # Raw per-trial cursors/FETCH timings remain in Profile; counters are grouped.
+    db.execute(text("SELECT pg_stat_force_next_flush()"))
+    db.execute(text("SELECT pg_stat_clear_snapshot()"))
+    return {"database": dict(db.execute(text("""SELECT blks_read,blks_hit,temp_files,temp_bytes,
+        blk_read_time,blk_write_time FROM pg_stat_database WHERE datname=current_database()
+        """)).mappings().one()),
+        "statements": [dict(r) for r in db.execute(text("""SELECT
+        CASE WHEN query LIKE 'FETCH%%' THEN 'FETCH' WHEN query LIKE 'DECLARE%%' THEN 'DECLARE'
+        WHEN query LIKE '%string_agg(encode(sha256%' THEN 'FINGERPRINT' ELSE 'OTHER' END AS phase,
+        count(*) AS normalized_entries,sum(calls) AS calls,sum(rows) AS rows,
+        sum(total_exec_time) AS exec_ms,sum(shared_blks_hit) AS shared_hit,
+        sum(shared_blks_read) AS shared_read,sum(local_blks_read) AS local_read,
+        sum(local_blks_written) AS local_written,sum(temp_blks_read) AS temp_read,
+        sum(temp_blks_written) AS temp_written,sum(wal_bytes) AS wal_bytes
+        FROM pg_stat_statements WHERE dbid=(SELECT oid FROM pg_database
+        WHERE datname=current_database()) GROUP BY 1""")).mappings()],
+        "maintenance": [dict(r) for r in db.execute(text("""SELECT relname,
+        last_autovacuum,last_autoanalyze,n_live_tup,n_dead_tup FROM pg_stat_user_tables WHERE
+        relname IN ('stock_trade_status_daily','stock_factor_daily','data_publication_row')
+        """)).mappings()],
+        "autovacuum_workers": [dict(r) for r in db.execute(text("SELECT pid,wait_event_type,"
+        "wait_event FROM pg_stat_activity WHERE datname=current_database() "
+        "AND backend_type='autovacuum worker'")).mappings()],
+        "statements_info":dict(db.execute(text("SELECT * FROM pg_stat_statements_info"))
+                               .mappings().one()),
+        "scope":"cumulative grouped counters, may include observer/reader/background work"}
 
 
 def verified_environment():
@@ -59,81 +100,192 @@ def verified_environment():
     return url
 
 
-def sql(variant):
-    raise NotImplementedError("A42_SQL_CANDIDATE_NOT_IMPLEMENTED")
+def sql(variant, columns=None):
+    from app.models.market_data import StockTradeStatusDaily as Model
+    from app.repositories.ab_merge_read import FACTOR_COLUMNS
+    from sqlalchemy import text
+
+    columns = FACTOR_COLUMNS if columns is None else tuple(columns)
+    if not columns or any(c not in Model.__table__.c for c in columns):
+        raise ValueError("A42_INVALID_PROJECTION")
+    if variant not in SQL_VARIANTS:
+        raise ValueError("A42_INVALID_SQL_VARIANT")
+    modifier = "NOT MATERIALIZED" if variant == "S3_INLINE" else "MATERIALIZED"
+    narrow = variant in {"S3_KEYS","S4","S5"}
+    keys = "s.row_key,s.trade_date,s.row_key->>1 AS code"
+    if not narrow:
+        keys += ",s.row_data,s.is_deleted"
+    candidates = f"""WITH candidate_keys AS {modifier} (SELECT {keys}
+        FROM public.data_publication_row s WHERE s.publication_id=:root
+        AND s.table_name='stock_trade_status_daily' AND s.trade_date BETWEEN :lo AND :hi)"""
+    if variant == "S4":
+        public = """SELECT a.* FROM public.stock_trade_status_daily a
+            LEFT JOIN candidate_keys k ON k.trade_date=a.trade_date AND k.code=a.ts_code
+            WHERE a.trade_date BETWEEN :lo AND :hi AND k.row_key IS NULL"""
+    else:
+        public = """SELECT a.* FROM public.stock_trade_status_daily a
+            WHERE a.trade_date BETWEEN :lo AND :hi AND NOT EXISTS (
+            SELECT 1 FROM candidate_keys k
+            WHERE k.row_key=jsonb_build_array(a.trade_date,a.ts_code))"""
+    # The unchanged E0 whole-root key guard is mandatory BEFORE every variant.
+    # Keys include wrong-version B and tombstones; identity is filtered LAST.
+    if narrow:
+        selected = """SELECT r.* FROM public.data_publication_row s CROSS JOIN LATERAL
+            jsonb_populate_record(NULL::public.stock_trade_status_daily,s.row_data) r
+            WHERE s.publication_id=:root AND s.table_name='stock_trade_status_daily'
+            AND s.trade_date BETWEEN :lo AND :hi AND NOT s.is_deleted"""
+    else:
+        selected = """SELECT r.* FROM candidate_keys k CROSS JOIN LATERAL
+            jsonb_populate_record(NULL::public.stock_trade_status_daily,k.row_data) r
+            WHERE NOT k.is_deleted"""
+    union = selected + " UNION ALL " + public
+    projection = ",".join(f'"{c}"' for c in columns)
+    order = "" if variant == "S5" else " ORDER BY ts_code,trade_date"
+    return text(candidates + f" SELECT {projection} FROM ({union}) merged "
+                "WHERE calc_version=:version AND config_hash=:hash" + order)
 
 
-def measure(db, engine, variant, params, *, window_days=None, carry=False, container=None):
+@contextmanager
+def observe(profile):
+    import pytest
+
+    from scripts import ab_read_profile_v14_a4 as old
+
+    original = old.sql_phase
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(old, "sql_phase", lambda statement:
+            "T5_declare" if statement.lstrip().upper().startswith("WITH CANDIDATE_KEYS")
+            else original(statement))
+        with profile.observe() as constructor:
+            yield constructor
+
+
+def measure(db, engine, variant, params, *, window_days=None, carry=False, container=None,
+            cursor_fraction="0.1", service_call=False, readers=0):
     from app.repositories import ab_merge_read as ab
     from app.repositories.calculation_frame import read_calculation_frame, read_calculation_windows
     from app.services.data_publication import workspace
     from sqlalchemy import text
 
     from scripts.ab_read_benchmark_v14 import frame_digest, q0_statement
-    from scripts.ab_read_profile_v14_a4 import Profile, database_snapshot, resource_snapshot
+    from scripts.ab_read_profile_v14_a4 import Profile, resource_snapshot
+    from scripts.ab_read_resources_v14_a4_2 import Telemetry
     from scripts.publication_candidate_benchmark_v13 import rss_bytes
 
     current = workspace(db)
     if not carry:
         current.ab_public_read_evidence = {}
+        current.a42_events = None
+    previous_dates = len(current.ab_public_read_evidence)
     gc.collect()
     before = {"database": database_snapshot(db), "resources": resource_snapshot(container)}
+    before["wal_lsn"] = db.scalar(text("SELECT pg_current_wal_insert_lsn()::text"))
+    before["pg_stat_io"] = db.scalar(text("SELECT jsonb_agg(to_jsonb(i)) FROM pg_stat_io i"))
+    pid = db.scalar(text("SELECT pg_backend_pid()"))
     db.commit()
+    db.execute(text("SELECT set_config('cursor_tuple_fraction',:fraction,true)"),
+               {"fraction": cursor_fraction})
     profile, metrics = Profile(db, engine), []
     start, cpu = perf_counter(), process_time()
     protected = variant not in CONTROLS[:2]
-    with profile.observe() as constructor:
-        if variant == "Q0_LEGACY_RAW":
-            rows = []
-            with db.execute(q0_statement().execution_options(yield_per=5000), params) as result:
-                for batch in result.mappings().partitions(5000):
-                    rows.extend(batch)
-            frame = constructor(rows)
-            del rows
-        elif variant == "Q0_SERVICE_CONTROL":
-            frame = read_calculation_frame(db, q0_statement().bindparams(**params), name="test.a42")
-        elif variant in {"Q1_CURRENT", "Q2_CURRENT"}:
-            frame = ab.ABMergeReadRepository(db, observer=metrics.append).read_trade_status(
-                window=ab.ReadWindow(params["lo"], params["hi"]),
-                calc_version=params["version"], config_hash=params["hash"],
-                window_days=5 if variant == "Q2_CURRENT" else window_days)
-        else:
-            ab._prepare_candidate_read(db, current, ab.ReadWindow(params["lo"], params["hi"]))
-            statement = q0_statement() if variant == "Q0_SAFETY_EQUIVALENT" else sql(variant)
+    with (Telemetry(engine, pid, readers, container=bool(container)) as telemetry,
+          observe(profile) as constructor):
+        def read():
+            return read_variant()
+
+        def read_variant():
+            if variant == "Q0_LEGACY_RAW":
+                rows = []
+                with db.execute(q0_statement().execution_options(yield_per=5000), params) as result:
+                    for batch in result.mappings().partitions(5000):
+                        rows.extend(batch)
+                return constructor(rows)
+            if variant == "Q0_SERVICE_CONTROL":
+                return read_calculation_frame(
+                    db, q0_statement().bindparams(**params), name="test.a42")
+            if variant in {"Q1_CURRENT", "Q2_CURRENT"}:
+                return ab.ABMergeReadRepository(db, observer=metrics.append).read_trade_status(
+                    window=ab.ReadWindow(params["lo"], params["hi"]),
+                    calc_version=params["version"], config_hash=params["hash"],
+                    window_days=5 if variant == "Q2_CURRENT" else window_days)
+            if variant == "E3":
+                from scripts.ab_read_evidence_v14_a4_2 import EventEvidence
+
+                if current.a42_events is None:
+                    current.a42_events = EventEvidence()
+                current.a42_events.prepare(db, current, ab.ReadWindow(params["lo"], params["hi"]))
+            else:
+                ab._prepare_candidate_read(db, current, ab.ReadWindow(params["lo"], params["hi"]))
+            statement = (q0_statement() if variant == "Q0_SAFETY_EQUIVALENT" else
+                         sql("S3" if variant == "E3" else variant))
             windows = (ab.calendar_windows(db, ab.ReadWindow(params["lo"], params["hi"]),
                                           window_days) if window_days else
                        [ab.ReadWindow(params["lo"], params["hi"])])
-            frame = read_calculation_windows(db, [statement.bindparams(
+            return read_calculation_windows(db, [statement.bindparams(
                 **{**params, "lo": w.start, "hi": w.end},
                 **({"root": current.job_id} if variant != "Q0_SAFETY_EQUIVALENT" else {}))
                 for w in windows], name="test.a42", observer=metrics.append)
+
+        if service_call:
+            import pytest
+            from app.services.factors import service as factors
+
+            def intercept(db_arg, statement, *, name):
+                assert db_arg is db and name == "factors.trade_status"
+                values = list(statement.compile().params.values())
+                assert all(params[key] in values for key in ("lo","hi","version","hash"))
+                return read()
+
+            with pytest.MonkeyPatch.context() as patch:
+                patch.setattr(factors, "read_calculation_frame", intercept)
+                frame = factors.FactorService(db)._read_trade_status(params["lo"], params["hi"])
+        else:
+            frame = read()
         seconds = perf_counter() - start
+        commit_start = perf_counter()
         db.commit()
+        commit_seconds = perf_counter()-commit_start
         verify_start = perf_counter()
         if protected:
             db.execute(text("LOCK TABLE public.stock_trade_status_daily IN SHARE MODE"))
+            if variant == "E3":
+                current.a42_events.verify(db)
             ab.verify_public_read_evidence(db, current)
         db.commit()
         final_seconds = perf_counter() - verify_start
+    client_cpu = process_time()-cpu
     # A4-1 ordinary SELECT/driver controls have no global sort in their timed
     # path. Protected Q0 uses the exact same full-frame sort as Q1/Q2/S3-S5.
     if not frame.empty:
         frame = frame.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
     result = {"variant": variant, "read_seconds": seconds,
         "final_transaction_seconds": final_seconds,
-        "safe_total_seconds": perf_counter() - start,
-        "read_plus_final_seconds": seconds + final_seconds,
-        "client_cpu_seconds": process_time() - cpu, "rows": len(frame),
+        "safe_total_seconds": seconds + commit_seconds + final_seconds,
+        "read_commit_seconds": commit_seconds,
+        "read_plus_final_seconds": seconds + commit_seconds + final_seconds,
+        "client_cpu_seconds": client_cpu, "rows": len(frame),
         "hash": frame_digest(frame), "dtypes": frame.dtypes.astype(str).to_dict(),
         "columns": list(frame.columns), "window_days": window_days,
+        "previous_read_set_dates": previous_dates,
+        "current_read_set_dates": len(current.ab_public_read_evidence),
+        "read_set_shallow_bytes": sys.getsizeof(current.ab_public_read_evidence)
+            + sum(sys.getsizeof(k)+sys.getsizeof(v)
+                  for k,v in current.ab_public_read_evidence.items()),
+        "cursor_fraction": cursor_fraction, "service_call": service_call, "reader_count":readers,
         "frame_bytes": int(frame.memory_usage(index=True, deep=True).sum()),
         "process_lifetime_peak_rss_bytes": rss_bytes(),
-        "protection": "E0" if protected else "NOT_EQUIVALENT",
+        "protection": ("UNPROVEN_E3_PLUS_E0_FINAL" if variant == "E3" else
+                       "E0" if protected else "NOT_EQUIVALENT"),
         "aba_event_detection": "UNPROVEN", "metrics": metrics, **profile.receipt(),
         "before": before, "after": {"database": database_snapshot(db),
                                    "resources": resource_snapshot(container)}}
+    result["telemetry"] = telemetry.receipt()
+    result["after"]["pg_stat_io"] = db.scalar(text(
+        "SELECT jsonb_agg(to_jsonb(i)) FROM pg_stat_io i"))
+    result["wal_bytes_whole_instance"] = int(db.scalar(text(
+        "SELECT pg_wal_lsn_diff(pg_current_wal_insert_lsn(),CAST(:lsn AS pg_lsn))"),
+        {"lsn":before["wal_lsn"]}))
     # Golden canonicalization is not part of the safety timing.
-    result["safe_total_seconds"] = result["read_plus_final_seconds"]
     del frame
     return result, profile.statements
 
@@ -147,8 +299,10 @@ def run(args, output):
     from sqlalchemy import text
 
     from scripts.ab_read_benchmark_v14 import frozen_q0, seed, stage
+    from scripts.ab_read_evidence_v14_a4_2 import install_events
     from scripts.ab_read_experiment_summary_v14_a4_2 import summarize
     from scripts.ab_read_profile_v14_a4 import seed_multitable
+    from scripts.ab_read_resources_v14_a4_2 import host_memory_bytes
     from scripts.v14_test_database import isolated_v14_database
     from tests.integration import test_data_publication as support
 
@@ -157,10 +311,14 @@ def run(args, output):
         head=subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         dirty=bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT)),
         source_contract=source_contract(), network="LOCAL_ONLY", cache_control="UNCONTROLLED",
+        versions={name:importlib.metadata.version(name) for name in
+                  ("pandas","psycopg","SQLAlchemy")},
+        image_id=(subprocess.check_output(["docker","inspect","--format","{{.Image}}",
+                  args.container],text=True).strip() if args.container else "LOCAL_PORTABLE_PG17"),
         production_path_changes="NONE", read_performance_pass="NOT_CLAIMED",
         host=dict(platform=platform.platform(), python=platform.python_version(),
-                  logical_cpus=os.cpu_count()), runs=[], plans={},
-        orders=alternate(tuple(args.variants), args.repeats))
+                  logical_cpus=os.cpu_count(), ram_bytes=host_memory_bytes()), runs=[], plans={},
+        orders=alternate(tuple(args.variants), args.repeats), monthly=[], windows=[])
     with pytest.MonkeyPatch.context() as patch, isolated_v14_database(patch) as (factory, engine):
         with factory() as db:
             db.execute(text("CREATE EXTENSION pg_stat_statements"))
@@ -171,13 +329,29 @@ def run(args, output):
                                    identity=data_queue_identity(), row_counts={}))
             db.commit()
             seed_multitable(db, other, other, args.other_rows)
+            if args.coverage == "b_only":
+                db.execute(text("UPDATE public.stock_trade_status_daily "
+                                "SET trade_date=trade_date+366"))
+                db.commit()
         patch.setattr(support, "PublicationWorkspace", frozen_q0()[0])
+        job_end = date(2025 if args.coverage=="a_only" else 2024,12,31)
         with support.candidate(factory, engine, start=date(2024, 1, 1),
-                               end=date(2024, 12, 31)) as (db, job):
+                               end=job_end) as (db, job):
+            if args.coverage == "a_only":
+                db.execute(text("DELETE FROM trade_calendar"))  # Owned fixture only, before B seed.
+                db.execute(text("""INSERT INTO trade_calendar(cal_date,is_open,exchange)
+                    SELECT d::date,extract(isodow FROM d)<6,'SSE' FROM generate_series(
+                    '2025-01-01'::date,'2025-12-31'::date,'1 day') d"""))
+                db.commit()
             stage(db, job.id, job.id, args.candidate_rows,
                   tombstone_percent=args.tombstones,
-                  offset=args.public_rows//257//4 if args.public_rows<100000
-                  else args.public_rows//257*3//4)
+                  offset=0 if args.coverage=="high" else
+                    args.public_rows//257//4 if args.public_rows<100000
+                    else args.public_rows//257*3//4)
+            if args.coverage == "mismatched":
+                db.execute(text("""UPDATE public.data_publication_row SET
+                    row_data=jsonb_set(row_data,'{config_hash}','"wrong"'::jsonb)
+                    WHERE publication_id=:root AND NOT is_deleted"""), {"root":job.id})
             db.execute(text("""INSERT INTO trade_calendar(cal_date,is_open,exchange)
                 SELECT d::date,extract(isodow FROM d)<6,'SSE'
                 FROM generate_series('2023-01-01'::date,'2025-12-31'::date,'1 day') d
@@ -189,26 +363,103 @@ def run(args, output):
             db.execute(text("SET lock_timeout='5s'"))
             output["settings"] = {key: db.scalar(text(f"SHOW {key}")) for key in (
                 "server_version", "work_mem", "shared_buffers", "cursor_tuple_fraction",
-                "statement_timeout", "lock_timeout", "track_io_timing", "autovacuum")}
+                "statement_timeout", "lock_timeout", "track_io_timing", "autovacuum", "TimeZone",
+                "max_parallel_workers_per_gather", "effective_cache_size", "random_page_cost",
+                "default_statistics_target", "pg_stat_statements.max", "pg_stat_statements.track")}
+            output["system_identifier"] = db.scalar(text(
+                "SELECT system_identifier::text FROM pg_control_system()"))
             output["fixture"] = dict(a=args.public_rows, b=args.candidate_rows,
-                other_b=args.other_rows, tombstone_percent=args.tombstones,
+                other_b=args.other_rows, tombstone_percent=args.tombstones, coverage=args.coverage,
                 layout="frozen A4-1 stock-major/257 days; typed Factor other-root rows",
                 sizes=[dict(r) for r in db.execute(text("""SELECT relname,
                 pg_table_size(relid) AS table_bytes,pg_indexes_size(relid) AS index_bytes,
-                pg_total_relation_size(relid) AS total_bytes FROM pg_stat_user_tables WHERE
+                pg_total_relation_size(relid) AS total_bytes,
+                (SELECT CASE WHEN reltoastrelid=0 THEN 0 ELSE
+                pg_total_relation_size(reltoastrelid) END FROM pg_class
+                WHERE oid=relid) AS toast_bytes
+                FROM pg_stat_user_tables WHERE
                 relname IN ('stock_trade_status_daily','stock_factor_daily','data_publication_row')
-                """)).mappings()])
+                """)).mappings()],
+                indexes=[dict(r) for r in db.execute(text(
+                    "SELECT tablename,indexdef FROM pg_indexes "
+                    "WHERE schemaname='public' AND tablename IN "
+                    "('data_publication_row','stock_trade_status_daily','stock_factor_daily')"))
+                    .mappings()],
+                width_sample=dict(db.execute(text("SELECT count(*) AS sampled_rows,"
+                    "avg(pg_column_size(s)) AS average_stored_bytes FROM "
+                    "public.data_publication_row s TABLESAMPLE SYSTEM(1)")).mappings().one()),
+                actual_counts=dict(db.execute(text("SELECT "
+                    "(SELECT count(*) FROM public.stock_trade_status_daily) AS a,"
+                    "count(*) FILTER (WHERE publication_id=:root) AS b,"
+                    "count(*) FILTER (WHERE publication_id<>:root) AS other_b "
+                    "FROM public.data_publication_row"), {"root":job.id}).mappings().one()))
             db.commit()
             params = dict(lo=date(2024, 1, 1), hi=date(2024, 12, 31),
                           version="trade_status_v1", hash=data_queue_identity()["analysis"])
-            for repeat, order in enumerate(output["orders"]):
-                for variant in order:
-                    record, _ = measure(db, engine, variant, params, container=args.container)
-                    record.update(repeat=repeat, scope="full")
-                    output["runs"].append(record)
+            captured = {}
+
+            def trial(variant, *, scope, repeat, values=params, **kwargs):
+                if variant == "E3" and not output.get("event_install_seconds"):
+                    started = perf_counter()
+                    install_events(db)
+                    output["event_install_seconds"] = perf_counter()-started
+                try:
+                    record, statements = measure(db, engine, variant, values,
+                        container=args.container, readers=args.readers, **kwargs)
+                except BaseException as error:
+                    output["failed_trial"] = {"variant": variant, "scope": scope,
+                        "repeat": repeat, "failure_type": type(error).__name__,
+                        "sqlstate": getattr(getattr(error, "orig", None), "sqlstate", None)}
                     save(args.output, output)
-                    print(json.dumps({k:record[k] for k in (
-                        "variant", "repeat", "rows", "read_plus_final_seconds")}), flush=True)
+                    raise
+                record.update(repeat=repeat, scope=scope)
+                output["runs"].append(record)
+                captured.setdefault((variant, record["cursor_fraction"]), statements)
+                save(args.output, output)
+                print(json.dumps({k:record[k] for k in (
+                    "variant", "scope", "repeat", "rows", "read_plus_final_seconds")}), flush=True)
+                return record
+
+            for repeat, order in enumerate(output["orders"]):
+                for fraction in args.cursor_fractions:
+                    for variant in order:
+                        trial(variant, scope="full", repeat=repeat, cursor_fraction=fraction)
+            if args.window_matrix:
+                for fraction in ("0.1", "1.0"):
+                    for repeat, order in enumerate(alternate((None,1,3,5,10,20), args.repeats)):
+                        for days in order:
+                            trial("S3", scope="window_matrix", repeat=repeat,
+                                  window_days=days, cursor_fraction=fraction)
+            if args.monthly:
+                from app.services.recalculation import _month_chunks
+
+                variants = tuple(v for v in args.variants if v != "Q0_LEGACY_RAW")
+                for repeat, order in enumerate(alternate(variants, args.repeats)):
+                    for variant in order:
+                        for index,(lo,hi) in enumerate(_month_chunks(
+                                date(2025,1,1),date(2025,3,31))):
+                            record = trial(variant, scope=f"month_{lo.month}", repeat=repeat,
+                                values={**params,"lo":lo-timedelta(days=430),"hi":hi},
+                                carry=index>0, service_call=True)
+                            record.update(input_start=str(lo-timedelta(days=430)),
+                                          input_end=str(hi),chunk_start=str(lo),chunk_end=str(hi))
+                            output["monthly"].append(record)
+                output["monthly_scope"] = (
+                    "Actual FactorService._read_trade_status called with original 430-day bounds; "
+                    "process-local transport substitution only; no numerical engine/Raw writes")
+            if args.plans:
+                from scripts.ab_read_profile_v14_a4 import capture_plans, cursor_actual_plans
+
+                for (variant, fraction), statements in captured.items():
+                    db.execute(text("SELECT set_config('cursor_tuple_fraction',:f,true)"),
+                               {"f":fraction})
+                    output["plans"][variant+"_"+fraction] = {
+                        "select_and_cursor_estimate": capture_plans(db, statements),
+                        "actual_cursor_untimed": cursor_actual_plans(db, statements)}
+                    save(args.output, output)
+            from scripts.ab_read_profile_v14_a4 import lock_probe
+
+            output["lock_probe_outside_timed_trials"] = lock_probe(db, engine)
             output["summary"] = summarize(output)
             save(args.output, output)
 
@@ -222,17 +473,29 @@ def main():
     parser.add_argument("--other-rows", type=int, default=10895)
     parser.add_argument("--tombstones", type=int, choices=(0, 1, 10), default=1)
     parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--variants", nargs="+", choices=CONTROLS+SQL_VARIANTS, default=CONTROLS)
+    parser.add_argument("--variants", nargs="+", choices=CONTROLS+SQL_VARIANTS+("E3",),
+                        default=CONTROLS+SQL_VARIANTS)
+    parser.add_argument("--monthly", action="store_true")
+    parser.add_argument("--window-matrix", action="store_true")
+    parser.add_argument("--plans", action="store_true")
     parser.add_argument("--container")
+    parser.add_argument("--readers", type=int, choices=(0,2), default=0)
+    parser.add_argument("--cursor-fractions", nargs="+", choices=("0.1","1.0"),
+                        default=["0.1","1.0"])
+    parser.add_argument("--coverage", choices=("partial","a_only","b_only","high","mismatched"),
+                        default="partial")
     args = parser.parse_args()
     output = {"schema": "a42-contract-v1", "baseline": BASELINE,
+              "measurement_version":"a42-v2-grouped-cumulative-counters",
+              "script_sha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "production_path_changes": "NONE", "read_performance_pass": "NOT_CLAIMED"}
     try:
         verified_environment()
         output["source_contract"] = source_contract()
         save(args.output, output)
         if not args.contract_only:
-            if min(args.public_rows,args.candidate_rows,args.other_rows)<1 or args.repeats<3:
+            if (not 1<=args.public_rows<=2570000 or not 1<=args.candidate_rows<=1350000
+                    or not 1<=args.other_rows<=2800000 or not 3<=args.repeats<=5):
                 raise ValueError("A42_COMPLETE_POSITIVE_FIXTURE_AND_THREE_REPEATS_REQUIRED")
             run(args, output)
     except BaseException as error:

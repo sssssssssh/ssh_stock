@@ -20,6 +20,12 @@ Wrong identity must fail before CREATE and before cleanup DROP. Each experiment
 uses the existing UUID child-database/migration/finally-cleanup fixture.
 No connection to the cloud business database is authorized, including diagnostics.
 
+Taskbook path mapping: the unit file is named
+`tests/unit/test_ab_read_experiment_contract_v14_a4_2.py`; integration retains
+`tests/integration/test_ab_read_experiment_v14_a4_2.py`. Identical basenames collide
+under this repository's existing pytest prepend mode. No global test/import
+configuration or package layout was changed to hide that collection failure.
+
 Local provisioning uses a newly initialized portable PG17 data directory and a free
 loopback port, NOT the prior test cluster or the running application database.
 Read the expected system ID from `pg_controldata` for that directory, and set the

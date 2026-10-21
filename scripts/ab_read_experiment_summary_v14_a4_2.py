@@ -11,11 +11,14 @@ def summarize(output):
     goldens = {}
     for run in output.get("runs", []):
         scope = run.get("scope", "full")
+        if run.get("telemetry", {}).get("reader_errors"):
+            raise ValueError("A42_RR_READER_ERROR")
         golden = (run["rows"], run["hash"], run["dtypes"], run["columns"])
         if scope in goldens and golden != goldens[scope]:
             raise ValueError("A42_GOLDEN_MISMATCH")
         goldens[scope] = golden
-        if not run["cursors"] or any(not c.get("closed") for c in run["cursors"]):
+        if not run["cursors"] or any(not c.get("closed") or "until_eof_seconds" not in c
+                                     for c in run["cursors"]):
             raise ValueError("A42_CURSOR_INCOMPLETE")
         fetched = sum(f.get("rows", 0) for c in run["cursors"] for f in c["fetches"])
         if fetched != run["rows"]:
@@ -32,9 +35,11 @@ def summarize(output):
                        "range": [min(values), max(values)], "samples": values,
                        "protection": runs[0]["protection"]})
     return {"tables": tables, "golden": "PASS" if groups else "UNPROVEN",
+            "event_install_seconds":output.get("event_install_seconds"),
+            "measured_groups_complete": bool(groups) and all(len(r)>=3 for r in groups.values()),
             "state": "A4_2_NO_SAFE_WINNER", "read_performance_pass": "NOT_CLAIMED",
             "authorize_a4_3": False,
-            "reason": "No equivalent cheaper validation proved; E3 requires new contract",
+            "reason": "No equivalent cheaper proof; E3 rollback/privileged gaps remain",
             "cloud": "NOT_AUTHORIZED_NOT_PERFORMED", "all_slow_samples_retained": True}
 
 

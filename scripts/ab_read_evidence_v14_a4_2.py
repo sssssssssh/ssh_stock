@@ -69,10 +69,11 @@ def generations(db):
 
 
 class EventEvidence:
-    """SAFE_WITH_NEW_CONTRACT only: trusted enabled triggers, immutable counters.
+    """UNPROVEN prototype: needs trusted triggers AND rollback-aware certificates.
 
     Global counters deliberately fail closed on outside-read-set A changes.
-    Owners/superusers can bypass/reset them: NOT equivalent to today's contract.
+    Owners can bypass/reset; savepoint rollback can reuse a counter value while
+    this Python certificate survives. Explicit tests reject production equivalence.
     """
 
     def __init__(self):
