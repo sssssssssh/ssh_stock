@@ -23,6 +23,29 @@ def host_memory_bytes():
     return os.sysconf("SC_PHYS_PAGES")*os.sysconf("SC_PAGE_SIZE")
 
 
+def current_rss_bytes():
+    if sys.platform != "win32":
+        return int(Path("/proc/self/statm").read_text().split()[1])*os.sysconf("SC_PAGE_SIZE")
+    from ctypes import wintypes
+
+    class Memory(ctypes.Structure):
+        _fields_ = [("size",wintypes.DWORD),("faults",wintypes.DWORD),
+                    *[(name,ctypes.c_size_t) for name in (
+                        "peak","rss","peak_paged","paged","peak_nonpaged",
+                        "nonpaged","pagefile","peak_pagefile")]]
+
+    value = Memory()
+    value.size = ctypes.sizeof(value)
+    kernel = ctypes.WinDLL("kernel32")
+    kernel.GetCurrentProcess.restype = wintypes.HANDLE
+    info = ctypes.WinDLL("psapi").GetProcessMemoryInfo
+    info.argtypes = (wintypes.HANDLE,ctypes.c_void_p,wintypes.DWORD)
+    info.restype = wintypes.BOOL
+    if not info(kernel.GetCurrentProcess(),ctypes.byref(value),value.size):
+        raise OSError("A42_RSS_SAMPLE_FAILED")
+    return value.rss
+
+
 def cpu_sample(pid):
     if sys.platform == "win32":
         from ctypes import wintypes
@@ -60,7 +83,7 @@ def cpu_sample(pid):
 
 
 class Telemetry:
-    def __init__(self, engine, pid, readers=0, *, container=False):
+    def __init__(self, engine, pid, readers=0, *, container=False, reader_pause=2):
         from sqlalchemy import create_engine
 
         from scripts.publication_candidate_benchmark_v13 import ReaderProbe
@@ -70,6 +93,13 @@ class Telemetry:
         self.container = container
         self.waits, self.errors, self.cpu = [], [], []
         self.reader = ReaderProbe(engine, readers)
+        self.reader_pause = reader_pause
+
+        class PacedStop(threading.Event):
+            def wait(self, timeout=None):
+                return super().wait(max(reader_pause, timeout or reader_pause))
+
+        self.reader.stop = PacedStop()
 
     def sample(self):
         from sqlalchemy import text
@@ -89,6 +119,7 @@ class Telemetry:
                 sample["client_cpu_seconds"] = sample.pop("backend_cpu_seconds")
                 sample["backend_cpu_seconds"] = (
                     None if self.container else cpu_sample(self.pid)["backend_cpu_seconds"])
+                sample["client_current_rss_bytes"] = current_rss_bytes()
                 self.cpu.append(sample)
             except (OSError, FileNotFoundError, ProcessLookupError):
                 self.errors.append("BACKEND_CPU_UNAVAILABLE_CONTAINER_PID_NAMESPACE")
@@ -109,6 +140,7 @@ class Telemetry:
         return self
 
     def __exit__(self, *args):
+        self.sample()
         self.stop.set()
         self.thread.join(timeout=10)
         self.reader.finish()
@@ -120,7 +152,11 @@ class Telemetry:
         from scripts.publication_candidate_benchmark_v13 import distribution
 
         return {"writer_wait_samples":self.waits, "cpu_samples":self.cpu,
+                "sampled_peak_rss_lower_bound":max(
+                    (s["client_current_rss_bytes"] for s in self.cpu),default=None),
+                "reader_min_pause_seconds":self.reader_pause,
                 "reader_latency":distribution(self.reader.latencies),
+                "reader_samples_seconds":list(self.reader.latencies),
                 "reader_errors":self.reader.errors, "sample_errors":self.errors,
                 "scope":"backend PID CPU or unavailable across namespaces; host CPU whole machine; "
                 "WAL/pg_stat_io are whole dedicated instance; cgroup is whole PG incl background"}

@@ -58,7 +58,10 @@ def test_e2_caller_generation_does_not_invalidate_for_direct_candidate_sql(datab
 
         def scalar(statement, params=None, **kwargs):
             if str(statement).lstrip().startswith("SELECT EXISTS(SELECT 1 FROM"):
-                return certificate.check(original, statement, params)
+                binding = (job.execution_token,(support.DAY,"TEST.SZ"),
+                           (support.DAY,"TEST.SZ"),"trade_status_v1",
+                           support.data_queue_identity()["analysis"])
+                return certificate.check(original, statement, params,binding=binding)
             return original(statement, params, **kwargs)
 
         monkeypatch.setattr(db, "scalar", scalar)
@@ -239,6 +242,8 @@ def test_e3_self_mutation_rebuild_and_savepoint_preserve_first_preimage(database
 
 
 def test_e3_savepoint_generation_reuse_is_an_explicit_unsafe_certificate_counterexample(database):
+    from scripts.ab_read_experiment_v14_a4_2 import sql
+
     factory, engine = database
     support.seed_published(factory)
     with support.candidate(factory, engine) as (db, job):
@@ -253,9 +258,12 @@ def test_e3_savepoint_generation_reuse_is_an_explicit_unsafe_certificate_counter
             assert evidence.seen["B"] == 1
             savepoint.rollback()
         assert generations(db)["B"] == 0
-        db.execute(text("UPDATE public.data_publication_row SET entity_key='CORRUPT'"))
+        db.execute(text("UPDATE public.data_publication_row SET trade_date='2020-01-01'"))
         assert generations(db)["B"] == 1  # The rolled-back number has been reused.
         evidence.prepare(db, ws, ab.ReadWindow(support.DAY, support.DAY))  # Prototype misses this.
+        params = dict(root=job.id,lo=support.DAY,hi=support.DAY,version="trade_status_v1",
+                      hash=support.data_queue_identity()["analysis"])
+        assert len(db.execute(sql("S3"),params).all()) == 1  # Corrupt date resurrects A.
         with pytest.raises(ValueError, match="AB_READ_CANDIDATE_INVALID"):
             prepare(db)  # Original validation correctly refuses the same corrupted B.
 
@@ -291,6 +299,54 @@ def test_native_all_field_read_preserves_decimal_projection_and_other_types(data
             frames.append(read_calculation_frame(db,statement.bindparams(**bind),name="test.decimal"))
         pd.testing.assert_frame_equal(frames[0],frames[1],check_exact=True)
         assert frames[1].iloc[0]["decimal_probe"] == Decimal("11.12345678")
+
+
+@pytest.mark.parametrize("days",[1,5,20])
+def test_spring_closure_fixture_rows_survive_calendar_windows(database,monkeypatch,days):
+    from datetime import date, timedelta
+
+    import pandas as pd
+    from app.models.market_data import TradeCalendar
+    from app.repositories.calculation_frame import read_calculation_frame
+
+    from scripts.ab_read_benchmark_v14 import q0_statement
+
+    substitute_sql(monkeypatch,"S5")
+    factory,engine = database
+    lo,hi = date(2025,1,20),date(2025,2,10)
+    with factory() as db:
+        day = lo
+        while day<=hi:
+            closed = date(2025,1,28)<=day<=date(2025,2,4)
+            db.add(TradeCalendar(cal_date=day,is_open=day.weekday()<5 and not closed))
+            db.add(Model(**support.sample_row(Model,None,day=day)))
+            day += timedelta(days=1)
+        db.commit()
+    with support.candidate(factory,engine) as (db,job):
+        values = dict(lo=lo,hi=hi,version="trade_status_v1",
+                      hash=support.data_queue_identity()["analysis"])
+        old = read_calculation_frame(db,q0_statement().bindparams(**values),name="test.closure")
+        actual = ab.ABMergeReadRepository(db).read_trade_status(window=ab.ReadWindow(lo,hi),
+            calc_version=values["version"],config_hash=values["hash"],window_days=days)
+        pd.testing.assert_frame_equal(golden.sorted_frame(old),actual,check_exact=True)
+        assert len(actual)==(hi-lo).days+1
+
+
+def test_event_cost_probe_records_wal_without_changing_public_or_candidate_values(database):
+    from scripts.ab_read_evidence_v14_a4_2 import event_dml_cost
+
+    factory,engine = database
+    support.seed_published(factory)
+    with support.candidate(factory,engine) as (db,job):
+        before = db.scalar(text("SELECT jsonb_agg(to_jsonb(a)) FROM "
+                                "public.stock_trade_status_daily a"))
+        plain = event_dml_cost(db)
+        install_events(db)
+        events = event_dml_cost(db)
+        assert len(plain["trials"]) == len(events["trials"]) == 6
+        assert generations(db) == {"A":3,"B":3}
+        assert db.scalar(text("SELECT jsonb_agg(to_jsonb(a)) FROM "
+                              "public.stock_trade_status_daily a")) == before
 
 
 @pytest.mark.parametrize("damage", ["marker","system_id"])

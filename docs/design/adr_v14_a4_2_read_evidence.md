@@ -15,6 +15,10 @@ Baseline: f8df915. Production changes: NONE. A4-3/B/C: NOT AUTHORIZED.
 Sources and real counterexamples: `scripts/ab_read_evidence_v14_a4_2.py` and
 `tests/integration/test_ab_read_experiment_v14_a4_2.py`. Nine initial PG17 tests passed.
 JUnit `.codex_tmp/a42-evidence-mechanisms.xml` records actual executions, not mocked guards.
+The strengthened E2 probe binds root, execution token, lower/upper full natural
+keys, version and config hash. These bindings prevent identity/range confusion,
+but still do not detect a direct writer that leaves the caller's generation stale.
+Even perfect interval partition coverage cannot repair that missing mutation signal.
 
 E3 creates only fixture-local objects in `a42_lab` after verifying physical identity
 and the UUID child DB. Statement triggers cover INSERT, UPDATE, DELETE and TRUNCATE,

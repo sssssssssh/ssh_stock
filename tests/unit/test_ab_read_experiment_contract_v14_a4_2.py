@@ -71,9 +71,29 @@ def test_summary_refuses_incomplete_cursor_or_different_output(damage):
 
 
 def test_resource_measurements_are_positive_not_synthetic_placeholders():
-    from scripts.ab_read_resources_v14_a4_2 import cpu_sample, host_memory_bytes
+    from scripts.ab_read_resources_v14_a4_2 import (
+        cpu_sample,
+        current_rss_bytes,
+        host_memory_bytes,
+    )
 
     assert host_memory_bytes() > 0
+    assert current_rss_bytes() > 0
     sample = cpu_sample(os.getpid())
     assert sample["backend_cpu_seconds"] >= 0
     assert sample["host_total_seconds"] >= sample["host_idle_seconds"]
+
+
+def test_window_matrix_must_match_full_read_not_just_other_windows():
+    full, window = trial(1), trial(2)
+    window.update(scope="window_matrix", window_days=5, hash="lost-closed-day")
+    with pytest.raises(ValueError, match="A42_GOLDEN_MISMATCH"):
+        summarize({"runs":[full,window]})
+
+
+def test_partial_receipt_is_not_complete_even_if_observed_groups_have_three_runs():
+    result = summarize({"runs":[trial(1),trial(2),trial(3)],
+                        "experiment_complete":True,"failure_type":"QueryCanceled"})
+    assert result["measured_groups_complete"]
+    assert not result["experiment_complete"]
+    assert not result["authorize_a4_3"]

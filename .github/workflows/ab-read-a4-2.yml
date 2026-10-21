@@ -1,0 +1,149 @@
+name: A4-2 isolated read experiments
+
+"on":
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  laboratory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a42_test
+      TEST_DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a42_test
+      TUSHARE_TOKEN: synthetic-a42
+      LLM_ENABLED: "false"
+      AB_MERGE_READ_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - name: Own physical PG17, never business or shared service DB
+        run: |
+          marker=$(python -c 'import uuid; print(uuid.uuid4())')
+          docker run -d --name a42-pg17 --label purpose=ssh-stock-a4-physical-test \
+            --label stage=A4-2 --cpus=2 --memory=3g -p 127.0.0.1:55440:5432 \
+            -e POSTGRES_DB=a42_test -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
+            postgres:17 -c "v14.test_instance=$marker" \
+            -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all \
+            -c track_io_timing=on -c track_wal_io_timing=on -c max_wal_size=1GB
+          for attempt in $(seq 1 40); do
+            docker exec a42-pg17 pg_isready -U synthetic -d a42_test && break
+            sleep 1
+          done
+          docker exec a42-pg17 pg_isready -U synthetic -d a42_test
+          system=$(docker exec a42-pg17 sh -c 'LC_ALL=C pg_controldata "$PGDATA"' | awk '/Database system identifier:/ {print $NF}')
+          test -n "$system"
+          echo "V14_TEST_INSTANCE=$marker" >> "$GITHUB_ENV"
+          echo "V14_TEST_SYSTEM_IDENTIFIER=$system" >> "$GITHUB_ENV"
+      - name: Freeze source and prove physical target before migration
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/ab_read_experiment_v14_a4_2.py --contract-only --output .codex_tmp/a42-contract.json
+          python -c 'from scripts.v14_test_database import verified_test_url; verified_test_url(); from alembic import command; from alembic.config import Config; command.upgrade(Config("alembic.ini"), "head")'
+          python -m alembic current
+          python -m alembic heads
+      - name: Negative proofs, SQL golden, actual Worker and frozen publication regressions
+        run: >-
+          python -m pytest tests/unit/test_ab_read_experiment_contract_v14_a4_2.py
+          tests/integration/test_ab_read_experiment_v14_a4_2.py
+          tests/integration/test_ab_merge_read_v14.py
+          tests/integration/test_ab_profile_cursor_v14_a4.py
+          tests/integration/test_data_publication.py
+          tests/integration/test_data_queue.py
+          --junitxml=.codex_tmp/a42-targeted.xml
+      - run: python -m ruff check backend tests migrations scripts
+      - name: Serial 10k then 100k, complete fetch and actual plans
+        run: |
+          python scripts/ab_read_experiment_v14_a4_2.py --plans --monthly --window-matrix \
+            --container a42-pg17 --output .codex_tmp/a42-10k.json
+          python scripts/ab_read_experiment_v14_a4_2.py --public-rows 100000 \
+            --candidate-rows 52529 --other-rows 108949 --plans --monthly --window-matrix \
+            --container a42-pg17 --output .codex_tmp/a42-100k.json
+      - name: Frozen million fixture, same complete safety costs
+        run: >-
+          python scripts/ab_read_experiment_v14_a4_2.py --public-rows 2570000
+          --candidate-rows 1350000 --other-rows 2800000 --plans --monthly --window-matrix
+          --container a42-pg17 --output .codex_tmp/a42-million.json
+      - name: Distribution and tombstone matrix, not a reduced-size performance claim
+        run: |
+          for coverage in partial a_only b_only high mismatched; do
+            for tombstones in 0 1 10; do
+              python scripts/ab_read_experiment_v14_a4_2.py --coverage "$coverage" \
+                --tombstones "$tombstones" --variants Q0_SAFETY_EQUIVALENT Q1_CURRENT S3_KEYS S4 S5 \
+                --cursor-fractions 0.1 --container a42-pg17 \
+                --output ".codex_tmp/a42-shape-$coverage-$tombstones.json"
+            done
+          done
+      - name: Event prototype timing is UNPROVEN, never eligible for production
+        run: >-
+          python scripts/ab_read_experiment_v14_a4_2.py --public-rows 100000
+          --candidate-rows 52529 --other-rows 108949 --variants Q0_SAFETY_EQUIVALENT Q1_CURRENT E3
+          --monthly --container a42-pg17 --output .codex_tmp/a42-events.json
+      - name: Two repeatable-read public readers, same million fixture
+        run: >-
+          python scripts/ab_read_experiment_v14_a4_2.py --public-rows 2570000
+          --candidate-rows 1350000 --other-rows 2800000 --readers 2 --reader-pause 5
+          --variants Q0_SAFETY_EQUIVALENT Q1_CURRENT S3_KEYS S5
+          --container a42-pg17 --output .codex_tmp/a42-million-readers.json
+      - name: Validate exact HEAD receipts, never authorize A4-3
+        run: |
+          python scripts/ab_read_experiment_summary_v14_a4_2.py .codex_tmp/a42-10k.json \
+            .codex_tmp/a42-100k.json .codex_tmp/a42-million.json .codex_tmp/a42-events.json \
+            .codex_tmp/a42-million-readers.json --output .codex_tmp/a42-comparison.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          receipts = list(Path('.codex_tmp').glob('a42-*.json'))
+          for path in receipts:
+              data = json.loads(path.read_text())
+              if isinstance(data, dict) and data.get('schema') == 'a42-experiment-v1':
+                  assert data['head'] == os.environ['GITHUB_SHA'] and not data['dirty']
+                  assert not data.get('failure_type') and data['summary']['golden'] == 'PASS'
+                  assert data['summary']['experiment_complete']
+                  assert data['summary']['measured_groups_complete']
+                  assert data['read_performance_pass'] == 'NOT_CLAIMED'
+                  assert data['summary']['authorize_a4_3'] is False
+          primary = json.loads(Path('.codex_tmp/a42-million.json').read_text())
+          assert primary['fixture']['actual_counts'] == dict(a=2570000, b=1350000, other_b=2800000)
+          assert all(r['rows'] == 3104443 for r in primary['runs'])
+          assert primary['plans'] and primary['lock_probe_outside_timed_trials']
+          PY
+      - name: Explicit final status including early failure
+        if: always()
+        run: |
+          mkdir -p .codex_tmp
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path('.codex_tmp/a42-status.json').write_text(json.dumps(dict(
+              head=os.environ['GITHUB_SHA'], job_status='${{ job.status }}',
+              run_url=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              production_path_changes='NONE', read_performance_pass='NOT_CLAIMED',
+              authorize_a4_3=False, cloud='NOT_AUTHORIZED_NOT_PERFORMED',
+              note='Raw partial receipts on failure are incomplete, not a PASS'), indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a42-experiments-${{ github.sha }}
+          include-hidden-files: true
+          path: |
+            .codex_tmp/a42-*.json
+            .codex_tmp/a42-*.xml
+          if-no-files-found: error
+      - name: Remove only this job's isolated instance
+        if: always()
+        run: docker rm -f a42-pg17

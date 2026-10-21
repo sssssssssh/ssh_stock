@@ -1,7 +1,9 @@
 """Discardable E1/E2 counterexamples and E3 events; NEVER production credentials."""
 
 import os
+import re
 from datetime import timedelta
+from time import perf_counter
 
 
 class UnsafeFingerprintMemo:
@@ -23,8 +25,10 @@ class UnsafeCandidateCertificate:
     def __init__(self):
         self.values = {}
 
-    def check(self, scalar, statement, params, generation=0):
-        key = (params["root"], generation)
+    def check(self, scalar, statement, params, generation=0, *, binding=()):
+        # Even root/token/range/version/hash binding cannot observe a direct SQL
+        # mutation when the caller-owned generation does not change.
+        key = (params["root"], generation, binding)
         if key not in self.values:
             self.values[key] = scalar(statement, params)
         return self.values[key]
@@ -39,7 +43,7 @@ def laboratory_only(db):
     actual = db.execute(text("SELECT current_database(),"
         "current_setting('v14.test_instance',true),"
         "system_identifier::text FROM pg_control_system()")).one()
-    if (not actual[0].startswith("v14_") or not actual[0].endswith("_test")
+    if (not re.fullmatch(r"v14_[0-9a-f]{32}_test",actual[0])
             or actual[1] != os.environ.get("V14_TEST_INSTANCE")
             or actual[2] != os.environ.get("V14_TEST_SYSTEM_IDENTIFIER")):
         raise ValueError("A42_DDL_REQUIRES_UUID_CHILD_ON_OWNED_PHYSICAL_INSTANCE")
@@ -66,6 +70,30 @@ def generations(db):
     from sqlalchemy import text
 
     return dict(db.execute(text("SELECT kind,n FROM a42_lab.generation")).all())
+
+
+def event_dml_cost(db):
+    """Separate zero-row DML control; trigger overhead, NOT writer throughput."""
+    from sqlalchemy import text
+
+    laboratory_only(db)
+    db.commit()
+    before = db.scalar(text("SELECT pg_current_wal_insert_lsn()::text"))
+    db.commit()
+    trials = []
+    for table,column in (("stock_trade_status_daily","is_st"),
+                         ("data_publication_row","table_name")):
+        for _ in range(3):
+            started = perf_counter()
+            changed = db.execute(text(f"UPDATE public.{table} SET {column}={column} WHERE false"))
+            assert changed.rowcount == 0
+            db.commit()
+            trials.append(dict(table=table,seconds=perf_counter()-started,rows=0))
+    wal = db.scalar(text("SELECT pg_wal_lsn_diff(pg_current_wal_insert_lsn(),CAST(:p AS pg_lsn))"),
+                    {"p":before})
+    db.commit()
+    return {"trials":trials,"wal_bytes_whole_instance":int(wal),
+            "scope":"Zero-row statement-trigger lower-bound cost; WAL includes background work"}
 
 
 class EventEvidence:

@@ -58,6 +58,12 @@ def save(path, output):
     temporary.replace(path)
 
 
+def laboratory_sources():
+    return {name:hashlib.sha256((ROOT / "scripts" / name).read_bytes()).hexdigest()
+            for name in ("ab_read_experiment_v14_a4_2.py","ab_read_resources_v14_a4_2.py",
+                         "ab_read_evidence_v14_a4_2.py","ab_read_experiment_summary_v14_a4_2.py")}
+
+
 def database_snapshot(db):
     from sqlalchemy import text
 
@@ -156,12 +162,16 @@ def observe(profile):
         patch.setattr(old, "sql_phase", lambda statement:
             "T5_declare" if statement.lstrip().upper().startswith("WITH CANDIDATE_KEYS")
             else original(statement))
-        with profile.observe() as constructor:
-            yield constructor
+        try:
+            with profile.observe() as constructor:
+                yield constructor
+        except BaseException as error:
+            error.a42_profile = profile.receipt()
+            raise
 
 
 def measure(db, engine, variant, params, *, window_days=None, carry=False, container=None,
-            cursor_fraction="0.1", service_call=False, readers=0):
+            cursor_fraction="0.1", service_call=False, readers=0, reader_pause=2):
     from app.repositories import ab_merge_read as ab
     from app.repositories.calculation_frame import read_calculation_frame, read_calculation_windows
     from app.services.data_publication import workspace
@@ -188,7 +198,8 @@ def measure(db, engine, variant, params, *, window_days=None, carry=False, conta
     profile, metrics = Profile(db, engine), []
     start, cpu = perf_counter(), process_time()
     protected = variant not in CONTROLS[:2]
-    with (Telemetry(engine, pid, readers, container=bool(container)) as telemetry,
+    with (Telemetry(engine, pid, readers, container=bool(container),
+                    reader_pause=reader_pause) as telemetry,
           observe(profile) as constructor):
         def read():
             return read_variant()
@@ -299,7 +310,7 @@ def run(args, output):
     from sqlalchemy import text
 
     from scripts.ab_read_benchmark_v14 import frozen_q0, seed, stage
-    from scripts.ab_read_evidence_v14_a4_2 import install_events
+    from scripts.ab_read_evidence_v14_a4_2 import event_dml_cost, install_events
     from scripts.ab_read_experiment_summary_v14_a4_2 import summarize
     from scripts.ab_read_profile_v14_a4 import seed_multitable
     from scripts.ab_read_resources_v14_a4_2 import host_memory_bytes
@@ -400,15 +411,19 @@ def run(args, output):
 
             def trial(variant, *, scope, repeat, values=params, **kwargs):
                 if variant == "E3" and not output.get("event_install_seconds"):
+                    output["event_dml_without_events"] = event_dml_cost(db)
                     started = perf_counter()
                     install_events(db)
                     output["event_install_seconds"] = perf_counter()-started
+                    output["event_dml_with_events"] = event_dml_cost(db)
                 try:
                     record, statements = measure(db, engine, variant, values,
-                        container=args.container, readers=args.readers, **kwargs)
+                        container=args.container, readers=args.readers,
+                        reader_pause=args.reader_pause, **kwargs)
                 except BaseException as error:
                     output["failed_trial"] = {"variant": variant, "scope": scope,
                         "repeat": repeat, "failure_type": type(error).__name__,
+                        "partial_profile":getattr(error,"a42_profile",None),
                         "sqlstate": getattr(getattr(error, "orig", None), "sqlstate", None)}
                     save(args.output, output)
                     raise
@@ -460,6 +475,10 @@ def run(args, output):
             from scripts.ab_read_profile_v14_a4 import lock_probe
 
             output["lock_probe_outside_timed_trials"] = lock_probe(db, engine)
+            source_contract()
+            if laboratory_sources() != output["laboratory_sources"]:
+                raise ValueError("A42_LABORATORY_SOURCE_CHANGED_DURING_TRIALS")
+            output["experiment_complete"] = True
             output["summary"] = summarize(output)
             save(args.output, output)
 
@@ -480,6 +499,7 @@ def main():
     parser.add_argument("--plans", action="store_true")
     parser.add_argument("--container")
     parser.add_argument("--readers", type=int, choices=(0,2), default=0)
+    parser.add_argument("--reader-pause",type=int,choices=(1,2,5),default=2)
     parser.add_argument("--cursor-fractions", nargs="+", choices=("0.1","1.0"),
                         default=["0.1","1.0"])
     parser.add_argument("--coverage", choices=("partial","a_only","b_only","high","mismatched"),
@@ -487,6 +507,7 @@ def main():
     args = parser.parse_args()
     output = {"schema": "a42-contract-v1", "baseline": BASELINE,
               "measurement_version":"a42-v2-grouped-cumulative-counters",
+              "laboratory_sources":laboratory_sources(),
               "script_sha256":hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "production_path_changes": "NONE", "read_performance_pass": "NOT_CLAIMED"}
     try:

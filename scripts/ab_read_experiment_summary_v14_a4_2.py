@@ -6,6 +6,18 @@ import statistics
 from pathlib import Path
 
 
+def percentile(values, p):
+    if not values:
+        return None
+    return (statistics.quantiles(values,n=100,method="inclusive")[p-1]
+            if len(values)>1 else values[0])
+
+
+def phase_seconds(run, phase, *, read_only=False):
+    return sum(e["seconds"] for e in run["events"] if e["phase"]==phase
+               and (not read_only or e.get("offset_seconds",float("inf"))<run["read_seconds"]))
+
+
 def summarize(output):
     groups = {}
     goldens = {}
@@ -14,9 +26,10 @@ def summarize(output):
         if run.get("telemetry", {}).get("reader_errors"):
             raise ValueError("A42_RR_READER_ERROR")
         golden = (run["rows"], run["hash"], run["dtypes"], run["columns"])
-        if scope in goldens and golden != goldens[scope]:
+        comparison_scope = "full" if scope == "window_matrix" else scope
+        if comparison_scope in goldens and golden != goldens[comparison_scope]:
             raise ValueError("A42_GOLDEN_MISMATCH")
-        goldens[scope] = golden
+        goldens[comparison_scope] = golden
         if not run["cursors"] or any(not c.get("closed") or "until_eof_seconds" not in c
                                      for c in run["cursors"]):
             raise ValueError("A42_CURSOR_INCOMPLETE")
@@ -28,18 +41,34 @@ def summarize(output):
     tables = []
     for key, runs in groups.items():
         values = [r["read_plus_final_seconds"] for r in runs]
-        p95 = statistics.quantiles(values, n=100, method="inclusive")[94] if len(values)>1 else None
+        p95 = percentile(values,95)
+        components = {}
+        if all("events" in r for r in runs):
+            components = {phase:statistics.median(phase_seconds(r,phase,read_only=read_only)
+                for r in runs) for phase,read_only in (
+                    ("T3_fingerprint_inclusive",True),("T4_candidate_validation_sql",True),
+                    ("T8_verify_inclusive",False),("T2_lock_hold",False),
+                    ("T6_frame",False),("T6_sort",False),("checkpoint",False))}
+        fetches = [f["seconds"] for r in runs for c in r["cursors"] for f in c["fetches"]
+                   if "seconds" in f]
+        readers = [s for r in runs for s in r.get("telemetry",{}).get("reader_samples_seconds",[])]
         tables.append({"scope": key[0], "variant": key[1], "window_days": key[2],
                        "cursor_fraction": key[3], "repeats": len(values),
                        "p50": statistics.median(values), "p95": p95,
                        "range": [min(values), max(values)], "samples": values,
-                       "protection": runs[0]["protection"]})
+                       "protection": runs[0]["protection"], "nested_phase_p50":components,
+                       "fetch_p95":percentile(fetches,95),"fetch_p99":percentile(fetches,99),
+                       "reader_p95":percentile(readers,95),
+                       "timing_caveat":"Nested phase medians overlap; never add them"})
     return {"tables": tables, "golden": "PASS" if groups else "UNPROVEN",
+            "experiment_complete": bool(output.get("experiment_complete"))
+                and not output.get("failure_type"),
             "event_install_seconds":output.get("event_install_seconds"),
             "measured_groups_complete": bool(groups) and all(len(r)>=3 for r in groups.values()),
             "state": "A4_2_NO_SAFE_WINNER", "read_performance_pass": "NOT_CLAIMED",
             "authorize_a4_3": False,
-            "reason": "No equivalent cheaper proof; E3 rollback/privileged gaps remain",
+            "reason": "No candidate authorized; E0 SQL needs scale/resource review; "
+                "E1/E2 rejected and E3 rollback/privileged gaps remain",
             "cloud": "NOT_AUTHORIZED_NOT_PERFORMED", "all_slow_samples_retained": True}
 
 
