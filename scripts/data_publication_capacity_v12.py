@@ -13,6 +13,8 @@ import statistics
 import sys
 import threading
 import time
+from contextlib import ExitStack, contextmanager
+from functools import wraps
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +30,293 @@ def peak_rss_bytes():
     from scripts.publication_candidate_benchmark_v13 import rss_bytes
 
     return rss_bytes()
+
+
+class CapacityProgress:
+    """Bounded diagnostic sidecar, deliberately NOT a capacity receipt."""
+
+    def __init__(self, path, identity):
+        from scripts.a42_artifacts import atomic, now
+        from scripts.a42_receipt_contract import require
+
+        self.path = Path(path)
+        require(not self.path.exists(), "CAPACITY_PROGRESS_ALREADY_EXISTS")
+        self.started = time.perf_counter()
+        self.last_write = self.started
+        self.replace_attempts = 5 if os.name == "nt" else 1
+        self.stack = []
+        self.table = None
+        self.expected_probe = False
+        self.data = dict(
+            schema_version="capacity-progress-v1", artifact_kind="DIAGNOSTIC_ONLY",
+            **{key: identity[key] for key in (
+                "head_sha", "run_id", "attempt", "job_id", "model_hash", "working_tree_dirty")},
+            started_at=now(), updated_at=now(), status="INCOMPLETE",
+            current_phase="initialization", current_table=None, completed_table_count=0,
+            tables={}, phases={}, completed_levels=[],
+            peak_process_rss_bytes=0, rss_scope="PROCESS_LIFETIME_HIGH_WATER_NOT_TABLE_PEAK",
+            production_read_authorized=False,
+        )
+        atomic(self.path, self.data)
+
+    def flush(self, *, force=False):
+        from scripts.a42_artifacts import atomic, now
+
+        clock = time.perf_counter()
+        if not force and clock - self.last_write < 5:
+            return
+        self.last_write = clock
+        self.data.update(updated_at=now(), last_checkpoint_at=now(),
+                         elapsed_seconds=clock-self.started,
+                         current_operation_elapsed_seconds=(clock-self.stack[-1][1]
+                                                            if self.stack else 0))
+        if self.table:
+            table = self.data["tables"][self.table]
+            table["elapsed_seconds"] = clock-self.table_start
+            table["rows_per_second"] = table["rows"] / table["elapsed_seconds"]
+        self.data["peak_process_rss_bytes"] = peak_rss_bytes()
+        # Windows scanners may briefly hold the destination during os.replace.
+        # Retry ONLY this diagnostic file, never a database operation.
+        for attempt in range(self.replace_attempts):
+            try:
+                atomic(self.path, self.data)
+                break
+            except PermissionError:
+                if attempt + 1 == self.replace_attempts:
+                    raise
+                time.sleep(0.025)
+
+    def begin_level(self, stocks, days, level):
+        self.table = None
+        self.data.update(level=level, stocks=stocks, days=days, tables={}, phases={},
+                         current_table=None, completed_table_count=0)
+        self.flush(force=True)
+
+    def finish_table(self):
+        if self.table is not None:
+            table = self.data["tables"][self.table]
+            table.update(status="MEASURED", elapsed_seconds=time.perf_counter()-self.table_start)
+            table["rows_per_second"] = table["rows"] / table["elapsed_seconds"]
+            table["peak_process_rss_bytes"] = peak_rss_bytes()
+            self.data["completed_table_count"] += 1
+            self.table = None
+            self.data["current_table"] = None
+            self.flush(force=True)
+
+    def begin_table(self, name):
+        self.finish_table()
+        self.table, self.table_start = name, time.perf_counter()
+        self.data["current_table"] = name
+        self.data["tables"][name] = dict(
+            status="INCOMPLETE", rows=0, batch_count=0, commit_count=0,
+            payload_count=0, operations={}, sql={},
+        )
+        self.flush(force=True)
+
+    @contextmanager
+    def phase(self, name, *, persist=True):
+        from scripts.a42_artifacts import failure
+
+        previous = self.data["current_phase"]
+        started = time.perf_counter()
+        self.stack.append((name, started))
+        self.data["current_phase"] = name
+        try:
+            if persist:
+                totals = (self.data["tables"][self.table]["operations"] if self.table
+                          else self.data["phases"])
+                self.flush(force=name not in totals)
+            yield
+        except BaseException as error:
+            if not self.expected_probe:
+                self.data.setdefault("first_failure", dict(phase=name, table=self.table,
+                                                           **failure(error)))
+            raise
+        finally:
+            elapsed = time.perf_counter()-started
+            for totals in [self.data["phases"]] + (
+                [self.data["tables"][self.table]["operations"]] if self.table else []
+            ):
+                counter = totals.setdefault(name, dict(count=0, elapsed_seconds=0))
+                counter["count"] += 1
+                counter["elapsed_seconds"] += elapsed
+            try:
+                if persist:
+                    self.flush()
+            finally:
+                self.stack.pop()
+                self.data["current_phase"] = previous
+
+    @contextmanager
+    def lifecycle(self, manager, enter, leave):
+        with ExitStack() as stack:
+            def close(*error):
+                # A diagnostic I/O failure must never prevent real cleanup.
+                with self.phase(leave, persist=False):
+                    try:
+                        self.flush(force=True)
+                    finally:
+                        result = manager.__exit__(*error)
+                    return result
+            with self.phase(enter):
+                value = manager.__enter__()
+                stack.push(close)
+            yield value
+
+    def fail(self, error):
+        from scripts.a42_artifacts import failure
+
+        self.data.update(status="INCOMPLETE", terminal_failure=failure(error))
+        self.flush(force=True)
+
+
+@contextmanager
+def observe_capacity(progress):
+    """Observe original driver calls in this lab process; no SQL/budget changes.
+
+    Payload timers are in-memory only. Durable writes happen at operation/table
+    boundaries, not for each payload row. SQL timings are nested in upsert, etc.;
+    they must not be added to those outer durations.
+    """
+    from sqlalchemy.orm import Session
+
+    active = [None]
+    main_thread = threading.get_ident()
+
+    def wrapped(function, name):
+        @wraps(function)
+        def call(*args, **kwargs):
+            with progress.phase(name):
+                return function(*args, **kwargs)
+        return call
+
+    original_isolated = isolated_contract_database
+
+    @contextmanager
+    def isolated(*args, **kwargs):
+        with progress.lifecycle(original_isolated(*args, **kwargs),
+                                "isolation_and_migration", "database_cleanup") as (factory, engine):
+            def before(c, cursor, statement, parameters, context, executemany):
+                if threading.get_ident() == main_thread:
+                    context.capacity_started = time.perf_counter()
+
+            def after(c, cursor, statement, parameters, context, executemany):
+                started = getattr(context, "capacity_started", None)
+                if started is None or progress.table is None:
+                    return
+                # Only fixed labels are retained, never SQL or bind values.
+                verb = statement.lstrip().split(None, 1)[0].upper()
+                verb = verb if verb in {"SELECT", "WITH", "INSERT", "UPDATE", "DELETE",
+                                        "EXPLAIN", "SET"} else "OTHER"
+                counter = progress.data["tables"][progress.table]["sql"].setdefault(
+                    verb, dict(count=0, elapsed_seconds=0))
+                counter["count"] += 1
+                counter["elapsed_seconds"] += time.perf_counter()-started
+
+            event.listen(engine, "before_cursor_execute", before)
+            event.listen(engine, "after_cursor_execute", after)
+            try:
+                yield factory, engine
+            finally:
+                event.remove(engine, "before_cursor_execute", before)
+                event.remove(engine, "after_cursor_execute", after)
+
+    original_candidate = candidate
+
+    @contextmanager
+    def observed_candidate(*args, **kwargs):
+        with progress.lifecycle(original_candidate(*args, **kwargs),
+                                "candidate_create", "candidate_cleanup") as (db, job):
+            active[0] = db
+            try:
+                yield db, job
+            finally:
+                active[0] = None
+
+    from app.services.data_publication import PublicationWorkspace
+
+    original_scope, original_upsert = PublicationWorkspace.record_scope, PublicationWorkspace.upsert
+    original_payload, original_commit = payload, Session.commit
+    original_validation = record_validation
+    original_execute = Session.execute
+
+    def execute(db, statement, *args, **kwargs):
+        if db is not active[0]:
+            return original_execute(db, statement, *args, **kwargs)
+        name = None
+        if getattr(statement, "is_select", False):
+            columns = list(statement.selected_columns)
+            if len(columns) == 2 and [c.name for c in columns] == ["ts_code", "id"]:
+                name = "signal_id_lookup"
+        elif isinstance(statement, type(text(""))):
+            sql = statement.text.lstrip()
+            if sql.startswith("EXPLAIN"):
+                name = ("publication_plan" if "_publishable" in sql or "SELECT count(*)" in sql
+                        else "candidate_plan" if "data_publication_row" in sql else "public_plan")
+            elif "AS json_bytes" in sql or "AS rows" in sql:
+                name = "candidate_or_preimage_statistics"
+        if name is None:
+            return original_execute(db, statement, *args, **kwargs)
+        with progress.phase(name):
+            return original_execute(db, statement, *args, **kwargs)
+
+    def scope(ws, model, filters):
+        progress.begin_table(model.__tablename__)
+        with progress.phase("record_scope"):
+            return original_scope(ws, model, filters)
+
+    def construct(*args, **kwargs):
+        with progress.phase("payload", persist=False):
+            row = original_payload(*args, **kwargs)
+        if progress.table:
+            progress.data["tables"][progress.table]["payload_count"] += 1
+        return row
+
+    def upsert(ws, model, rows, *args, **kwargs):
+        with progress.phase("workspace_upsert"):
+            result = original_upsert(ws, model, rows, *args, **kwargs)
+            table = progress.data["tables"][model.__tablename__]
+            table["rows"] += len(rows)
+            table["batch_count"] += (len(rows)+499)//500
+            return result
+
+    def commit(db):
+        if db is not active[0]:
+            return original_commit(db)
+        with progress.phase("day_commit"):
+            result = original_commit(db)
+            if progress.table:
+                progress.data["tables"][progress.table]["commit_count"] += 1
+            return result
+
+    def validation(*args, **kwargs):
+        progress.finish_table()
+        with progress.phase("record_validation"):
+            return original_validation(*args, **kwargs)
+
+    original_probe = rollback_probe
+
+    def probe(*args, **kwargs):
+        with progress.phase("rollback_probe"):
+            progress.expected_probe = True
+            try:
+                return original_probe(*args, **kwargs)
+            finally:
+                progress.expected_probe = False
+
+    with pytest.MonkeyPatch.context() as local:
+        local.setattr(sys.modules[__name__], "isolated_contract_database", isolated)
+        local.setattr(sys.modules[__name__], "candidate", observed_candidate)
+        local.setattr(sys.modules[__name__], "payload", construct)
+        local.setattr(sys.modules[__name__], "record_validation", validation)
+        local.setattr(sys.modules[__name__], "rollback_probe", probe)
+        for name in ("seed", "public_digests", "stats", "update_job"):
+            local.setattr(sys.modules[__name__], name, wrapped(globals()[name], name))
+        local.setattr(PublicationWorkspace, "record_scope", scope)
+        local.setattr(PublicationWorkspace, "upsert", upsert)
+        local.setattr(Session, "commit", commit)
+        local.setattr(Session, "execute", execute)
+        yield
 
 
 def payload(model, source, day, entity, value):
@@ -526,6 +815,7 @@ def run_cli(args, result):
     from scripts.v14_test_database import isolated_v14_database, verified_test_url
 
     result.update(isolation())  # Physical proof BEFORE all DDL and application imports.
+    args.progress = CapacityProgress(args.output.with_suffix(".progress.json"), result)
     if os.environ.get("A421_CONTAINER"):
         result.update(container_receipt(os.environ["A421_CONTAINER"]))
     url = verified_test_url()
@@ -562,7 +852,9 @@ def run_cli(args, result):
     for stocks, days, level in selected_levels(args):
         result.update(status="INCOMPLETE", failed_phase="capacity-"+level)
         atomic(args.output, result)
-        result["results"].append(run_level(stocks, days, level))
+        args.progress.begin_level(stocks, days, level)
+        with observe_capacity(args.progress):
+            result["results"].append(run_level(stocks, days, level))
         measurement = result["results"][-1]
         validate_capacity(measurement, level)
         print(
@@ -593,8 +885,12 @@ def run_cli(args, result):
         )
         result["completed_groups"] = len(result["results"])
         atomic(args.output, result)
+        args.progress.data["completed_levels"].append(level)
+        args.progress.flush(force=True)
     result.update(status="COMPLETE", finished_at=now(), failed_phase=None)
     atomic(args.output, result)
+    args.progress.data.update(status="DIAGNOSTIC_FINISHED", current_phase="finished")
+    args.progress.flush(force=True)
     print(json.dumps(dict(output=str(args.output), levels=len(result["results"]))))
 
 
@@ -616,6 +912,8 @@ def main(argv=None):
     except BaseException as error:
         result.update(status="INCOMPLETE", finished_at=now(), **failure(error))
         atomic(args.output, result)
+        if hasattr(args, "progress"):
+            args.progress.fail(error)
         if result.get("failure_code") == "V14_EXPLICIT_MARKED_PG17_REQUIRED":
             print("EXPLICIT_LOOPBACK_SYNTHETIC_TEST_DATABASE_REQUIRED", file=sys.stderr)
         raise SystemExit(1) from None

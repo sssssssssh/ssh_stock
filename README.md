@@ -1,5 +1,19 @@
 # A 股机会发现与趋势研究系统
 
+## L2 容量诊断补强（验收 OPEN）
+
+本轮从 master `66a5ca6` 继续，只补充容量测试的诊断，不改变生产发布和批次默认值。
+原容量命令会在正式结果旁生成 `capacity.progress.json`（由 `--output` 的文件名派生）：
+记录实际阶段、表级行数、批次、按日提交、Python/SQL 调用耗时和进程内存高水位。
+它是 `DIAGNOSTIC_ONLY`，`DIAGNOSTIC_FINISHED` 也不是容量验收通过；门禁仍只读取正式 `capacity.json`。
+每次实验使用新的输出目录；已有进度文件拒绝隐式续跑，正式收据保持 INCOMPLETE。
+批次内低频落盘，表和阶段边界保留检查点；不记录 SQL、绑定参数或连接信息。
+Windows 文件短暂占用只对诊断文件有限重试，不重试数据库或提高 SQL/发布预算。
+现有 CI 的 always 工件上传已包含同目录进度，无需更改 CI 或重跑业务任务。
+历史瓶颈证据、中规模结果及未完成验收见 [L2 诊断报告](docs/acceptance/v14_a4_2_1_l2_diagnosis.md)。
+本轮最终本地 2490 项 pytest 与 Ruff 已通过；专用 PG17 current=heads 为 0058，未升级业务库。
+600×3 合成测试不能替代正式 L2 5000×20；完整 L2 与本轮 exact-SHA 门禁未通过前整体保持 OPEN。
+
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 
 执行结果与未关闭项见 [P3 执行报告](docs/acceptance/v14_a4_2_1_closeout.md)。
