@@ -6,13 +6,13 @@ name: a4232-statistics-tail-diagnostic
     paths:
       - '.github/workflows/a4232-statistics-tail-diagnostic.yml'
       - 'scripts/*a4232*.py'
-      - 'tests/**/test_tail_stability_a4232.py'
+      - 'tests/**/test_*a4232.py'
       - 'docs/acceptance/*a4_2_3_2*'
   pull_request:
     paths:
       - '.github/workflows/a4232-statistics-tail-diagnostic.yml'
       - 'scripts/*a4232*.py'
-      - 'tests/**/test_tail_stability_a4232.py'
+      - 'tests/**/test_*a4232.py'
       - 'docs/acceptance/*a4_2_3_2*'
 
 permissions:
@@ -39,12 +39,12 @@ jobs:
           resource-class: capacity
       - name: Small PG17, natural GC, plan/statistics and existing A/B safety contracts only
         run: >-
-          python -m pytest --tb=no --show-capture=no
+          python -m pytest -p scripts.a4232_pytest_receipt --tb=no --show-capture=no
           tests/unit/test_tail_stability_a4232.py
           tests/unit/test_tail_historical_a4231.py
           tests/unit/test_lookup_tail_attribution_a4231.py
           tests/unit/test_tail_attribution_review_a4231.py
-          tests/integration/test_tail_stability_a4232.py
+          tests/integration/test_tail_stability_pg17_a4232.py
           tests/integration/test_lookup_candidates_a422.py
           --junitxml=.codex_tmp/a4232-internal/preflight.xml
       - name: Sanitized test receipt, never raw assertion/driver SQL text

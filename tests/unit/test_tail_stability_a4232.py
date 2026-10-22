@@ -388,3 +388,20 @@ def test_driver_parameter_order_is_explicit_not_bind_data():
     assert server == 'WITH input_keys AS ($1) SELECT $2,$3,$2'
     assert order == ['keys','publication','table_name']
     assert '%(keys)s' in driver and 'value' not in driver
+
+
+def test_new_unit_and_pg17_modules_have_distinct_names_for_pytest_collection():
+    names = [p.name for folder in ('tests/unit','tests/integration')
+             for p in Path(folder).glob('test_*a4232.py')]
+    assert len(names) == len(set(names)) == 2
+
+
+def test_failure_metadata_keeps_driver_class_and_state_not_message_or_sql():
+    from scripts.a4232_pytest_receipt import safe_exception
+
+    error = RuntimeError('SECRET_DONT_EXPORT and SQL')
+    error.a4232_driver_type = 'UndefinedFunction'
+    error.a4232_sqlstate = '42883'
+    value = safe_exception(error)
+    assert value['sqlstate'] == '42883' and value['driver_type'] == 'UndefinedFunction'
+    assert 'SECRET' not in json.dumps(value) and ' SQL' not in json.dumps(value)

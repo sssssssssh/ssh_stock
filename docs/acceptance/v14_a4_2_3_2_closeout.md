@@ -34,6 +34,12 @@ P1a的PG17通过之后才允许P1b激活；不能拿单测结果冒充真实统�
 
 ## 当前审批/剩余项
 
+P1a提交5e2ac9e的[预检run39831770523](https://github.com/sssssssssh/ssh_stock/actions/runs/39831770523)
+在测试收集阶段失败：unit/integration同名模块触发pytest import mismatch；attribution跳过，样本0。
+已在本地collect-only复现并将PG17模块改为test_tail_stability_pg17_a4232.py，新增命名回归。
+另为预检失败增加仅含类名/SQLSTATE/脱敏栈的工件，不上传原异常/SQL；协议不变，未运行实验。
+修正后全库2740项可收集，完整1929项单测通过（24.43秒，两个既有警告），新增72项与Ruff通过。
+
 新实验NOT_RUN；unique_repair_candidate=null。P2/P3、生产SQL、正式5/100、正式L2均NOT_AUTHORIZED。
 capacity_ready/performance_eligible/production_matches_candidate=false，原release gate和P95门槛不变。
 统计稳态、原始新工件、因果分析和最终exact-SHA CI尚待P1a/P1b/P1c实际执行；没有通过前保持OPEN。

@@ -1,9 +1,10 @@
-"""Tiny official PG17 fixtures: contracts only, never 128 timing samples."""
+"""Tiny PG17 contracts only; distinct module name avoids pytest import collisions."""
 
 from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from scripts import publication_lookup_diagnostic_a422 as lab
 from scripts.a4232_plan_probe import assert_plans, capture_queries, plan_snapshot
@@ -43,6 +44,13 @@ def tiny_stability_database(monkeypatch):
                         probe.connection(execution_options={'isolation_level':'AUTOCOMMIT'})
                         probe.execute(text("SET statement_timeout='300s'"))
                         yield db,probe,engine,c,ws
+        except DBAPIError as error:
+            # Also protect the existing full pytest/JUnit job, which does not
+            # use the dedicated job's no-trace options/plugin.
+            sanitized = RuntimeError('A4232_PG17_DRIVER_FAILURE')
+            sanitized.a4232_driver_type = type(error.orig).__name__
+            sanitized.a4232_sqlstate = getattr(error.orig,'sqlstate',None)
+            raise sanitized from None
         finally:
             get_settings.cache_clear()
 
