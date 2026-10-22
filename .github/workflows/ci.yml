@@ -93,6 +93,52 @@ jobs:
       - if: always()
         run: docker rm -f a421-pg17
 
+  lookup-tail-attribution:
+    # One diagnostic round, NOT a new performance/production admission path.
+    # Later commits and rerun attempts cannot silently repeat this experiment.
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+      github.run_attempt == 1 &&
+      contains(github.event.head_commit.message, '[a4231-attribution-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONUNBUFFERED: "1"
+      LLM_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - name: Protocol and production freeze before any database access
+        run: python -c 'from scripts.publication_lookup_tail_attribution_a4231 import guard; guard()'
+      - uses: ./.github/actions/a421-pg
+        with:
+          resource-class: capacity
+      - name: Low-cost contracts, imported snapshot and A/B safety preflight
+        run: >-
+          python -m pytest tests/unit/test_lookup_tail_attribution_a4231.py
+          tests/integration/test_tail_attribution_a4231.py
+          tests/integration/test_lookup_candidates_a422.py
+          --junitxml=.codex_tmp/a4231/tests.xml
+      - name: The sole preregistered 128-sample Telemetry intervention
+        run: >-
+          python scripts/publication_lookup_tail_attribution_a4231.py
+          --output .codex_tmp/a4231/attribution.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4231-attribution-${{ github.sha }}-attempt${{ github.run_attempt }}
+          path: .codex_tmp/a4231
+          include-hidden-files: true
+          if-no-files-found: error
+      - if: always()
+        run: docker rm -f a421-pg17
+
   test:
     runs-on: ubuntu-latest
     services:
