@@ -1,0 +1,17 @@
+{
+  "source_sha": "3916dc4dc72f83f2470a96ff265428bd2e9549e2",
+  "run_id": "39833706083",
+  "attempt": 1,
+  "artifact_id": 12450573698,
+  "zip_sha256": "3276cdbc12413ce2ab4a3a522a53b6d9c434dfbd19d85f7655126b8f3094ad10",
+  "zip_size_bytes": 109252,
+  "metadata_source": "GitHub Actions artifact API; downloaded bytes SHA256 independently matched",
+  "job_id": 120019624908,
+  "job_conclusion": "failure",
+  "collection_status": "INCOMPLETE_ENVIRONMENT_DRIFT",
+  "artifact_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39833706083/artifacts/12450573698",
+  "evidence_kind": "DIAGNOSTIC_ONLY",
+  "capacity_ready": false,
+  "performance_eligible": false,
+  "unique_repair_candidate": null
+}

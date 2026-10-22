@@ -7,6 +7,9 @@
 仅预检漂移时允许新UUID合成库四表条件式autovacuum控制，采样后漂移立即停止，不补样。
 数据MVCC/统计/计划结构/prepared计数分开核验；旧1100/128结果只作历史诊断。
 无唯一因果修复候选就INSUFFICIENT_EVIDENCE/STOP，生产C0与正式L2不变。
+本轮唯一批次实际64/128：block1末轮后检测到活跃autovacuum worker，按协议停止且未补样。
+四表已记录统计未变，不伪称发生新ANALYZE；完整稳态未验证，无唯一候选，
+见[实际交付/工件](docs/acceptance/v14_a4_2_3_2_closeout.md)，P2/P3继续未授权。
 
 ## A4-2.3.1 因果诊断（仅诊断授权）
 

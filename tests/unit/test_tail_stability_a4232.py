@@ -9,6 +9,7 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
+from zipfile import ZipFile
 
 import pytest
 import yaml
@@ -419,3 +420,78 @@ def test_context_manager_cleanup_does_not_replace_first_failure():
     assert output['first_failure']['failure_type'] == 'RuntimeError'
     assert output['terminal_failure']['failure_type'] == 'ValueError'
     assert 'SECRET' not in json.dumps(output)
+
+
+def test_offline_review_rejects_wrong_source_before_reading_archive(tmp_path):
+    from scripts.publication_tail_stability_review_a4232 import review
+
+    with pytest.raises(ValueError,match='MANIFEST_IDENTITY_MISMATCH'):
+        review(tmp_path/'not-read.zip',dict(source_sha='wrong'))
+
+
+def test_offline_review_rejects_wrong_zip_digest(tmp_path):
+    from scripts import publication_tail_stability_review_a4232 as offline
+
+    path = tmp_path/'wrong.zip'
+    path.write_bytes(b'not-the-source-archive')
+    manifest = dict(source_sha=offline.SOURCE_SHA,run_id=offline.SOURCE_RUN,attempt=1,
+                    artifact_id=1,zip_sha256='0'*64)
+    with pytest.raises(ValueError,match='ZIP_DIGEST_MISMATCH'):
+        offline.review(path,manifest)
+
+
+def test_partial_receipt_cannot_become_zero_latency_or_stable_evidence(tmp_path):
+    from scripts import publication_tail_stability_review_a4232 as offline
+
+    path = tmp_path/'partial.zip'
+    value = dict(head_sha=offline.SOURCE_SHA,run_id=offline.SOURCE_RUN,attempt='1',
+        status='INCOMPLETE_ENVIRONMENT_DRIFT',samples=[],first_failure={'failure_type':'ValueError'},
+        capacity_ready=False,performance_eligible=False,production_matches_candidate=False,
+        production_read_authorized=False,unique_repair_candidate=None,
+        p2='NOT_AUTHORIZED',p3='NOT_AUTHORIZED',model_hash=c.MODEL_HASH,working_tree_dirty=False,
+        protocol_sha256=c.PROTOCOL_HASH,measurement_version=c.VERSION,
+        production_source_sha256=c.C0_SOURCE,proposed_source_sha256=c.C1_SOURCE)
+    with ZipFile(path,'w') as z:
+        z.writestr('attribution.json',json.dumps(value))
+    manifest = dict(source_sha=offline.SOURCE_SHA,run_id=offline.SOURCE_RUN,attempt=1,
+        artifact_id=1,zip_sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+    report = offline.review(path,manifest)
+    assert report['collection_status'] == 'INCOMPLETE_ENVIRONMENT_DRIFT'
+    assert report['statistics_plan_status'] == 'NOT_VERIFIED'
+    assert report['sample_count'] == 0 and report['summary'] == []
+    assert report['root_cause'] == 'INSUFFICIENT_EVIDENCE'
+    assert report['unique_repair_candidate'] is None and report['capacity_ready'] is False
+
+
+def test_offline_plan_replay_rejects_bind_expressions_even_with_matching_hash():
+    from scripts.publication_tail_stability_review_a4232 import validate_plan_hashes
+
+    node = {'Node Type':'Result','Filter':'PRIVATE_BIND_DONT_EXPORT'}
+    value = dict(variants={'C0':dict(fresh_structure=node,fresh_sha256=runner.digest(node))})
+    with pytest.raises(ValueError,match='PLAN_HASH_MISMATCH'):
+        validate_plan_hashes(value)
+
+
+def test_background_worker_guard_fails_even_without_any_relation_statistics_change():
+    before,after = statistics_snapshot(),statistics_snapshot()
+    after['active_autovacuum_workers'] = 1
+    assert before['relations'] == after['relations']
+    with pytest.raises(ValueError,match='ENVIRONMENT_DRIFT') as error:
+        c.assert_stable(before,after)
+    assert error.value.a4232_drift['after']['active_autovacuum_workers'] == 1
+
+
+def test_real_review_keeps_64_samples_and_distinguishes_activity_from_analyze_drift():
+    data = json.loads(Path('docs/acceptance/evidence/a4232_stability_review.json').read_text())
+    assert data['sample_count'] == data['uncollected_samples'] == 64
+    assert data['planned_samples'] == 128 and data['excluded_samples'] == 0
+    audit = data['field_audit']
+    assert audit['parent_validated_samples'] == 32 and audit['missing_plan_brackets'] == 4
+    assert audit['recorded_plan_snapshots'] == 34
+    assert audit['relation_field_changes'] == audit['plan_identity_changes'] == []
+    assert len(audit['background_activity_changes']) == 1
+    assert audit['background_activity_changes'][0]['field'] == 'active_autovacuum_workers'
+    assert data['root_cause'] == 'INSUFFICIENT_EVIDENCE'
+    assert data['statistics_plan_status'] == 'NOT_VERIFIED' and data['h3_checks'] is None
+    assert len(data['generation2_events']) == 8
+    assert data['unique_repair_candidate'] is None and data['capacity_ready'] is False
