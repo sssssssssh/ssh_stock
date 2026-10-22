@@ -1,0 +1,36 @@
+{
+  "evidence_kind": "HISTORICAL_DIAGNOSTIC",
+  "review_baseline_sha": "29ee84548a4254c646b30305ed620ae0fdd2f49c",
+  "initial_working_tree_dirty": false,
+  "origin_master_matches": true,
+  "historical_1100": {
+    "source_sha": "44e46b0cf4b52b2e7008e1f9ed842cd251971864",
+    "run_id": "39785757520", "attempt": 1, "artifact_id": 12429939366,
+    "zip_sha256": "e2ceaf9137e0ce52c0d91201329bf0de15a4cd14ab6321aaebf74e069ba4eceb",
+    "sample_count": 1100, "control_points": 400, "original_order_and_quantiles_reverified": true,
+    "analyzed_c0_p95_seconds": 0.0887559778, "analyzed_c1_p95_seconds": 0.1915950005,
+    "anomaly_repeats": [5, 13, 19, 25, 41, 66, 81],
+    "large_gc_correlated_anomalies": 6, "non_large_gc_counterexample_repeat": 81,
+    "frozen_replay_sha256": "73bc56873e7890cb2e6bb368d30188f22fff9b92672c0d686d2cae738e61c826"
+  },
+  "historical_128": {
+    "source_sha": "947966dc5a33cc6d8a688431f6deb00a2dffa538",
+    "run_id": "39820748153", "attempt": 1, "artifact_id": 12444391989,
+    "zip_sha256": "8457f553e548b4306c5d402cc86e8ea3afe3c754e1a34a80e47fc089796b9bcf",
+    "sample_count": 128, "original_order_and_quantiles_reverified": true,
+    "frozen_review_sha256": "37fe47d5aa8abbe8c31cb9ce484b7198b5b69a69027ae4a1a8323ba009a2db8a",
+    "preregistered_checks_met": 2, "preregistered_checks_total": 8,
+    "generation2_events": 4, "generation2_variant": "C0", "modes": ["full", "minimal"],
+    "as_seeded_autoanalyze_drift": true,
+    "analysis_status": "INCOMPLETE_ENVIRONMENT_DRIFT", "root_cause": "INSUFFICIENT_EVIDENCE"
+  },
+  "baseline_ci": {
+    "run_id": "39823095688", "attempt": 1, "status_observed": "in_progress",
+    "core": "in_progress", "lookup": "success", "audit": "success",
+    "capacity": "skipped", "attribution": "skipped",
+    "observation_utc": "2026-10-22T18:04:44Z", "formal_acceptance": "NOT_VERIFIED"
+  },
+  "production_source_sha256": "7708d91c831a64093f18aa4f8515789492762f464ccfe202ee0219b756f32976",
+  "capacity_ready": false, "performance_eligible": false, "production_read_authorized": false,
+  "unique_repair_candidate": null, "p2": "NOT_AUTHORIZED", "p3": "NOT_AUTHORIZED"
+}

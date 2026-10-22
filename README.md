@@ -1,5 +1,13 @@
 # A 股机会发现与趋势研究系统
 
+## A4-2.3.2 统计稳定性复核（仅P0/P1）
+
+从29ee8454继续；[v2协议](docs/acceptance/v14_a4_2_3_2_protocol.md)先单独提交，
+随后只执行一次128样本的analyzed稳态诊断。先手动ANALYZE与独立目录观察，
+仅预检漂移时允许新UUID合成库四表条件式autovacuum控制，采样后漂移立即停止，不补样。
+数据MVCC/统计/计划结构/prepared计数分开核验；旧1100/128结果只作历史诊断。
+无唯一因果修复候选就INSUFFICIENT_EVIDENCE/STOP，生产C0与正式L2不变。
+
 ## A4-2.3.1 因果诊断（仅诊断授权）
 
 从3bdfc371继续，P0先核对历史七个异常及邻近C0；[假设注册表](docs/acceptance/a4231_hypotheses.md)
