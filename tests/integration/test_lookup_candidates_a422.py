@@ -50,6 +50,8 @@ def test_disconnect_unknown_commit_and_cancellation(candidate_database, monkeypa
 
 
 def test_typed_golden_empty_duplicates_new_rows_json_nulls_and_tombstones(monkeypatch):
+    from decimal import Decimal
+
     from app.models.data_publication import DataPublicationRow
     from app.repositories.upsert import upsert_rows
     from app.services.data_publication import KEYS, MODELS
@@ -59,7 +61,7 @@ def test_typed_golden_empty_duplicates_new_rows_json_nulls_and_tombstones(monkey
         with original.candidate(factory, engine) as (db, job):
             ws = db.info['publication_workspace']
             for model in MODELS[:8]:
-                payload = original.sample_row(model, job.id, 23)
+                payload = original.sample_row(model, job.id, Decimal('23.125'))
                 if 'reason_codes' in model.__table__.c:
                     payload['reason_codes'] = {'nested': [None, 0, False, '合成']}
                 new = {**payload}
@@ -89,3 +91,35 @@ def test_typed_golden_empty_duplicates_new_rows_json_nulls_and_tombstones(monkey
                     DataPublicationRow.publication_id == job.id,
                     DataPublicationRow.table_name == model.__tablename__)).all()
                 assert any(base is not None for base in bases)
+
+
+def test_other_root_isolation_preserve_null_and_json_merge(candidate_database):
+    from app.models import market_data as m
+    from app.repositories.job_run import update_job
+    from app.repositories.upsert import upsert_rows
+    from app.services.data_publication import KEYS
+
+    factory, engine = candidate_database
+    original.seed_published(factory)
+    with original.candidate(factory, engine) as (db, job):
+        original.stage_all(db, job, 999)
+        update_job(db, job, status='CANCELLED')
+    with original.candidate(factory, engine) as (db, job):
+        ws = db.info['publication_workspace']
+        payload = original.sample_row(m.StockFactorDaily, job.id)
+        values, _, _ = ws._lookup_batch(m.StockFactorDaily, [payload])
+        assert next(iter(values.values()))['adj_close'] == 10  # Never other root's 999.
+        signal = original.sample_row(m.StrategySignal, job.id)
+        signal.update(score=2.5, reason_codes={'keep': None, 'old': True})
+        keys = KEYS['strategy_signal']
+        upsert_rows(db, m.StrategySignal, [signal], keys)
+        db.commit()
+        upsert_rows(db, m.StrategySignal, [{**signal, 'score': None,
+            'reason_codes': {'new': False}}], keys,
+            preserve_existing_on_null_columns=['score'], merge_json_columns=['reason_codes'])
+        db.commit()
+        values, bases, _ = ws._lookup_batch(m.StrategySignal, [signal])
+        row = next(iter(values.values()))
+        assert row['score'] == 2.5
+        assert row['reason_codes'] == {'keep': None, 'old': True, 'new': False}
+        assert next(iter(bases.values()))['_publication_base']['score'] is None

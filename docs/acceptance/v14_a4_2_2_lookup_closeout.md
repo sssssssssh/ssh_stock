@@ -65,8 +65,8 @@ Core 在 npm audit 约 90 秒后只打印 Audit command failed，后续前端 co
    无权限指标标 NOT_AVAILABLE。
 5. 生产改动必须同时达到慢表 lookup median 至少 30% 与完整代表工作负载至少 20%，
    不回归其他表/资源/正确性；否则仅交付诊断。
-   已有 A4-1/A4-2 逐字节冻结会拒绝生产文件任何变化，严格例外范围正在请用户确认；
-   未获允许不擅自放宽冻结。
+   已有 A4-1/A4-2 逐字节冻结会拒绝生产文件任何变化；用户已允许仅对经验证的
+   _lookup_batch() 差异设置严格例外，其余源码/模型/历史证据继续冻结。
 6. npm audit 独立提交：有界网络重试、受控脱敏诊断、完整 lockfile 校验；
    INCOMPLETE 独立文件且非零退出，不生成虚假风险清单。独立审计 Job 不阻断本地前端测试调度，
    但 release 必须验证同 SHA/attempt 的有效审计。
@@ -101,3 +101,43 @@ Core 在 npm audit 约 90 秒后只打印 Audit command failed，后续前端 co
 - Node22.23.4 上 audit 单元测试 24/24 通过；相关 Python 单元测试 65/65、ruff 通过。
   一次全 unit 运行因外部 LLM_ENABLED=false 覆盖合成 dotenv 用例失败；移除该测试环境覆盖重跑，
   不改业务测试断言。完整 PG17、前端及容量结论以新 SHA CI 工件为准。
+
+## 首轮实测与跟进（历史 P1，不作后续 SHA 验收）
+
+P1 主 CI 39774476378 / attempt 1 的 lookup Job 成功，工件 12424881949：
+ZIP SHA256 `d014d56160b76279c2fcd9962929ab16d49ff36ec0e16b9b32e2b70d61580074`。
+同实例 150 次样本、30 份 actual EXPLAIN，全部样本 golden 一致。
+
+| 原统计、2000 键 median 秒 | C0 | C1 | C2 | C3/100 | C3/1000 |
+|---|---:|---:|---:|---:|---:|
+| stock_opportunity_daily | 0.131781 | 0.114662 | 0.536879 | 0.130041 | 0.111767 |
+| signal_forward_eval | 75.953502 | 0.080825 | 0.080810 | 0.090320 | 0.079798 |
+| stock_trade_status_daily | 0.108841 | 0.082479 | 0.083214 | 0.092449 | 0.081977 |
+
+显式 ANALYZE 后 opportunity C0/C1 为 0.131918/0.115423 秒（仅改善 12.5%）；
+SFE 为 76.921047/0.084642 秒。严格门槛没有全部达到，生产 SQL 未改。
+P1 的三表总耗时计算仅为表 median 之和，不能代替逐轮完整工作负载；后续脚本已修正。
+
+重要反证：SFE 前两个 B 覆盖批次约 0.02 秒，后两个 B 缺失批次约 38 秒；
+首批 EXPLAIN 却仅约 11ms，说明首批计划不能解释真正慢批次。
+该样本 wall=75.387 秒、execute=75.352 秒、client CPU=0.245 秒、JSON=0.00243 秒；
+PG cgroup CPU 增量约 75.575 秒，采样 blockers=0，物理读取字节无增长、temp=0。
+支持数据库端 CPU 执行而非 Python/锁/磁盘读是该样本主成本，但尚不能推断具体慢节点。
+根因仍标 INSUFFICIENT_EVIDENCE，不能把首批快计划当作慢计划，也不归因阿里云配置。
+
+后续严格补强：机会表也必须覆盖 A-only 首次写入，所以将两个慢表候选均固定为前十天。
+public 仍是原 5000×20、603040 行；诊断 B 共 503020 行，固定同一快照下比较全部方案。
+这与 P1 的 553020 行 B 快照不同，不能把跨轮绝对时间作为优化增益；不修改正式 L2。
+全部代表表、全部方案在同一新实例比较 B 覆盖与晚期键实际 EXPLAIN（60 份），并在计时外
+追加同连接 auto_explain 实际执行计划（36 份）和 generic/custom prepared counters。
+auto_explain 只在计时外开启，参数日志关闭，不改 planner/plan_cache_mode；原始 server logs 不导出。
+依据 [PG17 auto_explain 文档](https://www.postgresql.org/docs/17/auto-explain.html)，
+log_parameter_max_length=0 禁止参数日志；LOAD/配置/JSON 解析先做低成本自检，再装载大夹具。
+
+P2 `9de0a75f2a1d93f3b47664c6bd4dac2a6666fbdc` 的 CI 39776238585 / attempt 1：
+独立审计成功，工件 12424317609，ZIP SHA256
+`d9edc98844b11125d70dc58f3390aacf7ad28d56e005327a8700b874e0911460`。
+Node22.23.3/npm10.9.9，lock SHA256
+`379b41703367d8c450005543ee3baed30334ebb0e6343bbc441cf9d32caa8b19`。
+all=11（moderate4/high3/critical4）；production=4（moderate2/high2/critical0）。
+两份报告均合法 exit1，未伪报零漏洞，未升级依赖；该结果不能填充后续 SHA 的审计。

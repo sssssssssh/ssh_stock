@@ -72,9 +72,19 @@ def lookup_receipt(directory, head, attempt):
             and receipt.get('production_source_sha256') == hashlib.sha256(
                 proposed.encode()).hexdigest(), 'LOOKUP_PRODUCTION_NOT_VERIFIED_CANDIDATE')
     plans = receipt.get('plans', [])
-    require(len(plans) == 30 and {(p['statistics'], p['table'], p['variant']) for p in plans}
-            == {key[:3] for key in expected} and all(p.get('plan') for p in plans),
+    require(len(plans) == 60
+            and {(p['statistics'], p['table'], p['variant'], p['case']) for p in plans}
+            == {(*key[:3], case) for key in expected for case in ('b_present', 'late_keys')}
+            and all(p.get('plan') for p in plans),
             'LOOKUP_PLANS_INCOMPLETE')
+    require(receipt.get('observer_preflight') == 'PASS', 'LOOKUP_ACTUAL_PLAN_OBSERVER_MISSING')
+    for regime in ('as_seeded', 'analyzed'):
+        probes = receipt.get('actual_execution_probes', {}).get(regime, {}).get('cases', [])
+        require(len(probes) == 18 and {(p['table'], p['variant'], p['case']) for p in probes}
+                == {(table, variant, case) for table in TABLES for variant in ('C0', 'C1', 'C2')
+                    for case in ('b_present', 'b_absent_for_sfe')}
+                and all(p.get('plan') and p.get('golden') == 'PASS' for p in probes),
+                'LOOKUP_ACTUAL_PLANS_INCOMPLETE')
     return dict(testcases=junit(paths[0].parent/'tests.xml'), status='COMPLETE')
 
 

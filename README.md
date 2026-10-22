@@ -24,6 +24,8 @@ Windows 文件短暂占用只对诊断文件有限重试，不重试数据库或
 `dependency-audit` 独立执行 Node22 风险审计（90 秒×最多三次/报告，有界退避）；
 网络失败只生成 INCOMPLETE 诊断并失败关闭，不阻断 Core 前端测试调度，但阻断最终发布。
 审计与诊断工件均绑定同 SHA/run/attempt，不能以旧报告补齐。
+首轮计划不足以解释 SFE 的 A-only 慢批次；跟进诊断同时覆盖 B 存在/缺失键，
+在计时外采集真实 auto_explain 与 prepared counters，不改生产规划器配置。
 
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 

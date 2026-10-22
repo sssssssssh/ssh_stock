@@ -47,6 +47,81 @@ def redact_plan(value):
     return value
 
 
+def prepared_snapshot(db):
+    from sqlalchemy import text
+
+    return [dict(name=row['name'], generic_plans=row['generic_plans'],
+                 custom_plans=row['custom_plans'],
+                 sql_sha256=hashlib.sha256(row['statement'].encode()).hexdigest())
+            for row in db.execute(text('SELECT name,statement,generic_plans,custom_plans '
+                "FROM pg_prepared_statements WHERE statement LIKE 'WITH input_keys AS%%'"))
+            .mappings()]
+
+
+def logged_plans(log):
+    """Extract only auto_explain JSON; never export raw server logs or binds."""
+    decoder, result, offset = json.JSONDecoder(), [], 0
+    while (start := log.find('{', offset)) >= 0:
+        try:
+            value, end = decoder.raw_decode(log[start:])
+        except ValueError:
+            offset = start+1
+            continue
+        offset = start+end
+        if (isinstance(value, dict)
+                and str(value.get('Query Text', '')).startswith('WITH input_keys')):
+            result.append(redact_plan(value))
+    return result
+
+
+def enable_auto_explain(db):
+    from sqlalchemy import text
+
+    db.execute(text("LOAD 'auto_explain'"))
+    for name, value in {'log_format':'json', 'log_analyze':'on', 'log_buffers':'on',
+        'log_verbose':'on', 'log_timing':'on', 'log_settings':'on',
+        'log_parameter_max_length':'0', 'log_min_duration':'0ms'}.items():
+        db.execute(text(f"SET LOCAL auto_explain.{name}='{value}'"))
+
+
+def read_logged_plans(container, started):
+    raw = subprocess.run(['docker', 'logs', '--since', started, container],
+                         text=True, capture_output=True, timeout=30, check=True)
+    return logged_plans(raw.stdout+raw.stderr)
+
+
+def actual_execution_probe(db, ws, models, inputs, container):
+    from sqlalchemy import text
+
+    from scripts.a42_artifacts import now
+
+    # Only after timed comparisons. No plan-cache or planner hints are changed.
+    started = now()
+    before = prepared_snapshot(db)
+    enable_auto_explain(db)
+    cases = []
+    golden = {}
+    for model in models:
+        table = model.__tablename__
+        for variant in ('C0', 'C1', 'C2'):
+            for case, offset in (('b_present', 0), ('b_absent_for_sfe', 1000)):
+                clock = perf_counter()
+                result = lookup(ws, model, inputs[table][offset:offset+500], variant)
+                if variant == 'C0':
+                    golden[table, case] = result
+                elif result != golden[table, case]:
+                    raise ValueError('A422_ACTUAL_PROBE_GOLDEN_MISMATCH')
+                cases.append(dict(table=table, variant=variant, case=case,
+                    wall_seconds=perf_counter()-clock, existing_rows=len(result[0]), golden='PASS'))
+    db.execute(text("SET LOCAL auto_explain.log_min_duration='-1'"))
+    plans = read_logged_plans(container, started)
+    if len(plans) != len(cases):
+        raise ValueError('A422_ACTUAL_EXECUTION_PLAN_COUNT_MISMATCH')
+    return dict(prepared_before=before, prepared_after=prepared_snapshot(db),
+        observer_scope='UNTIMED_POST_COMPARISON_AUTO_EXPLAIN_NO_BIND_VALUES',
+        cases=[dict(**case, plan=plan) for case, plan in zip(cases, plans, strict=True)])
+
+
 @lru_cache
 def baseline_module():
     source = subprocess.check_output([
@@ -229,7 +304,9 @@ def setup_runtime():
     os.environ.update(DATABASE_URL=url.render_as_string(hide_password=False),
                       AB_MERGE_READ_ENABLED="false", LLM_ENABLED="false",
                       TUSHARE_TOKEN="synthetic-a422")
-    from app.core.config import get_settings
+    from app.core.config import Settings, get_settings
+
+    Settings.model_config['env_file'] = None  # Standalone lab process, never business dotenv.
     from app.models import market_data as m
     from app.models.job import JobRun
     from app.services.data_publication import KEYS, MODELS
@@ -254,7 +331,10 @@ def seed_candidates(db, root, c, days):
         keys = ",".join(f'p."{k}"' for k in c.KEYS[name])
         change = ("jsonb_build_object('calc_run_id',CAST(:root AS text))"
                   if "calc_run_id" in model.__table__.c else "'{}'::jsonb")
-        limit = "WHERE p.trade_date <= :cutoff" if name == "signal_forward_eval" else ""
+        # Reproduce first-write A-only keys as well as A/B-covered keys for BOTH
+        # slow representatives; P1's opportunity fixture covered every B key.
+        limit = ("WHERE p.trade_date <= :cutoff"
+                 if name in {'signal_forward_eval', 'stock_opportunity_daily'} else "")
         entity = 'p.ts_code' if 'ts_code' in model.__table__.c else 'NULL::text'
         count = db.execute(text(f"""INSERT INTO public.data_publication_row
             (publication_id,table_name,row_key,row_data,base_row,source_id,is_deleted,
@@ -264,7 +344,7 @@ def seed_candidates(db, root, c, days):
             dict(root=root, name=name, cutoff=days[9])).rowcount
         counts[name] = count
     db.commit()
-    if sum(counts.values()) != 553020:
+    if sum(counts.values()) != 503020:
         raise ValueError("A422_FIXTURE_CANDIDATE_COUNT_CHANGED")
     return counts
 
@@ -318,11 +398,11 @@ def run(output, path):
     from scripts.ab_read_resources_v14_a4_2 import Telemetry, host_memory_bytes
     from scripts.v14_test_database import isolated_v14_database
 
-    proof, c, candidate = setup_runtime()
-    output.update(proof)
     # Only this CI-created instance is used for performance evidence.
     if os.environ.get("GITHUB_ACTIONS") != "true":
         raise ValueError("A422_MEASUREMENTS_REQUIRE_ISOLATED_CI_RUNNER")
+    proof, c, candidate = setup_runtime()
+    output.update(proof)
     container = os.environ["A421_CONTAINER"]
     output.update(container_receipt(container))
     output["host"] = dict(platform=platform.platform(), logical_cpus=os.cpu_count(),
@@ -332,6 +412,16 @@ def run(output, path):
         host_disk_wait_attribution="NOT_AVAILABLE", cold_cache="UNCONTROLLED_NOT_CLAIMED")
     with deadline(100*60), pytest.MonkeyPatch.context() as patch:
         with isolated_v14_database(patch) as (factory, engine):
+            with factory() as observer:
+                clock = now()
+                enable_auto_explain(observer)
+                observer.execute(text('WITH input_keys AS (SELECT 1 AS synthetic) '
+                                      'SELECT * FROM input_keys')).all()
+                observer.execute(text("SET LOCAL auto_explain.log_min_duration='-1'"))
+                if len(read_logged_plans(container, clock)) != 1:
+                    raise ValueError('A422_OBSERVER_PREFLIGHT_FAILED')
+            output['observer_preflight'] = 'PASS'
+            output['configuration_source'] = 'EXPLICIT_SYNTHETIC_ENV_NO_DOTENV'
             days = [date(2026, 1, 2)+timedelta(days=i) for i in range(20)]
             output.update(phase="fixture_seed", public_stocks=5000, public_days=20,
                           public_total_rows=603040)
@@ -378,8 +468,12 @@ def run(output, path):
                                 plan = db.execute(text(prefix+sql), params).scalar()
                                 output.setdefault('plans', []).append(dict(statistics=regime,
                                     table=name, variant=variant, plan=redact_plan(plan)))
-                            lookup(ws, model, inputs[name][:VARIANTS[variant]], variant, explain)
-                            atomic(path, output)
+                            for case, offset in (('b_present', 0), ('late_keys', 1000)):
+                                before_plans = len(output.get('plans', []))
+                                lookup(ws, model, inputs[name][offset:offset+VARIANTS[variant]],
+                                       variant, explain)
+                                output['plans'][before_plans]['case'] = case
+                                atomic(path, output)
                     for name in TABLES:
                         model = next(m for m in c.MODELS if m.__tablename__ == name)
                         expected, _ = workload(ws, model, inputs[name], 'C0')
@@ -419,6 +513,11 @@ def run(output, path):
                                 atomic(path, output)
                                 print(json.dumps(dict(statistics=regime, table=name,
                                     variant=variant, repeat=repeat, wall_seconds=wall)), flush=True)
+                    models = [next(m for m in c.MODELS if m.__tablename__ == name)
+                              for name in TABLES]
+                    probes = output.setdefault('actual_execution_probes', {})
+                    probes[regime] = actual_execution_probe(db, ws, models, inputs, container)
+                    atomic(path, output)
                 output['summary'] = summarize(output['samples'])
                 output['whole_workloads'] = whole_workloads(output['samples'])
                 output['decision'] = performance_decision(
@@ -450,6 +549,8 @@ def main():
         run(output, args.output)
     except BaseException as error:
         output.update(status='INCOMPLETE', **failure(error))
+        if isinstance(error, ValueError) and re.fullmatch(r'A422_[A-Z0-9_]+', str(error)):
+            output['failure_code'] = str(error)
         atomic(args.output, output)
         raise SystemExit(1) from None
     finally:

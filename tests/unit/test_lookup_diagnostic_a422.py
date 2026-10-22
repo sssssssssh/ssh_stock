@@ -53,6 +53,27 @@ def test_plan_redaction_retains_nodes_and_observed_counters():
     assert result[0]['Settings'] == plan[0]['Settings']
 
 
+def test_actual_log_parser_discards_raw_log_and_bind_blocks():
+    import json
+
+    value = {'Query Text': 'WITH input_keys AS (SELECT $1) SELECT * FROM input_keys',
+        'Plan': {'Actual Rows': 500, 'Rows Removed by Filter': 100000},
+        'Query Parameters': 'PRIVATE_BIND'}
+    result = lab.logged_plans('PRIVATE_LOG\nLOG: plan:\n'+json.dumps(value)+'\nEND')
+    assert len(result) == 1 and 'PRIVATE' not in str(result)
+    assert result[0]['Plan']['Rows Removed by Filter'] == 100000
+    assert lab.logged_plans('{malformed\n{"Plan":{}}') == []
+
+
+def test_standalone_runtime_disables_dotenv_and_checks_ci_before_setup():
+    source = Path(lab.__file__).read_text()
+    assert "Settings.model_config['env_file'] = None" in source
+    assert source.index('A422_MEASUREMENTS_REQUIRE_ISOLATED_CI_RUNNER') < source.index(
+        'proof, c, candidate = setup_runtime()')
+    assert source.index("'log_parameter_max_length':'0'") < source.index(
+        "'log_min_duration':'0ms'")
+
+
 def comparison():
     return [dict(statistics=regime, table=table, variant=variant,
                  **lab.distribution([10 if variant == 'C0' else 6]*5))
