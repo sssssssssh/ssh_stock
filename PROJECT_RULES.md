@@ -1,5 +1,14 @@
 # 项目开发规则
 
+## A4-2.3.1 单轮归因边界
+
+新任务只授权先冻结协议、再单轮受控归因；不再把缺因果证据等同于不得采集归因证据。
+历史与新诊断分别标识HISTORICAL_NOT_ACCEPTANCE/DIAGNOSTIC_ONLY，均不得授权生产。
+仅对Telemetry生命周期做对称full/minimal反事实，保留原lookup计时/SQL/GC自然行为。
+固定样本、顺序、独立进程规则、20分钟软预算；缺样本或中断保留INCOMPLETE，不自动重跑。
+P2修复与新5/100性能复核仍需再次审阅；生产C0/AB开关/正式容量及源码冻结保持。
+协议见docs/acceptance/v14_a4_2_3_1_attribution_protocol.md；不改原历史冻结证据。
+
 ## A4-2.3 条件准入边界
 
 审阅基线44e46b0的失败必须按原inclusive分位数、完整1100样本复算，不重写原工件。
