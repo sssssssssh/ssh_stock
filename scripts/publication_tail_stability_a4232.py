@@ -60,12 +60,17 @@ from scripts.publication_lookup_tail_review_a423 import INPUT_HASHES  # noqa: E4
 
 
 def remember(receipt, error):
-    receipt.setdefault('first_failure',getattr(error,'a4232_first_failure',failure(error)))
+    earliest,seen = error,set()
+    while id(earliest) not in seen:
+        seen.add(id(earliest))
+        previous = earliest.__cause__ or earliest.__context__
+        if previous is None or id(previous) in seen:
+            break
+        earliest = previous
+    receipt.setdefault('first_failure',getattr(error,'a4232_first_failure',failure(earliest)))
     receipt['terminal_failure'] = failure(error)
     if re.fullmatch(r'A4232_[A-Z0-9_]{1,100}',str(error)):
         receipt['terminal_failure']['failure_code'] = str(error)
-        if receipt['first_failure']['failure_type'] == type(error).__name__:
-            receipt['first_failure']['failure_code'] = str(error)
     if hasattr(error,'a4232_drift'):
         receipt.update(status='INCOMPLETE_ENVIRONMENT_DRIFT',drift=error.a4232_drift)
     else:
@@ -457,6 +462,13 @@ def run(output, path):
                                 output['child_failure'] = {k:child[k] for k in
                                     ('first_failure','terminal_failure','drift','failed_sample')
                                     if k in child}
+                                error = ValueError('A4232_ENVIRONMENT_DRIFT' if 'drift' in child
+                                                   else 'A4232_CHILD_INCOMPLETE')
+                                if 'drift' in child:
+                                    error.a4232_drift = dict(block=block,child_drift=child['drift'])
+                                if 'first_failure' in child:
+                                    error.a4232_first_failure = child['first_failure']
+                                raise error
                             validate_child(child,output,config)
                             if block:
                                 assert_plans(output['frozen_plans'],child['initial_snapshot']['plans'])

@@ -405,3 +405,17 @@ def test_failure_metadata_keeps_driver_class_and_state_not_message_or_sql():
     value = safe_exception(error)
     assert value['sqlstate'] == '42883' and value['driver_type'] == 'UndefinedFunction'
     assert 'SECRET' not in json.dumps(value) and ' SQL' not in json.dumps(value)
+
+
+def test_context_manager_cleanup_does_not_replace_first_failure():
+    try:
+        try:
+            raise RuntimeError('SECRET_FIRST')
+        except RuntimeError:
+            raise ValueError('SECRET_TERMINAL') from None
+    except ValueError as error:
+        output = {}
+        runner.remember(output,error)
+    assert output['first_failure']['failure_type'] == 'RuntimeError'
+    assert output['terminal_failure']['failure_type'] == 'ValueError'
+    assert 'SECRET' not in json.dumps(output)

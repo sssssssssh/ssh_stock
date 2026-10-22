@@ -43,3 +43,17 @@ P1a提交5e2ac9e的[预检run39831770523](https://github.com/sssssssssh/ssh_stoc
 新实验NOT_RUN；unique_repair_candidate=null。P2/P3、生产SQL、正式5/100、正式L2均NOT_AUTHORIZED。
 capacity_ready/performance_eligible/production_matches_candidate=false，原release gate和P95门槛不变。
 统计稳态、原始新工件、因果分析和最终exact-SHA CI尚待P1a/P1b/P1c实际执行；没有通过前保持OPEN。
+
+## P1a实测与P1b唯一激活
+
+修正提交`462d46e26e8ea4e3bcc1b2631e8c20eeb213a87a`的
+[专用CI39832828251](https://github.com/sssssssssh/ssh_stock/actions/runs/39832828251) attempt1已成功：
+contracts Job120013195818为171/171通过（64.48秒），Ruff通过，attribution仍跳过。
+[工件12449991106](https://github.com/sssssssssh/ssh_stock/actions/runs/39832828251/artifacts/12449991106)
+ZIP摘要（GitHub元数据）：78e3727410f613da5be89dae9d3988ced74b0c0a430c918664c299913c7ccc58。
+该微型测试结果不能充当128样本或容量结果。
+
+本P1b提交激活协议规定的唯一批次；专用工作流必须先通过同SHA的contracts，才运行采集。
+只补充异常上下文首发/终态保留、子进程漂移向父传播和预检物理身份收据；计时/方案/顺序/协议不变。
+本提交时新性能数据仍NOT_RUN；结果必须绑定其实际SHA/run/attempt和ZIP摘要，不能提前填PASS。
+激活前本地完整1930项单元测试通过（22.46秒，两个既有警告），专项73项及Ruff/diff检查通过。

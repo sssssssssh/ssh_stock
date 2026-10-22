@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 from xml.etree import ElementTree
 
-from scripts.a42_artifacts import atomic, failure, header
+from scripts.a42_artifacts import atomic, failure, header, isolation
 
 
 def receipt(source):
@@ -30,6 +30,10 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     args = parser.parse_args()
     output = receipt(args.source)
+    try:
+        output.update(isolation())
+    except BaseException as error:
+        output.update(status='INCOMPLETE',**failure(error))
     atomic(args.output,output)
     raise SystemExit(0 if output['status'] == 'COMPLETE' else 1)
 
