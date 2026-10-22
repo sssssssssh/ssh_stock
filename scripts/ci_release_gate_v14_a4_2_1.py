@@ -31,6 +31,50 @@ def junit(path):
     return len(cases)
 
 
+def lookup_receipt(directory, head, attempt):
+    import hashlib
+
+    from scripts.publication_lookup_diagnostic_a422 import (
+        BASELINE,
+        TABLES,
+        VARIANTS,
+        candidate_source,
+        performance_decision,
+        summarize,
+    )
+
+    paths = list(directory.rglob('lookup/lookup.json'))
+    require(len(paths) == 1, 'LOOKUP_ARTIFACT_MISSING')
+    receipt = json.loads(paths[0].read_text())
+    identity(receipt, head=head, attempt=attempt, job_id='a422-lookup-diagnosis')
+    physical(receipt)
+    require(receipt.get('status') == 'COMPLETE' and not receipt['working_tree_dirty']
+            and receipt.get('run_id') == os.environ['GITHUB_RUN_ID']
+            and receipt.get('model_hash') == model_hash()
+            and receipt.get('lookup_baseline_sha') == BASELINE, 'LOOKUP_INCOMPLETE')
+    samples = receipt.get('samples', [])
+    expected = {(regime, table, variant, repeat) for regime in ('as_seeded', 'analyzed')
+                for table in TABLES for variant in VARIANTS for repeat in range(5)}
+    actual = [(s['statistics'], s['table'], s['variant'], s['repeat']) for s in samples]
+    require(len(actual) == len(expected) and set(actual) == expected
+            and all(s.get('golden') == 'PASS' and s.get('keys') == 2000 for s in samples),
+            'LOOKUP_SAMPLES_INCOMPLETE')
+    summary = summarize(samples)
+    require(summary == receipt.get('summary') and performance_decision(summary)
+            == receipt.get('decision'), 'LOOKUP_DECISION_MISMATCH')
+    require(receipt['decision']['performance_eligible'] is True, 'LOOKUP_TARGET_NOT_MET')
+    proposed = candidate_source()
+    require((ROOT/'backend/app/services/data_publication.py').read_text() == proposed
+            and receipt.get('production_matches_candidate') is True
+            and receipt.get('production_source_sha256') == hashlib.sha256(
+                proposed.encode()).hexdigest(), 'LOOKUP_PRODUCTION_NOT_VERIFIED_CANDIDATE')
+    plans = receipt.get('plans', [])
+    require(len(plans) == 30 and {(p['statistics'], p['table'], p['variant']) for p in plans}
+            == {key[:3] for key in expected} and all(p.get('plan') for p in plans),
+            'LOOKUP_PLANS_INCOMPLETE')
+    return dict(testcases=junit(paths[0].parent/'tests.xml'), status='COMPLETE')
+
+
 def status(directory, job, *, core=False, safety=False):
     directory = Path(directory)
     value = dict(**header(job), status="INCOMPLETE", finished_at=now(),
@@ -82,7 +126,8 @@ def gate(args):
                 require(json.loads(path.read_text()).get("run_id") == os.environ["GITHUB_RUN_ID"],
                         "MANIFEST_RUN_MISMATCH")
         else:
-            require_jobs(needs, {"test", "capacity"})
+            require_jobs(needs, {"test", "capacity", "lookup-diagnosis"})
+            result['lookup'] = lookup_receipt(args.input, head, attempt)
             core_files = list(args.input.rglob("core/status.json"))
             require(len(core_files) == 1, "CORE_ARTIFACT_MISSING")
             core = json.loads(core_files[0].read_text())

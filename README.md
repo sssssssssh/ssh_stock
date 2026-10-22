@@ -14,6 +14,14 @@ Windows 文件短暂占用只对诊断文件有限重试，不重试数据库或
 本轮最终本地 2490 项 pytest 与 Ruff 已通过；专用 PG17 current=heads 为 0058，未升级业务库。
 600×3 合成测试不能替代正式 L2 5000×20；完整 L2 与本轮 exact-SHA 门禁未通过前整体保持 OPEN。
 
+## V1.4 A4-2.2 候选查找诊断（开发中，验收 OPEN）
+
+基线为 `4a095883`；[基线与实验计划](docs/acceptance/v14_a4_2_2_lookup_closeout.md)
+记录原 L2 超时逐表证据。新增 CI 隔离 PG17 的 C0/C1/C2/C3 诊断，使用正式
+5000×20 public 夹具，但只测固定 2000 键代表负载，不能替代正式 L2。
+未取得计划/正确性/性能证据前不修改生产查询、不盲目重跑全量 L2；Release Gate 保持 OPEN。
+不读取业务 `.env` 或连接阿里云，不进入 A4-3/B/C。
+
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 
 执行结果与未关闭项见 [P3 执行报告](docs/acceptance/v14_a4_2_1_closeout.md)。

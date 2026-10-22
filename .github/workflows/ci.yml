@@ -5,6 +5,46 @@ name: CI
   pull_request:
 
 jobs:
+  lookup-diagnosis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      capacity_ready: ${{ steps.measure.outputs.capacity_ready }}
+    env:
+      LLM_ENABLED: "false"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - uses: ./.github/actions/a421-pg
+        with:
+          resource-class: capacity
+      - name: Lookup rewrite and safety regressions before measurements
+        run: >-
+          python -m pytest tests/unit/test_lookup_diagnostic_a422.py
+          tests/integration/test_lookup_candidates_a422.py
+          --junitxml=.codex_tmp/a421/lookup/tests.xml
+      - name: Same-instance C0 C1 C2 C3, actual L2 cardinalities
+        id: measure
+        run: >-
+          python scripts/publication_lookup_diagnostic_a422.py
+          --output .codex_tmp/a421/lookup/lookup.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a421-lookup-${{ github.sha }}-attempt${{ github.run_attempt }}
+          include-hidden-files: true
+          path: .codex_tmp/a421
+          if-no-files-found: error
+      - if: always()
+        run: docker rm -f a421-pg17
+
   test:
     runs-on: ubuntu-latest
     services:
@@ -288,6 +328,10 @@ jobs:
           if-no-files-found: ignore
 
   capacity:
+    needs: lookup-diagnosis
+    # Diagnosis alone is not acceptance. Until the measured safe candidate is
+    # the actual production path, do not blindly repeat a 270-minute L2.
+    if: needs.lookup-diagnosis.outputs.capacity_ready == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
@@ -331,7 +375,7 @@ jobs:
         run: docker rm -f a421-pg17
 
   publication-release-gate:
-    needs: [test, capacity]
+    needs: [test, capacity, lookup-diagnosis]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

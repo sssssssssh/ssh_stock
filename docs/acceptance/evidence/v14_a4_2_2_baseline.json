@@ -1,0 +1,1320 @@
+{
+  "schema_version": "a422-baseline-v1",
+  "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+  "runs": [
+    {
+      "id": 39732005829,
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39732005829",
+      "jobs": [
+        {
+          "id": 119668941123,
+          "name": "capacity (L1)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T06:08:18Z"
+        },
+        {
+          "id": 119668941333,
+          "name": "test",
+          "conclusion": "failure",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T06:48:28Z"
+        },
+        {
+          "id": 119668941335,
+          "name": "capacity (L2)",
+          "conclusion": "failure",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T10:38:18Z"
+        },
+        {
+          "id": 119668941544,
+          "name": "capacity (L3-scaled-10pct)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T08:25:19Z"
+        },
+        {
+          "id": 119668942619,
+          "name": "ui-visual-acceptance",
+          "conclusion": "skipped",
+          "started_at": "2026-10-22T06:07:28Z",
+          "completed_at": "2026-10-22T06:07:28Z"
+        },
+        {
+          "id": 119776781963,
+          "name": "publication-release-gate",
+          "conclusion": "failure",
+          "started_at": "2026-10-22T10:38:20Z",
+          "completed_at": "2026-10-22T10:38:26Z"
+        }
+      ]
+    },
+    {
+      "id": 39732005730,
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39732005730",
+      "jobs": [
+        {
+          "id": 119668940348,
+          "name": "contract-and-safety",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T06:13:34Z"
+        },
+        {
+          "id": 119670912596,
+          "name": "laboratory (a42-million-window-0, million-window, million, 240, 0.1)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:13:37Z",
+          "completed_at": "2026-10-22T07:06:12Z"
+        },
+        {
+          "id": 119670912608,
+          "name": "laboratory (a42-million-plans-window_matrix-0, million-plans, million, 240, 0.1, window_matrix)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:33:21Z",
+          "completed_at": "2026-10-22T06:58:16Z"
+        },
+        {
+          "id": 119670912655,
+          "name": "laboratory (a42-million-plans-full-1, million-plans, million, 240, 1.0, full)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:03:50Z",
+          "completed_at": "2026-10-22T07:36:19Z"
+        },
+        {
+          "id": 119670912669,
+          "name": "laboratory (a42-million-plans-full-0, million-plans, million, 240, 0.1, full)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:16:30Z",
+          "completed_at": "2026-10-22T06:43:54Z"
+        },
+        {
+          "id": 119670912685,
+          "name": "laboratory (a42-small-10k, small, 10k, 120)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:13:37Z",
+          "completed_at": "2026-10-22T06:16:28Z"
+        },
+        {
+          "id": 119670912686,
+          "name": "laboratory (a42-million-plans-monthly-1, million-plans, million, 240, 0.1, monthly, 1)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:51:16Z",
+          "completed_at": "2026-10-22T08:33:56Z"
+        },
+        {
+          "id": 119670912688,
+          "name": "laboratory (a42-small-100k, small, 100k, 120)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:13:37Z",
+          "completed_at": "2026-10-22T06:33:19Z"
+        },
+        {
+          "id": 119670912700,
+          "name": "laboratory (a42-million-window-1, million-window, million, 240, 1.0)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:58:18Z",
+          "completed_at": "2026-10-22T07:51:14Z"
+        },
+        {
+          "id": 119670912716,
+          "name": "laboratory (a42-million-readers, million-readers, million, 240)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:35:13Z",
+          "completed_at": "2026-10-22T08:27:38Z"
+        },
+        {
+          "id": 119670912741,
+          "name": "laboratory (a42-million-full-0, million-full, million, 240, 0.1)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:13:37Z",
+          "completed_at": "2026-10-22T07:03:48Z"
+        },
+        {
+          "id": 119670912754,
+          "name": "laboratory (a42-million-plans-monthly-0, million-plans, million, 240, 0.1, monthly, 0)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:36:21Z",
+          "completed_at": "2026-10-22T08:13:40Z"
+        },
+        {
+          "id": 119670912761,
+          "name": "laboratory (a42-million-full-1, million-full, million, 240, 1.0)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:43:56Z",
+          "completed_at": "2026-10-22T07:35:11Z"
+        },
+        {
+          "id": 119670912790,
+          "name": "laboratory (a42-million-plans-window_matrix-1, million-plans, million, 240, 1.0, window_matrix)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:06:14Z",
+          "completed_at": "2026-10-22T07:27:41Z"
+        },
+        {
+          "id": 119670912796,
+          "name": "laboratory (a42-million-monthly, million-monthly, million, 300)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T07:27:43Z",
+          "completed_at": "2026-10-22T09:21:57Z"
+        },
+        {
+          "id": 119670913879,
+          "name": "laboratory (a42-shapes-partial, supplemental-shapes, 10k, 120, partial)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:27:45Z",
+          "completed_at": "2026-10-22T08:29:04Z"
+        },
+        {
+          "id": 119670913952,
+          "name": "laboratory (a42-million-plans-monthly-2, million-plans, million, 240, 0.1, monthly, 2)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:13:42Z",
+          "completed_at": "2026-10-22T09:00:03Z"
+        },
+        {
+          "id": 119670913979,
+          "name": "laboratory (a42-shapes-a_only, supplemental-shapes, 10k, 120, a_only)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:29:05Z",
+          "completed_at": "2026-10-22T08:30:30Z"
+        },
+        {
+          "id": 119670914034,
+          "name": "laboratory (a42-shapes-b_only, supplemental-shapes, 10k, 120, b_only)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:30:32Z",
+          "completed_at": "2026-10-22T08:31:37Z"
+        },
+        {
+          "id": 119670914055,
+          "name": "laboratory (a42-shapes-high, supplemental-shapes, 10k, 120, high)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:31:39Z",
+          "completed_at": "2026-10-22T08:32:58Z"
+        },
+        {
+          "id": 119670914161,
+          "name": "laboratory (a42-shapes-mismatched, supplemental-shapes, 10k, 120, mismatched)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:33:00Z",
+          "completed_at": "2026-10-22T08:34:22Z"
+        },
+        {
+          "id": 119670914271,
+          "name": "laboratory (a42-event-prototype, event-prototype, 100k, 120)",
+          "conclusion": "success",
+          "started_at": "2026-10-22T08:33:59Z",
+          "completed_at": "2026-10-22T08:37:49Z"
+        },
+        {
+          "id": 119744148201,
+          "name": "a42-acceptance-gate",
+          "conclusion": "success",
+          "started_at": "2026-10-22T09:21:59Z",
+          "completed_at": "2026-10-22T09:22:11Z"
+        }
+      ]
+    },
+    {
+      "id": 39732005757,
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39732005757",
+      "jobs": [
+        {
+          "id": 119668940448,
+          "name": "isolated-baseline",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T06:46:09Z"
+        }
+      ]
+    },
+    {
+      "id": 39732005753,
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "attempt": 1,
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/39732005753",
+      "jobs": [
+        {
+          "id": 119668940763,
+          "name": "candidate-performance",
+          "conclusion": "success",
+          "started_at": "2026-10-22T06:07:30Z",
+          "completed_at": "2026-10-22T07:07:48Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 12419701750,
+      "name": "a421-capacity-L2-4a095883bff09e0e5da6fe5fcf308f8206651f35-attempt1",
+      "zip_sha256": "sha256:bec6a0603b34f703890d9548be2f56a4176304cfa77c97fa287296a63d9130fa",
+      "size": 5024
+    },
+    {
+      "id": 12419068893,
+      "name": "a421-publication-release-4a095883bff09e0e5da6fe5fcf308f8206651f35-attempt1",
+      "zip_sha256": "sha256:6b8f990ff1fd93818a17121805acf0b8f35450e34ff87fd2245ea449bdf4c83a",
+      "size": 632
+    },
+    {
+      "id": 12412505131,
+      "name": "a421-capacity-L3-scaled-10pct-4a095883bff09e0e5da6fe5fcf308f8206651f35-attempt1",
+      "zip_sha256": "sha256:cbb9ebc1357d04e987d7acb9e16e494dad54657b2d76f3b7f1320ef87ec61160",
+      "size": 6994
+    },
+    {
+      "id": 12407710261,
+      "name": "data-publication-reliability",
+      "zip_sha256": "sha256:a0410cf9da52b15cd5aa0000888975816cf3db921048c49f8dbb1d65e99bfc37",
+      "size": 60958
+    },
+    {
+      "id": 12407272738,
+      "name": "m17-1-2-suspend-evidence",
+      "zip_sha256": "sha256:37b98dd60667acd1c6637b8c3e2f28487efb18818c7c9e20c496c4587fc0f3ab",
+      "size": 52981
+    },
+    {
+      "id": 12407217811,
+      "name": "m17-1-1-retention-evidence",
+      "zip_sha256": "sha256:58d303389097de6d28ae0e692a6c761de45132bf6caca1efd84a049cc02a992b",
+      "size": 8530
+    },
+    {
+      "id": 12407192484,
+      "name": "data-queue-container-acceptance",
+      "zip_sha256": "sha256:45317b5c0fb201dd2df3d4dc25957f595402c5699752c3d9a33d524f387f6235",
+      "size": 486
+    },
+    {
+      "id": 12407048077,
+      "name": "a421-core-4a095883bff09e0e5da6fe5fcf308f8206651f35-attempt1",
+      "zip_sha256": "sha256:bf840291102dff2aca79d5a628584eeba09cee32819a878aa841042931fc31fd",
+      "size": 61461
+    },
+    {
+      "id": 12406719849,
+      "name": "m17-capacity-measurements",
+      "zip_sha256": "sha256:f923628d0183de40252d723773a9f98dee1f081a36d0b0f523c75e7cc74b8861",
+      "size": 8211
+    },
+    {
+      "id": 12405725773,
+      "name": "v14-read-evidence",
+      "zip_sha256": "sha256:872e8b1fbbd1935d61841fb8737ac16eea897871013bdcafe3e306b0bc0bcac2",
+      "size": 15330
+    },
+    {
+      "id": 12405586271,
+      "name": "a421-capacity-L1-4a095883bff09e0e5da6fe5fcf308f8206651f35-attempt1",
+      "zip_sha256": "sha256:ac6ad286d222e7918daeaea1c0c3ae980b91bb85918ebbb34fc197369d3604f7",
+      "size": 6267
+    }
+  ],
+  "measurements": {
+    "formal": {
+      "schema_version": "v14-a4-2.1-shard-v1",
+      "baseline_sha": "02c69c6127860f72adaf79071a9a11930b69e411",
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "working_tree_dirty": false,
+      "job_id": "capacity-L2",
+      "attempt": "1",
+      "run_id": "39732005829",
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "production_read_authorized": false,
+      "authorize_a4_3": false,
+      "read_performance_pass": "NOT_CLAIMED",
+      "level": "L2",
+      "results": [],
+      "status": "INCOMPLETE",
+      "started_at": "2026-10-22T06:08:10.395291+00:00",
+      "finished_at": "2026-10-22T10:38:13.508496+00:00",
+      "expected_groups": 1,
+      "completed_groups": 0,
+      "database_instance": "a722fddb-3d74-42fe-b6f7-4a8becd6e30f",
+      "physical_system_identifier": "7699370063982198828",
+      "postgres_version": "17.11 (Debian 17.11-1.pgdg13+2)",
+      "isolation": {
+        "verified": true,
+        "before_ddl": true,
+        "expected_marker": "a722fddb-3d74-42fe-b6f7-4a8becd6e30f",
+        "observed_marker": "a722fddb-3d74-42fe-b6f7-4a8becd6e30f",
+        "expected_system_identifier": "7699370063982198828",
+        "observed_system_identifier": "7699370063982198828"
+      },
+      "resources": {
+        "cpu_limit": 0,
+        "memory_bytes": 0
+      },
+      "image_id": "sha256:82903352d6faf8f8a318bc4353d1cb1db67d4a5ff968d2799b2718e2cb00afa2",
+      "configured_image": "postgres:17",
+      "resource_class": "capacity-dedicated-host",
+      "environment": {
+        "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+        "machine": "x86_64",
+        "python": "3.12.15",
+        "logical_cpus": 4
+      },
+      "failed_phase": "capacity-L2",
+      "failure_type": "OperationalError",
+      "failure_code": "RESOURCE_DEFERRED",
+      "budget_exhausted": true,
+      "sqlstate": null,
+      "failure_trace": [
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 911,
+          "function": "main"
+        },
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 857,
+          "function": "run_cli"
+        },
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 615,
+          "function": "run_level"
+        },
+        {
+          "file": "contextlib.py",
+          "line": 158,
+          "function": "__exit__"
+        },
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 228,
+          "function": "observed_candidate"
+        },
+        {
+          "file": "contextlib.py",
+          "line": 158,
+          "function": "__exit__"
+        },
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 152,
+          "function": "lifecycle"
+        },
+        {
+          "file": "contextlib.py",
+          "line": 610,
+          "function": "__exit__"
+        },
+        {
+          "file": "contextlib.py",
+          "line": 595,
+          "function": "__exit__"
+        },
+        {
+          "file": "data_publication_capacity_v12.py",
+          "line": 159,
+          "function": "close"
+        },
+        {
+          "file": "contextlib.py",
+          "line": 158,
+          "function": "__exit__"
+        },
+        {
+          "file": "test_data_publication.py",
+          "line": 143,
+          "function": "candidate"
+        },
+        {
+          "file": "data_publication.py",
+          "line": 166,
+          "function": "close"
+        },
+        {
+          "file": "session.py",
+          "line": 1997,
+          "function": "rollback"
+        },
+        {
+          "file": "<string>",
+          "line": 2,
+          "function": "rollback"
+        },
+        {
+          "file": "state_changes.py",
+          "line": 137,
+          "function": "_go"
+        },
+        {
+          "file": "session.py",
+          "line": 1398,
+          "function": "rollback"
+        },
+        {
+          "file": "session.py",
+          "line": 1363,
+          "function": "rollback"
+        },
+        {
+          "file": "base.py",
+          "line": 2621,
+          "function": "rollback"
+        },
+        {
+          "file": "base.py",
+          "line": 2740,
+          "function": "_do_rollback"
+        },
+        {
+          "file": "base.py",
+          "line": 2723,
+          "function": "_close_impl"
+        },
+        {
+          "file": "base.py",
+          "line": 2715,
+          "function": "_connection_rollback_impl"
+        },
+        {
+          "file": "base.py",
+          "line": 1132,
+          "function": "_rollback_impl"
+        },
+        {
+          "file": "base.py",
+          "line": 2365,
+          "function": "_handle_dbapi_exception"
+        },
+        {
+          "file": "base.py",
+          "line": 1130,
+          "function": "_rollback_impl"
+        },
+        {
+          "file": "default.py",
+          "line": 712,
+          "function": "do_rollback"
+        },
+        {
+          "file": "connection.py",
+          "line": 310,
+          "function": "rollback"
+        },
+        {
+          "file": "connection.py",
+          "line": 484,
+          "function": "wait"
+        },
+        {
+          "file": "waiting.pyx",
+          "line": 219,
+          "function": "psycopg_binary._psycopg.wait_c"
+        },
+        {
+          "file": "_connection_base.py",
+          "line": 610,
+          "function": "_rollback_gen"
+        },
+        {
+          "file": "_connection_base.py",
+          "line": 476,
+          "function": "_exec_command"
+        },
+        {
+          "file": "pgconn.pyx",
+          "line": 310,
+          "function": "psycopg_binary.pq.PGconn.send_query"
+        }
+      ]
+    },
+    "progress": {
+      "schema_version": "capacity-progress-v1",
+      "artifact_kind": "DIAGNOSTIC_ONLY",
+      "head_sha": "4a095883bff09e0e5da6fe5fcf308f8206651f35",
+      "run_id": "39732005829",
+      "attempt": "1",
+      "job_id": "capacity-L2",
+      "model_hash": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+      "working_tree_dirty": false,
+      "started_at": "2026-10-22T06:08:10.487015+00:00",
+      "updated_at": "2026-10-22T10:38:13.511786+00:00",
+      "status": "INCOMPLETE",
+      "current_phase": "initialization",
+      "current_table": "signal_forward_eval",
+      "completed_table_count": 8,
+      "tables": {
+        "stock_trade_status_daily": {
+          "status": "MEASURED",
+          "rows": 100000,
+          "batch_count": 200,
+          "commit_count": 20,
+          "payload_count": 100000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.010405386000002181
+            },
+            "payload": {
+              "count": 100000,
+              "elapsed_seconds": 7.284091018999504
+            },
+            "workspace_upsert": {
+              "count": 200,
+              "elapsed_seconds": 15.037843518999722
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 1.1355992019999235
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 402,
+              "elapsed_seconds": 4.30974828600003
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0004665689999967526
+            },
+            "WITH": {
+              "count": 200,
+              "elapsed_seconds": 2.0616696860000445
+            },
+            "SELECT": {
+              "count": 200,
+              "elapsed_seconds": 0.2074250770001811
+            }
+          },
+          "elapsed_seconds": 23.97464859500002,
+          "rows_per_second": 4171.072606288598,
+          "peak_process_rss_bytes": 196657152
+        },
+        "stock_factor_daily": {
+          "status": "MEASURED",
+          "rows": 100000,
+          "batch_count": 200,
+          "commit_count": 20,
+          "payload_count": 100000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.003447871999981089
+            },
+            "payload": {
+              "count": 100000,
+              "elapsed_seconds": 7.457014063975123
+            },
+            "workspace_upsert": {
+              "count": 200,
+              "elapsed_seconds": 2646.5124620129995
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.5740982409998878
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 402,
+              "elapsed_seconds": 8.26244377500268
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.00043281899999669804
+            },
+            "WITH": {
+              "count": 200,
+              "elapsed_seconds": 2623.415588283001
+            },
+            "SELECT": {
+              "count": 200,
+              "elapsed_seconds": 0.19769966100298575
+            }
+          },
+          "elapsed_seconds": 2657.77046575,
+          "rows_per_second": 37.6255215748215,
+          "peak_process_rss_bytes": 211963904
+        },
+        "market_daily": {
+          "status": "MEASURED",
+          "rows": 20,
+          "batch_count": 20,
+          "commit_count": 20,
+          "payload_count": 20,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.0030296700001599675
+            },
+            "payload": {
+              "count": 20,
+              "elapsed_seconds": 0.003799346998675901
+            },
+            "workspace_upsert": {
+              "count": 20,
+              "elapsed_seconds": 0.6512740359994496
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.1176136010008122
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 42,
+              "elapsed_seconds": 0.02076302599880364
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0004272500000297441
+            },
+            "WITH": {
+              "count": 20,
+              "elapsed_seconds": 0.5647826550002719
+            },
+            "SELECT": {
+              "count": 20,
+              "elapsed_seconds": 0.015653217998533364
+            }
+          },
+          "elapsed_seconds": 0.7776778490001561,
+          "rows_per_second": 25.717589906557805,
+          "peak_process_rss_bytes": 211963904
+        },
+        "sector_factor_daily": {
+          "status": "MEASURED",
+          "rows": 1000,
+          "batch_count": 20,
+          "commit_count": 20,
+          "payload_count": 1000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.0029752990003544255
+            },
+            "payload": {
+              "count": 1000,
+              "elapsed_seconds": 0.08356395999089727
+            },
+            "workspace_upsert": {
+              "count": 20,
+              "elapsed_seconds": 31.871858452000197
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.441301044998454
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 42,
+              "elapsed_seconds": 0.0688294490005319
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0003722699998434109
+            },
+            "WITH": {
+              "count": 20,
+              "elapsed_seconds": 31.637543890000416
+            },
+            "SELECT": {
+              "count": 20,
+              "elapsed_seconds": 0.020476166999742418
+            }
+          },
+          "elapsed_seconds": 32.41173920600022,
+          "rows_per_second": 30.853018828896264,
+          "peak_process_rss_bytes": 211963904
+        },
+        "theme_factor_daily": {
+          "status": "MEASURED",
+          "rows": 2000,
+          "batch_count": 20,
+          "commit_count": 20,
+          "payload_count": 2000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.003151188000174443
+            },
+            "payload": {
+              "count": 2000,
+              "elapsed_seconds": 0.16197171199837612
+            },
+            "workspace_upsert": {
+              "count": 20,
+              "elapsed_seconds": 0.570561296998676
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.46272300600048766
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 42,
+              "elapsed_seconds": 0.1557260440004029
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.00037501299993891735
+            },
+            "WITH": {
+              "count": 20,
+              "elapsed_seconds": 0.0835479999996096
+            },
+            "SELECT": {
+              "count": 20,
+              "elapsed_seconds": 0.01898971600121513
+            }
+          },
+          "elapsed_seconds": 1.2097565529998064,
+          "rows_per_second": 1653.2251840592592,
+          "peak_process_rss_bytes": 211963904
+        },
+        "stock_state_daily": {
+          "status": "MEASURED",
+          "rows": 100000,
+          "batch_count": 200,
+          "commit_count": 20,
+          "payload_count": 100000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.15769728900022528
+            },
+            "payload": {
+              "count": 100000,
+              "elapsed_seconds": 7.229927652983861
+            },
+            "workspace_upsert": {
+              "count": 200,
+              "elapsed_seconds": 2651.770025961996
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.7230028819990366
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 402,
+              "elapsed_seconds": 4.971903366989864
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0004571750000650354
+            },
+            "WITH": {
+              "count": 200,
+              "elapsed_seconds": 2637.5535925379977
+            },
+            "SELECT": {
+              "count": 200,
+              "elapsed_seconds": 0.1873280120016716
+            }
+          },
+          "elapsed_seconds": 2663.586347635,
+          "rows_per_second": 37.543367080549146,
+          "peak_process_rss_bytes": 216473600
+        },
+        "stock_opportunity_daily": {
+          "status": "MEASURED",
+          "rows": 100000,
+          "batch_count": 200,
+          "commit_count": 20,
+          "payload_count": 100000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.006826503999945999
+            },
+            "payload": {
+              "count": 100000,
+              "elapsed_seconds": 7.569797030142581
+            },
+            "workspace_upsert": {
+              "count": 200,
+              "elapsed_seconds": 5681.166781740006
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.45418482900277013
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 402,
+              "elapsed_seconds": 6.593309199002761
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0004442159997779527
+            },
+            "WITH": {
+              "count": 200,
+              "elapsed_seconds": 5662.599591649989
+            },
+            "SELECT": {
+              "count": 200,
+              "elapsed_seconds": 0.25216553397604
+            }
+          },
+          "elapsed_seconds": 5691.971928253999,
+          "rows_per_second": 17.568603861803442,
+          "peak_process_rss_bytes": 236232704
+        },
+        "strategy_signal": {
+          "status": "MEASURED",
+          "rows": 100000,
+          "batch_count": 200,
+          "commit_count": 20,
+          "payload_count": 100000,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.0027085550009360304
+            },
+            "payload": {
+              "count": 100000,
+              "elapsed_seconds": 6.7371878481026215
+            },
+            "workspace_upsert": {
+              "count": 200,
+              "elapsed_seconds": 41.00470967599722
+            },
+            "day_commit": {
+              "count": 20,
+              "elapsed_seconds": 0.4436203409986774
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 402,
+              "elapsed_seconds": 3.959088173965938
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.0003490549988782732
+            },
+            "WITH": {
+              "count": 200,
+              "elapsed_seconds": 28.0338744110104
+            },
+            "SELECT": {
+              "count": 200,
+              "elapsed_seconds": 0.1599852239996835
+            }
+          },
+          "elapsed_seconds": 48.5920780790002,
+          "rows_per_second": 2057.9486194729448,
+          "peak_process_rss_bytes": 236232704
+        },
+        "signal_forward_eval": {
+          "status": "INCOMPLETE",
+          "rows": 50000,
+          "batch_count": 100,
+          "commit_count": 10,
+          "payload_count": 50500,
+          "operations": {
+            "record_scope": {
+              "count": 1,
+              "elapsed_seconds": 0.002659313000549446
+            },
+            "payload": {
+              "count": 50500,
+              "elapsed_seconds": 0.07006296160398051
+            },
+            "signal_id_lookup": {
+              "count": 101,
+              "elapsed_seconds": 3.9234228229997825
+            },
+            "workspace_upsert": {
+              "count": 101,
+              "elapsed_seconds": 5057.718199351
+            },
+            "day_commit": {
+              "count": 10,
+              "elapsed_seconds": 0.25078312900041055
+            },
+            "candidate_cleanup": {
+              "count": 1,
+              "elapsed_seconds": 0.1586806469986186
+            },
+            "database_cleanup": {
+              "count": 1,
+              "elapsed_seconds": 2.8438819180009887
+            }
+          },
+          "sql": {
+            "INSERT": {
+              "count": 203,
+              "elapsed_seconds": 2.4045220729931316
+            },
+            "UPDATE": {
+              "count": 1,
+              "elapsed_seconds": 0.00027784000121755525
+            },
+            "SELECT": {
+              "count": 201,
+              "elapsed_seconds": 3.8740110929938965
+            },
+            "WITH": {
+              "count": 100,
+              "elapsed_seconds": 5007.369726468005
+            }
+          },
+          "elapsed_seconds": 5066.344256163,
+          "rows_per_second": 9.869049056265187
+        }
+      },
+      "phases": {
+        "isolation_and_migration": {
+          "count": 1,
+          "elapsed_seconds": 0.8397413659999984
+        },
+        "payload": {
+          "count": 553529,
+          "elapsed_seconds": 36.622770184795684
+        },
+        "seed": {
+          "count": 1,
+          "elapsed_seconds": 8.597603169000024
+        },
+        "public_digests": {
+          "count": 1,
+          "elapsed_seconds": 5.128848766999994
+        },
+        "stats": {
+          "count": 1,
+          "elapsed_seconds": 0.13281902599999285
+        },
+        "candidate_create": {
+          "count": 1,
+          "elapsed_seconds": 0.08684980300000689
+        },
+        "record_scope": {
+          "count": 9,
+          "elapsed_seconds": 0.19290107600232886
+        },
+        "workspace_upsert": {
+          "count": 1161,
+          "elapsed_seconds": 16126.303716045995
+        },
+        "day_commit": {
+          "count": 170,
+          "elapsed_seconds": 4.60292627600046
+        },
+        "signal_id_lookup": {
+          "count": 101,
+          "elapsed_seconds": 3.9234228229997825
+        },
+        "candidate_cleanup": {
+          "count": 1,
+          "elapsed_seconds": 0.1586806469986186
+        },
+        "database_cleanup": {
+          "count": 1,
+          "elapsed_seconds": 2.8438819180009887
+        }
+      },
+      "completed_levels": [],
+      "peak_process_rss_bytes": 248156160,
+      "rss_scope": "PROCESS_LIFETIME_HIGH_WATER_NOT_TABLE_PEAK",
+      "production_read_authorized": false,
+      "level": "L2",
+      "stocks": 5000,
+      "days": 20,
+      "last_checkpoint_at": "2026-10-22T10:38:13.511796+00:00",
+      "elapsed_seconds": 16203.024782116,
+      "current_operation_elapsed_seconds": 0,
+      "first_failure": {
+        "phase": "workspace_upsert",
+        "table": "signal_forward_eval",
+        "failure_type": "BudgetExhausted",
+        "failure_code": "RESOURCE_DEFERRED",
+        "budget_exhausted": true,
+        "sqlstate": null,
+        "failure_trace": [
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 129,
+            "function": "phase"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 277,
+            "function": "upsert"
+          },
+          {
+            "file": "data_publication.py",
+            "line": 297,
+            "function": "upsert"
+          },
+          {
+            "file": "data_publication.py",
+            "line": 261,
+            "function": "_lookup_batch"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 259,
+            "function": "execute"
+          },
+          {
+            "file": "session.py",
+            "line": 2373,
+            "function": "execute"
+          },
+          {
+            "file": "session.py",
+            "line": 2280,
+            "function": "_execute_internal"
+          },
+          {
+            "file": "base.py",
+            "line": 1421,
+            "function": "execute"
+          },
+          {
+            "file": "elements.py",
+            "line": 526,
+            "function": "_execute_on_connection"
+          },
+          {
+            "file": "base.py",
+            "line": 1643,
+            "function": "_execute_clauseelement"
+          },
+          {
+            "file": "base.py",
+            "line": 1848,
+            "function": "_execute_context"
+          },
+          {
+            "file": "base.py",
+            "line": 1988,
+            "function": "_exec_single_context"
+          },
+          {
+            "file": "base.py",
+            "line": 2368,
+            "function": "_handle_dbapi_exception"
+          },
+          {
+            "file": "base.py",
+            "line": 1969,
+            "function": "_exec_single_context"
+          },
+          {
+            "file": "default.py",
+            "line": 952,
+            "function": "do_execute"
+          },
+          {
+            "file": "cursor.py",
+            "line": 113,
+            "function": "execute"
+          },
+          {
+            "file": "connection.py",
+            "line": 484,
+            "function": "wait"
+          },
+          {
+            "file": "waiting.pyx",
+            "line": 222,
+            "function": "psycopg_binary._psycopg.wait_c"
+          },
+          {
+            "file": "a42_artifacts.py",
+            "line": 160,
+            "function": "exhausted"
+          }
+        ]
+      },
+      "terminal_failure": {
+        "failure_type": "OperationalError",
+        "failure_code": "RESOURCE_DEFERRED",
+        "budget_exhausted": true,
+        "sqlstate": null,
+        "failure_trace": [
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 911,
+            "function": "main"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 857,
+            "function": "run_cli"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 615,
+            "function": "run_level"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 158,
+            "function": "__exit__"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 228,
+            "function": "observed_candidate"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 158,
+            "function": "__exit__"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 152,
+            "function": "lifecycle"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 610,
+            "function": "__exit__"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 595,
+            "function": "__exit__"
+          },
+          {
+            "file": "data_publication_capacity_v12.py",
+            "line": 159,
+            "function": "close"
+          },
+          {
+            "file": "contextlib.py",
+            "line": 158,
+            "function": "__exit__"
+          },
+          {
+            "file": "test_data_publication.py",
+            "line": 143,
+            "function": "candidate"
+          },
+          {
+            "file": "data_publication.py",
+            "line": 166,
+            "function": "close"
+          },
+          {
+            "file": "session.py",
+            "line": 1997,
+            "function": "rollback"
+          },
+          {
+            "file": "<string>",
+            "line": 2,
+            "function": "rollback"
+          },
+          {
+            "file": "state_changes.py",
+            "line": 137,
+            "function": "_go"
+          },
+          {
+            "file": "session.py",
+            "line": 1398,
+            "function": "rollback"
+          },
+          {
+            "file": "session.py",
+            "line": 1363,
+            "function": "rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2621,
+            "function": "rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2740,
+            "function": "_do_rollback"
+          },
+          {
+            "file": "base.py",
+            "line": 2723,
+            "function": "_close_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 2715,
+            "function": "_connection_rollback_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 1132,
+            "function": "_rollback_impl"
+          },
+          {
+            "file": "base.py",
+            "line": 2365,
+            "function": "_handle_dbapi_exception"
+          },
+          {
+            "file": "base.py",
+            "line": 1130,
+            "function": "_rollback_impl"
+          },
+          {
+            "file": "default.py",
+            "line": 712,
+            "function": "do_rollback"
+          },
+          {
+            "file": "connection.py",
+            "line": 310,
+            "function": "rollback"
+          },
+          {
+            "file": "connection.py",
+            "line": 484,
+            "function": "wait"
+          },
+          {
+            "file": "waiting.pyx",
+            "line": 219,
+            "function": "psycopg_binary._psycopg.wait_c"
+          },
+          {
+            "file": "_connection_base.py",
+            "line": 610,
+            "function": "_rollback_gen"
+          },
+          {
+            "file": "_connection_base.py",
+            "line": 476,
+            "function": "_exec_command"
+          },
+          {
+            "file": "pgconn.pyx",
+            "line": 310,
+            "function": "psycopg_binary.pq.PGconn.send_query"
+          }
+        ]
+      }
+    }
+  }
+}

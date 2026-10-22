@@ -72,7 +72,8 @@ def test_original_core_steps_and_every_release_assertion_are_preserved():
         return sorted(ast.dump(n) for n in ast.walk(ast.parse(text)) if isinstance(n, ast.Assert))
     assert assertions(original) == assertions(checks)
     release = new_ci["jobs"]["publication-release-gate"]
-    assert release["needs"] == ["test", "capacity"] and "always()" in release["if"]
+    assert release["needs"] == ["test", "capacity", "lookup-diagnosis"]
+    assert "always()" in release["if"]
     assert new_ci["jobs"]["capacity"]["strategy"]["matrix"]["level"] == [
         "L1", "L2", "L3-scaled-10pct"]
 
@@ -98,13 +99,14 @@ def test_successful_gate_still_never_claims_production_performance(tmp_path, mon
     monkeypatch.setenv("GITHUB_REPOSITORY", "synthetic/unit")
     monkeypatch.setenv("GITHUB_RUN_ID", "1")
     monkeypatch.setenv("A421_NEEDS", json.dumps({k:{"result":"success"}
-                                              for k in ("test", "capacity")}))
+                                              for k in ("test", "capacity", "lookup-diagnosis")}))
     core_dir = tmp_path/"input/core"
     core = {**header("core"), "status":"COMPLETE", "working_tree_dirty":False}
     atomic(core_dir/"status.json", core)
     # Pure gate-control unit; actual merger, original assertions and real L1
     # are independently exercised, never replace those real CI checks.
     monkeypatch.setattr(cli, "merge_capacity", lambda *a,**k:{"synthetic_unit_only":True})
+    monkeypatch.setattr(cli, "lookup_receipt", lambda *a,**k:{"synthetic_unit_only":True})
     from scripts import publication_release_checks_v14_a4_2_1 as checks
 
     monkeypatch.setattr(checks, "validate", lambda *a,**k:{"synthetic_unit_only":True})
