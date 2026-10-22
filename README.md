@@ -26,6 +26,9 @@ Windows 文件短暂占用只对诊断文件有限重试，不重试数据库或
 审计与诊断工件均绑定同 SHA/run/attempt，不能以旧报告补齐。
 首轮计划不足以解释 SFE 的 A-only 慢批次；跟进诊断同时覆盖 B 存在/缺失键，
 在计时外采集真实 auto_explain 与 prepared counters，不改生产规划器配置。
+P3 已定位 B 缺失的范围负探测瓶颈，但快表 P95 尚不通过；生产仍为 C0。
+后续按[固定尾延迟协议](docs/acceptance/v14_a422_tail_protocol.md)追加 100 次快表复核，
+不丢异常样本、不改阈值、不关闭 GC；不是重试至通过。
 
 ## V1.4 A4-2.1 CI 专项（开发中，验收 OPEN）
 

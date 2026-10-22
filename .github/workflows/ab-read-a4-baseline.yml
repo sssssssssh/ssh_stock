@@ -38,11 +38,11 @@ jobs:
             -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \
             -c track_wal_io_timing=on -c pg_stat_statements.track=all -c max_wal_size=1GB
           for attempt in $(seq 1 30); do
-            docker exec a4-isolated-pg17 pg_isready -U synthetic -d a4_test && break
+            docker exec a4-isolated-pg17 pg_isready -h 127.0.0.1 -U synthetic -d a4_test && break
             sleep 1
           done
-          docker exec a4-isolated-pg17 pg_isready -U synthetic -d a4_test
-          A4_SYSTEM=$(docker exec a4-isolated-pg17 psql -U synthetic -d a4_test -Atc \
+          docker exec a4-isolated-pg17 pg_isready -h 127.0.0.1 -U synthetic -d a4_test
+          A4_SYSTEM=$(docker exec -e PGPASSWORD=synthetic a4-isolated-pg17 psql -h 127.0.0.1 -U synthetic -d a4_test -Atc \
             'SELECT system_identifier FROM pg_control_system()')
           echo "V14_TEST_INSTANCE=$A4_INSTANCE" >> "$GITHUB_ENV"
           echo "V14_TEST_SYSTEM_IDENTIFIER=$A4_SYSTEM" >> "$GITHUB_ENV"

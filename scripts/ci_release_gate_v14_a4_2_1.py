@@ -36,6 +36,7 @@ def lookup_receipt(directory, head, attempt):
 
     from scripts.publication_lookup_diagnostic_a422 import (
         BASELINE,
+        CONTROL_REPEATS,
         TABLES,
         VARIANTS,
         candidate_source,
@@ -53,9 +54,12 @@ def lookup_receipt(directory, head, attempt):
             and receipt.get('run_id') == os.environ['GITHUB_RUN_ID']
             and receipt.get('model_hash') == model_hash()
             and receipt.get('lookup_baseline_sha') == BASELINE, 'LOOKUP_INCOMPLETE')
+    require(receipt.get('candidate_key_hits') == {table:(1000 if table in TABLES[:2] else 2000)
+                                                for table in TABLES}, 'LOOKUP_COVERAGE_MISMATCH')
     samples = receipt.get('samples', [])
     expected = {(regime, table, variant, repeat) for regime in ('as_seeded', 'analyzed')
-                for table in TABLES for variant in VARIANTS for repeat in range(5)}
+                for table in TABLES for variant in VARIANTS
+                for repeat in range(CONTROL_REPEATS if table == TABLES[2] else 5)}
     actual = [(s['statistics'], s['table'], s['variant'], s['repeat']) for s in samples]
     require(len(actual) == len(expected) and set(actual) == expected
             and all(s.get('golden') == 'PASS' and s.get('keys') == 2000 for s in samples),
@@ -82,7 +86,7 @@ def lookup_receipt(directory, head, attempt):
         probes = receipt.get('actual_execution_probes', {}).get(regime, {}).get('cases', [])
         require(len(probes) == 18 and {(p['table'], p['variant'], p['case']) for p in probes}
                 == {(table, variant, case) for table in TABLES for variant in ('C0', 'C1', 'C2')
-                    for case in ('b_present', 'b_absent_for_sfe')}
+                    for case in ('b_present', 'late_keys')}
                 and all(p.get('plan') and p.get('golden') == 'PASS' for p in probes),
                 'LOOKUP_ACTUAL_PLANS_INCOMPLETE')
     return dict(testcases=junit(paths[0].parent/'tests.xml'), status='COMPLETE')

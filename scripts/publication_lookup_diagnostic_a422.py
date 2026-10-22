@@ -1,6 +1,7 @@
 """CI-only, read-only C0/C1/C2/C3 lookup comparison; never a capacity receipt."""
 
 import argparse
+import gc
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ import statistics
 import subprocess
 import sys
 import types
+from contextlib import contextmanager
 from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -20,6 +22,24 @@ sys.path[:0] = [str(ROOT), str(ROOT / "backend")]
 BASELINE = "4a095883bff09e0e5da6fe5fcf308f8206651f35"
 VARIANTS = {"C0": 500, "C1": 500, "C2": 500, "C3_100": 100, "C3_1000": 1000}
 TABLES = ("stock_opportunity_daily", "signal_forward_eval", "stock_trade_status_daily")
+CONTROL_REPEATS = 100  # Fixed before this trial, not a retry-until-pass policy.
+
+
+@contextmanager
+def observe_gc(metrics):
+    started = []
+
+    def callback(phase, info):
+        if phase == 'start':
+            started.append(perf_counter())
+        elif started:
+            metrics['gc_seconds'] += perf_counter()-started.pop()
+            metrics['gc_count'] += 1
+    gc.callbacks.append(callback)
+    try:
+        yield
+    finally:
+        gc.callbacks.remove(callback)
 
 
 def candidate_source():
@@ -33,7 +53,15 @@ def candidate_source():
               AND c.row_key=jsonb_build_array({key_sql})'''
     if source.count(old) != 1:
         raise ValueError('A422_BASELINE_SQL_CHANGED')
-    return source.replace(old, new)
+    source = source.replace(old, new)
+    comment = '''# Equal inclusive bounds on the non-NULL, totally ordered PK are a point
+        # lookup. Full PK ordering keeps the covering key access path even when
+        # empty-table statistics underestimate our own uncommitted candidates.'''
+    if source.count(comment) != 1:
+        raise ValueError('A422_BASELINE_COMMENT_CHANGED')
+    return source.replace(comment, '''# Explicit equalities expose the unique non-NULL candidate PK,
+        # including negative probes when this key has not been staged yet.
+        # Keep the same typed row, tombstone and public-preimage semantics.''')
 
 
 def redact_plan(value):
@@ -56,6 +84,33 @@ def prepared_snapshot(db):
             for row in db.execute(text('SELECT name,statement,generic_plans,custom_plans '
                 "FROM pg_prepared_statements WHERE statement LIKE 'WITH input_keys AS%%'"))
             .mappings()]
+
+
+def parse_backend_process(raw, ticks):
+    first, _, status = raw.partition('\n')
+    fields = first.rsplit(')', 1)[1].split()
+    memory = {}
+    for line in status.splitlines():
+        parts = line.split()
+        if parts and parts[0] in ('VmRSS:', 'VmHWM:'):
+            if len(parts) != 3 or parts[2] != 'kB':
+                raise ValueError('A422_BACKEND_MEMORY_UNITS_CHANGED')
+            memory[parts[0][:-1]] = int(parts[1])*1024
+    return dict(cpu_seconds=(int(fields[11])+int(fields[12]))/ticks,
+        current_rss_bytes=memory['VmRSS'], process_lifetime_peak_rss_bytes=memory['VmHWM'],
+        scope='MAIN_BACKEND_INTERVAL_INCLUDES_OBSERVERS_HWM_IS_PROCESS_LIFETIME')
+
+
+@lru_cache
+def backend_clock_ticks(container):
+    return int(subprocess.check_output(['docker', 'exec', container, 'getconf', 'CLK_TCK'],
+                                      text=True, timeout=10))
+
+
+def backend_snapshot(container, pid):
+    raw = subprocess.check_output(['docker', 'exec', container, 'cat',
+        f'/proc/{int(pid)}/stat', f'/proc/{int(pid)}/status'], text=True, timeout=10)
+    return parse_backend_process(raw, backend_clock_ticks(container))
 
 
 def logged_plans(log):
@@ -104,7 +159,7 @@ def actual_execution_probe(db, ws, models, inputs, container):
     for model in models:
         table = model.__tablename__
         for variant in ('C0', 'C1', 'C2'):
-            for case, offset in (('b_present', 0), ('b_absent_for_sfe', 1000)):
+            for case, offset in (('b_present', 0), ('late_keys', 1000)):
                 clock = perf_counter()
                 result = lookup(ws, model, inputs[table][offset:offset+500], variant)
                 if variant == 'C0':
@@ -244,8 +299,16 @@ def summarize(samples):
 
 
 def whole_workloads(samples):
-    groups = {}
+    groups, seen = {}, set()
     for s in samples:
+        identity = s['statistics'], s['table'], s['variant'], s['repeat']
+        if identity in seen:
+            raise ValueError('A422_DUPLICATE_SAMPLE')
+        seen.add(identity)
+        if s['repeat'] >= 5:
+            if s['table'] != TABLES[2] or s['repeat'] >= CONTROL_REPEATS:
+                raise ValueError('A422_UNEXPECTED_EXTRA_REPEAT')
+            continue  # Tail-only repetitions remain in raw samples and table summaries.
         key = s['statistics'], s['variant'], s['repeat']
         tables = groups.setdefault(key, {})
         if s['table'] in tables:
@@ -420,6 +483,8 @@ def run(output, path):
                 observer.execute(text("SET LOCAL auto_explain.log_min_duration='-1'"))
                 if len(read_logged_plans(container, clock)) != 1:
                     raise ValueError('A422_OBSERVER_PREFLIGHT_FAILED')
+                output['backend_observer_preflight'] = backend_snapshot(
+                    container, observer.scalar(text('SELECT pg_backend_pid()')))
             output['observer_preflight'] = 'PASS'
             output['configuration_source'] = 'EXPLICIT_SYNTHETIC_ENV_NO_DOTENV'
             days = [date(2026, 1, 2)+timedelta(days=i) for i in range(20)]
@@ -447,6 +512,15 @@ def run(output, path):
                       dict(early=days[9], late=days[19])).mappings()]
                     if len(inputs[name]) != 2000:
                         raise ValueError("A422_REPRESENTATIVE_KEY_COUNT_CHANGED")
+                    row_keys = [[row[key] for key in c.KEYS[name]] for row in inputs[name]]
+                    hits = db.scalar(text('''SELECT count(*)
+                        FROM jsonb_array_elements(CAST(:keys AS jsonb)) k(value)
+                        JOIN public.data_publication_row c ON c.publication_id=:root
+                          AND c.table_name=:name AND c.row_key=k.value'''),
+                        dict(keys=json.dumps(row_keys, default=str), root=job.id, name=name))
+                    if hits != (1000 if name in TABLES[:2] else 2000):
+                        raise ValueError('A422_CANDIDATE_COVERAGE_CHANGED')
+                    output.setdefault('candidate_key_hits', {})[name] = hits
                 output['input_key_sha256'] = {name:hashlib.sha256(json.dumps(
                     rows, default=str, sort_keys=True).encode()).hexdigest()
                     for name, rows in inputs.items()}
@@ -477,9 +551,11 @@ def run(output, path):
                     for name in TABLES:
                         model = next(m for m in c.MODELS if m.__tablename__ == name)
                         expected, _ = workload(ws, model, inputs[name], 'C0')
-                        for repeat in range(5):
+                        repeats = CONTROL_REPEATS if name == TABLES[2] else 5
+                        for repeat in range(repeats):
                             variants = list(VARIANTS)
-                            variants = variants[repeat:]+variants[:repeat]
+                            rotation = repeat % len(variants)
+                            variants = variants[rotation:]+variants[:rotation]
                             for variant in variants:
                                 size = VARIANTS[variant]
                                 output.update(phase='query_comparison', current_table=name,
@@ -487,12 +563,16 @@ def run(output, path):
                                 atomic(path, output)
                                 before = db_snapshot(db)
                                 resources_before = resource_snapshot(container)
+                                backend_before = backend_snapshot(container, pid)
                                 started_at = now()
                                 metrics = dict(python_json_seconds=0.0, execute_seconds=0.0,
                                     buffered_row_materialization_seconds=0.0,
+                                    gc_seconds=0.0, gc_count=0,
+                                    gc_scope='PROCESS_GC_NESTED_IN_JSON_ROW_AND_WALL',
                                     execute_scope='DRIVER_EXECUTE_INCLUDES_NETWORK_AND_BUFFERING',
                                     dataframe_seconds='NOT_APPLICABLE_NO_DATAFRAME_IN_LOOKUP')
-                                with Telemetry(engine, pid, container=True) as telemetry:
+                                with (Telemetry(engine, pid, container=True) as telemetry,
+                                      observe_gc(metrics)):
                                     cpu, clock = process_time(), perf_counter()
                                     returned, batches = workload(
                                         ws, model, inputs[name], variant, metrics)
@@ -501,10 +581,13 @@ def run(output, path):
                                     raise ValueError('A422_LOOKUP_GOLDEN_MISMATCH')
                                 sample = dict(statistics=regime, table=name, variant=variant,
                                     repeat=repeat, keys=2000, batch_size=size, wall_seconds=wall,
+                                    purpose='tail_only' if repeat >= 5 else 'whole_workload',
                                     started_at=started_at, finished_at=now(),
                                     rows_per_second=2000/wall,
                                     batch_seconds=batches, client_cpu_seconds=client_cpu,
                                     metrics=metrics, telemetry=telemetry.receipt(),
+                                    backend_before=backend_before,
+                                    backend_after=backend_snapshot(container, pid),
                                     resources_before=resources_before,
                                     resources_after=resource_snapshot(container),
                                     database_before=before, database_after=db_snapshot(db),
@@ -543,6 +626,7 @@ def main():
         raise SystemExit('A422_OUTPUT_ALREADY_EXISTS')
     output = dict(**header('a422-lookup-diagnosis'), artifact_kind='DIAGNOSTIC_ONLY',
                   status='INCOMPLETE', started_at=now(), samples=[], plans=[],
+                  repeats=dict(slow_tables=5, control=CONTROL_REPEATS),
                   formal_capacity_complete=False)
     install_signals()
     try:

@@ -1,0 +1,807 @@
+{
+  "artifact_kind": "HISTORICAL_DIAGNOSIS_NOT_LATEST_SHA_ACCEPTANCE",
+  "head_sha": "ef6e06d0e12b642af8dbd7a95ed571e448d4624e",
+  "run_id": "39778639522",
+  "attempt": "1",
+  "artifact_id": 12426374999,
+  "zip_sha256": "569782da60aa6483f9293e24a8e8f6284ed8ed4fc86c2aefc303fadd2f38852a",
+  "root_cause": "CODE_SQL_PRIMARY",
+  "status": "OPEN",
+  "decision": {
+    "performance_eligible": false,
+    "reasons": [
+      "P95_REGRESSION"
+    ],
+    "ratios": [
+      {
+        "statistics": "as_seeded",
+        "table": "stock_opportunity_daily",
+        "c1_over_c0": 0.0019172240812942384
+      },
+      {
+        "statistics": "as_seeded",
+        "table": "signal_forward_eval",
+        "c1_over_c0": 0.0013557259801663321
+      },
+      {
+        "statistics": "as_seeded",
+        "table": "stock_trade_status_daily",
+        "c1_over_c0": 0.7977268371195584
+      },
+      {
+        "statistics": "analyzed",
+        "table": "stock_opportunity_daily",
+        "c1_over_c0": 0.0020055877529335255
+      },
+      {
+        "statistics": "analyzed",
+        "table": "signal_forward_eval",
+        "c1_over_c0": 0.0013910093821338017
+      },
+      {
+        "statistics": "analyzed",
+        "table": "stock_trade_status_daily",
+        "c1_over_c0": 0.7477424058941521
+      }
+    ],
+    "caveat": "Per-repeat sum of all 3 tables' measured lookup walls (not contiguous); NOT full table, upsert/publication or formal L2 acceptance; manual plan/resource review required before any production change"
+  },
+  "public_counts": {
+    "stock_trade_status_daily": 100000,
+    "stock_factor_daily": 100000,
+    "market_daily": 20,
+    "sector_factor_daily": 1000,
+    "theme_factor_daily": 2000,
+    "stock_state_daily": 100000,
+    "stock_opportunity_daily": 100000,
+    "strategy_signal": 100000,
+    "signal_forward_eval": 100000,
+    "data_quality_daily": 20
+  },
+  "candidate_counts": {
+    "stock_trade_status_daily": 100000,
+    "stock_factor_daily": 100000,
+    "market_daily": 20,
+    "sector_factor_daily": 1000,
+    "theme_factor_daily": 2000,
+    "stock_state_daily": 100000,
+    "stock_opportunity_daily": 50000,
+    "strategy_signal": 100000,
+    "signal_forward_eval": 50000
+  },
+  "sample_count": 150,
+  "plan_count": 60,
+  "actual_probe_count": 36,
+  "summary": [
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C0",
+      "median": 45.213799913,
+      "p95": 46.445899892199975,
+      "samples": [
+        45.67629490899998,
+        46.638301137999974,
+        44.95673266,
+        45.213799913,
+        45.061953604999985
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C1",
+      "median": 0.08668498600002295,
+      "p95": 0.09022180019999268,
+      "samples": [
+        0.08668498600002295,
+        0.08018518600005109,
+        0.08332344000001513,
+        0.09008450499993614,
+        0.09025612400000682
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C2",
+      "median": 0.08742334599998003,
+      "p95": 0.2263531279999597,
+      "samples": [
+        0.08742334599998003,
+        0.0851545740000006,
+        0.08555781400002616,
+        0.2604847459999746,
+        0.08982665599990014
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C3_100",
+      "median": 0.09660314899997502,
+      "p95": 0.09913842319998593,
+      "samples": [
+        0.09975267499999063,
+        0.09668141599996716,
+        0.09660314899997502,
+        0.09340891699997655,
+        0.09596598899997844
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C3_1000",
+      "median": 0.08331493299999693,
+      "p95": 0.08842627340000035,
+      "samples": [
+        0.07939282000000958,
+        0.08305437400002802,
+        0.08486011900004087,
+        0.08331493299999693,
+        0.08931781199999023
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C0",
+      "median": 53.33638586099994,
+      "p95": 53.65711509540008,
+      "samples": [
+        53.04476467400002,
+        53.72435500800009,
+        53.38815544500005,
+        51.40051472999994,
+        53.33638586099994
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C1",
+      "median": 0.07230952399993384,
+      "p95": 0.19606638359996395,
+      "samples": [
+        0.07629663800003073,
+        0.07230952399993384,
+        0.22600881999994726,
+        0.06793813299998419,
+        0.06717102900006466
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C2",
+      "median": 0.06955739800002902,
+      "p95": 0.0707737336000264,
+      "samples": [
+        0.06983783999999105,
+        0.07100770700003523,
+        0.06935288399995443,
+        0.06878413599997657,
+        0.06955739800002902
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C3_100",
+      "median": 0.07763662199999999,
+      "p95": 0.08081975700004022,
+      "samples": [
+        0.07655604399997173,
+        0.07763662199999999,
+        0.07874114499998086,
+        0.08133941000005507,
+        0.07687190699994062
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C3_1000",
+      "median": 0.06919953700003134,
+      "p95": 0.07137929859995892,
+      "samples": [
+        0.06503487899999527,
+        0.07173820699995304,
+        0.06919953700003134,
+        0.0699436649999825,
+        0.06818929200005641
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_trade_status_daily",
+      "variant": "C0",
+      "median": 0.08669189600004756,
+      "p95": 0.08801483659995028,
+      "samples": [
+        0.08627260100001877,
+        0.08739166700001988,
+        0.08817062899993289,
+        0.08593876299994463,
+        0.08669189600004756
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_trade_status_daily",
+      "variant": "C1",
+      "median": 0.06915645200001563,
+      "p95": 0.18656765559999258,
+      "samples": [
+        0.07040654599995833,
+        0.21560793300000114,
+        0.06786786100008158,
+        0.06915645200001563,
+        0.0656350530000509
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_trade_status_daily",
+      "variant": "C2",
+      "median": 0.06878519199995026,
+      "p95": 0.07063511279993691,
+      "samples": [
+        0.06764228600002298,
+        0.06909316800010856,
+        0.06771835100005319,
+        0.07102059899989399,
+        0.06878519199995026
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_trade_status_daily",
+      "variant": "C3_100",
+      "median": 0.07632346399998369,
+      "p95": 0.07730791299991324,
+      "samples": [
+        0.07632346399998369,
+        0.07700294500000382,
+        0.0773841549998906,
+        0.07584224100003212,
+        0.07623699700002362
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_trade_status_daily",
+      "variant": "C3_1000",
+      "median": 0.0674983979999979,
+      "p95": 0.1813043173999631,
+      "samples": [
+        0.06653849899998932,
+        0.06726266699990902,
+        0.0674983979999979,
+        0.20972505099996397,
+        0.06762138299995968
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C0",
+      "median": 44.48794368099993,
+      "p95": 45.057588787600025,
+      "samples": [
+        45.171816517000025,
+        44.60067787000003,
+        44.48794368099993,
+        44.395442770000045,
+        43.625662334000026
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C1",
+      "median": 0.0892244749998099,
+      "p95": 0.09360447640001439,
+      "samples": [
+        0.09140325399994254,
+        0.09415478200003236,
+        0.0892244749998099,
+        0.08724847899998167,
+        0.08665488999986337
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C2",
+      "median": 0.08692268999993757,
+      "p95": 0.24051124480001818,
+      "samples": [
+        0.09253570000009859,
+        0.2775051309999981,
+        0.08641275900004075,
+        0.08576802599986877,
+        0.08692268999993757
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C3_100",
+      "median": 0.0991447630001403,
+      "p95": 0.10369977660002405,
+      "samples": [
+        0.10346364299994093,
+        0.10375881000004483,
+        0.09849119300019993,
+        0.09764090900011979,
+        0.0991447630001403
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C3_1000",
+      "median": 0.08957383100005245,
+      "p95": 0.2196653753999726,
+      "samples": [
+        0.08957383100005245,
+        0.09111498900006154,
+        0.08673124999995707,
+        0.2518029719999504,
+        0.08751731300003485
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C0",
+      "median": 49.14694456999996,
+      "p95": 50.48799885080011,
+      "samples": [
+        49.14694456999996,
+        50.81038436400013,
+        48.584839496000086,
+        47.61393503500017,
+        49.19845679800005
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C1",
+      "median": 0.06836386100007985,
+      "p95": 0.07101634039995589,
+      "samples": [
+        0.06836386100007985,
+        0.06921825399990666,
+        0.06568296799991913,
+        0.06708362300014414,
+        0.07146586199996818
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C2",
+      "median": 0.0689391760001854,
+      "p95": 0.06956108699996548,
+      "samples": [
+        0.06774190000010094,
+        0.06947808299992175,
+        0.067534630000182,
+        0.0689391760001854,
+        0.06958183799997641
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C3_100",
+      "median": 0.07626356700006909,
+      "p95": 0.0795462567999948,
+      "samples": [
+        0.07564115300010599,
+        0.07711898399998063,
+        0.07626356700006909,
+        0.0756921780000539,
+        0.08015307499999835
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C3_1000",
+      "median": 0.06445534299996325,
+      "p95": 0.06683884879985272,
+      "samples": [
+        0.06712009499983651,
+        0.06571386399991752,
+        0.06443881399991369,
+        0.06391456699998344,
+        0.06445534299996325
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_trade_status_daily",
+      "variant": "C0",
+      "median": 0.09229006200007461,
+      "p95": 0.09505404059982539,
+      "samples": [
+        0.09569557599979817,
+        0.09229006200007461,
+        0.09248789899993426,
+        0.08674554499998521,
+        0.09041533399999935
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_trade_status_daily",
+      "variant": "C1",
+      "median": 0.06900919300005626,
+      "p95": 0.07053296199992473,
+      "samples": [
+        0.06902043399986724,
+        0.06900919300005626,
+        0.07091109399993911,
+        0.06857529200010504,
+        0.06739003100005903
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_trade_status_daily",
+      "variant": "C2",
+      "median": 0.06938362599998982,
+      "p95": 0.19527925260013035,
+      "samples": [
+        0.06938362599998982,
+        0.06810921700002837,
+        0.07017961499991543,
+        0.22655416200018408,
+        0.06788165400007529
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_trade_status_daily",
+      "variant": "C3_100",
+      "median": 0.0778581239999312,
+      "p95": 0.0830524656000307,
+      "samples": [
+        0.07674804700013738,
+        0.07963271600010557,
+        0.0778581239999312,
+        0.08390740300001198,
+        0.07516632900001241
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_trade_status_daily",
+      "variant": "C3_1000",
+      "median": 0.06756227200003195,
+      "p95": 0.07077768780009137,
+      "samples": [
+        0.06609950600000047,
+        0.0712148980001075,
+        0.06698662100006914,
+        0.06902884700002687,
+        0.06756227200003195
+      ]
+    }
+  ],
+  "whole_workloads": [
+    {
+      "statistics": "as_seeded",
+      "variant": "C0",
+      "median": 98.48503136199997,
+      "p95": 100.12150468720007,
+      "samples": [
+        98.80733218400002,
+        100.45004781300008,
+        98.43305873399999,
+        96.70025340599989,
+        98.48503136199997
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "variant": "C1",
+      "median": 0.233388170000012,
+      "p95": 0.37538062540003236,
+      "samples": [
+        0.233388170000012,
+        0.3681026429999861,
+        0.37720012100004396,
+        0.22717908999993597,
+        0.2230622060001224
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "variant": "C2",
+      "median": 0.22525544900014438,
+      "p95": 0.36586543399985205,
+      "samples": [
+        0.22490347199999405,
+        0.22525544900014438,
+        0.22262904900003377,
+        0.4002894809998452,
+        0.22816924599987942
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "variant": "C3_100",
+      "median": 0.25132098299997097,
+      "p95": 0.2527091957998664,
+      "samples": [
+        0.25263218299994605,
+        0.25132098299997097,
+        0.2527284489998465,
+        0.25059056800006374,
+        0.24907489299994268
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "variant": "C3_1000",
+      "median": 0.22205524799989007,
+      "p95": 0.33541261659995597,
+      "samples": [
+        0.21096619799999417,
+        0.22205524799989007,
+        0.22155805400007011,
+        0.3629836489999434,
+        0.22512848700000632
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "variant": "C0",
+      "median": 93.16527107599995,
+      "p95": 95.28557316940014,
+      "samples": [
+        94.41445666299978,
+        95.50335229600023,
+        93.16527107599995,
+        92.0961233500002,
+        92.91453446600008
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "variant": "C1",
+      "median": 0.22581853699966814,
+      "p95": 0.23166329299997415,
+      "samples": [
+        0.22878754899988962,
+        0.23238222899999528,
+        0.22581853699966814,
+        0.22290739400023085,
+        0.22551078299989058
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "variant": "C2",
+      "median": 0.22966122600018934,
+      "p95": 0.4083262176000062,
+      "samples": [
+        0.22966122600018934,
+        0.4150924309999482,
+        0.22412700400013819,
+        0.38126136400023825,
+        0.22438618199998928
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "variant": "C3_100",
+      "median": 0.2558528430001843,
+      "p95": 0.259856506000142,
+      "samples": [
+        0.2558528430001843,
+        0.26051051000013103,
+        0.2526128840002002,
+        0.2572404900001857,
+        0.25446416700015106
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "variant": "C3_1000",
+      "median": 0.22279343199988944,
+      "p95": 0.3534058589999859,
+      "samples": [
+        0.22279343199988944,
+        0.22804375100008656,
+        0.2181566849999399,
+        0.3847463859999607,
+        0.21953492800003005
+      ]
+    }
+  ],
+  "negative_probe_nodes": [
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C0",
+      "case": "B_ABSENT",
+      "wall_seconds": 22.748769031999927,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 502429,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 45.394,
+          "Shared Hit Blocks": 3595012,
+          "Shared Read Blocks": 488,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "stock_opportunity_daily",
+      "variant": "C1",
+      "case": "B_ABSENT",
+      "wall_seconds": 0.025134731999969517,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 1,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 0.005,
+          "Shared Hit Blocks": 2000,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C0",
+      "case": "B_ABSENT",
+      "wall_seconds": 26.69289869499994,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 502429,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 53.307,
+          "Shared Hit Blocks": 5792093,
+          "Shared Read Blocks": 202,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "as_seeded",
+      "table": "signal_forward_eval",
+      "variant": "C1",
+      "case": "B_ABSENT",
+      "wall_seconds": 0.01737263500001518,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 1,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 0.004,
+          "Shared Hit Blocks": 2000,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C0",
+      "case": "B_ABSENT",
+      "wall_seconds": 22.10043348599993,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 502802,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 44.103,
+          "Shared Hit Blocks": 3595499,
+          "Shared Read Blocks": 1,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "stock_opportunity_daily",
+      "variant": "C1",
+      "case": "B_ABSENT",
+      "wall_seconds": 0.024004953000030582,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 1,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 0.004,
+          "Shared Hit Blocks": 2000,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C0",
+      "case": "B_ABSENT",
+      "wall_seconds": 25.693321949999927,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 502802,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 51.309,
+          "Shared Hit Blocks": 5791631,
+          "Shared Read Blocks": 664,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    },
+    {
+      "statistics": "analyzed",
+      "table": "signal_forward_eval",
+      "variant": "C1",
+      "case": "B_ABSENT",
+      "wall_seconds": 0.01729789600017284,
+      "candidate_nodes": [
+        {
+          "Node Type": "Index Scan",
+          "Relation Name": "data_publication_row",
+          "Index Name": "pk_data_publication_row",
+          "Plan Rows": 1,
+          "Actual Rows": 0,
+          "Actual Loops": 500,
+          "Actual Total Time": 0.004,
+          "Shared Hit Blocks": 2000,
+          "Shared Read Blocks": 0,
+          "Temp Read Blocks": 0,
+          "Temp Written Blocks": 0
+        }
+      ]
+    }
+  ]
+}

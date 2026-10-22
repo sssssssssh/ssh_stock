@@ -74,6 +74,17 @@ def test_standalone_runtime_disables_dotenv_and_checks_ci_before_setup():
         "'log_min_duration':'0ms'")
 
 
+def test_backend_cpu_is_container_pid_not_host_pid_and_hwm_is_not_per_query():
+    fields = ['0']*24
+    fields[11:13] = ['125', '75']
+    raw = '42 (postgres) '+' '.join(fields)+'\nVmRSS:\t100 kB\nVmHWM:\t200 kB\n'
+    receipt = lab.parse_backend_process(raw, 100)
+    assert receipt['cpu_seconds'] == 2
+    assert receipt['current_rss_bytes'] == 102400
+    assert receipt['process_lifetime_peak_rss_bytes'] == 204800
+    assert 'PROCESS_LIFETIME' in receipt['scope']
+
+
 def comparison():
     return [dict(statistics=regime, table=table, variant=variant,
                  **lab.distribution([10 if variant == 'C0' else 6]*5))
@@ -103,6 +114,28 @@ def test_whole_workload_uses_per_repeat_sum_not_sum_of_table_medians():
         lab.whole_workloads(samples+samples[:1])
 
 
+def test_fixed_control_tail_keeps_every_sample_without_extending_slow_workload():
+    samples = [dict(statistics='analyzed', variant='C0', table=table, repeat=i,
+                    wall_seconds=1+i) for table in lab.TABLES
+               for i in range(lab.CONTROL_REPEATS if table == lab.TABLES[2] else 5)]
+    summary = lab.summarize(samples)
+    assert len(next(r for r in summary if r['table'] == lab.TABLES[2])['samples']) == 100
+    assert lab.whole_workloads(samples)[0]['samples'] == [3, 6, 9, 12, 15]
+    with pytest.raises(ValueError, match='DUPLICATE'):
+        lab.whole_workloads(samples+samples[-1:])
+
+
+def test_gc_is_observed_not_disabled_or_forced_and_callback_is_restored():
+    import gc
+
+    original = list(gc.callbacks)
+    metrics = dict(gc_seconds=0.0, gc_count=0)
+    with lab.observe_gc(metrics):
+        gc.collect()
+    assert metrics['gc_count'] >= 1 and metrics['gc_seconds'] >= 0
+    assert gc.callbacks == original
+
+
 def test_fast_control_and_tail_regression_block_eligibility():
     rows = comparison()
     rows[5].update(median=11.1, p95=11.1)
@@ -117,6 +150,24 @@ def test_no_production_path_or_formal_capacity_replacement():
     assert 'formal_capacity_complete=False' in source
     assert 'public_total_rows=603040' in source
     assert 'c.seed(factory, 5000, days)' in source
-    assert "range(5)" in source and "statement_timeout='300s'" in source
+    assert 'else 5' in source and 'CONTROL_REPEATS = 100' in source
+    assert "statement_timeout='300s'" in source
     assert 'ANALYZE, BUFFERS, VERBOSE, SETTINGS' in source
     assert 'SET enable_seqscan' not in source
+
+
+def test_a41_startup_changes_only_socket_readiness_not_identity_resources_or_scope():
+    import yaml
+
+    filename = '.github/workflows/ab-read-a4-baseline.yml'
+    old = yaml.safe_load(subprocess.check_output([
+        'git', 'show', lab.BASELINE+':'+filename], text=True))
+    current = yaml.safe_load(Path(filename).read_text())
+    name = 'Dedicated physical PG17, fixed resources, I/O and statement evidence'
+    before = next(s for s in old['jobs']['isolated-baseline']['steps'] if s.get('name') == name)
+    after = next(s for s in current['jobs']['isolated-baseline']['steps'] if s.get('name') == name)
+    expected = before['run'].replace('pg_isready -U synthetic -d a4_test',
+        'pg_isready -h 127.0.0.1 -U synthetic -d a4_test').replace(
+        'docker exec a4-isolated-pg17 psql -U synthetic',
+        'docker exec -e PGPASSWORD=synthetic a4-isolated-pg17 psql -h 127.0.0.1 -U synthetic')
+    assert after == {**before, 'run': expected}
