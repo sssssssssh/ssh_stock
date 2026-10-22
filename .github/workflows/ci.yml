@@ -40,6 +40,9 @@ jobs:
   lookup-diagnosis:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
     outputs:
       capacity_ready: ${{ steps.measure.outputs.capacity_ready }}
     env:
@@ -60,13 +63,26 @@ jobs:
       - name: Lookup rewrite and safety regressions before measurements
         run: >-
           python -m pytest tests/unit/test_lookup_diagnostic_a422.py
+          tests/unit/test_lookup_tail_review_a423.py
           tests/integration/test_lookup_candidates_a422.py
           --junitxml=.codex_tmp/a421/lookup/tests.xml
-      - name: Same-instance C0 C1 C2 C3, actual L2 cardinalities
+      - name: Fetch pinned historical evidence, never new SHA performance evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          curl --fail --silent --show-error --location --max-time 120
+          -H "Authorization: Bearer $GH_TOKEN"
+          -H "Accept: application/vnd.github+json"
+          "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/12429939366/zip"
+          --output .codex_tmp/a423-source.zip
+      - name: A4-2.3 P0 replay only; no approved repair, no repeated performance trial
         id: measure
         run: >-
-          python scripts/publication_lookup_diagnostic_a422.py
-          --output .codex_tmp/a421/lookup/lookup.json
+          python scripts/publication_lookup_tail_review_a423.py
+          --archive .codex_tmp/a423-source.zip
+          --expected-baseline docs/acceptance/evidence/v14_a423_tail_baseline.json
+          --output .codex_tmp/a421/lookup/historical-tail-review.json
+          --readiness-output .codex_tmp/a421/lookup/readiness.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -31,6 +31,41 @@ def junit(path):
     return len(cases)
 
 
+def capacity_blocker(directory, head, attempt):
+    """A current denial is diagnostic evidence, never an alternate PASS path."""
+    import hashlib
+
+    from scripts.publication_lookup_tail_review_a423 import BLOCKERS, C1_SOURCE, SOURCE_DIGEST
+
+    files = list(directory.rglob('lookup/readiness.json'))
+    if not files:
+        return None  # Original full lookup and capacity checks remain mandatory.
+    require(len(files) == 1, 'CAPACITY_ADMISSION_AMBIGUOUS')
+    receipt = json.loads(files[0].read_text())
+    identity(receipt, head=head, attempt=attempt, job_id='a423-capacity-admission')
+    require(receipt.get('run_id') == os.environ['GITHUB_RUN_ID']
+            and receipt.get('model_hash') == model_hash()
+            and receipt.get('working_tree_dirty') is False
+            and receipt.get('admission_schema_version') == 'v14-a423-capacity-admission-v1',
+            'CAPACITY_ADMISSION_IDENTITY_MISMATCH')
+    require(receipt.get('status') == 'CAPACITY_NOT_AUTHORIZED'
+            and receipt.get('capacity_ready') is False
+            and receipt.get('performance_eligible') is False
+            and receipt.get('formal_capacity_complete') is False
+            and receipt.get('source_zip_sha256') == SOURCE_DIGEST
+            and receipt.get('evidence_kind') == 'DIAGNOSTIC_ONLY'
+            and receipt.get('source_evidence_kind') == 'HISTORICAL'
+            and receipt.get('reasons') == list(BLOCKERS), 'CAPACITY_ADMISSION_INVALID')
+    current = hashlib.sha256(
+        (ROOT/'backend/app/services/data_publication.py').read_bytes()).hexdigest()
+    require(receipt.get('production_source_sha256') == current
+            and receipt.get('proposed_source_sha256') == C1_SOURCE
+            and receipt.get('production_matches_candidate') is (current == C1_SOURCE),
+            'CAPACITY_ADMISSION_SOURCE_MISMATCH')
+    return {key:receipt[key] for key in ('status', 'capacity_ready', 'reasons',
+                                       'production_source_sha256', 'source_zip_sha256')}
+
+
 def lookup_receipt(directory, head, attempt):
     import hashlib
 
@@ -183,6 +218,10 @@ def gate(args):
                 require(json.loads(path.read_text()).get("run_id") == os.environ["GITHUB_RUN_ID"],
                         "MANIFEST_RUN_MISMATCH")
         else:
+            blocker = capacity_blocker(args.input, head, attempt)
+            if blocker:
+                result['capacity_admission'] = blocker
+                require(False, 'CAPACITY_NOT_AUTHORIZED')
             require_jobs(needs, {"test", "capacity", "lookup-diagnosis", "dependency-audit"})
             result['audit'] = audit_receipt(args.input, head, attempt)
             result['lookup'] = lookup_receipt(args.input, head, attempt)

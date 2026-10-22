@@ -1,5 +1,15 @@
 # A 股机会发现与趋势研究系统
 
+## A4-2.3 尾延迟复核（PERFORMANCE_OPEN）
+
+从审阅SHA `44e46b0`继续；[基线](docs/acceptance/v14_a4_2_3_baseline.md)保留400点控制表序列和全部异常。
+离线复算命令：`python scripts/publication_lookup_tail_review_a423.py --archive SOURCE.zip --output NEW.json`。
+SOURCE必须是固定历史工件12429939366，ZIP摘要不符拒绝；已有输出拒绝覆盖，不读取业务配置或连接数据库。
+GC相关性未形成唯一修复候选，按[预注册协议](docs/acceptance/v14_a4_2_3_protocol.md)停止进入条件阶段。
+lookup CI不重复100次性能矩阵，只做历史复核与小型隔离PG17安全回归，当前拒绝收据绑定新SHA/run/attempt。
+CAPACITY_NOT_AUTHORIZED不等于性能通过或资源延期；生产仍C0、正式L2未执行、Release Gate仍拒绝。
+完整状态与未关闭项见[交付记录](docs/acceptance/v14_a4_2_3_closeout.md)；不操作业务库，不开启AB新读取。
+
 ## L2 容量诊断补强（验收 OPEN）
 
 本轮从 master `66a5ca6` 继续，只补充容量测试的诊断，不改变生产发布和批次默认值。

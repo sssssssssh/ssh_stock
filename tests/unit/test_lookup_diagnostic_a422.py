@@ -129,11 +129,15 @@ def test_gc_is_observed_not_disabled_or_forced_and_callback_is_restored():
     import gc
 
     original = list(gc.callbacks)
+    enabled, thresholds = gc.isenabled(), gc.get_threshold()
     metrics = dict(gc_seconds=0.0, gc_count=0)
     with lab.observe_gc(metrics):
-        gc.collect()
+        callback = gc.callbacks[-1]
+        callback('start', {'generation':0})
+        callback('stop', {'generation':0})
     assert metrics['gc_count'] >= 1 and metrics['gc_seconds'] >= 0
     assert gc.callbacks == original
+    assert gc.isenabled() == enabled and gc.get_threshold() == thresholds
 
 
 def test_fast_control_and_tail_regression_block_eligibility():

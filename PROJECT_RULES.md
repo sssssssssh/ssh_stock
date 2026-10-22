@@ -1,5 +1,15 @@
 # 项目开发规则
 
+## A4-2.3 条件准入边界
+
+审阅基线44e46b0的失败必须按原inclusive分位数、完整1100样本复算，不重写原工件。
+历史复核标HISTORICAL，当前拒绝收据标DIAGNOSTIC_ONLY，二者均不能充当FORMAL_ACCEPTANCE。
+GC只相关而未证明可修复因果时，P1/P2/P3均NOT_AUTHORIZED；不因提交自动重跑100次刷绿。
+任何observer/计时合同调整需版本化并经用户审阅，不扣GC、不删异常、不改门槛。
+正式capacity仍须性能/安全/资源/源码精确匹配及完整同SHA证据；拒绝收据永不产生准入true。
+本轮停止在P0审阅，不修改生产C0、模型、索引、迁移、公式或业务.env；不连接阿里云。
+协议及阶段缺口见docs/acceptance/v14_a4_2_3_protocol.md和v14_a4_2_3_closeout.md。
+
 ## L2 容量诊断边界
 
 从审阅提交 `66a5ca6` 增加容量驱动观测；冻结生产仍为 `02c69c6`。
