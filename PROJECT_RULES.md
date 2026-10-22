@@ -8,6 +8,8 @@
 固定样本、顺序、独立进程规则、20分钟软预算；缺样本或中断保留INCOMPLETE，不自动重跑。
 P2修复与新5/100性能复核仍需再次审阅；生产C0/AB开关/正式容量及源码冻结保持。
 协议见docs/acceptance/v14_a4_2_3_1_attribution_protocol.md；不改原历史冻结证据。
+128样本采集完成不等于有效因果反事实：统计漂移须单列INCOMPLETE，不能只验证MVCC数据快照。
+本轮H3未全部满足、as_seeded自动ANALYZE，结论INSUFFICIENT_EVIDENCE；无修复候选、不重复实验。
 
 ## A4-2.3 条件准入边界
 

@@ -5,6 +5,8 @@
 只在隔离合成PG17验证尾延迟假设，完整保留异常与原性能门槛；不改变产品功能或业务流程。
 一次受控诊断与未来正式性能/容量验收分离。无因果机制则如实不足，不以采集完成表示生产提速。
 P2/P3默认未授权，不进入A4-3或历史复用；协议见acceptance/v14_a4_2_3_1_attribution_protocol.md。
+本轮128样本结论INSUFFICIENT_EVIDENCE，无唯一修复候选；性能与正式容量仍OPEN，
+不以观察器模式下C1未出现长GC宣称原尾延迟已解决，见acceptance/v14_a4_2_3_1_attribution_closeout.md。
 
 ## A4-2.3 尾延迟关闭前置
 

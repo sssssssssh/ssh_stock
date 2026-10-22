@@ -4,7 +4,9 @@
 
 从3bdfc371继续，P0先核对历史七个异常及邻近C0；[假设注册表](docs/acceptance/a4231_hypotheses.md)
 与[运行前协议](docs/acceptance/v14_a4_2_3_1_attribution_protocol.md)明确单因素Telemetry反事实。
-拟固定128个快表样本、双统计状态、对称C0/C1及独立子进程；不是旧100×5验收矩阵。
+唯一一轮128个快表样本已完整采集，双统计状态、对称C0/C1及独立子进程；不是旧100×5验收矩阵。
+结论INSUFFICIENT_EVIDENCE：H3分块条件未全部满足，as_seeded发生自动ANALYZE统计漂移；
+[诊断交付](docs/acceptance/v14_a4_2_3_1_attribution_closeout.md)保留全部样本与失败关闭审阅，未重跑。
 不修改GC策略、生产SQL或原门禁。归因采集完成不代表因果成立，更不授权正式L2。
 P2方案/复核和P3生产/容量仍须另行审阅批准；当前capacity_ready保持false。
 
