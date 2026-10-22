@@ -41,6 +41,7 @@ def lookup_receipt(directory, head, attempt):
         candidate_source,
         performance_decision,
         summarize,
+        whole_workloads,
     )
 
     paths = list(directory.rglob('lookup/lookup.json'))
@@ -60,7 +61,9 @@ def lookup_receipt(directory, head, attempt):
             and all(s.get('golden') == 'PASS' and s.get('keys') == 2000 for s in samples),
             'LOOKUP_SAMPLES_INCOMPLETE')
     summary = summarize(samples)
-    require(summary == receipt.get('summary') and performance_decision(summary)
+    workloads = whole_workloads(samples)
+    require(summary == receipt.get('summary') and workloads == receipt.get('whole_workloads')
+            and performance_decision(summary, workloads)
             == receipt.get('decision'), 'LOOKUP_DECISION_MISMATCH')
     require(receipt['decision']['performance_eligible'] is True, 'LOOKUP_TARGET_NOT_MET')
     proposed = candidate_source()
@@ -75,11 +78,51 @@ def lookup_receipt(directory, head, attempt):
     return dict(testcases=junit(paths[0].parent/'tests.xml'), status='COMPLETE')
 
 
-def status(directory, job, *, core=False, safety=False):
+def audit_receipt(directory, head, attempt):
+    import hashlib
+    import subprocess
+
+    paths = list(directory.rglob('audit/m17_1-dependency-audit.json'))
+    require(len(paths) == 1 and not list(directory.rglob('*audit-incomplete.json')),
+            'AUDIT_ARTIFACT_MISSING_OR_INCOMPLETE')
+    receipt = json.loads(paths[0].read_text())
+    require(receipt.get('schema_version') == 'm17.1-dependency-audit-v1'
+            and receipt.get('status') == 'COMPLETE'
+            and receipt.get('head_sha') == head and str(receipt.get('attempt')) == str(attempt)
+            and receipt.get('run_id') == os.environ['GITHUB_RUN_ID'], 'AUDIT_IDENTITY_MISMATCH')
+    lock = ROOT/'frontend/package-lock.json'
+    require(receipt.get('lock_sha256') == hashlib.sha256(lock.read_bytes()).hexdigest(),
+            'AUDIT_LOCK_MISMATCH')
+    require(str(receipt.get('node_version', '')).startswith('v22.'), 'AUDIT_NODE_MISMATCH')
+    # Reuse the exact Node report/lock validators, not a looser second schema.
+    validation = """const fs=require('node:fs');
+const {validateAudit,validateLock}=require('./scripts/m17_1_dependency_audit.cjs');
+const a=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));
+const l=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+const reports=['all','production'].map(k=>validateAudit({status:a[k].exit_status,
+  stdout:JSON.stringify(a[k].report)}));
+if(JSON.stringify(validateLock(...reports,l))!==JSON.stringify(a.packages))process.exit(1);
+"""
+    checked = subprocess.run(['node', '-e', validation, str(paths[0]), str(lock)],
+                             cwd=ROOT, capture_output=True, timeout=30)
+    require(checked.returncode == 0, 'AUDIT_REPORT_INVALID')
+    return {k:receipt[k]['report']['metadata']['vulnerabilities'] for k in ('all', 'production')}
+
+
+def status(directory, job, *, core=False, safety=False, audit=False):
     directory = Path(directory)
     value = dict(**header(job), status="INCOMPLETE", finished_at=now(),
                  workflow_job_status=os.environ.get("UPSTREAM_STATUS", "unknown"))
-    if core:
+    if audit:
+        for name in ('m17_1-dependency-audit.json', 'm17_1-dependency-audit-incomplete.json'):
+            source = ROOT/'.codex_tmp'/name
+            if source.is_file():
+                directory.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, directory/name)
+        if value['workflow_job_status'] == 'success':
+            value['counts'] = audit_receipt(directory.parent, value['head_sha'], value['attempt'])
+            value['status'] = 'COMPLETE'
+    elif core:
         files = [".codex_tmp/data-queue-containers.json",
             "frontend/coverage/runtime-reliability-browser/result.json",
             ".codex_tmp/data-publication-targeted.xml", ".codex_tmp/m17_1_2-full.xml",
@@ -126,7 +169,8 @@ def gate(args):
                 require(json.loads(path.read_text()).get("run_id") == os.environ["GITHUB_RUN_ID"],
                         "MANIFEST_RUN_MISMATCH")
         else:
-            require_jobs(needs, {"test", "capacity", "lookup-diagnosis"})
+            require_jobs(needs, {"test", "capacity", "lookup-diagnosis", "dependency-audit"})
+            result['audit'] = audit_receipt(args.input, head, attempt)
             result['lookup'] = lookup_receipt(args.input, head, attempt)
             core_files = list(args.input.rglob("core/status.json"))
             require(len(core_files) == 1, "CORE_ARTIFACT_MISSING")
@@ -158,14 +202,15 @@ def gate(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=(
-        "lab", "publication", "status", "core-status", "safety-status"))
+        "lab", "publication", "status", "core-status", "safety-status", "audit-status"))
     parser.add_argument("--input", type=Path, default=Path(".codex_tmp/a421-input"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--job-id", default="unknown")
     args = parser.parse_args()
     if args.mode.endswith("status"):
         status(args.output, args.job_id,
-               core=args.mode=="core-status", safety=args.mode=="safety-status")
+               core=args.mode=="core-status", safety=args.mode=="safety-status",
+               audit=args.mode=="audit-status")
     else:
         gate(args)
 

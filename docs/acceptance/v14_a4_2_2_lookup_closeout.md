@@ -79,3 +79,25 @@ Core 在 npm audit 约 90 秒后只打印 Audit command failed，后续前端 co
 生产 SQL 未改，AB_MERGE_READ_ENABLED=false；不进入 A4-3/B/C。
 正式 L2 / 全部新 SHA 工件 / Release Gate 尚 OPEN，不用历史或诊断代替。
 
+## 实施记录
+
+- P1 `6e486a8dfd0de63c516e50e14af267302d8ee589` 已推送。
+  CI 39774476378 / attempt 1 的新候选查找安全测试通过，诊断尚在运行；
+  主 Core job 119809850998 在隔离容器就绪阶段失败：日志先报告 Unix socket
+  accepting connections，随后读取 pg_control_system 时出现 database system is shutting down。
+  这是测试容器初始化临时 socket 服务的就绪竞争，不是业务数据库证据。
+- 后续改用容器内 TCP 就绪与身份读取，保留双身份、PG17、loopback 与正式迁移检查。
+  不放宽原有 release assertions；测试精确限制启动脚本仅作这一替换。
+- npm audit 与 Core frontend coverage/build 分为独立 Job；仍要求同 SHA/run/attempt、
+  Node22、lock SHA、合法完整 all/production 报告；发布门禁重新调用同一 Node 校验器。
+  每次明确网络失败最多三次、每次 90 秒、1/2 秒退避；证书/格式/模式错误快速失败。
+  stdout/stderr 只输出有界结构摘要与字节数，不转储任意 registry 响应。
+  失败产生独立 INCOMPLETE 诊断、非零退出，不输出部分风险清单或伪造零漏洞。
+- 诊断先保存所有代表表 actual plans，再执行较长重复实验；在截止情况下保留已取得计划。
+  每样本保存 UTC、整个代表表 lookup wall、batch、rows/sec、JSON 与 buffered-row 计时。
+  execute 含驱动传输/缓冲，不冒充纯数据库执行；无 DataFrame / commit 的阶段标不适用。
+  整个三表代表负载按每轮实际墙钟求和后计算 median/P95，不把“各表 median 之和”冒充结果。
+  pg_stat_database 为可能延迟至事务末尾的累积计数，不能作独占逐查询 I/O。
+- Node22.23.4 上 audit 单元测试 24/24 通过；相关 Python 单元测试 65/65、ruff 通过。
+  一次全 unit 运行因外部 LLM_ENABLED=false 覆盖合成 dotenv 用例失败；移除该测试环境覆盖重跑，
+  不改业务测试断言。完整 PG17、前端及容量结论以新 SHA CI 工件为准。

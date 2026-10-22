@@ -61,13 +61,25 @@ def comparison():
 
 
 def test_thresholds_require_every_table_both_regimes_and_five_repeats():
-    assert lab.performance_decision(comparison())['performance_eligible']
-    assert not lab.performance_decision(comparison()[:-1])['performance_eligible']
+    workloads = [dict(statistics=r, variant=v, **lab.distribution([s]*5))
+                 for r in ('as_seeded', 'analyzed') for v, s in [('C0', 30), ('C1', 18)]]
+    assert lab.performance_decision(comparison(), workloads)['performance_eligible']
+    assert not lab.performance_decision(comparison()[:-1], workloads)['performance_eligible']
     rows = comparison()
     rows[1]['median'] = 7.01
-    assert not lab.performance_decision(rows)['performance_eligible']
+    assert not lab.performance_decision(rows, workloads)['performance_eligible']
     with pytest.raises(ValueError, match='FIVE_REPEATS'):
         lab.distribution([1]*4)
+
+
+def test_whole_workload_uses_per_repeat_sum_not_sum_of_table_medians():
+    samples = [dict(statistics='analyzed', variant='C0', table=table, repeat=i,
+                    wall_seconds=1+i) for i in range(5) for table in lab.TABLES]
+    assert lab.whole_workloads(samples)[0]['samples'] == [3, 6, 9, 12, 15]
+    with pytest.raises(ValueError, match='INCOMPLETE'):
+        lab.whole_workloads(samples[:-1])
+    with pytest.raises(ValueError, match='DUPLICATE'):
+        lab.whole_workloads(samples+samples[:1])
 
 
 def test_fast_control_and_tail_regression_block_eligibility():

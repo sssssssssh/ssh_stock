@@ -5,6 +5,38 @@ name: CI
   pull_request:
 
 jobs:
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: M17.1 dependency risk inventory (not an upgrade)
+        run: |
+          node --test scripts/m17_1_dependency_audit.test.cjs
+          node scripts/m17_1_dependency_audit.cjs
+      - if: always()
+        env:
+          UPSTREAM_STATUS: ${{ job.status }}
+        run: >-
+          python scripts/ci_release_gate_v14_a4_2_1.py audit-status
+          --output .codex_tmp/a421/audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a421-audit-${{ github.sha }}-attempt${{ github.run_attempt }}
+          path: .codex_tmp/a421
+          include-hidden-files: true
+          if-no-files-found: error
+
   lookup-diagnosis:
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -86,11 +118,11 @@ jobs:
             -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \
             -c pg_stat_statements.track=all
           for attempt in $(seq 1 30); do
-            docker exec v14-isolated-pg17 pg_isready -U stock -d v14_test && break
+            docker exec v14-isolated-pg17 pg_isready -h 127.0.0.1 -U stock -d v14_test && break
             sleep 1
           done
-          docker exec v14-isolated-pg17 pg_isready -U stock -d v14_test
-          V14_SYSTEM_ID=$(docker exec v14-isolated-pg17 psql -U stock -d v14_test -Atc \
+          docker exec v14-isolated-pg17 pg_isready -h 127.0.0.1 -U stock -d v14_test
+          V14_SYSTEM_ID=$(docker exec -e PGPASSWORD=stock v14-isolated-pg17 psql -h 127.0.0.1 -U stock -d v14_test -Atc \
             'SELECT system_identifier FROM pg_control_system()')
           echo "V14_TEST_INSTANCE=$V14_INSTANCE" >> "$GITHUB_ENV"
           echo "V14_TEST_SYSTEM_IDENTIFIER=$V14_SYSTEM_ID" >> "$GITHUB_ENV"
@@ -180,10 +212,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - name: M17.1 dependency risk inventory (not an upgrade)
-        run: |
-          node --test scripts/m17_1_dependency_audit.test.cjs
-          node scripts/m17_1_dependency_audit.cjs
       - run: npm run test:coverage
         working-directory: frontend
       - run: npm run build
@@ -303,13 +331,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: m17-1-dependency-audit
-          include-hidden-files: true
-          path: .codex_tmp/m17_1-dependency-audit.json
-          if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
           name: m17-1-1-retention-evidence
           include-hidden-files: true
           path: |
@@ -375,7 +396,7 @@ jobs:
         run: docker rm -f a421-pg17
 
   publication-release-gate:
-    needs: [test, capacity, lookup-diagnosis]
+    needs: [test, capacity, lookup-diagnosis, dependency-audit]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30

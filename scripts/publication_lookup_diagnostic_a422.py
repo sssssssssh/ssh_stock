@@ -108,10 +108,26 @@ def lookup(ws, model, payload, variant, observer=None, metrics=None):
                 observer(sql, parameters)
             started = perf_counter()
             try:
-                return db.execute(text(sql), parameters)
+                result = db.execute(text(sql), parameters)
             finally:
                 if metrics is not None:
                     metrics['execute_seconds'] += perf_counter()-started
+            if metrics is None:
+                return result
+
+            class Rows:
+                def mappings(self):
+                    rows = iter(result.mappings())
+                    while True:
+                        clock = perf_counter()
+                        try:
+                            row = next(rows)
+                        except StopIteration:
+                            return
+                        finally:
+                            metrics['buffered_row_materialization_seconds'] += perf_counter()-clock
+                        yield row
+            return Rows()
 
     ws.db = Proxy()
     if metrics is not None:
@@ -152,7 +168,25 @@ def summarize(samples):
             for k, v in groups.items()]
 
 
-def performance_decision(summary):
+def whole_workloads(samples):
+    groups = {}
+    for s in samples:
+        key = s['statistics'], s['variant'], s['repeat']
+        tables = groups.setdefault(key, {})
+        if s['table'] in tables:
+            raise ValueError('A422_DUPLICATE_SAMPLE')
+        tables[s['table']] = s['wall_seconds']
+    workloads = {}
+    for (regime, variant, repeat), tables in groups.items():
+        if set(tables) != set(TABLES):
+            raise ValueError('A422_WHOLE_WORKLOAD_INCOMPLETE')
+        workloads.setdefault((regime, variant), []).append((repeat, sum(tables.values())))
+    return [dict(statistics=regime, variant=variant,
+                 **distribution([seconds for _, seconds in sorted(values)]))
+            for (regime, variant), values in workloads.items()]
+
+
+def performance_decision(summary, workloads=None):
     """Both stats regimes and every table are required; never cherry-pick."""
     rows = {(r["statistics"], r["table"], r["variant"]): r for r in summary}
     reasons = []
@@ -174,10 +208,13 @@ def performance_decision(summary):
                 reasons.append("CONTROL_REGRESSION")
             before.append(a["median"])
             after.append(b["median"])
-        if len(before) != len(TABLES) or sum(after) > sum(before) * 0.8:
+        whole = {(r['statistics'], r['variant']): r for r in (workloads or [])}
+        a, b = whole.get((regime, 'C0')), whole.get((regime, 'C1'))
+        if len(before) != len(TABLES) or not a or not b or b['median'] > a['median'] * 0.8:
             reasons.append("WORKLOAD_MEDIAN_TARGET_NOT_MET")
     return dict(performance_eligible=not reasons, reasons=sorted(set(reasons)), ratios=ratios,
-                caveat="Sum of table medians, NOT median full-workload runtime or formal L2; "
+                caveat="Per-repeat sum of all 3 tables' measured lookup walls (not contiguous); "
+                       "NOT full table, upsert/publication or formal L2 acceptance; "
                        "manual plan/resource review required before any production change")
 
 
@@ -251,7 +288,8 @@ def db_snapshot(db):
           AND query LIKE 'WITH input_keys AS%%'""")).mappings()]
     else:
         result["lookup_statements"] = "NOT_AVAILABLE"
-    result["scope"] = "Cumulative child DB, includes observers; queryid only, no SQL or binds"
+    result["scope"] = ("Cumulative child DB, includes observers; queryid only, no SQL or binds; "
+                       "pg_stat_database can lag until transaction end; NOT per-query I/O")
     return result
 
 
@@ -264,7 +302,7 @@ def environment(db):
       'shared_preload_libraries','statement_timeout','jit')""")).all())
     tables = [dict(r) for r in db.execute(text("""SELECT c.relname,
       pg_table_size(c.oid) AS table_bytes,pg_indexes_size(c.oid) AS index_bytes,
-      s.n_live_tup,s.last_analyze,s.last_autoanalyze FROM pg_class c
+      c.reltuples,c.relpages,s.n_live_tup,s.last_analyze,s.last_autoanalyze FROM pg_class c
       JOIN pg_namespace n ON c.relnamespace=n.oid LEFT JOIN pg_stat_user_tables s ON s.relid=c.oid
       WHERE n.nspname='public' AND c.relname IN ('stock_opportunity_daily',
       'signal_forward_eval','stock_trade_status_daily','data_publication_row')""")).mappings()]
@@ -275,7 +313,7 @@ def run(output, path):
     import pytest
     from sqlalchemy import text
 
-    from scripts.a42_artifacts import atomic, container_receipt, deadline
+    from scripts.a42_artifacts import atomic, container_receipt, deadline, now
     from scripts.ab_read_profile_v14_a4 import resource_snapshot
     from scripts.ab_read_resources_v14_a4_2 import Telemetry, host_memory_bytes
     from scripts.v14_test_database import isolated_v14_database
@@ -301,6 +339,10 @@ def run(output, path):
             c.seed(factory, 5000, days)
             with candidate(factory, engine, start=days[0], end=days[-1]) as (db, job):
                 ws = db.info['publication_workspace']
+                output['public_counts'] = {model.__tablename__:db.scalar(text(
+                    f'SELECT count(*) FROM public."{model.__tablename__}"')) for model in c.MODELS}
+                if sum(output['public_counts'].values()) != 603040:
+                    raise ValueError('A422_PUBLIC_FIXTURE_COUNT_CHANGED')
                 output['candidate_rows'] = seed_candidates(db, job.id, c, days)
                 db.execute(text("CREATE EXTENSION IF NOT EXISTS pg_stat_statements"))
                 db.commit()
@@ -322,7 +364,22 @@ def run(output, path):
                     if regime == 'analyzed':
                         for name in (*TABLES, 'data_publication_row'):
                             db.execute(text(f'ANALYZE public."{name}"'))
+                        db.commit()
+                        db.execute(text("SET LOCAL statement_timeout='300s'"))
                     output.setdefault('environments', {})[regime] = environment(db)
+                    # Persist all three tables' actual plans before the longer
+                    # repeated measurements; a deadline must not erase diagnosis.
+                    for name in TABLES:
+                        model = next(m for m in c.MODELS if m.__tablename__ == name)
+                        for variant in VARIANTS:
+                            def explain(sql, params, regime=regime, name=name, variant=variant):
+                                prefix = ('EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS, '
+                                          'FORMAT JSON) ')
+                                plan = db.execute(text(prefix+sql), params).scalar()
+                                output.setdefault('plans', []).append(dict(statistics=regime,
+                                    table=name, variant=variant, plan=redact_plan(plan)))
+                            lookup(ws, model, inputs[name][:VARIANTS[variant]], variant, explain)
+                            atomic(path, output)
                     for name in TABLES:
                         model = next(m for m in c.MODELS if m.__tablename__ == name)
                         expected, _ = workload(ws, model, inputs[name], 'C0')
@@ -336,7 +393,11 @@ def run(output, path):
                                 atomic(path, output)
                                 before = db_snapshot(db)
                                 resources_before = resource_snapshot(container)
-                                metrics = dict(python_json_seconds=0.0, execute_seconds=0.0)
+                                started_at = now()
+                                metrics = dict(python_json_seconds=0.0, execute_seconds=0.0,
+                                    buffered_row_materialization_seconds=0.0,
+                                    execute_scope='DRIVER_EXECUTE_INCLUDES_NETWORK_AND_BUFFERING',
+                                    dataframe_seconds='NOT_APPLICABLE_NO_DATAFRAME_IN_LOOKUP')
                                 with Telemetry(engine, pid, container=True) as telemetry:
                                     cpu, clock = process_time(), perf_counter()
                                     returned, batches = workload(
@@ -346,6 +407,8 @@ def run(output, path):
                                     raise ValueError('A422_LOOKUP_GOLDEN_MISMATCH')
                                 sample = dict(statistics=regime, table=name, variant=variant,
                                     repeat=repeat, keys=2000, batch_size=size, wall_seconds=wall,
+                                    started_at=started_at, finished_at=now(),
+                                    rows_per_second=2000/wall,
                                     batch_seconds=batches, client_cpu_seconds=client_cpu,
                                     metrics=metrics, telemetry=telemetry.receipt(),
                                     resources_before=resources_before,
@@ -354,17 +417,12 @@ def run(output, path):
                                     commit_seconds='NOT_APPLICABLE_READ_ONLY_LOOKUP', golden='PASS')
                                 output.setdefault('samples', []).append(sample)
                                 atomic(path, output)
-                        for variant in VARIANTS:
-                            def explain(sql, params, regime=regime, name=name, variant=variant):
-                                prefix = ('EXPLAIN (ANALYZE, BUFFERS, VERBOSE, SETTINGS, '
-                                          'FORMAT JSON) ')
-                                plan = db.execute(text(prefix+sql), params).scalar()
-                                output.setdefault('plans', []).append(dict(statistics=regime,
-                                    table=name, variant=variant, plan=redact_plan(plan)))
-                            lookup(ws, model, inputs[name][:VARIANTS[variant]], variant, explain)
-                            atomic(path, output)
+                                print(json.dumps(dict(statistics=regime, table=name,
+                                    variant=variant, repeat=repeat, wall_seconds=wall)), flush=True)
                 output['summary'] = summarize(output['samples'])
-                output['decision'] = performance_decision(output['summary'])
+                output['whole_workloads'] = whole_workloads(output['samples'])
+                output['decision'] = performance_decision(
+                    output['summary'], output['whole_workloads'])
                 current = (ROOT/'backend/app/services/data_publication.py').read_text()
                 proposed = candidate_source()
                 output.update(lookup_baseline_sha=BASELINE,
