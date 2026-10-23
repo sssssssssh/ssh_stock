@@ -103,3 +103,13 @@ purpose/stage label、marker/独立 pg_controldata system ID 与 PG17 双验证�
 read 资源 PG17、正式迁移四张空表、受限角色、最多3ticks/用例；无lookup/seed/性能矩阵。
 没有 dispatch、authorize、attribution、capacity、workflow_run 或schedule，不接入正式发布。
 原五条工作流、governance policy/consumed one-shot/Release Gate 字节保持73a3273基线。
+
+## A4233.1 授权的 test/evidence 例外
+
+前节为历史交付事实。本轮仅ci.yml test job增加迁移/observer定向检查、完整JUnit去敏及阶段化上传，
+原命令/覆盖率保留；其余job含authorize/capacity/publication-release-gate逐项仍冻结。
+严格合同以reviewed test job的完整摘要限定唯一例外，历史manifest/policy/one-shot不重写。
+a4233-observer-contracts仍是单一12分钟contracts，补迁移与失败证据回归，不增加dispatch或lookup。
+安全主CI工件a42331-safe-ci-SHA-run-attempt必需；迁移/固定错误码工件仅存在时上传；
+后续容器/浏览器从未运行时跳过，运行成功仍要求必备产物，运行失败可保留部分文件。
+完整状态与剩余边界见[a4233_1_ci_remediation.md](a4233_1_ci_remediation.md)。

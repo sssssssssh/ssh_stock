@@ -1,5 +1,16 @@
 # A4233 W00–W05 交付记录
 
+## A4233.1 追加说明（保留以下历史事实）
+
+基线7bc2974主CI重复的M16.5失败已在双验证独立PG17复现：全局SessionLocal固定A而
+Settings缓存重建使Alembic改连B，A提交归档在新连接可见，B空库guard正确返回false。
+本轮不修改生产迁移，改用owned UUID fixture与显式Session/connection身份核验；
+补observer v2稳定快照/有界停止、主线程signal限制和安全完整JUnit工件。
+本轮对ci.yml test job的精确例外取代以下“原五workflow完全不变”的未来约束，
+但所有正式Gate/昂贵触发/旧协议/policy/one-shot仍冻结；历史manifest原字节保留。
+最终主CI与专项必须同SHA重新验收；本报告旧绿灯不能替代。
+实施与实际测试、未关闭项见[a4233_1_ci_remediation.md](a4233_1_ci_remediation.md)。
+
 状态：**OBSERVER_IMPLEMENTED_CONTRACT_PASS（仅低成本功能合同；非性能/因果/发布认证）**。
 基线73a3273301502822dc7a881a64dfdca45db4d063，master；未授权性能测量。
 本文件只记录新观测能力，不更新旧A4231/A4232协议、工件、报告或一次性授权记录。

@@ -213,6 +213,52 @@ class Receipt(Identity):
     content_sha256: Hash
 
 
+class LifecycleReceipt(Receipt):
+    """v1 historical evidence stays readable; new lifecycle fields are mandatory in v2."""
+    schema_version: Literal['a4233.observer.v2'] = 'a4233.observer.v2'
+    lifecycle: Annotated[list[Literal['INIT','RUNNING','STOP_REQUESTED','JOINED',
+                                     'STOP_TIMEOUT','RECEIPT']], Field(min_length=4,max_length=6)]
+    worker_started: bool
+    worker_joined: bool
+    snapshot_sequence: Counter
+    snapshot_mode: Literal['JOINED_IMMUTABLE','RUNNING_FAILURE_SUMMARY','NOT_STARTED_FAILURE']
+    snapshot_sha256: Hash
+    cleanup_failure_count: Counter
+    cleanup_failures_omitted: Counter
+    stop_failure_code: Literal['A4233_JOIN_TIMEOUT'] | None
+
+
+def snapshot_payload(value):
+    return {k:value[k] for k in ('datid','relations','ticks','failed_tick',
+                                'physical_verified','restricted_readonly_verified')}
+
+
+def validate_lifecycle(receipt):
+    trace = receipt.lifecycle
+    expected = ['INIT']+(['RUNNING'] if receipt.worker_started else [])+['STOP_REQUESTED']
+    check(trace in (expected+['JOINED','RECEIPT'],expected+['STOP_TIMEOUT','RECEIPT']),
+          'A4233_LIFECYCLE_INVALID')
+    joined = trace[-2] == 'JOINED'
+    check(receipt.worker_joined == (joined and receipt.worker_started),
+          'A4233_LIFECYCLE_INVALID')
+    check(receipt.snapshot_mode == ('RUNNING_FAILURE_SUMMARY' if not joined else
+        'JOINED_IMMUTABLE' if receipt.worker_started else 'NOT_STARTED_FAILURE'),
+        'A4233_SNAPSHOT_INVALID')
+    check(receipt.snapshot_sha256 == digest(snapshot_payload(receipt.model_dump())),
+          'A4233_SNAPSHOT_INVALID')
+    check(receipt.cleanup_failure_count == len(receipt.cleanup_failure_codes)
+          +receipt.cleanup_failures_omitted, 'A4233_CLEANUP_COUNT_INVALID')
+    if not joined:
+        check(receipt.status == 'INCOMPLETE_OBSERVABILITY' and not receipt.cleanup_complete
+              and receipt.stop_failure_code == 'A4233_JOIN_TIMEOUT',
+              'A4233_FALSE_COMPLETE')
+    else:
+        check(receipt.stop_failure_code is None,'A4233_LIFECYCLE_INVALID')
+    if receipt.status == 'COMPLETE_CONTRACT':
+        check(receipt.worker_joined and receipt.cleanup_failures_omitted == 0,
+              'A4233_FALSE_COMPLETE')
+
+
 def correlate(tick, datid, relations, previous=None):
     """Conservative cross-view associations; absence never proves inactivity."""
     start, end = tick.tick_started_monotonic_ns, tick.tick_finished_monotonic_ns
@@ -324,11 +370,14 @@ def seal(receipt):
 
 def validate(value, expected):
     try:
-        receipt = Receipt.model_validate(value)
+        model = LifecycleReceipt if value.get('schema_version') == 'a4233.observer.v2' else Receipt
+        receipt = model.model_validate(value)
         for k,v in expected.model_dump().items():
             check(getattr(receipt,k) == v, 'A4233_IDENTITY_MISMATCH')
         check(receipt.content_sha256 == digest({k:v for k,v in receipt.model_dump().items()
             if k != 'content_sha256'}), 'A4233_DIGEST_MISMATCH')
+        if isinstance(receipt,LifecycleReceipt):
+            validate_lifecycle(receipt)
         check(len({r.relid for r in receipt.relations}) == len(receipt.relations),
               'A4233_MAPPING_INCOMPLETE')
         try:

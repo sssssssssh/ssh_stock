@@ -1,5 +1,16 @@
 # 项目开发规则
 
+## A4233.1 测试隔离与异常生命周期
+
+本轮在7bc2974上只整改测试/观测器/证据。迁移降级测试须新建并双验证自有UUID合成PG17库；
+Session/Alembic同时比较物理实例、database/schema/revision，显式传connection，不靠改环境
+假定全局SessionLocal已换库。归档非空拒降级不变，清理只限本fixture创建对象且失败关闭。
+observer v2 INIT/RUNNING/STOP_REQUESTED/JOINED或STOP_TIMEOUT/RECEIPT；
+2秒停止预算，连接由worker关闭，未join仅发布稳定有界失败快照，不声称cleanup完成。
+历史v1及旧A4231/A4232协议/证据/policy/one-shot不改；本轮授权主CI test job精确证据例外，
+其余正式authorize/capacity/publication-release-gate与生产SQL/模型/迁移继续冻结。
+本阶段不校准/归因/P95/L2；最终同SHA主CI、A4233合同与Ruff均成功才可标ACCEPTED。
+
 ## A4-2.3.3 观测器准备边界
 
 仅新增 a4233 独立只读 PG17 observer/合同/reviewer 和微型测试，候选采样预算尚非正式实验合同。

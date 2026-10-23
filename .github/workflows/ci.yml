@@ -279,6 +279,7 @@ jobs:
       TUSHARE_TOKEN: test-token
       M17_MEASUREMENT_PATH: .codex_tmp/m17_capacity.jsonl
       M17_1_1_MEASUREMENT_PATH: .codex_tmp/m17_1_1-retention.jsonl
+      A42331_MIGRATION_EVIDENCE_DIR: .codex_tmp/a42331-migrations
     steps:
       - uses: actions/checkout@v4
         with:
@@ -323,8 +324,12 @@ jobs:
         run: >-
           python scripts/ab_read_benchmark_v14.py --variant all --readers 2
           --output .codex_tmp/v14-read-ci-smoke.json
-      - uses: actions/upload-artifact@v4
+      - name: Redact existing V14 JUnit before any artifact export
+        id: safe_v14
         if: always()
+        run: python -m scripts.a42331_ci_evidence redact-v14
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && steps.safe_v14.outcome == 'success' }}
         with:
           name: v14-read-evidence
           include-hidden-files: true
@@ -368,8 +373,19 @@ jobs:
           python -m pytest tests/integration/test_m17_paper_daily.py -q
           python -m pytest tests/integration/test_m17_paper_jobs.py -q
           python -m pytest tests/integration/test_m17_1_paper_continuity.py -q
-      - run: >-
-          python -m pytest --cov=backend/app --cov-report=term-missing --cov-fail-under=70
+      - name: Archive identity and observer failure-path regressions before full suite
+        id: targeted
+        run: >-
+          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
+          tests/integration/test_m16_5_archive_migration.py
+          tests/integration/test_m16_6_contract_migration.py
+          tests/unit/test_a42331_migration_contract.py tests/unit/test_a42331_ci_evidence.py
+          tests/unit/test_a4233_background_observer.py tests/integration/test_a4233_observer_pg17.py
+          -q --junitxml=.codex_tmp/a42331-targeted.xml
+      - id: full_tests
+        run: >-
+          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
+          --cov=backend/app --cov-report=term-missing --cov-fail-under=70
           --junitxml=.codex_tmp/m17_1_2-full.xml
       - name: M16.6 capture capacity measurements
         run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
@@ -380,14 +396,15 @@ jobs:
       - run: docker compose config
       - run: docker compose build
       - name: Data queue single/two Worker and atomic publication acceptance
+        id: data_queue
         run: TEST_DATABASE_URL="$DATABASE_URL" python scripts/data_queue_container_acceptance.py
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && (steps.data_queue.outcome == 'success' || steps.data_queue.outcome == 'failure') }}
         with:
           name: data-queue-container-acceptance
           include-hidden-files: true
           path: .codex_tmp/data-queue-containers.json
-          if-no-files-found: error
+          if-no-files-found: ${{ steps.data_queue.outcome == 'success' && 'error' || 'ignore' }}
       - run: docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t
       - uses: actions/setup-node@v4
         with:
@@ -401,6 +418,7 @@ jobs:
       - run: npm run build
         working-directory: frontend
       - name: M16.6 browser acceptance (isolated runner tooling)
+        id: browser
         run: |
           npm install --prefix "$RUNNER_TEMP/m166-browser" --no-save --package-lock=false playwright@1.64.0
           node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
@@ -467,21 +485,54 @@ jobs:
                            "suspend_timing: nullable TEXT; G1 real backfill pending approval.\n")
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && (steps.browser.outcome == 'success' || steps.browser.outcome == 'failure') }}
         with:
           name: m16-6-synthetic-browser
           path: frontend/coverage/browser
           if-no-files-found: ignore
       - name: Runtime reliability desktop and narrow-screen synthetic acceptance
+        id: runtime_browser
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/runtime_reliability_browser.cjs
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && (steps.runtime_browser.outcome == 'success' || steps.runtime_browser.outcome == 'failure') }}
         with:
           name: runtime-reliability-synthetic-browser
           path: frontend/coverage/runtime-reliability-browser
+          if-no-files-found: ${{ steps.runtime_browser.outcome == 'success' && 'error' || 'ignore' }}
+      - name: Mandatory safe test/failure evidence even when later stages never ran
+        id: safe_evidence
+        if: always()
+        env:
+          UPSTREAM_STATUS: ${{ job.status }}
+          A42331_STEP_OUTCOMES: >-
+            {"targeted":"${{ steps.targeted.outcome }}","full_tests":"${{ steps.full_tests.outcome }}",
+            "data_queue":"${{ steps.data_queue.outcome }}","browser":"${{ steps.browser.outcome }}",
+            "runtime_browser":"${{ steps.runtime_browser.outcome }}"}
+        run: python -m scripts.a42331_ci_evidence collect
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a42331-safe-ci-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a42331-ci
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('.codex_tmp/a42331-errors/*.json') != '' }}
+        with:
+          name: a42331-safe-errors-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a42331-errors
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && hashFiles('.codex_tmp/a42331-migrations/*.json') != '' }}
+        with:
+          name: a42331-migration-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a42331-migrations
+          include-hidden-files: true
           if-no-files-found: error
       - name: Core exact SHA bundle, independent of long capacity workloads
-        if: always()
+        id: core_bundle
+        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
         env:
           UPSTREAM_STATUS: ${{ job.status }}
         run: python scripts/ci_release_gate_v14_a4_2_1.py core-status --job-id core --output .codex_tmp/a421/core
@@ -503,14 +554,14 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && (steps.core_bundle.outcome == 'success' || steps.core_bundle.outcome == 'failure') }}
         with:
           name: a421-core-${{ github.sha }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: .codex_tmp/a421
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
         with:
           name: data-publication-reliability
           include-hidden-files: true
@@ -539,7 +590,7 @@ jobs:
             .codex_tmp/m17_1_1-release.json
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
         with:
           name: m17-1-2-suspend-evidence
           include-hidden-files: true

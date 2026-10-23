@@ -3,6 +3,7 @@
 import json
 import signal
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -539,9 +540,18 @@ def test_frozen_baseline_bytes_and_old_workflows_unchanged():
 
     assert manifest['baseline_sha'] == '73a3273301502822dc7a881a64dfdca45db4d063'
     for p,h in manifest['files'].items():
-        assert hashlib.sha256((ROOT/p).read_bytes()).hexdigest() == h
-        assert hashlib.sha256(subprocess.check_output(['git','show',manifest['baseline_sha']+':'+p],
-                                                       cwd=ROOT)).hexdigest() == h
+        before = subprocess.check_output(['git','show',manifest['baseline_sha']+':'+p],cwd=ROOT)
+        assert hashlib.sha256(before).hexdigest() == h
+        if p == '.github/workflows/ci.yml':
+            import yaml
+
+            from scripts.a42331_ci_contract import normalize_test_job
+
+            current = yaml.safe_load((ROOT/p).read_bytes())
+            current['jobs']['test'] = normalize_test_job(current['jobs']['test'])
+            assert current == yaml.safe_load(before)  # All other jobs/gates remain frozen.
+        else:
+            assert hashlib.sha256((ROOT/p).read_bytes()).hexdigest() == h
     assert subprocess.run(['git','diff','--quiet',manifest['baseline_sha'],'--',
         'backend','config','migrations','frontend'],cwd=ROOT).returncode == 0
 
@@ -579,3 +589,117 @@ def test_test_count_receipt_uses_a4233_namespace_and_no_raw_failure(tmp_path,mon
     assert r['status'] == 'INCOMPLETE_OBSERVABILITY'
     assert r['first_failure_code'] == 'A4233_TESTS_INCOMPLETE'
     assert 'secret' not in json.dumps(r)
+
+
+def test_three_ticks_have_explicit_joined_lifecycle_and_frozen_snapshot():
+    o = ob.Observer(lambda:Database(),marker=MARKER,system_id=SYSTEM,identity=identity(),
+                    planned_ticks=3)
+    r = o.run_micro()
+    assert r['schema_version'] == 'a4233.observer.v2'
+    assert r['lifecycle'] == ['INIT','RUNNING','STOP_REQUESTED','JOINED','RECEIPT']
+    assert r['worker_joined'] and r['snapshot_mode'] == 'JOINED_IMMUTABLE'
+    assert len(r['ticks']) == 3 and validate(r,identity()).status == 'COMPLETE_CONTRACT'
+    r['ticks'].clear()
+    assert len(o.receipt()['ticks']) == 3  # Caller cannot mutate the sealed audit.
+
+
+def test_live_worker_timeout_uses_only_published_complete_and_partial_evidence(monkeypatch):
+    import threading
+    import time
+
+    entered,release = threading.Event(),threading.Event()
+    class Blocked(Database):
+        activity_calls = 0
+        def execute(self,sql,prepare):
+            if sql == ob.SQL['activity']:
+                self.activity_calls += 1
+                if self.activity_calls == 2:
+                    entered.set()
+                    release.wait(timeout=1)
+            return super().execute(sql,prepare)
+    db,o = Blocked(),None
+    monkeypatch.setattr(ob,'STOP_SECONDS',.04)  # Finite fault injection, never runtime config.
+    try:
+        o = observer(db).start()
+        assert o.thread.daemon is True and entered.wait(timeout=1)
+        started = time.monotonic()
+        r = o.stop(Fault('A4233_SQL_TIMEOUT'))
+        assert time.monotonic()-started < .3
+        assert r['first_failure_code'] == 'A4233_SQL_TIMEOUT'
+        assert r['stop_failure_code'] == 'A4233_JOIN_TIMEOUT'
+        assert r['lifecycle'][-2:] == ['STOP_TIMEOUT','RECEIPT']
+        assert not r['worker_joined'] and not r['cleanup_complete']
+        assert r['snapshot_mode'] == 'RUNNING_FAILURE_SUMMARY'
+        assert len(r['ticks']) == 1 and r['failed_tick']['sequence'] == 1
+        assert r['failed_tick']['windows'][0]['view'] == 'clock'
+        assert validate(r,identity()).status == 'INCOMPLETE_OBSERVABILITY'
+    finally:
+        release.set()
+        if o is not None:
+            o.thread.join(timeout=1)
+            assert not o.thread.is_alive() and db.closed
+    assert o.receipt() == r  # Later worker progress/cleanup cannot rewrite the failed audit.
+
+
+def test_non_main_thread_guard_rejects_before_install_or_worker_start():
+    import threading
+
+    o = observer()
+    prior = signal.getsignal(signal.SIGTERM)
+    results = []
+    t = threading.Thread(target=lambda:results.append(o.run_micro()))
+    t.start()
+    t.join(timeout=1)
+    assert not t.is_alive() and o.thread is None
+    assert results[0]['first_failure_code'] == 'A4233_SIGNAL_MAIN_THREAD_REQUIRED'
+    assert results[0]['worker_started'] is False
+    assert signal.getsignal(signal.SIGTERM) == prior
+
+
+def test_many_cleanup_failures_are_counted_but_never_overflow_serialization():
+    o = observer()
+    o.fail('A4233_SQL_TIMEOUT')
+    for _ in range(20):
+        o.cleanup_failure('A4233_CONNECTION_CLOSE_FAILED')
+    r = o.stop()
+    assert len(r['cleanup_failure_codes']) == 4
+    assert r['cleanup_failure_count'] == 20 and r['cleanup_failures_omitted'] == 16
+    assert r['first_failure_code'] == 'A4233_SQL_TIMEOUT'
+    assert validate(r,identity()).status == 'INCOMPLETE_OBSERVABILITY'
+    assert o.stop() == r
+
+
+@pytest.mark.parametrize('physical,capability,expected',[
+    (False,True,False),(True,False,False),(True,True,True)])
+def test_cancel_uses_only_owned_verified_connection_and_bounded_safe_driver(
+    monkeypatch,physical,capability,expected,
+):
+    import psycopg
+
+    calls = []
+    class OwnConnection:
+        def cancel_safe(self,*,timeout):
+            assert 0 < timeout <= .25
+            calls.append(timeout)
+        def cancel(self):
+            pytest.fail('Legacy unbounded cancel is forbidden')
+    monkeypatch.setattr(psycopg,'Connection',OwnConnection)
+    monkeypatch.setattr(psycopg.capabilities,'has_cancel_safe',lambda:capability)
+    o = observer()
+    o._connection,o.physical_verified = OwnConnection(),physical
+    o._cancel_owned_query(time.monotonic_ns())
+    assert bool(calls) == expected
+
+
+def test_v2_cannot_claim_complete_with_non_joined_worker():
+    r = observer().run_micro()
+    r['worker_joined'] = False
+    with pytest.raises(Fault,match='LIFECYCLE_INVALID'):
+        validate(seal(r),identity())
+
+
+def test_legacy_v1_contract_remains_readable_without_lifecycle_reinterpretation():
+    r = receipt()
+    assert r['schema_version'] == 'a4233.observer.v1'
+    assert validate(r,identity()).status == 'COMPLETE_CONTRACT'
+    assert off.review(r,identity())['schema_version'] == 'a4233.review.v1'

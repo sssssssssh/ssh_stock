@@ -58,6 +58,11 @@ def test_original_core_steps_and_every_release_assertion_are_preserved():
         "git", "show", "02c69c612786:.github/workflows/ci.yml"], text=True)
     old = yaml.safe_load(baseline)["jobs"]["test"]["steps"]
     new_ci = yaml.safe_load(Path(".github/workflows/ci.yml").read_text())
+    from scripts.a42331_ci_contract import normalize_test_job
+
+    # A4233.1 explicitly authorizes only the exact reviewed test/evidence delta.
+    # Validate that delta first, then retain all original core/release assertions.
+    new_ci['jobs']['test'] = normalize_test_job(new_ci['jobs']['test'])
     new = new_ci["jobs"]["test"]["steps"]
     removed = {"Cold start L1 L2 L3 isolated publication capacity",
                "Data publication exact SHA release receipt"}

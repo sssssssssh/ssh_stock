@@ -5,6 +5,7 @@ import signal
 import threading
 import time
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -14,7 +15,7 @@ from scripts.a4233_observation_contract import (
     Analyze,
     Fault,
     Identity,
-    Receipt,
+    LifecycleReceipt,
     Relation,
     TableStats,
     Tick,
@@ -24,6 +25,7 @@ from scripts.a4233_observation_contract import (
     digest,
     failure_code,
     seal,
+    snapshot_payload,
     validate_ticks,
 )
 from scripts.ab_read_resources_v14_a4_2 import current_rss_bytes
@@ -103,6 +105,7 @@ SQL = dict(identity=IDENTITY_SQL,preflight=PREFLIGHT_SQL,columns=COLUMNS_SQL,
     tables=projection('pg_stat_user_tables')+" WHERE schemaname='public' AND relname IN "
         "('data_publication_row','signal_forward_eval','stock_opportunity_daily','stock_trade_status_daily')")
 SQL = {name:query+' LIMIT 129' for name,query in SQL.items()}
+STOP_SECONDS = 2.0  # Contract budget, not a CLI/runtime override.
 
 
 def connection_factory(url, marker, system_id):
@@ -171,11 +174,44 @@ class Observer:
         self.cleanup_complete = False
         self.failed_tick = None
         self.capacity = 1024
+        self._lock = threading.RLock()
+        self._lifecycle = ['INIT']
+        self._worker_started = False
+        self._connection = None
+        self._inflight = None
+        self._snapshot_sequence = 0
+        self._cleanup_failure_count = 0
+        self._sealed_receipt = None
+        self._publish()
 
     def fail(self, code):
-        if self.first_failure_code is None:
-            self.first_failure_code = code
+        with self._lock:
+            if self.first_failure_code is None:
+                self.first_failure_code = code
         self.stop_event.set()
+
+    def cleanup_failure(self, code):
+        with self._lock:
+            self._cleanup_failure_count += 1
+            if len(self.cleanup_failure_codes) < 4:
+                self.cleanup_failure_codes.append(code)
+
+    def _publish(self):
+        # Only the worker publishes collection state. Published dictionaries are
+        # detached from mutable buffers and are never mutated after assignment.
+        with self._lock:
+            self._snapshot_sequence += 1
+            self._published = dict(datid=self.datid,
+                relations=[r.model_dump() for r in self.relations],
+                ticks=[t.model_dump() for t in self.ticks],
+                failed_tick=deepcopy(self.failed_tick or self._inflight),
+                physical_verified=self.physical_verified,
+                restricted_readonly_verified=self.restricted_readonly_verified)
+
+    def _progress(self, sequence, windows, parts):
+        self._inflight = dict(sequence=sequence,windows=deepcopy(windows),
+            observations={k:[r.model_dump() for r in rows] for k,rows in parts.items()})
+        self._publish()
 
     def read(self, db, name, windows=None):
         check(name in SQL, 'A4233_SQL_NOT_ALLOWED')
@@ -208,6 +244,7 @@ class Observer:
               'A4233_PHYSICAL_MISMATCH')
         check(type(r['datid']) is int and r['datid'] > 0,'A4233_IDENTITY_REQUIRED')
         self.datid,self.physical_verified = r['datid'],True
+        self._publish()
         clock = time.get_clock_info('monotonic')
         check(clock.monotonic and not clock.adjustable,'A4233_MONOTONIC_REQUIRED')
         check(db.autocommit is True, 'A4233_AUTOCOMMIT_REQUIRED')
@@ -230,18 +267,23 @@ class Observer:
               and {r.table for r in self.relations if r.kind == 'TABLE'} == set(TABLES),
               'A4233_MAPPING_INCOMPLETE')
         self.restricted_readonly_verified = True
+        self._publish()
 
     def tick(self, db):
         start,cpu,u = time.monotonic_ns(),time.thread_time(),datetime.now(UTC).isoformat()
         windows,parts = [],{}
+        sequence = len(self.ticks)
+        self._progress(sequence,windows,parts)
         try:
             clock = self.read(db,'clock',windows)
             check(len(clock) == 1, 'A4233_CLOCK_INVALID')
             check(clock[0]['db_clock_timestamp'].tzinfo is not None,'A4233_CLOCK_INVALID')
             stamp = clock[0]['db_clock_timestamp'].astimezone(UTC).isoformat()
+            self._progress(sequence,windows,parts)
             for name,model in (('activity',Activity),('vacuum',Vacuum),('analyze',Analyze),
                                ('tables',TableStats)):
                 parts[name] = normalized(self.read(db,name,windows),model)
+                self._progress(sequence,windows,parts)
             rss = current_rss_bytes()
             end,v = time.monotonic_ns(),datetime.now(UTC).isoformat()
             t = Tick(sequence=len(self.ticks),tick_started_monotonic_ns=start,
@@ -252,18 +294,23 @@ class Observer:
             t.events = correlate(t,self.datid,self.relations,self.ticks[-1] if self.ticks else None)
             check(len(self.ticks) < self.capacity, 'A4233_TICK_BUFFER_FULL')
             self.ticks.append(t)  # Preserve slow/ambiguous full tick before validation.
+            self._inflight = None
+            self._publish()
             validate_ticks(self.ticks,self.datid,self.relations)
             check(all(e.code == 'NOT_OBSERVED' for e in t.events),'A4233_ACTIVITY_STOP')
         except BaseException:
             # Partial view evidence stays typed/bounded; no raw driver text or values.
             self.failed_tick = dict(sequence=len(self.ticks),windows=windows,
                 observations={k:[r.model_dump() for r in rows] for k,rows in parts.items()})
+            self._publish()
             raise
 
     def worker(self):
         db = None
         try:
             db = self.connect()
+            with self._lock:
+                self._connection = db
             self.preflight(db)
             due = time.monotonic_ns()
             for _ in range(self.planned_ticks):
@@ -275,7 +322,8 @@ class Observer:
                 self.tick(db)
                 due += 250_000_000
             if len(self.ticks) != self.planned_ticks and self.first_failure_code is None:
-                self.fail('A4233_TICK_MISSING')
+                self.fail('A4233_STOP_REQUESTED' if self.stop_event.is_set()
+                          else 'A4233_TICK_MISSING')
         except BaseException as error:
             self.fail(failure_code(error))
         finally:
@@ -283,47 +331,102 @@ class Observer:
                 try:
                     db.close()
                 except BaseException:
-                    self.cleanup_failure_codes.append('A4233_CONNECTION_CLOSE_FAILED')
+                    self.cleanup_failure('A4233_CONNECTION_CLOSE_FAILED')
+            with self._lock:
+                self._connection = None
+            self._publish()
 
     def start(self):
         check(self.thread is None,'A4233_ALREADY_STARTED')
-        self.thread = threading.Thread(target=self.worker,name='a4233-owned-observer',daemon=False)
+        with self._lock:
+            check(self._lifecycle == ['INIT'],'A4233_ALREADY_STOPPED')
+            self._lifecycle.append('RUNNING')
+            self._worker_started = True
+        # Failure-only fallback: CPython cannot kill a stuck C call. The normal
+        # path closes/joins; daemon status never counts as cleanup or success.
+        self.thread = threading.Thread(target=self.worker,name='a4233-owned-observer',daemon=True)
         self.thread.start()
         return self
 
     def stop(self, error=None):
+        with self._lock:
+            if self._sealed_receipt is not None:
+                return deepcopy(self._sealed_receipt)
         start = time.monotonic_ns()
         if error is not None:
             self.fail(failure_code(error))
         self.stop_event.set()
+        with self._lock:
+            if self._lifecycle[-1] != 'STOP_REQUESTED':
+                self._lifecycle.append('STOP_REQUESTED')
+        joined = False
         try:
             if self.thread is not None:
-                self.thread.join(timeout=2)
+                self.thread.join(timeout=min(.1,STOP_SECONDS))
+                if self.thread.is_alive():
+                    self._cancel_owned_query(start)
+                    remaining = max(0.0,STOP_SECONDS-(time.monotonic_ns()-start)/1e9)
+                    self.thread.join(timeout=remaining)
                 check(not self.thread.is_alive(),'A4233_JOIN_TIMEOUT')
-            check(time.monotonic_ns()-start <= 2_000_000_000,'A4233_JOIN_TIMEOUT')
+            check(time.monotonic_ns()-start <= STOP_SECONDS*1e9,'A4233_JOIN_TIMEOUT')
+            joined = True
         except BaseException as caught:
-            self.cleanup_failure_codes.append(failure_code(caught))
-        self.cleanup_complete = not self.cleanup_failure_codes
-        return self.receipt()
+            self.fail(failure_code(caught))
+            self.cleanup_failure('A4233_JOIN_TIMEOUT')
+        with self._lock:
+            self._lifecycle.append('JOINED' if joined else 'STOP_TIMEOUT')
+            self.cleanup_complete = joined and not self.cleanup_failure_codes
+            return self._receipt_locked(joined)
+
+    def _cancel_owned_query(self, started):
+        import psycopg
+
+        with self._lock:
+            db = self._connection
+            verified = self.physical_verified
+        # Only the observer's own driver connection; no arbitrary PID/SQL/close.
+        # Never fall back to legacy cancel(), whose timeout can be unbounded.
+        if (verified and isinstance(db,psycopg.Connection)
+                and psycopg.capabilities.has_cancel_safe()):
+            timeout = min(.25,max(0.0,STOP_SECONDS-(time.monotonic_ns()-started)/1e9))
+            if timeout > 0:
+                try:
+                    db.cancel_safe(timeout=timeout)
+                except BaseException:
+                    self.cleanup_failure('A4233_CANCEL_FAILED')
 
     def receipt(self):
-        if self.thread is not None and self.thread.is_alive():
-            # Do not iterate a buffer concurrently with a stuck owned worker.
-            self.fail('A4233_THREAD_STILL_ACTIVE')
-        complete = (self.thread is not None and not self.thread.is_alive()
-            and self.physical_verified and self.restricted_readonly_verified
-            and self.cleanup_complete and not self.first_failure_code
-            and not self.cleanup_failure_codes and len(self.ticks) == self.planned_ticks)
-        result = Receipt(**self.identity.model_dump(),datid=self.datid,
-            relations=self.relations,planned_ticks=self.planned_ticks,ticks=self.ticks,
-            physical_verified=self.physical_verified,
-            restricted_readonly_verified=self.restricted_readonly_verified,
+        with self._lock:
+            if self._sealed_receipt is not None:
+                return deepcopy(self._sealed_receipt)
+        error = (Fault('A4233_THREAD_STILL_ACTIVE')
+                 if self.thread is not None and self.thread.is_alive() else None)
+        return self.stop(error)
+
+    def _receipt_locked(self, joined):
+        snapshot = deepcopy(self._published)
+        complete = (joined and self._worker_started and snapshot['physical_verified']
+            and snapshot['restricted_readonly_verified'] and self.cleanup_complete
+            and not self.first_failure_code and not self.cleanup_failure_codes
+            and len(snapshot['ticks']) == self.planned_ticks and snapshot['failed_tick'] is None)
+        self._lifecycle.append('RECEIPT')
+        count = max(self._cleanup_failure_count,len(self.cleanup_failure_codes))
+        result = LifecycleReceipt(**self.identity.model_dump(),**snapshot,
+            planned_ticks=self.planned_ticks,worker_started=self._worker_started,
+            worker_joined=joined and self._worker_started,lifecycle=list(self._lifecycle),
+            snapshot_sequence=self._snapshot_sequence,
+            snapshot_mode='RUNNING_FAILURE_SUMMARY' if not joined else
+                'JOINED_IMMUTABLE' if self._worker_started else 'NOT_STARTED_FAILURE',
+            snapshot_sha256='0'*64,
+            cleanup_failure_count=count,cleanup_failures_omitted=count-len(self.cleanup_failure_codes),
+            stop_failure_code=None if joined else 'A4233_JOIN_TIMEOUT',
             cleanup_complete=self.cleanup_complete,first_failure_code=self.first_failure_code,
-            cleanup_failure_codes=self.cleanup_failure_codes,
-            failed_tick=self.failed_tick,
+            cleanup_failure_codes=list(self.cleanup_failure_codes),
             status='COMPLETE_CONTRACT' if complete else 'INCOMPLETE_OBSERVABILITY',
             content_sha256='0'*64).model_dump()
-        return seal(result)
+        result['snapshot_sha256'] = digest(snapshot_payload(result))
+        self._sealed_receipt = seal(result)
+        return deepcopy(self._sealed_receipt)
 
     def run_micro(self):
         try:
@@ -341,6 +444,8 @@ class Observer:
 @contextmanager
 def termination_guard(observer):
     """Only the calling main thread's SIGTERM handler, restored on exit."""
+    check(threading.current_thread() is threading.main_thread(),
+          'A4233_SIGNAL_MAIN_THREAD_REQUIRED')
     previous = signal.getsignal(signal.SIGTERM)
     def handler(signum, frame):
         observer.fail('A4233_SIGTERM')

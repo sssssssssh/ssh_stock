@@ -5,6 +5,7 @@ name: a4233-observer-contracts
     branches: [master]
     paths:
       - 'scripts/a4233_*.py'
+      - 'scripts/a42331_*.py'
       - 'tests/**/test_a4233*.py'
       - 'docs/acceptance/*a4233*'
       - 'docs/acceptance/*a4_2_3_3*'
@@ -12,6 +13,7 @@ name: a4233-observer-contracts
   pull_request:
     paths:
       - 'scripts/a4233_*.py'
+      - 'scripts/a42331_*.py'
       - 'tests/**/test_a4233*.py'
       - 'docs/acceptance/*a4233*'
       - 'docs/acceptance/*a4_2_3_3*'
@@ -32,6 +34,7 @@ jobs:
       LLM_ENABLED: 'false'
       PYTHONUNBUFFERED: '1'
       A4233_ARTIFACT_ROOT: .codex_tmp/a4233
+      A42331_MIGRATION_EVIDENCE_DIR: .codex_tmp/a4233/migrations
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,9 +49,12 @@ jobs:
           resource-class: read
       - name: Empty PG17 relations and restricted observer contracts only
         run: >-
-          python -m pytest -p scripts.a4232_pytest_receipt --tb=no --show-capture=no
+          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
           tests/unit/test_a4233_background_observer.py
           tests/integration/test_a4233_observer_pg17.py
+          tests/unit/test_a42331_migration_contract.py tests/unit/test_a42331_ci_evidence.py
+          tests/integration/test_m16_5_archive_migration.py
+          tests/integration/test_m16_6_contract_migration.py
           tests/unit/test_tail_stability_a4232.py tests/unit/test_a4_ci_governance.py
           --junitxml=.codex_tmp/a4233-internal/tests.xml
       - name: Sanitized test counts and physical isolation proof

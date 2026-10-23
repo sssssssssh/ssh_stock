@@ -36,7 +36,7 @@ def source_identity(root, *, instance_hash):
 
 def review(value, expected):
     receipt = validate(value,expected)
-    return dict(schema_version='a4233.review.v1',**expected.model_dump(),
+    result = dict(schema_version='a4233.review.v1',**expected.model_dump(),
         evidence_kind='DIAGNOSTIC_ONLY',protocol_status=DRAFT,
         data_source='SYNTHETIC_MICRO_SELFTEST',status=receipt.status,
         ticks=len(receipt.ticks),first_failure_code=receipt.first_failure_code,
@@ -45,6 +45,14 @@ def review(value, expected):
         absence_proven=False,causality='NOT_EVALUATED',unique_repair_candidate=None,
         performance_eligible=False,capacity_ready=False,production_read_authorized=False,
         observer_overhead_calibration='NOT_RUN_NOT_AUTHORIZED')
+    if receipt.schema_version == 'a4233.observer.v2':
+        result.update(schema_version='a4233.review.v2',lifecycle=receipt.lifecycle,
+            worker_joined=receipt.worker_joined,snapshot_sequence=receipt.snapshot_sequence,
+            snapshot_mode=receipt.snapshot_mode,snapshot_sha256=receipt.snapshot_sha256,
+            cleanup_failure_count=receipt.cleanup_failure_count,
+            cleanup_failures_omitted=receipt.cleanup_failures_omitted,
+            stop_failure_code=receipt.stop_failure_code)
+    return result
 
 
 def load(path):

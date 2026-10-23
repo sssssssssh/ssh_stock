@@ -159,3 +159,50 @@ def test_real_pg17_readonly_connection_prevents_dml_and_has_no_long_transaction(
         assert observer.restricted_readonly_verified
         assert observer.physical_verified
     assert Fault('A4233_TEST').code == 'A4233_TEST'
+
+
+def test_real_pg17_100ms_sql_timeout_retains_partial_tick_and_joins(observer_pg17):
+    engine,names = observer_pg17
+    observer,expected = make_observer(engine,names[0])
+    connect = observer.connect
+    class Delayed:
+        def __init__(self):
+            self.db = connect()
+        def __getattr__(self,name):
+            return getattr(self.db,name)
+        def execute(self,query,**kwargs):
+            if query == ob.SQL['activity']:
+                # Test-only, read-only delay; never part of the observer allowlist.
+                self.db.execute('SELECT pg_catalog.pg_sleep(0.2)',prepare=False)
+            return self.db.execute(query,**kwargs)
+        def close(self):
+            self.db.close()
+    observer.connect = Delayed
+    result = observer.run_micro()
+    assert result['first_failure_code'] == 'A4233_SQL_TIMEOUT'
+    assert result['worker_joined'] and result['cleanup_complete']
+    assert result['failed_tick']['windows'][-1]['view'] == 'activity'
+    assert result['failed_tick']['windows'][-1]['wall_ms'] >= 90
+    assert validate(result,expected).status == 'INCOMPLETE_OBSERVABILITY'
+
+
+def test_real_pg17_close_error_never_becomes_complete(observer_pg17):
+    engine,names = observer_pg17
+    observer,expected = make_observer(engine,names[0])
+    connect = observer.connect
+    closed = []
+    class CloseFailure:
+        def __init__(self):
+            self.db = connect()
+        def __getattr__(self,name):
+            return getattr(self.db,name)
+        def close(self):
+            self.db.close()  # Ensure the real test resource closes, then inject terminal failure.
+            closed.append(True)
+            raise RuntimeError('synthetic private driver detail')
+    observer.connect = CloseFailure
+    result = observer.run_micro()
+    assert closed == [True] and result['worker_joined']
+    assert not result['cleanup_complete']
+    assert result['cleanup_failure_codes'] == ['A4233_CONNECTION_CLOSE_FAILED']
+    assert validate(result,expected).status == 'INCOMPLETE_OBSERVABILITY'

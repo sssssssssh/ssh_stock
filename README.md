@@ -1,5 +1,14 @@
 # A 股机会发现与趋势研究系统
 
+## A4233.1 验收整改（非性能验收）
+
+迁移测试改用自有 UUID 合成 PG17 库，Session 与 Alembic 显式复用经核验的 engine/connection；
+生产 0051 非空归档拒绝降级保护不变。observer v2 只有确认 join 且证据完整才能完成，
+超时输出稳定失败快照；历史 v1 工件继续可读。主 CI 保留去敏的完整 JUnit 和 exact-SHA 失败收据，
+跳过的浏览器/容器阶段不再因缺目录二次报错。所有覆盖率与正式 Gate 标准不变。
+实现与真实验收记录见 [整改报告](docs/acceptance/a4233_1_ci_remediation.md)；
+报告提交时 CI 尚待最终 HEAD 验收，不能继承旧 SHA 绿灯或推导性能/生产授权。
+
 ## A4-2.3.3 后台活动观测准备（非性能验收）
 
 新增独立 `a4233` 只读 PG17 observer、严格收据与离线 reviewer；只在双身份合成库的
