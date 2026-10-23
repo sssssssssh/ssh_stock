@@ -10,7 +10,17 @@ from app.services.agent.llm.factory import build_llm_provider
 from app.services.agent.llm.openai_compatible import OpenAICompatibleProvider
 
 
-def test_eas_dotenv_values_configure_effective_chat_identity(tmp_path, monkeypatch) -> None:
+@pytest.fixture
+def eas_dotenv(tmp_path, monkeypatch):
+    # Exercise this file's values, not the runner's or earlier tests' environment.
+    for name in (
+        "LLM_ENABLED",
+        "LLM_ENDPOINT",
+        "LLM_MODEL",
+        "LLM_AUTH_SCHEME",
+        "LLM_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "old-example-token")
     env_file = tmp_path / ".env"
     env_file.write_text(
@@ -21,7 +31,11 @@ def test_eas_dotenv_values_configure_effective_chat_identity(tmp_path, monkeypat
         "LLM_API_KEY=example-token\n",
         encoding="utf-8",
     )
-    settings = Settings(_env_file=env_file)
+    return env_file
+
+
+def test_eas_dotenv_values_configure_effective_chat_identity(eas_dotenv) -> None:
+    settings = Settings(_env_file=eas_dotenv)
     settings.agent_config = _apply_agent_llm_overrides(AgentConfig(), settings)
 
     assert settings.agent_config.mode == "llm_chat"
@@ -33,6 +47,39 @@ def test_eas_dotenv_values_configure_effective_chat_identity(tmp_path, monkeypat
     assert isinstance(provider, OpenAICompatibleProvider)
     assert provider._api_key == "example-token"
     assert "example-token" not in repr(settings)
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_eas_process_environment_overrides_dotenv(eas_dotenv, monkeypatch, enabled) -> None:
+    for name, value in {
+        "LLM_ENABLED": str(enabled).lower(),
+        "LLM_ENDPOINT": "https://process.example.com/v1",
+        "LLM_MODEL": "process-model",
+        "LLM_AUTH_SCHEME": "bearer",
+        "LLM_API_KEY": "process-example-token",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    settings = Settings(_env_file=eas_dotenv)
+    settings.agent_config = _apply_agent_llm_overrides(AgentConfig(), settings)
+
+    assert settings.llm_enabled is enabled
+    assert settings.agent_config.llm_enabled is enabled
+    assert settings.agent_config.mode == ("llm_chat" if enabled else "tools_only")
+    assert str(settings.agent_config.llm.base_url) == "https://process.example.com/v1"
+    assert settings.agent_config.llm.model == "process-model"
+    assert settings.agent_config.llm.auth_scheme == "bearer"
+    assert settings.llm_api_key.get_secret_value() == "process-example-token"
+    assert "process-example-token" not in repr(settings)
+    assert "old-example-token" not in repr(settings)
+    if enabled:
+        provider = build_llm_provider(settings)
+        assert isinstance(provider, OpenAICompatibleProvider)
+        assert provider._api_key == "process-example-token"
+    else:
+        with pytest.raises(AgentChatError) as caught:
+            build_llm_provider(settings)
+        assert caught.value.code == "LLM_DISABLED"
 
 
 def test_eas_provider_posts_to_chat_endpoint_with_raw_token() -> None:

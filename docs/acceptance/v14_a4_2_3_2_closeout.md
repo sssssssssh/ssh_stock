@@ -187,3 +187,78 @@ block1最后4条后计划签名、该进程最终分配摘要/GC final及block2/
 未访问阿里云/ECS/RDS/业务数据库，未读取业务.env、修改原始数据、部署/重启服务或操作在途任务。
 只清理自建PG17容器、UUID库和自身子进程。未关闭/强制GC或改阈值，未改SQL/发布300秒、
 L2 270分钟、1000万行预算或batch500，AB_MERGE_READ_ENABLED保持false。
+
+## 10. 后续 CI 配置单测修复（2026-10-23，独立于原实验）
+
+本节仅追加后续记录，前九节的历史结论、原始 ZIP、manifest、协议和审阅 JSON 均不改写。
+核验基线为 master `0dddfa5609c31bff5c4aad4d266486233c418808`，工作区原本干净，
+与实际 origin/master 一致；仓库仍为 `sssssssssh/ssh_stock`，没有按任务书 URL 的拼写差异更换远端。
+[该 SHA 的主 CI 39839230208](https://github.com/sssssssssh/ssh_stock/actions/runs/39839230208)
+已失败：test 失败，audit/lookup 成功，capacity 因未获授权跳过，publication-release-gate 失败。
+任务书提供的全量结果为 2746 passed / 1 failed、覆盖率 89.26%；这是基线，不是本补丁结果。
+
+### 已证实根因与未证实项
+
+原 `test_eas_dotenv_values_configure_effective_chat_identity` 没有隔离五个 LLM 进程变量。
+本机 Python 3.12.11 / pydantic-settings 2.11.0 / pydantic 2.13.4：
+
+- 五个进程变量未设置时，原文件 4 passed（退出码 0）。
+- 仅设置合成 `LLM_ENABLED=false`，同一原文件稳定复现 1 failed / 3 passed（退出码 1），
+  原 `llm_chat` 断言实际为 `tools_only`。本地 JUnit 分别为
+  `.codex_tmp/a4232-followup/before-clean.xml` 与 `before-ci-environment.xml`。
+- Settings 没有自定义 source 优先级，进程环境覆盖临时 dotenv；
+  `_apply_agent_llm_overrides` 按已解析的 false 正确生成 tools_only，不是生产配置缺陷。
+  [Pydantic 官方优先级](https://docs.pydantic.dev/latest/concepts/pydantic_settings/#field-value-priority)
+  与此一致。未启用会输出配置值的 settings DEBUG。
+- 既有诊断 `setup_runtime()` 会设置 LLM_ENABLED=false，部分集成 fixture 调用它；
+  这是代码中可确认的环境污染入口。但没有采集原 CI 的逐测试环境追踪，
+  不能把具体最后写入者或 Runner 来源猜测写成已确认事实。
+
+最小修复仅在本测试模块的临时 dotenv fixture 中，使用 monkeypatch 清除
+LLM_ENABLED/LLM_ENDPOINT/LLM_MODEL/LLM_AUTH_SCHEME/LLM_API_KEY，退出后恢复原环境。
+保留旧 OPENAI_API_KEY 干扰项，真实 provider 仍必须选用显式 LLM_API_KEY。
+独立 enabled=true/false 两例用冲突进程值验证五个字段优先级、密钥 repr、provider 选钥/禁用。
+原 raw endpoint 请求、disabled 不要求 key、invalid endpoint 失败关闭测试均保留。
+未修改 Settings、生产优先级、Provider 或其他测试 fixture。
+
+### 实际验证与 Checklist
+
+以下命令使用本地单元测试、合成不可连接的 loopback 配置，不运行集成数据库或业务服务：
+
+```bash
+python -m pytest -q tests/unit/test_m16_eas_llm_config.py
+python -m pytest --collect-only -q tests/unit/test_config.py tests/unit/test_m16_1_agent_contracts.py tests/unit/test_m16_2_llm_orchestration.py tests/unit/test_m16_eas_llm_config.py
+python -m pytest -q tests/unit/test_config.py tests/unit/test_m16_1_agent_contracts.py tests/unit/test_m16_2_llm_orchestration.py tests/unit/test_m16_eas_llm_config.py
+python -m ruff check backend tests migrations scripts
+git diff --check
+```
+
+| 编号 | 本地结果 / 后续要求 |
+|---|---|
+| A01 | 分支/HEAD/远端/干净工作区已核验 |
+| A02 | 原失败已复现；优先级机制确认，具体 CI 最后污染源未追踪 |
+| A03–A04 | 目标文件 6 passed；dotenv 正向、环境 true/false 覆盖均验证 |
+| A05 | 清洁环境连续三次各 6 passed（2.03/2.07/2.42 秒），退出码均 0 |
+| A06 | 五个环境变量同时合成冲突时仍 6 passed；既有安全测试保留并通过 |
+| A07 | Ruff 和 diff 检查通过，退出码 0 |
+| A08 | [观测提案](a4232_background_activity_observation_proposal.md) 已新增；PROPOSAL / NOT APPROVED / NO MEASUREMENT EXECUTED |
+| A09 | 历史证据/协议、生产目录及所有 workflow/gate 保持基线内容；提交前再次 diff 核验 |
+| A10 | collect-only 为 39 项，实际 39 passed；完整 pytest/覆盖率本地未执行，DEFERRED 至本提交 exact-SHA CI，不沿用基线或旧 SHA 结果 |
+| A11 | 无业务库连接、迁移、服务操作、新性能实验或开关变更 |
+| A12 | 本节记录范围/命令/结果；最终 commit SHA、推送及 exact-SHA CI 结果由 Git/Actions 与最终交付绑定，不预写通过 |
+
+重复验证 JUnit 为 `.codex_tmp/a4232-followup/repeat-{1,2,3}.xml`，
+冲突环境与相关回归分别为 `after-conflicting-environment.xml`、`related.xml`；均为本地临时产物，不提交。
+只读 GitHub 状态核验不等于完整测试验收。推送后的主 CI 必须核对完整 pytest 数量、覆盖率、
+退出码和 head/run/attempt；尚未取得时状态为 PARTIAL，不能因提交成功宣称 COMPLETED。
+
+按本次任务书最小文件范围，仅修改目标单测、新增提案并追加本节；
+没有功能或长期规则变化，四份权威 Markdown 的既有口径不变，未更新 DOCX。
+后续 worker 关联、观测开销校准、完整新协议、128 样本、正式 5/100、L2 和生产优化均 DEFERRED/未批准。
+原尾延迟因果仍不明确，capacity_ready=false 与严格发布门禁继续保留；
+主测试通过不等于发布门禁通过，不能以 skipped/取消/部分证据补足验收。
+
+已有 A4-1/A4-2 工作流会在每次 master push 自动调度性能矩阵；本轮不修改其定义。
+为落实禁止新实验的范围约束，只取消本补丁 SHA 对应的这两条自动运行，不取消其他提交，
+也不触发任何一次性归因标记。主 CI 和 a4232 的小型 contracts 回归保留；
+被取消的工作流明确记为未执行，不能称为通过。具体 run ID 与取消结果在推送后核验。
