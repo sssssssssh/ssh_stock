@@ -325,12 +325,13 @@ class Observer:
         return seal(result)
 
     def run_micro(self):
-        self.start()
         try:
-            # At most eight ticks, no performance workload, no retries.
-            self.thread.join(timeout=4)
-            if self.thread.is_alive():
-                self.fail('A4233_MICRO_DEADLINE')
+            with termination_guard(self):
+                self.start()
+                # At most eight ticks, no performance workload, no retries.
+                self.thread.join(timeout=4)
+                if self.thread.is_alive():
+                    self.fail('A4233_MICRO_DEADLINE')
         except BaseException as error:
             self.fail(failure_code(error))
         return self.stop()

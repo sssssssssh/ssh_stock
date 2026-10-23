@@ -377,6 +377,18 @@ def test_sigterm_guard_restores_handler_and_stops_only_owned_observer():
     assert o.stop_event.is_set() and o.first_failure_code == 'A4233_SIGTERM'
 
 
+def test_micro_runner_actually_installs_sigterm_cleanup(monkeypatch):
+    o = observer()
+    prior = signal.getsignal(signal.SIGTERM)
+    def terminated_start():
+        signal.getsignal(signal.SIGTERM)(signal.SIGTERM,None)
+    monkeypatch.setattr(o,'start',terminated_start)
+    r = o.run_micro()
+    assert r['first_failure_code'] == 'A4233_SIGTERM'
+    assert r['status'] == 'INCOMPLETE_OBSERVABILITY'
+    assert signal.getsignal(signal.SIGTERM) == prior
+
+
 def test_sql_timeout_retains_code_not_driver_message():
     error = RuntimeError('password=secret SELECT values')
     error.sqlstate = '57014'
@@ -534,3 +546,25 @@ def test_new_workflow_has_one_contracts_job_and_no_measurement_entry():
                       'statstable-once','attribution-once','resource-class: capacity'):
         assert forbidden not in serialized
     assert DRAFT in (ROOT/'docs/acceptance/v14_a4_2_3_3_observation_protocol_draft.md').read_text()
+
+
+def test_test_count_receipt_uses_a4233_namespace_and_no_raw_failure(tmp_path,monkeypatch):
+    from scripts import a4233_test_receipt as tr
+
+    proof = dict(database_instance=MARKER,physical_system_identifier=SYSTEM,
+        postgres_version='17.11',
+        isolation=dict(verified=True,before_ddl=True,expected_marker=MARKER,observed_marker=MARKER,
+                       expected_system_identifier=SYSTEM,observed_system_identifier=SYSTEM))
+    monkeypatch.setattr(tr,'isolation',lambda:proof)
+    path = tmp_path/'tests.xml'
+    path.write_text('<testsuites><testsuite tests="2" failures="0" errors="0" skipped="0"/>'
+                    '</testsuites>')
+    r = tr.receipt(path)
+    assert r['schema_version'] == 'a4233.tests.v1' and r['status'] == 'COMPLETE_CONTRACT'
+    assert r['protocol_status'] == DRAFT and 'job_id' not in r
+    path.write_text('<testsuites><testsuite tests="2" failures="1" errors="0" skipped="0">'
+                    '<failure>secret SQL password</failure></testsuite></testsuites>')
+    r = tr.receipt(path)
+    assert r['status'] == 'INCOMPLETE_OBSERVABILITY'
+    assert r['first_failure_code'] == 'A4233_TESTS_INCOMPLETE'
+    assert 'secret' not in json.dumps(r)

@@ -54,7 +54,7 @@ jobs:
       - name: Sanitized test counts and physical isolation proof
         if: always()
         run: >-
-          python -m scripts.a4232_test_receipt
+          python -m scripts.a4233_test_receipt
           --source .codex_tmp/a4233-internal/tests.xml
           --output .codex_tmp/a4233/tests.json
       - run: python -m ruff check backend tests migrations scripts .github/actions

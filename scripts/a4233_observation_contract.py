@@ -16,7 +16,7 @@ TABLES = ('data_publication_row', 'signal_forward_eval',
 PROTOCOL = 'docs/acceptance/v14_a4_2_3_3_observation_protocol_draft.md'
 DRAFT = 'DRAFT / NOT APPROVED / NO PERFORMANCE MEASUREMENT EXECUTED'
 SOURCES = ('scripts/a4233_observation_contract.py', 'scripts/a4233_background_observer.py',
-           'scripts/a4233_observation_review.py')
+           'scripts/a4233_observation_review.py', 'scripts/a4233_test_receipt.py')
 Hash = Annotated[str, Field(pattern=r'^[0-9a-f]{64}$')]
 Positive = Annotated[int, Field(strict=True, gt=0)]
 Counter = Annotated[int, Field(strict=True, ge=0)]

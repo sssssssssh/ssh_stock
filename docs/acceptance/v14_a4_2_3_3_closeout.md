@@ -1,6 +1,6 @@
 # A4233 W00–W05 交付记录
 
-状态：**PARTIAL（实现完成，等待本提交真实微型PG17/CI验证）**。
+状态：**OBSERVER_IMPLEMENTED_CONTRACT_PASS（首版实证；最终SHA仍须独立CI确认）**。
 基线73a3273301502822dc7a881a64dfdca45db4d063，master；未授权性能测量。
 本文件只记录新观测能力，不更新旧A4231/A4232协议、工件、报告或一次性授权记录。
 
@@ -53,7 +53,7 @@ schema额外字段/哈希破坏/身份不匹配/缺tick/虚假COMPLETE/越权准
 
 ## 变更范围与剩余项
 
-新observer/contract/reviewer、unit/PG17测试、独立contracts workflow、W00/草案/本报告/hash清单；
+新observer/contract/reviewer/test-receipt、unit/PG17测试、独立contracts workflow、W00/草案/本报告/hash清单；
 更新四权威Markdown、workflow inventory及其单测。backend/config/migrations/frontend、所有旧脚本/
 协议/原始证据、原workflow、governance policy/consumed记录和Release Gate保持基线。
 
@@ -63,3 +63,35 @@ schema额外字段/哈希破坏/身份不匹配/缺tick/虚假COMPLETE/越权准
 新预算只是待审草案，后续profile、开销校准/归因/生产均NOT_AUTHORIZED。
 performance_eligible/capacity_ready/production_read_authorized恒false，unique_repair_candidate=null。
 完成本阶段后停止等待用户代码审阅。
+
+## 推送后实际PG17实证（首版，不冒充最终HEAD）
+
+实现提交 `d086e77977caa5a1dd9d39a3b7ca0ccef23b6f5e`，master，已推送。
+[新contracts run39952363025](https://github.com/sssssssssh/ssh_stock/actions/runs/39952363025)
+/ attempt1 / job120409676526：**269 passed、0失败/错误/跳过、12.16秒、exit0**；
+包括86个新unit、7个新微型PG17用例及176个原A4232/governance合同，Ruff/自有清理成功。
+PG17.11真实字段/类型、四空表与INDEX/TOAST/TOAST_INDEX映射、受限角色/缺权限/错误双身份/
+超级账号拒绝均实测。成功自检3ticks，无lookup、seed或真实维护负载。
+
+[原始工件12501265908](https://github.com/sssssssssh/ssh_stock/actions/runs/39952363025/artifacts/12501265908)
+ZIP SHA256 `bc138d6f9b2b286463f73ee190fbac195d8eda8efd0f47ef7d840beaa5abae65`，
+已下载比对API摘要、离线复核manifest各文件摘要/身份/typed合同，exit0。
+observer-contract SHA256 `2be0a00b2c685a5e842203cf801550bbafd3d3777c7fef89828b33a4ededcdb2`；
+ticks `9d87f154a7e66bc6e7e15150841c3577ddb103e4c21fd6e4b5cb4dea0da21bd1`；
+review `56fde3de6c6fd1b8e1f8e335954f1a9e143b13505ae95f5ccb6746c1f8781489`。
+实例摘要afac49a879d29c70292d0e93ad2e4405df74fed311ec1af258351ea7cdb45ec6；
+草案摘要f72e4ea46ce1c077739a5d79719ed229ecaed4904319addffd0cf5293b0fde5a。
+三个tick的SQL wall分别4.046392/3.385987/3.058868ms，总wall4.281900/3.730655/3.384199ms。
+这只是空表功能自检的原始计数，**不是正式开销校准或性能对照，不能用于归因/准入**。
+
+首版复查后最小补强：run_micro实际接入SIGTERM guard（新增回归）；
+测试计数收据改用新a4233命名空间，复用旧计数解析/双身份构件但不再输出旧job_id；
+测试管理员fixture的DB错误统一去敏。旧测量源/协议/policy/workflows未改。
+补强前全unit2121 passed/25.58秒，接入SIGTERM后2122 passed/26.14秒，均exit0，两个既有警告。
+新增命名空间测试后相关264 passed/3.15秒、完整unit2123 passed/26.65秒、Ruff/diff exit0；
+最终提交CI仍需独立确认，不继承首版SHA资格。
+
+首版普通push的原[主CI39952363024](https://github.com/sssssssssh/ssh_stock/actions/runs/39952363024)
+仍在执行，lookup/audit/workflow合同已成功，authorize/归因/capacity跳过。
+A4-1 run39952362842、A4-2 run39952362853、Publication run39952362980仅普通合同Job，
+昂贵Job须dispatch，不触发新性能矩阵。最终完成情况另核，不调用dispatch/重跑/取消其他任务。

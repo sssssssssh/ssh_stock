@@ -5,7 +5,9 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from psycopg import Error as PsycopgError
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 
 from scripts import a4233_background_observer as ob
 from scripts import a4233_observation_review as off
@@ -61,6 +63,9 @@ def observer_pg17(monkeypatch):
                         for name in names:
                             db.execute(text(f'DROP ROLE IF EXISTS "{name}"'))
                     admin.dispose()
+        except (DBAPIError,PsycopgError):
+            # Also sanitize the unchanged main CI's raw JUnit failure path.
+            raise RuntimeError('A4233_PG17_HARNESS_FAILURE') from None
         finally:
             get_settings.cache_clear()
 
