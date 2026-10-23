@@ -1,0 +1,13 @@
+name: Clean up owned A4 PostgreSQL
+description: Check unique name and run/job/attempt labels before removing a test container
+inputs:
+  container:
+    description: Optional separately provisioned owned container
+    default: ''
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        A4_CLEANUP_CONTAINER: ${{ inputs.container }}
+      run: python .github/actions/a4-governance/guard.py cleanup

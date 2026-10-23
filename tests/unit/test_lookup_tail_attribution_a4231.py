@@ -299,4 +299,7 @@ def test_no_gc_policy_changes_and_no_release_authorization_edge():
     assert "github.run_attempt == 1" in job['if'] and '[a4231-attribution-once]' in job['if']
     assert 'outputs' not in job and 'lookup-tail-attribution' not in jobs[
         'publication-release-gate']['needs']
-    assert jobs['capacity']['if'] == "needs.lookup-diagnosis.outputs.capacity_ready == 'true'"
+    assert "needs.lookup-diagnosis.outputs.capacity_ready == 'true'" in jobs['capacity']['if']
+    assert "github.event_name == 'workflow_dispatch'" in jobs['capacity']['if']
+    assert "inputs.confirm_expensive_run == true" in jobs['capacity']['if']
+    assert "github.event_name == 'workflow_dispatch'" in job['if']

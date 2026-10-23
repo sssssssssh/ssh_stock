@@ -4,39 +4,63 @@ inputs:
   resource-class:
     description: read is fixed 2 CPU/3 GiB; capacity is independently recorded host class
     default: read
+  port:
+    description: Loopback port on this isolated runner
+    default: '55440'
+  database:
+    description: Explicit synthetic parent database ending in _test
+    default: a421_test
+  set-database-url:
+    description: Keep the Core service DATABASE_URL when false
+    default: 'true'
 outputs:
   container:
     description: Owned test container only
-    value: a421-pg17
+    value: ${{ steps.start.outputs.container }}
 runs:
   using: composite
   steps:
-    - shell: bash
+    - id: start
+      shell: bash
       env:
         RESOURCE_CLASS: ${{ inputs.resource-class }}
+        TEST_PG_PORT: ${{ inputs.port }}
+        TEST_PG_DATABASE: ${{ inputs.database }}
+        SET_DATABASE_URL: ${{ inputs.set-database-url }}
       run: |
+        [[ "$RESOURCE_CLASS" == read || "$RESOURCE_CLASS" == capacity ]]
+        [[ "$TEST_PG_PORT" =~ ^[0-9]{4,5}$ ]]
+        [[ "$TEST_PG_DATABASE" =~ ^[a-z][a-z0-9_]*_test$ ]]
+        [[ "$SET_DATABASE_URL" == true || "$SET_DATABASE_URL" == false ]]
+        [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ && "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]
+        container="a4-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$(python -c 'import uuid; print(uuid.uuid4().hex[:12])')"
+        echo "A421_CONTAINER=$container" >> "$GITHUB_ENV"
+        echo "container=$container" >> "$GITHUB_OUTPUT"
         marker=$(python -c 'import uuid; print(uuid.uuid4())')
         limits=()
         if [ "$RESOURCE_CLASS" = read ]; then limits=(--cpus=2 --memory=3g); fi
-        docker run -d --name a421-pg17 --label purpose=ssh-stock-a4-physical-test \
+        docker run -d --name "$container" --label purpose=ssh-stock-a4-physical-test \
           --label stage=A4-2.1 \
-          "${limits[@]}" -p 127.0.0.1:55440:5432 \
-          -e POSTGRES_DB=a421_test -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
+          --label "ssh-stock.run-id=$GITHUB_RUN_ID" --label "ssh-stock.attempt=$GITHUB_RUN_ATTEMPT" \
+          --label "ssh-stock.job=$GITHUB_JOB" \
+          "${limits[@]}" -p "127.0.0.1:$TEST_PG_PORT:5432" \
+          -e "POSTGRES_DB=$TEST_PG_DATABASE" -e POSTGRES_USER=synthetic -e POSTGRES_PASSWORD=synthetic \
           postgres:17 -c "v14.test_instance=$marker" \
           -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all \
           -c track_io_timing=on -c track_wal_io_timing=on -c max_wal_size=1GB
         for attempt in $(seq 1 40); do
-          if docker exec a421-pg17 pg_isready -h 127.0.0.1 -U synthetic -d a421_test; then break; fi
+          if docker exec "$container" pg_isready -h 127.0.0.1 -U synthetic -d "$TEST_PG_DATABASE"; then break; fi
           sleep 1
         done
-        docker exec a421-pg17 pg_isready -h 127.0.0.1 -U synthetic -d a421_test
-        system=$(docker exec a421-pg17 sh -c 'LC_ALL=C pg_controldata "$PGDATA"' | awk '/Database system identifier:/ {print $NF}')
+        docker exec "$container" pg_isready -h 127.0.0.1 -U synthetic -d "$TEST_PG_DATABASE"
+        system=$(docker exec "$container" sh -c 'LC_ALL=C pg_controldata "$PGDATA"' | awk '/Database system identifier:/ {print $NF}')
         test -n "$system"
         echo "V14_TEST_INSTANCE=$marker" >> "$GITHUB_ENV"
         echo "V14_TEST_SYSTEM_IDENTIFIER=$system" >> "$GITHUB_ENV"
-        echo "TEST_DATABASE_URL=postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test" >> "$GITHUB_ENV"
-        echo "DATABASE_URL=postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test" >> "$GITHUB_ENV"
+        url="postgresql+psycopg://synthetic:synthetic@127.0.0.1:$TEST_PG_PORT/$TEST_PG_DATABASE"
+        echo "TEST_DATABASE_URL=$url" >> "$GITHUB_ENV"
+        if [ "$SET_DATABASE_URL" = true ]; then echo "DATABASE_URL=$url" >> "$GITHUB_ENV"; fi
         echo "TUSHARE_TOKEN=synthetic-a421" >> "$GITHUB_ENV"
         echo "AB_MERGE_READ_ENABLED=false" >> "$GITHUB_ENV"
-        echo "A421_CONTAINER=a421-pg17" >> "$GITHUB_ENV"
-        python -c 'import os; from scripts.v14_test_database import verified_test_url; os.environ.update(TEST_DATABASE_URL="postgresql+psycopg://synthetic:synthetic@127.0.0.1:55440/a421_test",V14_TEST_INSTANCE="'"$marker"'",V14_TEST_SYSTEM_IDENTIFIER="'"$system"'"); verified_test_url()'
+        TEST_DATABASE_URL="$url" V14_TEST_INSTANCE="$marker" V14_TEST_SYSTEM_IDENTIFIER="$system" \
+          python -c 'from scripts.v14_test_database import verified_test_url; verified_test_url()'

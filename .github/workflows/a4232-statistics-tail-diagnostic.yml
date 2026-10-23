@@ -14,12 +14,67 @@ name: a4232-statistics-tail-diagnostic
       - 'scripts/*a4232*.py'
       - 'tests/**/test_*a4232.py'
       - 'docs/acceptance/*a4_2_3_2*'
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact reviewed 40-character commit SHA
+        required: true
+        type: string
+      confirm_expensive_run:
+        description: Explicit diagnostic authorization, not production or release
+        required: true
+        type: boolean
+        default: false
+      run_reason:
+        description: Reviewed reason, without secrets
+        required: true
+        type: string
+      protocol_id:
+        description: Fixed one-shot ID; historical consumed IDs remain refused
+        required: true
+        type: string
+      protocol_sha256:
+        description: Frozen protocol SHA256 from the governance policy
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && 'ssh-stock-a4-expensive' || format('a4-l0-{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
+  authorize:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: a4-expensive-measurements
+    env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: a4232
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-a4232-authorization-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
+
   contracts:
+    needs: authorize
+    if: ${{ always() && !cancelled() && (github.event_name != 'workflow_dispatch' || needs.authorize.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -36,7 +91,7 @@ jobs:
       - run: python -m pip install -r requirements.lock
       - uses: ./.github/actions/a421-pg
         with:
-          resource-class: capacity
+          resource-class: read
       - name: Small PG17, natural GC, plan/statistics and existing A/B safety contracts only
         run: >-
           python -m pytest -p scripts.a4232_pytest_receipt --tb=no --show-capture=no
@@ -61,24 +116,44 @@ jobs:
           path: .codex_tmp/a4232-contract
           include-hidden-files: true
           if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
       - if: always()
-        run: docker rm -f a421-pg17
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-a4232-contract-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
 
   attribution:
-    needs: contracts
+    needs: [authorize, contracts]
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+      github.event_name == 'workflow_dispatch' && needs.authorize.result == 'success' &&
+      inputs.confirm_expensive_run == true && inputs.target_sha == github.sha &&
+      github.ref == 'refs/heads/master' &&
       github.run_attempt == 1 &&
-      contains(github.event.head_commit.message, '[a4232-statstable-once]')
+      inputs.protocol_id == '[a4232-statstable-once]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: a4-expensive-measurements
     env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
       LLM_ENABLED: "false"
       PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: a4232
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12.15"
@@ -100,5 +175,18 @@ jobs:
           path: .codex_tmp/a4232
           include-hidden-files: true
           if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
       - if: always()
-        run: docker rm -f a421-pg17
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-a4232-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error

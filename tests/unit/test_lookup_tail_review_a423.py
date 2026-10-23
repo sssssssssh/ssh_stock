@@ -280,7 +280,9 @@ def test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity():
     assert "12429939366/zip" in runs
     assert jobs["lookup-diagnosis"]["outputs"]["capacity_ready"] == (
         "${{ steps.measure.outputs.capacity_ready }}")
-    assert jobs["capacity"]["if"] == "needs.lookup-diagnosis.outputs.capacity_ready == 'true'"
+    assert "needs.lookup-diagnosis.outputs.capacity_ready == 'true'" in jobs["capacity"]["if"]
+    assert "github.event_name == 'workflow_dispatch'" in jobs["capacity"]["if"]
+    assert "inputs.confirm_expensive_run == true" in jobs["capacity"]["if"]
     assert "gc.collect(" not in Path(review.__file__).read_text()
     current = Path("backend/app/services/data_publication.py").read_bytes()
     assert hashlib.sha256(current).hexdigest() == review.C0_SOURCE

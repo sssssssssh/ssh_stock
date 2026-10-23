@@ -1,0 +1,67 @@
+{
+  "version": "a4-ci-1.0",
+  "baseline_sha": "c076fa49fdd82ea07f5939f4ec6c190b1b19785b",
+  "repository": "sssssssssh/ssh_stock",
+  "frozen_paths": ["backend", "config", "migrations", "frontend"],
+  "frozen_evidence_inputs": [
+    "tests/integration/test_data_publication.py",
+    "scripts/a42_ci_contract.py",
+    "scripts/publication_lookup_diagnostic_a422.py",
+    "scripts/a4231_attribution_metrics.py"
+  ],
+  "production_source_sha256": "7708d91c831a64093f18aa4f8515789492762f464ccfe202ee0219b756f32976",
+  "profiles": {
+    "a41": {
+      "workflow": "A4-1 read baseline diagnosis",
+      "protocol_id": "a4-1-frozen-baseline-v1",
+      "protocol": "docs/acceptance/v14_a4_baseline.md",
+      "protocol_sha256": "bb3f52bfd6e68b302b501ea500d57bd5e61168b591d60cf2690495c01ec75ae9",
+      "source": "scripts/ab_read_profile_v14_a4.py",
+      "source_sha256": "b5d209d7adf847f315dc88448f8ed96d236f5e1563b4e1dda9fe1b5ebc5f1d0b"
+    },
+    "a42": {
+      "workflow": "A4-2 isolated read experiments",
+      "protocol_id": "a4-2-frozen-matrix-v1",
+      "protocol": "docs/acceptance/v14_a4_2_experiment_contract.md",
+      "protocol_sha256": "d95ccb74d0a004b328b811be792aafcbe7fccffa9f539cb303ecd2c023311e95",
+      "source": "scripts/ab_read_experiment_v14_a4_2.py",
+      "source_sha256": "82d0a06af9a327e804ab85d594b971b9bfd76d81478e9b01106d59eb35028d19"
+    },
+    "publication-v13": {
+      "workflow": "Publication V1.3",
+      "protocol_id": "publication-v13-frozen-baseline-v1",
+      "protocol": "docs/acceptance/v13_baseline.md",
+      "protocol_sha256": "956a7d158d6c249e4709bbc7be404559d4a45f45859d24eb7ca8efd1f0007709",
+      "source": "scripts/publication_candidate_benchmark_v13.py",
+      "source_sha256": "cc1158ce4f233907df36e54bf2702431d1555fddbbccfb71cfe30639ba2b5af7"
+    },
+    "capacity": {
+      "workflow": "CI",
+      "protocol_id": "a4-2.1-formal-capacity-v1",
+      "protocol": "docs/acceptance/v14_a4_2_1_matrix.md",
+      "protocol_sha256": "83bd1c27942a7a72abb1b45401c71c5bd874f150fda2fcd392b864f462ec0f35",
+      "source": "scripts/data_publication_capacity_v12.py",
+      "source_sha256": "3fb34fccd2db6d4abd99fc53685e429a7ec2b4b3c27bcb00543cf9f9b51e944a"
+    },
+    "a4231": {
+      "workflow": "CI",
+      "protocol_id": "[a4231-attribution-once]",
+      "protocol": "docs/acceptance/v14_a4_2_3_1_attribution_protocol.md",
+      "protocol_sha256": "f2fe56c9b67376241d4c6fb55191172a4e178667fa89b983fefce81bf913d88e",
+      "source": "scripts/publication_lookup_tail_attribution_a4231.py",
+      "source_sha256": "5280982c469987aecccaf3eb9a3bbf904b4dbe199649b8211f5cbf40f52419bf",
+      "once": true,
+      "consumed_run_ids": ["39820748153"]
+    },
+    "a4232": {
+      "workflow": "a4232-statistics-tail-diagnostic",
+      "protocol_id": "[a4232-statstable-once]",
+      "protocol": "docs/acceptance/v14_a4_2_3_2_protocol.md",
+      "protocol_sha256": "047db54f9ac95b1729afa30e221f0fbd7013013db5fa4bf6f6302c4645affb39",
+      "source": "scripts/publication_tail_stability_a4232.py",
+      "source_sha256": "c3f2b2ee6bdcbd6f54bce1c48e0918ababebeb182e3d798bfc2872e55643755b",
+      "once": true,
+      "consumed_run_ids": ["39833706083"]
+    }
+  }
+}

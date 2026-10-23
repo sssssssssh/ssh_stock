@@ -273,11 +273,14 @@ def test_sanitized_junit_never_exports_arbitrary_failure_sql(tmp_path):
 def test_once_workflow_is_independent_and_preserves_original_release_gate():
     path = Path('.github/workflows/a4232-statistics-tail-diagnostic.yml')
     jobs = yaml.safe_load(path.read_text())['jobs']
-    assert set(jobs) == {'contracts','attribution'}
-    assert jobs['attribution']['needs'] == 'contracts'
+    assert set(jobs) == {'authorize','contracts','attribution'}
+    assert jobs['attribution']['needs'] == ['authorize','contracts']
     assert jobs['attribution']['timeout-minutes'] == 30
     assert 'github.run_attempt == 1' in jobs['attribution']['if']
     assert '[a4232-statstable-once]' in jobs['attribution']['if']
+    assert "github.event_name == 'workflow_dispatch'" in jobs['attribution']['if']
+    assert 'inputs.confirm_expensive_run == true' in jobs['attribution']['if']
+    assert jobs['authorize']['environment'] == 'a4-expensive-measurements'
     assert 'outputs' not in jobs['attribution']
     current = Path('.github/workflows/ci.yml').read_text()
     assert 'a4232' not in current

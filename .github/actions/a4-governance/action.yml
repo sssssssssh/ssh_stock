@@ -1,0 +1,13 @@
+name: A4 explicit manual authorization
+description: Read-only fail-closed dispatch, identity, frozen-source and consumed-ID guard
+inputs:
+  suite:
+    description: Fixed workflow profile, never a shell command
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        A4_SUITE: ${{ inputs.suite }}
+      run: python .github/actions/a4-governance/guard.py authorize --suite "$A4_SUITE"

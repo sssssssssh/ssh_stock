@@ -70,12 +70,24 @@ def test_original_core_steps_and_every_release_assertion_are_preserved():
             assert len(uploads) == 1 and uploads[0]['with']['if-no-files-found'] == 'error'
             assert uploads[0]['if'] == 'always()'
         elif step.get('name') == 'V1.4 physically isolated and marked PG17':
-            # Fix only the observed temporary-socket startup race, not isolation.
+            # A4-CI-1.0 adds unique ownership and bounded L0 resources; the
+            # original physical proof, socket readiness and exports still run.
             run = step['run'].replace('pg_isready -U stock -d v14_test',
                 'pg_isready -h 127.0.0.1 -U stock -d v14_test').replace(
                 'docker exec v14-isolated-pg17 psql -U stock',
                 'docker exec -e PGPASSWORD=stock v14-isolated-pg17 psql -h 127.0.0.1 -U stock')
-            assert {**step, 'run': run} in new
+            actual = next(s for s in new if s.get('name') == step['name'])
+            governed = actual['run']
+            lines = governed.splitlines(keepends=True)
+            governed = ''.join(line for line in lines if not line.lstrip().startswith((
+                'V14_CONTAINER=', 'echo "V14_CONTAINER=', '--label "ssh-stock.')))
+            governed = governed.replace('"$V14_CONTAINER"', 'v14-isolated-pg17').replace(
+                'purpose=ssh-stock-a4-physical-test', 'purpose=ssh-stock-v14-physical-test')
+            assert {**actual, 'run': governed} == {**step, 'run': run}
+            assert 'uuid.uuid4().hex[:12]' in actual['run']
+            assert '--cpus=2 --memory=3g' in actual['run']
+            assert all(label in actual['run'] for label in (
+                'ssh-stock.run-id', 'ssh-stock.attempt', 'ssh-stock.job'))
         elif step.get("name") not in removed:
             assert step in new
     source = next(s["run"] for s in old

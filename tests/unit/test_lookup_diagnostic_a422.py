@@ -160,7 +160,7 @@ def test_no_production_path_or_formal_capacity_replacement():
     assert 'SET enable_seqscan' not in source
 
 
-def test_a41_startup_changes_only_socket_readiness_not_identity_resources_or_scope():
+def test_a41_shared_startup_preserves_socket_identity_resources_and_scope():
     import yaml
 
     filename = '.github/workflows/ab-read-a4-baseline.yml'
@@ -170,8 +170,13 @@ def test_a41_startup_changes_only_socket_readiness_not_identity_resources_or_sco
     name = 'Dedicated physical PG17, fixed resources, I/O and statement evidence'
     before = next(s for s in old['jobs']['isolated-baseline']['steps'] if s.get('name') == name)
     after = next(s for s in current['jobs']['isolated-baseline']['steps'] if s.get('name') == name)
-    expected = before['run'].replace('pg_isready -U synthetic -d a4_test',
-        'pg_isready -h 127.0.0.1 -U synthetic -d a4_test').replace(
-        'docker exec a4-isolated-pg17 psql -U synthetic',
-        'docker exec -e PGPASSWORD=synthetic a4-isolated-pg17 psql -h 127.0.0.1 -U synthetic')
-    assert after == {**before, 'run': expected}
+    assert '--cpus=2 --memory=3g' in before['run']
+    assert after == dict(name=name, uses='./.github/actions/a421-pg',
+                        **{'with': {'port':'55439','database':'a4_test'}})
+    action = yaml.safe_load(Path('.github/actions/a421-pg/action.yml').read_text())
+    assert action['inputs']['resource-class']['default'] == 'read'
+    run = action['runs']['steps'][0]['run']
+    assert '--cpus=2 --memory=3g' in run and 'pg_isready -h 127.0.0.1' in run
+    assert 'pg_controldata' in run and 'verified_test_url()' in run
+    assert 'V14_TEST_INSTANCE' in run and 'V14_TEST_SYSTEM_IDENTIFIER' in run
+    assert 'A421_CONTAINER=$container' in run

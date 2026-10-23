@@ -1,0 +1,17 @@
+name: Record A4 governance outcome
+description: Diagnostic status only; never a capacity or release receipt
+inputs:
+  status:
+    required: true
+    description: Actual job status after cleanup
+  cleanup:
+    default: not_required
+    description: Actual cleanup step outcome
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        A4_JOB_STATUS: ${{ inputs.status }}
+        A4_CLEANUP_OUTCOME: ${{ inputs.cleanup }}
+      run: python .github/actions/a4-governance/guard.py finish

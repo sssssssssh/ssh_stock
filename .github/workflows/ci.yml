@@ -3,8 +3,92 @@ name: CI
 "on":
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      experiment:
+        description: Select exactly one reviewed experiment; none never authorizes measurement
+        required: true
+        type: choice
+        options: [none, capacity, a4231]
+        default: none
+      target_sha:
+        description: Exact reviewed 40-character commit SHA
+        required: true
+        type: string
+      confirm_expensive_run:
+        description: Explicit diagnostic authorization, not production or release
+        required: true
+        type: boolean
+        default: false
+      run_reason:
+        description: Reviewed reason, without secrets
+        required: true
+        type: string
+      protocol_id:
+        description: Fixed protocol ID from the governance policy
+        required: true
+        type: string
+      protocol_sha256:
+        description: Frozen protocol SHA256 from the governance policy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && 'ssh-stock-a4-expensive' || format('a4-l0-{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: false
 
 jobs:
+  workflow-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - run: python -m pytest tests/unit/test_a4_ci_governance.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml
+      - run: python -m ruff check backend tests migrations scripts .github/actions
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci-contracts.xml
+          include-hidden-files: true
+          if-no-files-found: error
+
+  authorize:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: a4-expensive-measurements
+    env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: ${{ inputs.experiment }}
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-main-authorization-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
+
   dependency-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -39,7 +123,7 @@ jobs:
 
   lookup-diagnosis:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 25
     permissions:
       contents: read
       actions: read
@@ -59,7 +143,7 @@ jobs:
       - run: python -m pip install -r requirements.lock
       - uses: ./.github/actions/a421-pg
         with:
-          resource-class: capacity
+          resource-class: read
       - name: Lookup rewrite and safety regressions before measurements
         run: >-
           python -m pytest tests/unit/test_lookup_diagnostic_a422.py
@@ -90,25 +174,46 @@ jobs:
           include-hidden-files: true
           path: .codex_tmp/a421
           if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
       - if: always()
-        run: docker rm -f a421-pg17
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-lookup-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
 
   lookup-tail-attribution:
     # One diagnostic round, NOT a new performance/production admission path.
     # Later commits and rerun attempts cannot silently repeat this experiment.
+    needs: authorize
     if: >-
-      github.event_name == 'push' && github.ref == 'refs/heads/master' &&
+      github.event_name == 'workflow_dispatch' && needs.authorize.result == 'success' &&
+      inputs.experiment == 'a4231' && inputs.confirm_expensive_run == true &&
+      inputs.target_sha == github.sha && github.ref == 'refs/heads/master' &&
       github.run_attempt == 1 &&
-      contains(github.event.head_commit.message, '[a4231-attribution-once]')
+      inputs.protocol_id == '[a4231-attribution-once]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: a4-expensive-measurements
     env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
       PYTHONUNBUFFERED: "1"
       LLM_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: a4231
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -136,8 +241,21 @@ jobs:
           path: .codex_tmp/a4231
           include-hidden-files: true
           if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
       - if: always()
-        run: docker rm -f a421-pg17
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-a4231-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
 
   test:
     runs-on: ubuntu-latest
@@ -174,17 +292,21 @@ jobs:
       - name: V1.4 physically isolated and marked PG17
         run: |
           V14_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')
-          docker run -d --name v14-isolated-pg17 --label purpose=ssh-stock-v14-physical-test \
+          V14_CONTAINER="a4-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$(python -c 'import uuid; print(uuid.uuid4().hex[:12])')"
+          echo "V14_CONTAINER=$V14_CONTAINER" >> "$GITHUB_ENV"
+          docker run -d --name "$V14_CONTAINER" --label purpose=ssh-stock-a4-physical-test \
+            --label "ssh-stock.run-id=$GITHUB_RUN_ID" --label "ssh-stock.attempt=$GITHUB_RUN_ATTEMPT" \
+            --label "ssh-stock.job=$GITHUB_JOB" --cpus=2 --memory=3g \
             -e POSTGRES_DB=v14_test -e POSTGRES_USER=stock -e POSTGRES_PASSWORD=stock \
             -p 127.0.0.1:55438:5432 postgres:17 -c "v14.test_instance=$V14_INSTANCE" \
             -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \
             -c pg_stat_statements.track=all
           for attempt in $(seq 1 30); do
-            docker exec v14-isolated-pg17 pg_isready -h 127.0.0.1 -U stock -d v14_test && break
+            docker exec "$V14_CONTAINER" pg_isready -h 127.0.0.1 -U stock -d v14_test && break
             sleep 1
           done
-          docker exec v14-isolated-pg17 pg_isready -h 127.0.0.1 -U stock -d v14_test
-          V14_SYSTEM_ID=$(docker exec -e PGPASSWORD=stock v14-isolated-pg17 psql -h 127.0.0.1 -U stock -d v14_test -Atc \
+          docker exec "$V14_CONTAINER" pg_isready -h 127.0.0.1 -U stock -d v14_test
+          V14_SYSTEM_ID=$(docker exec -e PGPASSWORD=stock "$V14_CONTAINER" psql -h 127.0.0.1 -U stock -d v14_test -Atc \
             'SELECT system_identifier FROM pg_control_system()')
           echo "V14_TEST_INSTANCE=$V14_INSTANCE" >> "$GITHUB_ENV"
           echo "V14_TEST_SYSTEM_IDENTIFIER=$V14_SYSTEM_ID" >> "$GITHUB_ENV"
@@ -363,6 +485,23 @@ jobs:
         env:
           UPSTREAM_STATUS: ${{ job.status }}
         run: python scripts/ci_release_gate_v14_a4_2_1.py core-status --job-id core --output .codex_tmp/a421/core
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
+        with:
+          container: ${{ env.V14_CONTAINER }}
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-core-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -411,17 +550,19 @@ jobs:
           if-no-files-found: ignore
 
   capacity:
-    needs: lookup-diagnosis
+    needs: [authorize, lookup-diagnosis]
     # Diagnosis alone is not acceptance. Until the measured safe candidate is
     # the actual production path, do not blindly repeat a 270-minute L2.
-    if: needs.lookup-diagnosis.outputs.capacity_ready == 'true'
+    if: github.event_name == 'workflow_dispatch' && needs.authorize.result == 'success' && inputs.experiment == 'capacity' && inputs.confirm_expensive_run == true && inputs.target_sha == github.sha && github.ref == 'refs/heads/master' && github.run_attempt == 1 && needs.lookup-diagnosis.outputs.capacity_ready == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    environment: a4-expensive-measurements
     strategy:
       fail-fast: false
       matrix:
         level: [L1, L2, L3-scaled-10pct]
     env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
       PYTHONUNBUFFERED: "1"
       LLM_ENABLED: "false"
       A421_CAPACITY_BUDGET_MINUTES: "270"
@@ -429,6 +570,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: capacity
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -454,8 +598,21 @@ jobs:
           path: .codex_tmp/a421
           include-hidden-files: true
           if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
       - if: always()
-        run: docker rm -f a421-pg17
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-capacity-${{ matrix.level }}-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
 
   publication-release-gate:
     needs: [test, capacity, lookup-diagnosis, dependency-audit]

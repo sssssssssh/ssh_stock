@@ -1,5 +1,16 @@
 # 项目开发规则
 
+## A4-CI-1.0 工作流授权边界
+
+普通 push/PR、提交消息和旧一次性标记不得启动高成本测量；保留自动合同/安全/Core/审计。
+昂贵 Job 仅 dispatch，先于依赖/PG 校验显式确认、完整目标 SHA、master、attempt1、
+dirty tree、协议/来源/模型/fixture；旧 A4231/A4232 ID 已消费且不得复用。
+手动工作流共享非取消 mutex，L0 使用独立组；原矩阵内部并行只沿用冻结协议。
+Environment reviewers 和 ACK 须管理员另行配置，不得将名称或配置声明当作现场审批已验证。
+治理收据仅 GOVERNANCE_ONLY，不能作为容量或发布凭据；原 strict Release Gate/历史证据不变，
+capacity skipped/缺证据仍失败关闭。治理完成不批准生产、性能复核、L2或下一阶段。
+详见 docs/acceptance/a4_ci_workflow_governance.md；仅治理提交等待审阅，不自动实跑。
+
 ## A4-2.3.2 统计稳定性边界
 
 新任务仅P0/P1，按docs/acceptance/v14_a4_2_3_2_protocol.md先单独冻结协议、再一次性诊断。

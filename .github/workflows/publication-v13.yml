@@ -5,31 +5,70 @@ name: Publication V1.3
     branches: [master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact reviewed 40-character commit SHA
+        required: true
+        type: string
+      confirm_expensive_run:
+        description: Explicit diagnostic authorization, not production or release
+        required: true
+        type: boolean
+        default: false
+      run_reason:
+        description: Reviewed reason, without secrets
+        required: true
+        type: string
+      protocol_id:
+        description: Fixed protocol ID from the governance policy
+        required: true
+        type: string
+      protocol_sha256:
+        description: Frozen protocol SHA256 from the governance policy
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && 'ssh-stock-a4-expensive' || format('a4-l0-{0}-{1}', github.workflow, github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
-  candidate-performance:
+  authorize:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 330
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: publication_v13_test
-          POSTGRES_USER: synthetic
-          POSTGRES_PASSWORD: synthetic
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U synthetic -d publication_v13_test"
-          --health-interval 5s --health-timeout 5s --health-retries 20
+    timeout-minutes: 5
+    environment: a4-expensive-measurements
     env:
-      DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:5432/publication_v13_test
-      TEST_DATABASE_URL: postgresql+psycopg://synthetic:synthetic@127.0.0.1:5432/publication_v13_test
-      TUSHARE_TOKEN: synthetic-v13
-      PYTHONUNBUFFERED: "1"
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: publication-v13
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-v13-authorization-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
+
+  contracts:
+    needs: authorize
+    if: ${{ always() && !cancelled() && (github.event_name != 'workflow_dispatch' || needs.authorize.result == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      LLM_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,6 +78,67 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -r requirements.lock
+      - uses: ./.github/actions/a421-pg
+        with:
+          database: publication_v13_test
+      - run: python -m alembic upgrade head
+      - run: python -m alembic current
+      - run: python -m alembic heads
+      - name: Candidate equivalence, real row locks, isolation and cancellation
+        run: >-
+          python -m pytest tests/integration/test_publication_lookup_v13.py
+          tests/integration/test_publication_cancel_v13.py
+          tests/integration/test_calculation_batch_progress.py
+          tests/integration/test_data_publication.py
+          tests/unit/test_calculation_progress.py tests/unit/test_publication_benchmark_v13.py
+          tests/unit/test_cli_derived_safety.py
+          tests/unit/test_publication_v13_receipt.py
+          --junitxml=.codex_tmp/v13-targeted.xml
+      - run: python -m ruff check backend tests migrations scripts
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publication-v13-contract-${{ github.sha }}-attempt${{ github.run_attempt }}
+          include-hidden-files: true
+          path: |
+            .codex_tmp/v13-targeted.xml
+            .codex_tmp/a4-ci
+          if-no-files-found: error
+
+  candidate-performance:
+    needs: [authorize, contracts]
+    if: github.event_name == 'workflow_dispatch' && needs.authorize.result == 'success' && inputs.confirm_expensive_run == true && inputs.target_sha == github.sha && github.ref == 'refs/heads/master' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    environment: a4-expensive-measurements
+    env:
+      A4_REVIEW_POLICY_ACK: ${{ vars.A4_REVIEW_POLICY_ACK }}
+      TUSHARE_TOKEN: synthetic-v13
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/a4-governance
+        with:
+          suite: publication-v13
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - uses: ./.github/actions/a421-pg
+        with:
+          resource-class: capacity
+          database: publication_v13_test
       - run: git rev-parse HEAD
       - run: python -m alembic upgrade head
       - run: python -m alembic current
@@ -89,14 +189,29 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: publication-v13-${{ github.sha }}
+          name: publication-v13-${{ github.sha }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: .codex_tmp/v13-*.json
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: publication-v13-junit-${{ github.sha }}
+          name: publication-v13-junit-${{ github.sha }}-run${{ github.run_id }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: .codex_tmp/v13-targeted.xml
+          if-no-files-found: error
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4-ci-v13-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
           if-no-files-found: error
