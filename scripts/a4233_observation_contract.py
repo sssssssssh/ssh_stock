@@ -76,8 +76,10 @@ class Relation(Strict):
 class Activity(Strict):
     datid: Positive | None
     pid: Positive
-    backend_type: Literal['autovacuum worker','client backend',
-                          'parallel worker','background worker']
+    backend_type: Literal['autovacuum launcher','autovacuum worker','client backend',
+        'parallel worker','background worker','logical replication launcher',
+        'logical replication worker','background writer','checkpointer','archiver',
+        'standalone backend','startup','walreceiver','walsender','walwriter','walsummarizer']
     backend_start: str
     query_start: str | None
     state: Literal['active', 'idle', 'idle in transaction',
@@ -246,6 +248,17 @@ def correlate(tick, datid, relations, previous=None):
                 else 'UNKNOWN_RELATION', pid=a.pid, backend_start=a.backend_start,
                 window_start_ns=start, window_end_ns=end))
     if previous is not None:
+        # Observe process/type churn even without a maintenance progress row.
+        # This is not a claim that the observed PID was doing VACUUM/ANALYZE.
+        old = {(a.pid,a.backend_start,a.backend_type):a for a in previous.activity
+               if a.backend_type not in ('client backend','autovacuum worker')}
+        new = {(a.pid,a.backend_start,a.backend_type):a for a in tick.activity
+               if a.backend_type not in ('client backend','autovacuum worker')}
+        for key in sorted(old.keys() ^ new.keys()):
+            a = new.get(key) or old[key]
+            result.append(Event(code='ENVIRONMENT_ACTIVITY_ONLY',pid=a.pid,
+                backend_start=a.backend_start,
+                window_start_ns=previous.tick_started_monotonic_ns,window_end_ns=end))
         before = {r.relid:r for r in previous.tables}
         for row in tick.tables:
             p = before.get(row.relid)

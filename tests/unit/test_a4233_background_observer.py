@@ -199,6 +199,7 @@ def test_read_only_fixed_sql_allowlist_and_bounded_fetch():
 @pytest.mark.parametrize('url',[
     'postgresql://x:x@external.invalid:5432/v14_x_test',
     'postgresql://x:x@127.0.0.1:5432/business',
+    'postgresql://x:x@127.0.0.1:5432/v14_existing_test',
     'postgresql://x:x@127.0.0.1:5432/v14_test?options=secret',
     'sqlite:///v14_test','postgresql://x:x@127.0.0.1/v14_test'])
 def test_external_targets_rejected_without_connecting(url):
@@ -265,6 +266,16 @@ def test_worker_count_only_cannot_be_labeled_analyze():
     e = correlate(t,7,relations())[0]
     assert e.code == 'ENVIRONMENT_ACTIVITY_ONLY'
     assert e.relid is e.relation is e.active_query_start_candidate is None
+
+
+def test_other_background_process_type_churn_is_not_silently_ignored():
+    p,t = tick(),tick(1)
+    p.activity = [active(backend_type='background writer',datid=None,state=None)]
+    t.activity = [active(backend_type='checkpointer',datid=None,state=None)]
+    events = correlate(t,7,relations(),p)
+    assert len(events) == 2 and all(e.code == 'ENVIRONMENT_ACTIVITY_ONLY' for e in events)
+    assert all(e.relation is None and e.active_query_start_candidate is None for e in events)
+    assert all(e.window_start_ns == p.tick_started_monotonic_ns for e in events)
 
 
 def test_cumulative_stats_only_possible_delayed_bracket():

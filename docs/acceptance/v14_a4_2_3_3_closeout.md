@@ -87,6 +87,8 @@ review `56fde3de6c6fd1b8e1f8e335954f1a9e143b13505ae95f5ccb6746c1f8781489`。
 首版复查后最小补强：run_micro实际接入SIGTERM guard（新增回归）；
 测试计数收据改用新a4233命名空间，复用旧计数解析/双身份构件但不再输出旧job_id；
 测试管理员fixture的DB错误统一去敏。旧测量源/协议/policy/workflows未改。
+最终复核补齐其他PG17后台进程的PID/起点/类型变动观测（不读取client会话），
+类型/进程增减只标ENVIRONMENT_ACTIVITY_ONLY并停止，不猜测关系或维护操作。
 补强前全unit2121 passed/25.58秒，接入SIGTERM后2122 passed/26.14秒，均exit0，两个既有警告。
 新增命名空间测试后相关264 passed/3.15秒、完整unit2123 passed/26.65秒、Ruff/diff exit0；
 最终提交CI仍需独立确认，不继承首版SHA资格。
@@ -95,3 +97,15 @@ review `56fde3de6c6fd1b8e1f8e335954f1a9e143b13505ae95f5ccb6746c1f8781489`。
 仍在执行，lookup/audit/workflow合同已成功，authorize/归因/capacity跳过。
 A4-1 run39952362842、A4-2 run39952362853、Publication run39952362980仅普通合同Job，
 昂贵Job须dispatch，不触发新性能矩阵。最终完成情况另核，不调用dispatch/重跑/取消其他任务。
+
+补强提交 `2e5c31a11687dd77da00570eab288083dafc0888`：
+[contracts39953061434](https://github.com/sssssssssh/ssh_stock/actions/runs/39953061434)
+/ attempt1，271 passed、7既有警告、8.95秒、exit0；Ruff/清理成功。
+[工件12501137250](https://github.com/sssssssssh/ssh_stock/actions/runs/39953061434/artifacts/12501137250)
+API ZIP摘要4cadc080d5ceb197800c67886196ec7e6f6dc1cb497dbe093f908ddbd9247128，
+本处只记录API实证，不声称该ZIP已下载。
+最后审阅新增后台类型变动回归、URL限定新UUID库而非任意_test库；本地相关测试和完整unit重新验证，
+最终CI以该补丁所属提交为准，后续阶段仍未获授权。
+该收尾代码本地相关266 passed/3.31秒、完整unit2125 passed/26.53秒（两个既有警告），
+Ruff/diff均exit0；首版工件另从Git重建source/protocol hash、从测试双身份收据重建instance摘要后
+独立复核全部文件hash/head/run/attempt成功（不是仅相信manifest自述）。

@@ -1,5 +1,6 @@
 """PG17 synthetic-only observer. No application import, maintenance, or performance CLI."""
 
+import re
 import signal
 import threading
 import time
@@ -95,7 +96,7 @@ def projection(view):
 
 SQL = dict(identity=IDENTITY_SQL,preflight=PREFLIGHT_SQL,columns=COLUMNS_SQL,
     relations=RELATIONS_SQL,clock='SELECT pg_catalog.clock_timestamp() AS db_clock_timestamp',
-    activity=projection('pg_stat_activity')+' WHERE backend_type=\'autovacuum worker\' '
+    activity=projection('pg_stat_activity')+' WHERE backend_type<>\'client backend\' '
         'OR pid IN (SELECT pid FROM pg_catalog.pg_stat_progress_vacuum UNION '
         'SELECT pid FROM pg_catalog.pg_stat_progress_analyze)',
     vacuum=projection('pg_stat_progress_vacuum'),analyze=projection('pg_stat_progress_analyze'),
@@ -113,8 +114,8 @@ def connection_factory(url, marker, system_id):
         UUID(marker)
         check(str(system_id).isdigit() and target.get_backend_name() == 'postgresql'
               and target.host in ('127.0.0.1','localhost') and target.port is not None
-              and (target.database or '').startswith('v14_')
-              and (target.database or '').endswith('_test') and not target.query,
+              and re.fullmatch(r'v14_[0-9a-f]{32}_test',target.database or '')
+              and not target.query,
               'A4233_EXPLICIT_SYNTHETIC_TARGET_REQUIRED')
     except Fault:
         raise
