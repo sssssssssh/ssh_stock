@@ -2,9 +2,6 @@ import uuid
 
 import pytest
 import sqlalchemy as sa
-from alembic import command
-from alembic.config import Config
-from app.core.db import SessionLocal
 from app.models.agent_archive import AgentToolResultArchive, AgentTurnArchiveManifest
 from app.models.agent_chat import AgentChatToolCall, AgentChatTurn
 from app.models.agent_frozen_contract import (
@@ -16,11 +13,11 @@ from test_m16_4_research_reports import _cleanup, _source, _user
 from test_m16_5_archive_migration import cleanup_archives
 
 
-def test_0052_empty_roundtrip_owner_fks_uniqueness_and_immutability():
-    config = Config("alembic.ini")
-    command.downgrade(config, "0051_m16_5_evidence_archive")
-    command.upgrade(config, "head")
-    with SessionLocal() as db:
+def test_0052_empty_roundtrip_owner_fks_uniqueness_and_immutability(archive_migration_database):
+    owned = archive_migration_database
+    owned.migrate('downgrade', '0051_m16_5_evidence_archive')
+    owned.migrate('upgrade', 'head')
+    with owned.factory() as db:
         assert db.scalar(sa.text("SELECT version_num FROM alembic_version")) == (
             "0058_data_publication"
         )
@@ -134,5 +131,5 @@ def test_0052_empty_roundtrip_owner_fks_uniqueness_and_immutability():
             db.rollback()
         finally:
             db.rollback()
-            cleanup_archives(owner_id)
-            _cleanup(other_id)
+            cleanup_archives(owner_id, session_factory=owned.factory)
+            _cleanup(other_id, session_factory=owned.factory)

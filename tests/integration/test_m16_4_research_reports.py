@@ -109,8 +109,8 @@ def _source(db, user: AppUser, *, value: str) -> tuple[uuid.UUID, uuid.UUID]:
     return chat.id, assistant.id
 
 
-def _cleanup(*user_ids: uuid.UUID) -> None:
-    with SessionLocal() as db:
+def _cleanup(*user_ids: uuid.UUID, session_factory=None) -> None:
+    with (session_factory or SessionLocal)() as db:
         comparison_ids = sa.select(AgentResearchReportComparison.id).where(
             AgentResearchReportComparison.owner_user_id.in_(user_ids)
         )

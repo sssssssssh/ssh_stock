@@ -4,8 +4,6 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import sqlalchemy as sa
-from alembic import command
-from alembic.config import Config
 from app.core.db import SessionLocal
 from app.domain.agent.report import CreateReportComparison, CreateResearchReport
 from app.models.agent_archive import AgentTurnArchiveManifest
@@ -16,10 +14,12 @@ from test_m16_5_archive_migration import cleanup_archives
 from test_m16_5_chat_archive import FixtureChat, archive_settings, provider
 
 
-def test_0050_0051_upgrade_preserves_real_legacy_report_and_comparison_ids_json_hashes():
+def test_0050_0051_upgrade_preserves_real_legacy_report_and_comparison_ids_json_hashes(
+    archive_migration_database,
+):
+    owned = archive_migration_database
     settings = archive_settings()
-    config = Config("alembic.ini")
-    with SessionLocal() as db:
+    with owned.factory() as db:
         owner = _user(db, "upgrade-legacy")
         owner_id = owner.id
         try:
@@ -49,9 +49,9 @@ def test_0050_0051_upgrade_preserves_real_legacy_report_and_comparison_ids_json_
             frozen = deepcopy([item.snapshot.model_dump(mode="json") for item in reports])
             comparison_result = deepcopy(comparison.result)
             db.rollback()
-            command.downgrade(config, "0050_m16_4_reports")
-            command.upgrade(config, "head")
-            command.upgrade(config, "head")
+            owned.migrate('downgrade', '0050_m16_4_reports')
+            owned.migrate('upgrade', 'head')
+            owned.migrate('upgrade', 'head')
             for report, expected in zip(reports, frozen, strict=True):
                 view = service.get_report(
                     user=SimpleNamespace(id=owner_id), report_id=report.report_id
@@ -77,7 +77,7 @@ def test_0050_0051_upgrade_preserves_real_legacy_report_and_comparison_ids_json_
             )
         finally:
             db.rollback()
-            _cleanup(owner_id)
+            _cleanup(owner_id, session_factory=owned.factory)
 
 
 def test_archive_serialization_and_atomic_write_latency_is_measured_not_assumed(monkeypatch):
