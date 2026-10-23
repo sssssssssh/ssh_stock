@@ -262,3 +262,39 @@ git diff --check
 为落实禁止新实验的范围约束，只取消本补丁 SHA 对应的这两条自动运行，不取消其他提交，
 也不触发任何一次性归因标记。主 CI 和 a4232 的小型 contracts 回归保留；
 被取消的工作流明确记为未执行，不能称为通过。具体 run ID 与取消结果在推送后核验。
+
+### 推送后实证补充（修复提交 90d152f，非新性能结论）
+
+修复代码 SHA 为 `90d152f473321032983638983d67e625b7f8d9ec`，已推送 master。
+[主 CI 39881695803](https://github.com/sssssssssh/ssh_stock/actions/runs/39881695803) / attempt 1：
+test、dependency-audit、lookup-diagnosis 均 SUCCESS。完整 pytest **2749 passed、0 failed/error/skipped**，
+644 条既有 warnings，耗时 982.16 秒，覆盖率 **89.28%**（原门槛 70% 未变）；
+包含目标文件全部六例。Ruff、迁移、构建、Worker 与浏览器步骤均成功。
+这是该 SHA 的实证，不能自动作为后续文档提交自己的 exact-SHA 结果。
+
+已下载核对以下原始 ZIP 与 API SHA256，并校验内部 head/run/attempt：
+
+| 证据 | artifact / SHA256 | 结果 |
+|---|---|---|
+| Core | 12471079997 / `3a6a62c96a787d2e1ebfa717935b2cd4d1d61231a1eaba3e9d9378e58a11e31d` | status COMPLETE，JUnit 2749 全通过 |
+| 小型 PG17 contracts | 12469999230 / `dcde00fd7f553c73520ad65564deb2ce6fd6bd053a1f18120d108cd29c773e11` | run 39881695836 / attempt 1，178 passed，双物理身份符合；attribution SKIPPED |
+| Publication release gate | 12471434787 / `958718499a45a3633bb7760e95b1817cec45ba30b6436b05e031107aa48dba4f` | INCOMPLETE / CAPACITY_NOT_AUTHORIZED |
+
+发布门禁拒绝理由保留 HISTORICAL_EVIDENCE_ONLY、P95_REGRESSION、CORRELATED_NOT_CAUSAL、
+NO_APPROVED_REPAIR_CANDIDATE、PRODUCTION_NOT_VERIFIED_CANDIDATE；capacity_ready=false。
+整体 workflow 因此 FAILURE，不能将 Core 成功表述为发布通过。
+
+**范围偏差须披露，不能改写为零新测量：**
+
+- 本 SHA 的 A4-1 run 39881695840、A4-2 run 39881695778 已取消，前者正式性能步骤跳过，
+  后者 laboratory 未开始；取消前只进入安全回归。取消/缺收据没有被门禁当成通过。
+- 另一个默认自动启动的 [Publication V1.3 run 39881695826](https://github.com/sssssssssh/ssh_stock/actions/runs/39881695826)
+  起初被误以为只有安全回归，实际含旧 B0/B1/B2 性能步骤。
+  该步骤 UTC 01:05:07 已启动，检查发现后立即请求取消，UTC 01:14:01 取消完成；
+  日志已经存在旧 baseline 的部分测量，故不能声称本次 push 完全没有额外性能测量。
+  这是本轮范围约束的执行偏差，已停止，不补跑、不采用其部分数据，也未修改任何 workflow。
+- 未激活或重跑 A4-2.3.2 的 128 样本，不补采旧 64 个缺失样本，没有正式 L2、
+  新观测器、生产 SQL/配置/门禁变更或业务数据库操作。
+
+本轮代码修复、设计提案和测试已完成，但因上述自动 CI 范围偏差，整体交付如实标为 **PARTIAL**，
+不宣称所有范围约束无例外满足。下一轮执行仍须人工审批，性能/容量准入继续 OPEN。
