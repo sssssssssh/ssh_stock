@@ -1,0 +1,30 @@
+{
+  "baseline_sha": "73a3273301502822dc7a881a64dfdca45db4d063",
+  "evidence_kind": "FREEZE_IDENTITY_ONLY_NOT_ACCEPTANCE",
+  "files": {
+    "backend/app/services/data_publication.py": "7708d91c831a64093f18aa4f8515789492762f464ccfe202ee0219b756f32976",
+    "scripts/a4232_stability_contract.py": "4b22cc21d27379d6999aa6171489de43f2aec4b92532d9135427e1176bdbad56",
+    "scripts/publication_tail_stability_a4232.py": "c3f2b2ee6bdcbd6f54bce1c48e0918ababebeb182e3d798bfc2872e55643755b",
+    "scripts/publication_tail_stability_review_a4232.py": "5dfe38851db6b84562eb9a11d1b93de6e01306cdc9065aad3f5724d9a0a4c148",
+    "scripts/publication_lookup_tail_attribution_a4231.py": "5280982c469987aecccaf3eb9a3bbf904b4dbe199649b8211f5cbf40f52419bf",
+    "scripts/a4231_attribution_metrics.py": "2d21620eb8f9150d1b974c2115ac2544d383b0720ffce0acb51f99fe3c42a4f7",
+    "scripts/a4232_plan_probe.py": "e32710eb2a4ee9fb58b104f047cd1f606bf8d30881c4832c2ddf36359dceb429",
+    "scripts/ci_release_gate_v14_a4_2_1.py": "be235b037199b1c5c901128350d4093f7a8a4442c1c8c686852f506fae284b2f",
+    "scripts/data_publication_capacity_v12.py": "3fb34fccd2db6d4abd99fc53685e429a7ec2b4b3c27bcb00543cf9f9b51e944a",
+    "docs/acceptance/v14_a4_2_3_1_attribution_protocol.md": "f2fe56c9b67376241d4c6fb55191172a4e178667fa89b983fefce81bf913d88e",
+    "docs/acceptance/v14_a4_2_3_2_protocol.md": "047db54f9ac95b1729afa30e221f0fbd7013013db5fa4bf6f6302c4645affb39",
+    "docs/acceptance/v14_a4_2_3_2_closeout.md": "80c03783edb76720f26a4f1e1292f6017debd30741f0a7e48416b11b55128768",
+    "docs/acceptance/a4232_background_activity_observation_proposal.md": "b5f8920d276cd0c0870fc8a4fed6242afc25a87e27b3059eac29ed5d299b4ada",
+    "docs/acceptance/evidence/a4232_source_manifest.json": "cf01e893924cba27d1477c3d14c194bd25bae3c42368a4d24ad4e6dcddfb6272",
+    "docs/acceptance/evidence/a4232_stability_review.json": "67b61d90f5d07978a53b06cfdef44c825c85eb823050283fa962c6dcfd235fe9",
+    "docs/acceptance/evidence/a4231_attribution_review.json": "37fe47d5aa8abbe8c31cb9ce484b7198b5b69a69027ae4a1a8323ba009a2db8a",
+    ".github/actions/a4-governance/policy.json": "c895ba7768843d556a44e47e31dcc7453fc36eb8ec08578516f60ce965f4a734",
+    ".github/actions/a421-pg/action.yml": "36b9df830823f6e9281151fbb4cb88df96c499a1192d550d14ebae6deb0450b7",
+    ".github/actions/a4-finish/action.yml": "8087d67746f43877189cd298c4065b788f3e1048ec137ad777316c95f0b946c7",
+    ".github/workflows/a4232-statistics-tail-diagnostic.yml": "4c298cc7c07fa34c08d188190c4e8cd1fe151de5cb64f7293c34049da6506e42",
+    ".github/workflows/ci.yml": "a1b457a8c9957cbd1b971f31fcca17bcab905979f1ee45ab0098ed239d90be32",
+    ".github/workflows/ab-read-a4-2.yml": "287dde3f6d114eea57c3a60a5cdba484aed8eb8ec23b77cc853d71d3bb34c9f6",
+    ".github/workflows/ab-read-a4-baseline.yml": "2dc58faa749a71c89450370190b7e676361010e64a4209f1d0848198ee13fced",
+    ".github/workflows/publication-v13.yml": "8322e03c2942b179e3a5dbbb6b0f71ffbd0750a0bc3cac855b4c71ea0d9f3613"
+  }
+}

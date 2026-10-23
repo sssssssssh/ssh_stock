@@ -1,0 +1,82 @@
+name: a4233-observer-contracts
+
+"on":
+  push:
+    branches: [master]
+    paths:
+      - 'scripts/a4233_*.py'
+      - 'tests/**/test_a4233*.py'
+      - 'docs/acceptance/*a4233*'
+      - 'docs/acceptance/*a4_2_3_3*'
+      - '.github/workflows/a4233-observer-contracts.yml'
+  pull_request:
+    paths:
+      - 'scripts/a4233_*.py'
+      - 'tests/**/test_a4233*.py'
+      - 'docs/acceptance/*a4233*'
+      - 'docs/acceptance/*a4_2_3_3*'
+      - '.github/workflows/a4233-observer-contracts.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a4-l0-a4233-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      LLM_ENABLED: 'false'
+      PYTHONUNBUFFERED: '1'
+      A4233_ARTIFACT_ROOT: .codex_tmp/a4233
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.15'
+          cache: pip
+      - run: python -m pip install -r requirements.lock
+      - uses: ./.github/actions/a421-pg
+        with:
+          resource-class: read
+      - name: Empty PG17 relations and restricted observer contracts only
+        run: >-
+          python -m pytest -p scripts.a4232_pytest_receipt --tb=no --show-capture=no
+          tests/unit/test_a4233_background_observer.py
+          tests/integration/test_a4233_observer_pg17.py
+          tests/unit/test_tail_stability_a4232.py tests/unit/test_a4_ci_governance.py
+          --junitxml=.codex_tmp/a4233-internal/tests.xml
+      - name: Sanitized test counts and physical isolation proof
+        if: always()
+        run: >-
+          python -m scripts.a4232_test_receipt
+          --source .codex_tmp/a4233-internal/tests.xml
+          --output .codex_tmp/a4233/tests.json
+      - run: python -m ruff check backend tests migrations scripts .github/actions
+      - id: cleanup
+        if: always()
+        uses: ./.github/actions/a4-cleanup
+      - if: always()
+        uses: ./.github/actions/a4-finish
+        with:
+          status: ${{ job.status }}
+          cleanup: ${{ steps.cleanup.outcome }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4233-contract-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4233
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4233-governance-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error

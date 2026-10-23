@@ -96,3 +96,10 @@ purpose/stage label、marker/独立 pg_controldata system ID 与 PG17 双验证�
 
 实现后的精确文件/合同测试/管理员配置与回滚见
 [治理与验收](a4_ci_workflow_governance.md)。此清单保留基线事实，不覆盖旧实验 closeout。
+
+## A4233 增补清单（不改变原五条工作流）
+
+`a4233-observer-contracts.yml`：普通 push/PR 的独立低成本 `contracts`，12分钟上限、
+read 资源 PG17、正式迁移四张空表、受限角色、最多3ticks/用例；无lookup/seed/性能矩阵。
+没有 dispatch、authorize、attribution、capacity、workflow_run 或schedule，不接入正式发布。
+原五条工作流、governance policy/consumed one-shot/Release Gate 字节保持73a3273基线。

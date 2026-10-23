@@ -163,7 +163,10 @@ def test_yaml_loader_preserves_unquoted_on_and_typed_booleans():
 
 
 def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
-    assert {p.name for p in (ROOT / ".github/workflows").glob("*.yml")} == set(EXPENSIVE)
+    contracts_only = {"a4233-observer-contracts.yml"}
+    assert {p.name for p in (ROOT / ".github/workflows").glob("*.yml")} == (
+        set(EXPENSIVE) | contracts_only
+    )
     inventory = (ROOT / "docs/acceptance/a4_ci_workflow_inventory.md").read_text(encoding="utf-8")
     for name in EXPENSIVE:
         value = workflow(name)
@@ -173,6 +176,14 @@ def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
             "workflow_dispatch",
         }
         assert not any(key in value for key in ("workflow_run", "repository_dispatch", "schedule"))
+    for name in contracts_only:
+        value = workflow(name)
+        assert name in inventory
+        assert set(value["on"]) == {"push", "pull_request"}
+        assert set(value["jobs"]) == {"contracts"}
+        assert value["jobs"]["contracts"]["timeout-minutes"] <= 12
+        assert not any(key in value["on"] for key in
+                       ("workflow_dispatch", "workflow_run", "repository_dispatch", "schedule"))
 
 
 @pytest.mark.parametrize("event", ["push", "pull_request"])

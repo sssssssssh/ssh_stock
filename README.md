@@ -1,5 +1,15 @@
 # A 股机会发现与趋势研究系统
 
+## A4-2.3.3 后台活动观测准备（非性能验收）
+
+新增独立 `a4233` 只读 PG17 observer、严格收据与离线 reviewer；只在双身份合成库的
+受限账号运行微型合同自检。普通 push/PR 的新 contracts job 不包含 lookup、seed 或性能入口。
+后台 PID/起点/关系/进度及时间窗口分列；进度空不证明无维护，关联不等于性能因果。
+当前无开销校准、C1 P95/正式 L2/生产授权；旧 A4232 不足结论不变。
+基线/权限见 [W00](docs/acceptance/a4233_baseline_and_contract.md)，
+候选预算/新阶段审批见 [草案](docs/acceptance/v14_a4_2_3_3_observation_protocol_draft.md)，
+实际验证见 [交付](docs/acceptance/v14_a4_2_3_3_closeout.md)。
+
 ## A4-CI-1.1 普通 CI 与正式门禁
 
 普通 push/PR 自动运行原有 L0 检查，不请求正式性能/容量 Gate；手动 CI 选择 `experiment=none`
