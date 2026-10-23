@@ -1,6 +1,6 @@
 # A4233 W00–W05 交付记录
 
-状态：**OBSERVER_IMPLEMENTED_CONTRACT_PASS（首版实证；最终SHA仍须独立CI确认）**。
+状态：**OBSERVER_IMPLEMENTED_CONTRACT_PASS（仅低成本功能合同；非性能/因果/发布认证）**。
 基线73a3273301502822dc7a881a64dfdca45db4d063，master；未授权性能测量。
 本文件只记录新观测能力，不更新旧A4231/A4232协议、工件、报告或一次性授权记录。
 
@@ -109,3 +109,71 @@ API ZIP摘要4cadc080d5ceb197800c67886196ec7e6f6dc1cb497dbe093f908ddbd9247128，
 该收尾代码本地相关266 passed/3.31秒、完整unit2125 passed/26.53秒（两个既有警告），
 Ruff/diff均exit0；首版工件另从Git重建source/protocol hash、从测试双身份收据重建instance摘要后
 独立复核全部文件hash/head/run/attempt成功（不是仅相信manifest自述）。
+
+## 最终实现实证与 A01–A15
+
+最终实现SHA `7d63fdbea97130a08949b6d72f49d51d7aafb3b8`，
+[contracts run39953751615](https://github.com/sssssssssh/ssh_stock/actions/runs/39953751615)
+/ attempt1 / job120414353827，**273 passed、0失败/错误/跳过，12.58秒，exit0**。
+构成为90个新unit、7个新PG17用例、原A4232/governance176合同；Ruff和自有清理exit0。
+PG17实际捕获的常驻类型有autovacuum launcher/background writer/checkpointer/
+logical replication launcher/walwriter，3ticks未观察到维护进度或进程变动；不证明无维护。
+
+[原始工件12501337815](https://github.com/sssssssssh/ssh_stock/actions/runs/39953751615/artifacts/12501337815)
+ZIP SHA256 `e0b8908ef84faeb2f3722a387222f23d48c0b31b071c7f807a757b6cb42fdceb`，7046字节。
+已下载、核对GitHub摘要、Git重建四源码/草案hash，独立对照测试证明的head/run/attempt/
+instance摘要，全部bundle文件hash与strict离线review通过（exit0）。
+
+| 文件 | SHA256 |
+|---|---|
+| observer-contract.json | c45044cd04f8c1a2b7eb51d803c2940344e0694c26d5f13103e65f4a44fbae1a |
+| ticks.json | 1fa893d4924a96761d9ca196e6c5d4cd4e4320585802672974c461219f18d02c |
+| review.json | 25627962ac83cd7c60065136f78ad7e0707099447a5b26de4f20958550f2c6fa |
+| failure.json | fe58750842de1802ed4f246a1b5b837512e59e21f86eadd83e3fadbc97fbca67 |
+
+新4源码聚合摘要35e0e94a30a624135e35f0b468ff476446330a505203e963d489a834584bffac；
+草案摘要f72e4ea46ce1c077739a5d79719ed229ecaed4904319addffd0cf5293b0fde5a；
+实例摘要49d8c165348f78256abb3d70209581fffc301315490bfbcd2501624500baa13b。
+
+| 验收 | 证据/结果 |
+|---|---|
+| A01/A10/A13 | 基线、24个冻结文件hash和生产目录逐字节检查通过；原5workflow/Gate/policy/one-shot/生产未修改 |
+| A02/A03/A05 | 真实PG17双身份/受限权限、明确SELECT、四空关系及其INDEX/TOAST映射合同通过 |
+| A04/A06 | PID复用/跨视图矛盾/未知OID/其他数据库、monotonic/UTC/DB时钟注入回归通过 |
+| A07/A08/A09 | SQL/tick/缓冲/线程/SIGTERM/首发与清理/写盘/Schema/哈希/隐私/虚假COMPLETE回归通过 |
+| A11 | 本地完整unit2125；专项真实PG17合同273；Ruff/diff exit0；本地DB未运行 |
+| A12 | 草案DRAFT，校准/性能/因果实验均未运行，所有准入false |
+| A14 | 普通push；原授权/归因/capacity均跳过，未调用dispatch；原性能Job的事件条件字节不变 |
+| A15 | 本报告列出源码/工件/CI/命令/退出码/剩余项；文档最终HEAD与远端一致性在交付时再核对 |
+
+文档追补只记录已取得的实现SHA实证，不借旧SHA声明文档提交的CI也已完成。
+截至2026-10-23 20:32（北京时间），[实现SHA主CI39953751782](https://github.com/sssssssssh/ssh_stock/actions/runs/39953751782)
+完整test仍运行，lookup/audit/workflow-contracts成功；其余普通合同工作流部分仍运行。
+未完成CI为NOT_VERIFIED，不是通过；最终文档SHA自己的新CI状态见最终交付，不继承旧SHA。
+
+### 完整变更文件（仓库相对路径）
+
+```text
+.github/workflows/a4233-observer-contracts.yml
+scripts/a4233_background_observer.py
+scripts/a4233_observation_contract.py
+scripts/a4233_observation_review.py
+scripts/a4233_test_receipt.py
+tests/unit/test_a4233_background_observer.py
+tests/integration/test_a4233_observer_pg17.py
+tests/unit/test_a4_ci_governance.py
+docs/acceptance/a4233_baseline_and_contract.md
+docs/acceptance/evidence/a4233_frozen_manifest.json
+docs/acceptance/v14_a4_2_3_3_observation_protocol_draft.md
+docs/acceptance/v14_a4_2_3_3_closeout.md
+docs/acceptance/a4_ci_workflow_inventory.md
+README.md
+PROJECT_RULES.md
+docs/股票机会发现系统_PRD_V1.0.md
+docs/股票机会发现系统_系统设计_V1.0.md
+```
+
+剩余：新观测器off/on开销未校准，真实维护事件与lookup重合未测（均未授权）；
+旧C1 P95失败/非GC反例/唯一修复候选仍INSUFFICIENT_EVIDENCE；完整整仓CI尚待真实终态。
+没有新性能profile、Environment修改、正式实验、生产SQL/参数/数据/任务或业务库操作。
+只完成W00–W05，停止等待本次代码审阅；不自动进入下一阶段。
