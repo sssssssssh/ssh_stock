@@ -1,6 +1,32 @@
-# A4-CI-1.0 工作流盘点
+# A4-CI 工作流盘点
 
-## W00 基线
+## 当前触发：A4-CI-1.1
+
+审阅基线 `d123bdad4c2c04105d068fceb8f33ecb58e33d30`，master，初始工作区干净。
+重新核对全部五条工作流；只改变 CI authorize、CI publication-release-gate、
+A4-2 a42-acceptance-gate 三个 if。下文 W00 是 1.0 改造前的历史事实，不是当前触发定义。
+
+| workflow | push / PR 的自动任务 | 手动入口 / 正式 Gate |
+|---|---|---|
+| ci.yml | workflow-contracts、dependency-audit、test、lookup-diagnosis；原 UI 专属分支条件不变 | none 仅 L0，无 authorize；capacity/a4231 才进入原授权；release 仅 always + dispatch + capacity + boolean确认true |
+| ab-read-a4-baseline.yml | contracts；昂贵 Job 和 authorize 跳过 | authorize -> isolated-baseline，原确认/身份/协议/资源校验不变，无新增 Gate |
+| ab-read-a4-2.yml | contract-and-safety；authorize/laboratory/正式 Gate 跳过 | 原授权/安全 -> laboratory；Gate 仅 always + dispatch + boolean确认true |
+| publication-v13.yml | contracts；昂贵 Job 和 authorize 跳过 | authorize -> candidate-performance，原所有保护不变，无新增 Gate |
+| a4232-statistics-tail-diagnostic.yml | 仅原路径命中时 contracts；authorize/attribution 跳过 | 原一次性授权/协议不变，已消费 token 仍拒绝 |
+
+CI 的 none 不调用 suite guard、不生成替代授权凭据，四项 L0 无新增 needs 或 if。
+capacity确认false 不执行测量或正式 Gate；a4231 无论如何不顺带运行 capacity/容量 release。
+A4-2确认false 的 authorize 仍由原 guard 拒绝，laboratory/Gate 不运行。
+两个 Gate 只选择是否请求正式验收；对应确认true 时不以 readiness/授权成功/实验成功为调度条件，
+上游失败、跳过、取消和凭证缺失仍调用原脚本并失败关闭。需求与矩阵详见治理文档。
+
+三条未修改的工作流、所有 L0 步骤、两个 Gate 的非 if 字段、昂贵测量命令/规模/21分片/1002组
+和6对照/max-parallel4/预算、工件路径及所有清理步骤均与 1.0 基线相同。
+无新增 schedule/workflow_run/repository_dispatch/pull_request_target 或其他隐式事件链。
+正式 Gate skipped 是未请求认证，不是性能 PASS；L0 绿色不等于发布许可。
+Environment 管理员保护仍为 NOT_VERIFIED_LIVE，不用本轮合同替代现场审批验证。
+
+## W00 历史基线（A4-CI-1.0 改造前）
 
 2026-10-23，master HEAD / origin/master 均为
 `c076fa49fdd82ea07f5939f4ec6c190b1b19785b`，工作区干净。
@@ -61,7 +87,7 @@ purpose/stage label、marker/独立 pg_controldata system ID 与 PG17 双验证�
 ## W01–W05 目标对照（不是实跑结果）
 
 - 五条 workflow 均保留普通自动安全/合同检查；昂贵 job 必须 dispatch、确认、完整 SHA、master、attempt1 和干净 checkout。
-- A4-1/Publication 拆出 contracts；A4-2 laboratory 只在授权后执行，原 always gate 保留。
+- A4-1/Publication 拆出 contracts；A4-2 laboratory 只在授权后执行；1.1 的 Gate 事件分层见首节，严格步骤保留。
 - CI lookup 缩为 read 级 PG 与固定历史离线复核；capacity 保留原 readiness 前提并额外要求明确授权。
 - A4231/A4232 改为显式 dispatch + 固定一次性 ID/协议 hash；旧 ID 已消费，继续拒绝，不再由 push 标记启动。
 - 高成本 workflow 共享跨 workflow 串行组，活动任务不自动取消；原 A4-2 分片内并行仍是已冻结协议的明确例外。

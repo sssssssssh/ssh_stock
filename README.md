@@ -1,14 +1,26 @@
 # A 股机会发现与趋势研究系统
 
+## A4-CI-1.1 普通 CI 与正式门禁
+
+普通 push/PR 自动运行原有 L0 检查，不请求正式性能/容量 Gate；手动 CI 选择 `experiment=none`
+同样只运行 L0，不进入 authorize、昂贵实验或正式 release gate。
+正式 CI release 仅 `workflow_dispatch + experiment=capacity + confirm_expensive_run=true`，
+A4-2 正式 Gate 仅 `workflow_dispatch + confirm_expensive_run=true`；均保留 always()，
+即使上游失败/取消/跳过或缺少证据，也由原严格 validator 拒绝放行。
+Gate skipped 不代表性能 PASS，普通 CI 绿色不等于生产批准；本轮不执行性能实验。
+完整触发矩阵、管理员 Environment 要求及回滚见 [治理文档](docs/acceptance/a4_ci_workflow_governance.md)。
+
 ## A4-CI-1.0 工作流触发治理
 
 普通 push/PR 只自动执行原 Core、审计、read 级 PG 合同/安全回归及历史工件离线复核，
 不自动运行 A4-1/A4-2/Publication 性能矩阵或 A4231/A4232 归因。
 高成本 Job 须 workflow_dispatch、完整已审阅 SHA、显式确认、原因、固定协议/hash、master、
 attempt1 和干净工作区；旧一次性 ID 已消费，不允许复用。
-当前没有配置 GitHub Environment；管理员仍需为 `a4-expensive-measurements` 配置 reviewers、
-master 分支保护及 Environment ACK，缺确认值时 guard 拒绝。声明 Environment 名称不是审批生效证明。
-容量未执行/未准入时 Release Gate 继续失败，轻量 CI 绿色不代表性能通过。
+1.0 只读盘点时没有配置 GitHub Environment；1.1 现场保护状态为 NOT_VERIFIED_LIVE。
+管理员仍需为 `a4-expensive-measurements` 核实 reviewers、master 分支保护及 Environment ACK，
+缺确认值时 guard 拒绝。声明 Environment 名称不是审批生效证明。
+1.1 普通事件跳过正式 Gate；对应已确认手动请求中容量未执行/未准入，Release Gate 继续失败。
+轻量 CI 绿色不代表性能通过。
 盘点、操作/失败/回滚与管理员事项见
 [工作流清单](docs/acceptance/a4_ci_workflow_inventory.md)和[治理手册](docs/acceptance/a4_ci_workflow_governance.md)。
 本轮不运行新性能实验、不改生产、不迁移业务库；提交后等待审阅，不自动进入下一阶段。

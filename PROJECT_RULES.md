@@ -1,5 +1,16 @@
 # 项目开发规则
 
+## A4-CI-1.1 正式验收事件边界
+
+普通 push/PR 和 CI dispatch experiment=none 只请求 L0；none 不调用 authorize，
+也不生成 suite 或授权替代凭据。原完整 L0 检查、工作流来源/预算与清理不得削弱。
+CI publication-release-gate 仅 always() + dispatch + capacity + boolean确认true；
+A4-2 a42-acceptance-gate 仅 always() + dispatch + boolean确认true。
+正式 Gate 不以 readiness、授权成功或实验成功为调度前提；上游失败/跳过/取消、缺失或错误凭证
+必须保留原严格拒绝。只允许调整事件 if，不改 needs/steps/validator 或 capacity_ready 来源。
+跳过未请求的正式 Gate 不等于性能认证通过；L0 绿色不等于生产批准。
+Environment 保护仍须管理员配置且 NOT_VERIFIED_LIVE，本阶段不授权任何新性能实验。
+
 ## A4-CI-1.0 工作流授权边界
 
 普通 push/PR、提交消息和旧一次性标记不得启动高成本测量；保留自动合同/安全/Core/审计。
@@ -8,7 +19,8 @@ dirty tree、协议/来源/模型/fixture；旧 A4231/A4232 ID 已消费且不�
 手动工作流共享非取消 mutex，L0 使用独立组；原矩阵内部并行只沿用冻结协议。
 Environment reviewers 和 ACK 须管理员另行配置，不得将名称或配置声明当作现场审批已验证。
 治理收据仅 GOVERNANCE_ONLY，不能作为容量或发布凭据；原 strict Release Gate/历史证据不变，
-capacity skipped/缺证据仍失败关闭。治理完成不批准生产、性能复核、L2或下一阶段。
+1.1 对应已确认的正式请求中 capacity skipped/缺证据仍失败关闭，普通事件不请求正式 Gate。
+治理完成不批准生产、性能复核、L2或下一阶段。
 详见 docs/acceptance/a4_ci_workflow_governance.md；仅治理提交等待审阅，不自动实跑。
 
 ## A4-2.3.2 统计稳定性边界

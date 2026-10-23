@@ -64,7 +64,7 @@ jobs:
           if-no-files-found: error
 
   authorize:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.experiment != 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: a4-expensive-measurements
@@ -616,7 +616,7 @@ jobs:
 
   publication-release-gate:
     needs: [test, capacity, lookup-diagnosis, dependency-audit]
-    if: ${{ always() }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.experiment == 'capacity' && inputs.confirm_expensive_run == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

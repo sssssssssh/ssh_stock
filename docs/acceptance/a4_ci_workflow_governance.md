@@ -1,4 +1,66 @@
-# A4-CI-1.0 工作流治理与验收
+# A4-CI-1.1 工作流治理与分层验收
+
+## 当前分层：A4-CI-1.1
+
+审阅基线为 `d123bdad4c2c04105d068fceb8f33ecb58e33d30`，开始时 master 工作区干净。
+本轮仅调整三个 Job 的事件条件、治理合同测试及文档。下面 1.0 记录中的无条件 always Gate
+已由本节事件选择取代；Gate 的 needs、steps、脚本、原始凭证、预算及严格校验完全不变。
+
+| 事件 / 输入 | CI L0 四项 | CI authorize | capacity / A4231 | CI publication-release-gate | A4-2 a42-acceptance-gate |
+|---|---|---|---|---|---|
+| push / PR | 运行 | 跳过 | 均跳过 | 跳过 | 跳过 |
+| CI dispatch，experiment=none（确认任意） | 运行 | 跳过 | 均跳过 | 跳过 | 不适用 |
+| CI dispatch，capacity，确认false | 运行 | 按现有 guard 拒绝 | 均跳过 | 跳过 | 不适用 |
+| CI dispatch，capacity，确认true | 运行 | 按原审批/guard 校验 | 仅 capacity 还需真实 readiness=true | always 执行严格验收 | 不适用 |
+| CI dispatch，a4231，确认true | 运行 | 原一次性 guard，已消费 token 拒绝 | 仅 A4231 原条件；capacity 跳过 | 跳过 | 不适用 |
+| A4-2 dispatch，确认false | 不适用 | 不适用 | laboratory 跳过，authorize 仍按原 guard 拒绝 | 不适用 | 跳过 |
+| A4-2 dispatch，确认true | 不适用 | 不适用 | laboratory 仍需原授权及安全检查 | 不适用 | always 执行严格验收 |
+
+CI L0 为 workflow-contracts、dependency-audit、test、lookup-diagnosis，条件、依赖与全部步骤不变；
+包括完整 pytest/coverage、Ruff、迁移、前端、Worker、Golden 和浏览器检查。
+A4-1/Publication 普通事件保留 contracts，昂贵 Job 不运行；A4232 沿用原路径过滤，匹配时运行
+contracts，authorize/attribution 不运行。不为让本轮触发 A4232 而修改其 paths 或消费旧 token。
+
+两个正式 Gate 仅在表中的对应 confirmed dispatch 中执行，均保留 always()，不添加上游成功、
+readiness、SHA 或取消状态作为 Gate 的调度前提。授权失败、上游 skipped/failed/cancelled、
+缺工件、错身份和不完整收据仍由原 validator 拒绝，退出码非零并保留 INCOMPLETE。
+不把整个 workflow 被平台硬终止后仍能启动 Gate 作为保证；缺少 Gate 结果永远不是正式批准。
+普通事件跳过正式 Gate 是 NOT_REQUESTED，不产生正式性能凭据，不映射为性能 PASS。
+普通 CI 绿色不等于性能/容量达标或生产发布批准，capacity_ready 的来源不变。
+
+### 1.1 合同与边界
+
+新增可执行 if 矩阵覆盖 push/PR、none、capacity、a4231 与 A4-2 确认组合。
+先在旧 YAML 上复现 22 failed / 2 passed，再只修改三个条件；不是只检查 if 字符串。
+正式 Gate 直接调用原 Python validator，模拟上游跳过、失败、取消、超时及成功但缺证据，
+必须退出1、INCOMPLETE，所有正式 PASS/生产授权均为 false；原合法/错 SHA/run/attempt、
+capacity_ready=false 和不完整凭证正反例仍保留并执行。
+
+冻结测试允许两个 Gate 的 if 变化，但继续逐字段冻结其余 Job 内容；另逐份比较全部五条 workflow
+与 1.0 基线，仅允许 CI authorize 和两个 Gate 的 if 变化。其余 L0/实验步骤、矩阵、触发事件、
+Environment、并发、清理与上传均不可变化；guard.py/policy.json 和历史消费登记也冻结。
+生产目录、迁移、性能脚本/协议和历史 evidence 不修改，不执行新性能实验或生产数据库操作。
+
+Environment 仍为 `a4-expensive-measurements`，Required reviewers、Prevent self-review、
+master 部署限制、禁止绕过及 `A4_REVIEW_POLICY_ACK` 须管理员配置；**NOT_VERIFIED_LIVE**。
+本轮不配置/声称验证这些保护，不 dispatch、rerun 或运行任何真实高成本矩阵来验证条件。
+本地测试退出码、最终提交的普通 push CI 与路径未命中的工作流在交付中分别据实报告，
+不能借用 1.0 提交的 Actions 结果表示 1.1 通过。回滚仍须保持手动实验边界，见末节。
+
+本轮文件共9份：两份 workflow、`tests/unit/test_a4_ci_governance.py`、本文件、
+`a4_ci_workflow_inventory.md`、README、PROJECT_RULES、PRD 和系统设计。
+其余三条 workflow 原字节不变，仅在合同中重新核对；未更新 DOCX。
+
+本地治理合同 `python -m pytest tests/unit/test_a4_ci_governance.py -q`：97 passed，退出0。
+连同原 receipt gate 和 capacity 拒绝/身份反例的集合：161 passed，退出0（139.16秒）。
+对应命令为上述测试加 `tests/unit/test_a42_receipt_gate.py`，以及
+`tests/unit/test_lookup_tail_review_a423.py::test_release_gate_records_specific_refusal_even_if_upstream_is_green`
+和 `::test_denial_cannot_be_promoted_to_admission_or_mixed_identity`，不连接任何数据库。
+`python -m ruff check backend tests migrations scripts .github/actions`、
+`git diff --check` 及 Actionlint1.7.12（本机未装 shellcheck/pyflakes，禁用两项扩展）通过。
+最终提交的普通 push CI 仍需取得本 SHA 的真实结果；不会用手动实验填补未运行项。
+
+## A4-CI-1.0 实施记录
 
 ## 范围与基线
 
@@ -11,9 +73,9 @@ W00 的全部五条工作流/Job/资源/工件盘点见 [原始清单](a4_ci_wor
 
 | workflow | 之前普通 push/PR | 之后普通 push/PR | 明确授权的手动部分 |
 |---|---|---|---|
-| CI | audit/Core；lookup 使用 capacity PG；提交标记可启动 A4231；容量只依赖 readiness | 原 audit/Core 全部步骤、治理合同、read 级 PG 小型查找安全测试、固定历史工件离线复核；严格 release 仍 always 执行 | authorize -> 选定 a4231 或 capacity；容量还必须原 readiness=true，不能由输入设置 |
+| CI | audit/Core；lookup 使用 capacity PG；提交标记可启动 A4231；容量只依赖 readiness | 原 audit/Core 全部步骤、治理合同、read 级 PG 小型查找安全测试、固定历史工件离线复核；1.1 正式 release 仅对应 confirmed dispatch | authorize -> 选定 a4231 或 capacity；none 跳过授权；容量还必须原 readiness=true，不能由输入设置 |
 | A4-1 | 单 Job 安全测试后自动10k/100k/million | contracts：原 observer/Golden/A-B 安全测试与 read PG | isolated-baseline：原120m及全部三规模命令 |
-| A4-2 | 原 contracts 后自动21分片矩阵 | 原 contract-and-safety；laboratory skipped；always aggregate 明确拒绝缺实验 | laboratory：原21分片/1002必需组+6对照、预算、max-parallel4不变 |
+| A4-2 | 原 contracts 后自动21分片矩阵 | 原 contract-and-safety；laboratory skipped；1.1 普通事件不请求正式 aggregate | laboratory：原21分片/1002必需组+6对照、预算、max-parallel4不变；confirmed dispatch 下 aggregate 仍 always 严格拒绝缺实验 |
 | Publication V1.3 | 原330m安全及多规模、多重复基准 | contracts：原候选等价/锁/取消/进度/原像回归和 read PG | candidate-performance：原330m、全部 baseline/current/empty/existing/scope/keys/receipt命令 |
 | A4232 | 路径 contracts 使用 capacity；提交标记可启动归因 | 路径 contracts 改 read；attribution 永不因 push/PR 标记启动 | 显式 dispatch + 旧 token/协议核验；旧 token 已消费，仍拒绝执行 |
 
@@ -114,13 +176,15 @@ PG17 marker 与独立 pg_controldata/pg_control_system 的双身份验证、正�
 ## W04 Release Gate 与历史证据
 
 以下代码/语义保持基线：ci_release_gate_v14_a4_2_1.py、a42_receipt_contract.py、
-publication_release_checks_v14_a4_2_1.py；CI publication-release-gate 和 A4-2 aggregate Job 完整内容不改。
+publication_release_checks_v14_a4_2_1.py；CI publication-release-gate 和 A4-2 aggregate 的事件 if
+按 1.1 分层，其余 Job 内容不改。
 audit/Core/lookup/全部容量的依赖、always、exact SHA/run/attempt、source/model/fixture hash、
 1002组、Golden、原发布断言、SQL/发布/行数预算均保留。
 capacity 只是在原 readiness==true 条件外增加 dispatch 授权，绝不能从手动输入设置 true。
 
-普通提交缺性能/容量证据时，相关实验 skipped，aggregate/release 仍可能 FAILURE。
-CAPACITY_NOT_AUTHORIZED、skipped、缺工件、错 SHA、INCOMPLETE 都不能转 PASS。
+1.1 普通提交不请求正式 Gate，相关实验及 aggregate/release 均 skipped；这不表示性能通过。
+对应 confirmed dispatch 下，CAPACITY_NOT_AUTHORIZED、skipped、缺工件、错 SHA、
+INCOMPLETE 都继续导致正式验收失败，不能转 PASS。
 轻量合同绿色只表示治理/安全检查通过，不是性能通过或生产切换许可。
 历史 JSON、baseline、source manifest、冻结协议和旧 closeout 字节不变，不用新报告覆盖。
 
@@ -159,7 +223,7 @@ W05 最新结果、退出码、HEAD/run/attempt 和链接在最终交付据实�
 | G05–G08 | guard 正反例 + 真实 CLI 先于 PG/依赖拒绝；来源/协议/模型与 fixture 冻结 |
 | G09 | attempt2/消费ID拒绝，共用非取消 mutex；pending名额限制明确，不承诺无限排队 |
 | G10 | 静态 always + 取消/超时/部分/清理失败和错归属合同；未实跑昂贵中断 |
-| G11–G12 | 原 gate Job/脚本和历史文件冻结；容量 skipped/缺失仍拒绝，合法证据沿用原正例测试 |
+| G11–G12 | 原 gate 非事件 if 字段/脚本和历史文件冻结；正式请求容量 skipped/缺失仍拒绝，合法证据沿用原正例测试 |
 | G13 | 仅静态/合同和自动安全回归，无手动高成本 dispatch；实际 Actions 步骤在交付核对 |
 | G14 | 提交后核对本次 HEAD 的 Actions/JUnit，不借基线或较小样本代替 |
 | G15 | 下述保守回滚，审批设置待管理员完成，不进入新阶段 |
@@ -185,7 +249,7 @@ Run workflow 的分支选 master，填入当前已审阅完整 HEAD 和 policy �
 不能把配置治理完成表示为 C1 P95 修复、正式L2通过或生产启用。
 本轮提交推送完成后 **等待审阅，不自动进入下一阶段**。
 
-## 修改文件清单
+## A4-CI-1.0 修改文件清单
 
 - 工作流五份：`.github/workflows/ci.yml`、`ab-read-a4-baseline.yml`、`ab-read-a4-2.yml`、
   `publication-v13.yml`、`a4232-statistics-tail-diagnostic.yml`。

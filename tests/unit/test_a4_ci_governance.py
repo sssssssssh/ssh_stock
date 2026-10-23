@@ -16,6 +16,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE = "c076fa49fdd82ea07f5939f4ec6c190b1b19785b"
+GOVERNANCE_BASELINE = "d123bdad4c2c04105d068fceb8f33ecb58e33d30"
 SPEC = importlib.util.spec_from_file_location(
     "a4_governance_guard", ROOT / ".github/actions/a4-governance/guard.py"
 )
@@ -50,8 +51,8 @@ def workflow(name):
     return yaml.load((ROOT / ".github/workflows" / name).read_text(), Loader=WorkflowLoader)
 
 
-def frozen(path):
-    return subprocess.check_output(["git", "show", f"{BASELINE}:{path}"], cwd=ROOT)
+def frozen(path, *, revision=BASELINE):
+    return subprocess.check_output(["git", "show", f"{revision}:{path}"], cwd=ROOT)
 
 
 def condition(expression, context):
@@ -252,6 +253,114 @@ def test_manual_dispatch_selects_only_one_ci_experiment_and_never_overrides_read
         assert not condition(jobs["capacity"]["if"], ctx)
 
 
+@pytest.mark.parametrize("event", ["push", "pull_request", "workflow_dispatch"])
+@pytest.mark.parametrize("selected", ["none", "capacity", "a4231"])
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_ci_l0_authorization_and_formal_gate_trigger_matrix(event, selected, confirmed):
+    jobs = workflow("ci.yml")["jobs"]
+    ctx = context(event)
+    ctx.update({
+        "inputs.experiment": selected,
+        "inputs.confirm_expensive_run": confirmed,
+        "inputs.protocol_id": "[a4231-attribution-once]",
+    })
+    manual = event == "workflow_dispatch"
+    assert condition(jobs["authorize"]["if"], ctx) is (manual and selected != "none")
+    for job in ("test", "dependency-audit", "lookup-diagnosis", "workflow-contracts"):
+        assert condition(jobs[job].get("if", "true"), ctx), job
+        assert not jobs[job].get("needs"), job
+    for job, suite in EXPENSIVE["ci.yml"].items():
+        assert condition(jobs[job]["if"], ctx) is (manual and confirmed and selected == suite)
+    assert condition(jobs["publication-release-gate"]["if"], ctx) is (
+        manual and confirmed and selected == "capacity"
+    )
+
+
+@pytest.mark.parametrize("event", ["push", "pull_request", "workflow_dispatch"])
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_a42_l0_and_formal_gate_trigger_matrix(event, confirmed):
+    jobs = workflow("ab-read-a4-2.yml")["jobs"]
+    ctx = context(event)
+    ctx["inputs.confirm_expensive_run"] = confirmed
+    manual = event == "workflow_dispatch"
+    assert condition(jobs["authorize"]["if"], ctx) is manual
+    assert condition(jobs["laboratory"]["if"], ctx) is (manual and confirmed)
+    assert condition(jobs["a42-acceptance-gate"]["if"], ctx) is (manual and confirmed)
+    if not manual:
+        ctx["needs.authorize.result"] = "skipped"
+        assert condition(jobs["contract-and-safety"]["if"], ctx)
+
+
+@pytest.mark.parametrize("mode", ["publication", "lab"])
+@pytest.mark.parametrize("upstream", ["skipped", "failure", "cancelled", "timed_out", "success"])
+def test_confirmed_formal_gate_runs_and_rejects_failed_or_missing_evidence(
+    tmp_path, monkeypatch, mode, upstream
+):
+    from scripts.ci_release_gate_v14_a4_2_1 import gate
+
+    filename, job, measured, required = (
+        ("ci.yml", "publication-release-gate", "capacity",
+         ["test", "capacity", "lookup-diagnosis", "dependency-audit"])
+        if mode == "publication" else
+        ("ab-read-a4-2.yml", "a42-acceptance-gate", "laboratory",
+         ["contract-and-safety", "laboratory"])
+    )
+    spec = workflow(filename)["jobs"][job]
+    ctx = context()
+    ctx.update({
+        "inputs.experiment": "capacity",
+        "needs.authorize.result": "failure",
+        "needs.lookup-diagnosis.outputs.capacity_ready": "false",
+        "cancelled": upstream == "cancelled",
+        **{f"needs.{key}.result": upstream if key == measured else "success" for key in required},
+    })
+    assert "always()" in spec["if"]  # Avoid GitHub's implicit success() after skipped needs.
+    assert condition(spec["if"], ctx)
+    monkeypatch.setenv("GITHUB_SHA", subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip())
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    monkeypatch.setenv("GITHUB_RUN_ID", "synthetic-governance-only")
+    monkeypatch.setenv("A421_NEEDS", json.dumps({
+        key: {"result": upstream if key == measured else "success"} for key in required
+    }))
+    args = SimpleNamespace(mode=mode, input=tmp_path / "missing", output=tmp_path / "gate.json")
+    with pytest.raises(SystemExit) as caught:
+        gate(args)
+    assert caught.value.code == 1
+    receipt = json.loads(args.output.read_text())
+    assert receipt["status"] == "INCOMPLETE" and receipt["errors"]
+    if upstream != "success":
+        assert receipt["errors"] == ["UPSTREAM_NOT_SUCCESS"]
+    assert all(receipt[key] is False for key in (
+        "INFRASTRUCTURE_PASS", "CORRECTNESS_PASS", "READ_PERFORMANCE_PASS",
+        "production_read_authorized", "authorize_a4_3",
+    ))
+
+
+@pytest.mark.parametrize("name", EXPENSIVE)
+def test_only_reviewed_job_conditions_change_from_ci_1_0(name):
+    before = yaml.load(frozen(".github/workflows/" + name, revision=GOVERNANCE_BASELINE),
+                       Loader=WorkflowLoader)
+    after = workflow(name)
+    allowed = {
+        "ci.yml": {"authorize", "publication-release-gate"},
+        "ab-read-a4-2.yml": {"a42-acceptance-gate"},
+    }.get(name, set())
+    for job in allowed:
+        assert after["jobs"][job]["if"] != before["jobs"][job]["if"]
+        after["jobs"][job]["if"] = before["jobs"][job]["if"]
+    assert after == before  # Includes every L0 step, gate dependency/command and matrix budget.
+
+
+def test_governance_guard_policy_and_consumed_tokens_remain_frozen():
+    for path in (".github/actions/a4-governance/guard.py",
+                 ".github/actions/a4-governance/policy.json"):
+        assert (ROOT / path).read_text(encoding="utf-8") == frozen(
+            path, revision=GOVERNANCE_BASELINE
+        ).decode("utf-8")
+
+
 def test_l0_retains_original_contract_cases_and_uses_only_read_resource_class():
     for filename, expensive in EXPENSIVE.items():
         value = workflow(filename)
@@ -449,15 +558,15 @@ def test_release_gate_and_historical_evidence_are_frozen_and_missing_capacity_st
         "docs/acceptance/evidence/a4232_source_manifest.json",
     ):
         assert (ROOT / name).read_text(encoding="utf-8") == frozen(name).decode("utf-8")
-    release = workflow("ci.yml")["jobs"]["publication-release-gate"]
-    original = yaml.load(frozen(".github/workflows/ci.yml"), Loader=WorkflowLoader)["jobs"]
-    assert release == original["publication-release-gate"]
-    assert (
-        workflow("ab-read-a4-2.yml")["jobs"]["a42-acceptance-gate"]
-        == yaml.load(frozen(".github/workflows/ab-read-a4-2.yml"), Loader=WorkflowLoader)["jobs"][
-            "a42-acceptance-gate"
-        ]
-    )
+    for filename, job in (("ci.yml", "publication-release-gate"),
+                          ("ab-read-a4-2.yml", "a42-acceptance-gate")):
+        release = workflow(filename)["jobs"][job]
+        original = yaml.load(frozen(".github/workflows/" + filename), Loader=WorkflowLoader)[
+            "jobs"
+        ][job]
+        assert "always()" in release.pop("if")
+        original.pop("if")
+        assert release == original  # Only event selection may change, never strict validation.
     for status in ("skipped", "cancelled", "failure"):
         with pytest.raises(ReceiptError, match="UPSTREAM_NOT_SUCCESS"):
             require_jobs({"test": "success", "capacity": status}, {"test", "capacity"})
