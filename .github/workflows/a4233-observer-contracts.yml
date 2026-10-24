@@ -6,16 +6,24 @@ name: a4233-observer-contracts
     paths:
       - 'scripts/a4233_*.py'
       - 'scripts/a42331_*.py'
+      - 'scripts/a4234_*.py'
       - 'tests/**/test_a4233*.py'
+      - 'tests/**/test_a4234*.py'
       - 'docs/acceptance/*a4233*'
+      - 'docs/acceptance/*a4234*'
+      - 'docs/acceptance/*a4_2_3_4*'
       - 'docs/acceptance/*a4_2_3_3*'
       - '.github/workflows/a4233-observer-contracts.yml'
   pull_request:
     paths:
       - 'scripts/a4233_*.py'
       - 'scripts/a42331_*.py'
+      - 'scripts/a4234_*.py'
       - 'tests/**/test_a4233*.py'
+      - 'tests/**/test_a4234*.py'
       - 'docs/acceptance/*a4233*'
+      - 'docs/acceptance/*a4234*'
+      - 'docs/acceptance/*a4_2_3_4*'
       - 'docs/acceptance/*a4_2_3_3*'
       - '.github/workflows/a4233-observer-contracts.yml'
 
@@ -63,6 +71,17 @@ jobs:
           python -m scripts.a4233_test_receipt
           --source .codex_tmp/a4233-internal/tests.xml
           --output .codex_tmp/a4233/tests.json
+      - name: A4234 offline blocked-preparation contracts only
+        run: >-
+          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
+          tests/unit/test_a4234_calibration_guard.py tests/unit/test_a4234_ci_governance.py
+          --junitxml=.codex_tmp/a4234-internal/tests.xml
+      - name: A4234 sanitized unit counts and static blocker (not calibration)
+        if: always()
+        run: >-
+          python -m scripts.a4234_calibration_guard
+          --tests .codex_tmp/a4234-internal/tests.xml
+          --output .codex_tmp/a4234/tests.json
       - run: python -m ruff check backend tests migrations scripts .github/actions
       - id: cleanup
         if: always()
@@ -84,5 +103,12 @@ jobs:
         with:
           name: a4233-governance-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a4234-contract-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a4234
           include-hidden-files: true
           if-no-files-found: error

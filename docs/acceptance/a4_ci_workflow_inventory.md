@@ -1,5 +1,14 @@
 # A4-CI 工作流盘点
 
+## A4234 增量（仅低成本阻塞准备合同）
+
+在5215145基线上仅追加a4233-observer-contracts.yml的a4234脚本/测试/文档paths，
+同一12分钟contracts job新增纯unit、always去敏计数与独立a4234-contract-SHA-run-attempt上传。
+原有步骤/PG17微型合同/资源级别/清理/upload保持；未新增workflow或dispatch/schedule/workflow_run。
+其余五条workflow（包括完整ci.yml）逐字节冻结；覆盖率70%、正式Gate、one-shot/policy不变。
+新收据COMPLETE_CONTRACT只证明本次纯unit，内部准备状态仍BLOCKED_NEEDS_SPEC_OR_CAPABILITY；
+全批8次预热不足以准备四进程×两模板，W03–W05停止，不运行预热/lookup/校准或新的正式数据集。
+
 ## 当前触发：A4-CI-1.1
 
 审阅基线 `d123bdad4c2c04105d068fceb8f33ecb58e33d30`，master，初始工作区干净。

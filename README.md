@@ -1,5 +1,16 @@
 # A 股机会发现与趋势研究系统
 
+## A4234 校准准备：8次总预热能力阻塞
+
+上一轮A4233.1同SHA主CI/专项及工件已独立复核：代码验收通过，性能仍未授权，见
+[最终审阅](docs/acceptance/a4233_1_final_review.md)；下方旧PARTIAL报告保留推送前历史。
+本轮用户确认“全批共8次，能力不足则标阻塞”。四个独立进程×C0/C1各只能预热一次，
+每次2000键/500批为4条SQL，不能越过现有prepare_threshold=5；不额外预热或改变driver设置。
+当前 **BLOCKED_NEEDS_SPEC_OR_CAPABILITY**，只有离线定义与拒绝guard；W03–W05停止，
+真实128次lookup、正式数据集与校准/性能/容量/生产准入均未执行、未授权。
+[协议v2](docs/acceptance/v14_a4_2_3_4_calibration_protocol.md)、
+[分项状态与剩余问题](docs/acceptance/a4234_calibration_readiness.md)。普通CI只增纯unit，不触发实验。
+
 ## A4233.1 验收整改（非性能验收）
 
 迁移测试改用自有 UUID 合成 PG17 库，Session 与 Alembic 显式复用经核验的 engine/connection；

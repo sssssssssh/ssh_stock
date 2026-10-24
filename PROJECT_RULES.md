@@ -1,5 +1,17 @@
 # 项目开发规则
 
+## A4234 校准准备停止线
+
+基线5215145152ae732fdba2cc5104c022eb0bed2618；A4233.1最终同SHA验收归档于
+docs/acceptance/a4233_1_final_review.md，代码通过不授予性能资格，旧PARTIAL原文不覆盖。
+用户确认预热**全批共8次**。四独立进程、C0/C1、2000键/500批、prepare_threshold=5不变，
+每条件仅4条SQL不足越过阈值；不得增加隐藏预热/探针、强制prepare、共享连接或把正式样本充预热。
+当前BLOCKED_NEEDS_SPEC_OR_CAPABILITY：仅协议v2、顺序定义、typed模拟身份与离线硬拒绝，
+W03–W05停止，不冒称18项校准合同完整或工具ready。普通push/PR/旧token/环境变量均不能执行。
+所有准入false；不创建正式数据集、不采128次、不访问.env/业务库、不改生产、旧脚本/协议/evidence/
+policy/consumed/正式Gate。仅在a4233专项追加unit/paths及独立a4234测试收据，主CI字节保持。
+详情见docs/acceptance/a4234_calibration_readiness.md；解除冲突及任何真实测量均须另行审阅。
+
 ## A4233.1 测试隔离与异常生命周期
 
 本轮在7bc2974上只整改测试/观测器/证据。迁移降级测试须新建并双验证自有UUID合成PG17库；

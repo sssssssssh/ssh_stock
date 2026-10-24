@@ -1,5 +1,13 @@
 # A股机会发现与趋势研究系统 PRD
 
+## A4234 校准准备（能力阻塞，非性能验收）
+
+无产品、策略、计算或交易功能变更。A4233.1代码同SHA验收已复核，性能授权仍无。
+用户确认全批8次预热；在四独立进程和现有driver阈值下不足以建立全部C0/C1 prepared条件，
+本轮BLOCKED_NEEDS_SPEC_OR_CAPABILITY并停止后续校准实现，不靠增加预热或放宽门槛达成ready。
+只交付候选协议、离线定义及拒绝入口和低成本测试；W03–W05未完成，128点校准未执行。
+历史因果仍INSUFFICIENT_EVIDENCE；见acceptance/a4234_calibration_readiness.md与a4233_1_final_review.md。
+
 ## A4233.1 验收可靠性整改
 
 本轮无产品功能变更。修复隔离测试连接身份不一致及observer异常停止/失败工件可靠性；
