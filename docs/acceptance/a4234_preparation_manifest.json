@@ -1,0 +1,49 @@
+{
+  "schema_version": "a4234.preparation-manifest.v1",
+  "baseline_sha": "5215145152ae732fdba2cc5104c022eb0bed2618",
+  "execution_enabled": false,
+  "input_seed": 4233,
+  "input_keys": 2000,
+  "batch_size": 500,
+  "input_key_sha256": "f7a11ade5c21e70867378f342946f570fb914ffdbd73b385adaea91846e51ed3",
+  "input_file_sha256": "918104253d18ad21629323befc4d2d2c198ca71a56629ca577b4ca1a9cb58e9a",
+  "model_tree_sha256": "f8bb5cf42d3f38757eda46ff149239789638f3aabe14434cda6ed7fe9daee20f",
+  "sql_template_sha256": {
+    "C0": "1b19ae3a8b492895c0b15c0f05adcff034b673a8fb4407bc4b4cdbec7635559a",
+    "C1": "b792c8641cc98c1cba20dc9537ee5db911d804511787be7fe19cdeb042562ecc"
+  },
+  "source_files": {
+    ".github/actions/a4-governance/policy.json": "c895ba7768843d556a44e47e31dcc7453fc36eb8ec08578516f60ce965f4a734",
+    "backend/app/services/data_publication.py": "7708d91c831a64093f18aa4f8515789492762f464ccfe202ee0219b756f32976",
+    "requirements.lock": "aa8d7f344bc70c749cb91375950ad0620a551add2933329b82520c35bd7c59b5",
+    "scripts/a4231_attribution_metrics.py": "2d21620eb8f9150d1b974c2115ac2544d383b0720ffce0acb51f99fe3c42a4f7",
+    "scripts/a4232_plan_probe.py": "e32710eb2a4ee9fb58b104f047cd1f606bf8d30881c4832c2ddf36359dceb429",
+    "scripts/a4232_stability_contract.py": "4b22cc21d27379d6999aa6171489de43f2aec4b92532d9135427e1176bdbad56",
+    "scripts/a4233_background_observer.py": "b7e2b1d7476f1ba52a0877ec2925a856a113ec7e9ceddf2a968dc342a7436507",
+    "scripts/a4233_observation_contract.py": "587de6285a373f3d9e5ba4b20fe73bd319d19e0e8700c9af8719a28201343cf7",
+    "scripts/a4233_observation_review.py": "bf2c562a47d6ec580ec9df7d44127637f3d95407a98a8b88ec41c84661609538",
+    "scripts/ab_read_resources_v14_a4_2.py": "cc7580665e9ab71286de60307bcda121f17db64fed8a900b1b0f0d57d8ccdc28",
+    "scripts/data_publication_capacity_v12.py": "3fb34fccd2db6d4abd99fc53685e429a7ec2b4b3c27bcb00543cf9f9b51e944a",
+    "scripts/publication_lookup_diagnostic_a422.py": "2a2e1b73163ede40365941f9f0d9b9c4c4d5e31ba60b7bbf4a77e7b4f8e8d85a",
+    "scripts/publication_tail_stability_a4232.py": "c3f2b2ee6bdcbd6f54bce1c48e0918ababebeb182e3d798bfc2872e55643755b"
+  },
+  "candidate_budgets": {
+    "blocks": 4,
+    "pairs_per_variant": 8,
+    "modes": 2,
+    "warmups_per_block": 8,
+    "lookup_sql_seconds": 300,
+    "observer_sql_ms": 100,
+    "observer_period_ms": 250,
+    "observer_tick_ms": 25,
+    "child_seconds": 300,
+    "parent_seconds": 1200,
+    "workflow_seconds": 1800,
+    "stop_join_ms": 2000,
+    "artifact_ms": 2000,
+    "probe_calls_per_block": 3,
+    "probe_sql_seconds": 30
+  },
+  "data_source": "DEFINITION_ONLY_NO_FIXTURE_CREATED",
+  "approval_status": "NOT_AUTHORIZED"
+}
