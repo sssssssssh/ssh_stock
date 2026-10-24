@@ -1,5 +1,5 @@
 {
-  "schema_version": "a4234.preparation-manifest.v1",
+  "schema_version": "a4234.preparation-manifest.v2",
   "baseline_sha": "5215145152ae732fdba2cc5104c022eb0bed2618",
   "execution_enabled": false,
   "input_seed": 4233,
@@ -31,7 +31,7 @@
     "blocks": 4,
     "pairs_per_variant": 8,
     "modes": 2,
-    "warmups_per_block": 8,
+    "warmups_per_block": 2,
     "lookup_sql_seconds": 300,
     "observer_sql_ms": 100,
     "observer_period_ms": 250,
@@ -42,8 +42,11 @@
     "stop_join_ms": 2000,
     "artifact_ms": 2000,
     "probe_calls_per_block": 3,
-    "probe_sql_seconds": 30
+    "probe_sql_seconds": 30,
+    "warmups_total": 8,
+    "prepare_threshold": 5
   },
   "data_source": "DEFINITION_ONLY_NO_FIXTURE_CREATED",
-  "approval_status": "NOT_AUTHORIZED"
+  "approval_status": "NOT_AUTHORIZED",
+  "prepared_status": "BLOCKED_PREPARED_WARMUP_BUDGET_INSUFFICIENT"
 }
