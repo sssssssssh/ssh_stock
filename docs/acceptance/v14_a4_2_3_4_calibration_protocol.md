@@ -118,7 +118,7 @@ inclusive分位数：排序x，h=(n-1)p，i=floor(h)，Q=x[i]+(h-i)(x[min(i+1,n-
 | 完整性 | 128点/64对，32warmup/12probes，精确顺序、身份与配对，零缺tick/溢出 |
 | 每tick总wall | ≤25ms，同时保持100ms SQL与250ms周期原合同 |
 | positive lookup相对差 | 每组p50≤0.05、inclusive p95≤0.10 |
-| observer整worker CPU / 相同worker elapsed | 每ON点≤0.05，进程CPU另存 |
+| observer整worker CPU / 对应进程资源elapsed | 每ON点≤0.05；worker elapsed和进程CPU另存，不互相替代 |
 | ON−OFF进程RSS峰值 | 每对≤33554432字节，signed与absolute差同时披露 |
 | backend CPU positive相对增量 | 每组p50≤0.05；缺指标或OFF CPU=0为NOT_AVAILABLE，不合格 |
 | 环境/输出/cleanup | 任一异常不完整/未定，不可形成任何资格 |
