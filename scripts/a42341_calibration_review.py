@@ -19,7 +19,12 @@ from scripts.a42341_contract import (
     warmup_schedule,
     write_new,
 )
-from scripts.a42341_environment_contract import backend_cpu, check_observer, compare_environment
+from scripts.a42341_environment_contract import (
+    backend_cpu,
+    check_observer,
+    compare_environment,
+    environment,
+)
 from scripts.a42341_prepared_capability import compare, condition
 
 
@@ -49,8 +54,13 @@ def relative(off, on):
 
 
 def check_sample(s, expected):
-    key = s.identity
     require(s.status == 'COMPLETE' and s.cleanup_complete, 'A42341_OBSERVER_INVALID')
+    check_sample_evidence(s, expected)
+
+
+def check_sample_evidence(s, expected):
+    """Check raw evidence without changing a partial point into a complete point."""
+    key = s.identity
     require(key.model_dump() == schedule()[key.position], 'A42341_SAMPLE_ORDER_INVALID')
     required = condition(expected, key.block, key.variant, 8 + (key.pair * 2 +
         int(key.mode != ('OFF' if (key.pair + key.block) % 2 == 0 else 'ON'))) * 4)
@@ -119,6 +129,179 @@ def summaries(pairs):
     return output, accepted
 
 
+def validate_prefix_and_timeline(data, expected):
+    """Both outcomes obey the same event prefix; a lookup failure omits only its end probe."""
+    keys, count, failed = schedule(), len(data.samples), data.failed_point
+    if failed is not None:
+        require(count < 128 and failed.identity.model_dump() == keys[count]
+            and failed.failure_code == data.first_failure_code, 'A42341_FAILED_POINT_INVALID')
+        started_blocks = keys[count]['block'] + 1
+    else:
+        require(count == 128, 'A42341_COLLECTION_INCOMPLETE')
+        started_blocks = 4
+    require(len(data.blocks) == started_blocks, 'A42341_BLOCK_CONCURRENCY')
+    require(data.parent_started_ns < data.parent_finished_ns
+        and (data.parent_finished_ns - data.parent_started_ns) / 1e6 <= 1_200_000
+        and data.workflow_elapsed_ms >= (data.parent_finished_ns
+            - data.parent_started_ns) / 1e6, 'A42341_BUDGET_EXCEEDED')
+    for i, sample in enumerate(data.samples):
+        require(sample.identity.model_dump() == keys[i], 'A42341_SAMPLE_ORDER_INVALID')
+        check_sample(sample, expected)
+        if i:
+            require(data.samples[i - 1].window_finished_ns <= sample.window_started_ns,
+                    'A42341_BLOCK_CONCURRENCY')
+    for b, block in enumerate(data.blocks):
+        required = condition(expected, b, 'C0')
+        require(block.block == b and block.process_identity == required.process_identity
+            and block.connection_identity == required.connection_identity
+            and data.parent_started_ns <= block.started_ns < block.finished_ns
+                <= data.parent_finished_ns
+            and (block.finished_ns - block.started_ns) / 1e6 <= 300_000,
+            'A42341_BLOCK_CONCURRENCY')
+        if b:
+            require(data.blocks[b - 1].finished_ns < block.started_ns,
+                    'A42341_BLOCK_CONCURRENCY')
+        require(all(block.started_ns <= s.window_started_ns < s.window_finished_ns
+            <= block.finished_ns for s in data.samples if s.identity.block == b),
+            'A42341_BLOCK_CONCURRENCY')
+
+    warmups = warmup_schedule()[:started_blocks * 4]
+    require(len(data.warmups) == len(warmups), 'A42341_PREPARE_IDENTITY_MISMATCH')
+    for row, definition in zip(data.warmups, warmups, strict=True):
+        required = condition(expected, row.block, row.variant, row.lookup_number * 4)
+        required = required.model_copy(update={'warmup_lookup_count': row.lookup_number})
+        require({k: getattr(row, k) for k in definition} == definition
+            and row.process_identity == required.process_identity
+            and row.connection_identity == required.connection_identity
+            and row.hypothetical_sql_count == row.lookup_number * 4
+            and row.condition_after == required
+            and row.hypothetical_batch_cache_keys == [required.prepare_cache_key_sha256] * 4,
+            'A42341_PREPARE_IDENTITY_MISMATCH')
+    phases = [(b, phase) for b in range(started_blocks)
+        for phase in range(2 if failed is not None and b == started_blocks - 1 else 3)]
+    require(len(data.probes) == len(phases), 'A42341_ENVIRONMENT_DRIFT')
+    for i, (probe, (b, phase)) in enumerate(zip(data.probes, phases, strict=True)):
+        block = data.blocks[b]
+        require(probe.block == b and probe.phase == (
+            'PRE_WARMUP', 'BLOCK_START', 'BLOCK_END')[phase]
+            and probe.environment == environment(expected)
+            and block.started_ns <= probe.started_ns < probe.finished_ns <= block.finished_ns,
+            'A42341_ENVIRONMENT_DRIFT')
+        if i:
+            require(data.probes[i - 1].finished_ns <= probe.started_ns,
+                    'A42341_ENVIRONMENT_DRIFT')
+        wanted = [condition(expected, b, v, (0, 8, 72)[phase]) for v in ('C0', 'C1')]
+        if phase == 0:
+            wanted = [c.model_copy(update={'warmup_lookup_count': 0}) for c in wanted]
+        require(probe.conditions == wanted, 'A42341_PREPARED_STABILITY_NOT_PROVEN')
+        if phase < 2:
+            if len(data.samples) > b * 32:
+                anchor = data.samples[b * 32].window_started_ns
+            else:
+                anchor = (failed.partial_sample.window_started_ns if failed.partial_sample
+                          else failed.observed_until_ns)
+            require(probe.finished_ns <= anchor, 'A42341_ENVIRONMENT_DRIFT')
+        else:
+            require(probe.started_ns >= data.samples[b * 32 + 31].window_finished_ns,
+                    'A42341_ENVIRONMENT_DRIFT')
+
+
+def validate_failed_point(data, expected):
+    failed = data.failed_point
+    if failed is None:
+        return
+    block = data.blocks[failed.identity.block]
+    require(block.started_ns <= failed.observed_until_ns <= block.finished_ns,
+            'A42341_FAILED_POINT_INVALID')
+    if data.samples:
+        require(data.samples[-1].window_finished_ns <= failed.observed_until_ns,
+                'A42341_FAILED_POINT_INVALID')
+    sample = failed.partial_sample
+    if sample is None:
+        require(failed.phase == 'DURING_LOOKUP' and failed.failure_code in {
+            'A42341_CANCELLED', 'A42341_SIGNAL', 'A42341_TIMEOUT',
+            'A42341_SQL_TIMEOUT', 'A42341_WORKLOAD_FAILED'}, 'A42341_FAILED_POINT_INVALID')
+        return
+    required = condition(expected, failed.identity.block, failed.identity.variant)
+    require(failed.phase == 'POST_LOOKUP_VALIDATION' and sample.status == 'INCOMPLETE'
+        and sample.identity == failed.identity
+        and sample.process_identity == required.process_identity
+        and sample.connection_identity == required.connection_identity
+        and block.started_ns <= sample.window_started_ns < sample.lookup_started_ns
+            < sample.lookup_finished_ns < sample.window_finished_ns <= block.finished_ns
+        and failed.observed_until_ns == sample.window_finished_ns,
+        'A42341_FAILED_POINT_INVALID')
+    if data.samples:
+        require(data.samples[-1].window_finished_ns <= sample.window_started_ns,
+                'A42341_FAILED_POINT_INVALID')
+    require(set(sample.segments) == {'sql_execute', 'driver_buffer', 'python_json', 'natural_gc'}
+        and all(sample.lookup_started_ns <= s.started_ns < s.finished_ns
+            <= sample.lookup_finished_ns for s in sample.segments.values())
+        and all(sample.lookup_started_ns <= g.started_ns < g.finished_ns
+            <= sample.lookup_finished_ns for g in sample.gc_events), 'A42341_FAILED_POINT_INVALID')
+    resources, obs = sample.resources, sample.observation
+    require(resources.process_elapsed_ms == (sample.window_finished_ns
+        - sample.window_started_ns) / 1e6, 'A42341_FAILED_POINT_INVALID')
+    for endpoint, timestamp in ((resources.backend_before, sample.window_started_ns),
+                                (resources.backend_after, sample.window_finished_ns)):
+        require(endpoint is None or (endpoint.observed_ns == timestamp
+            and endpoint.container_sha256 == expected.fixture_sha256
+            and endpoint.pid == required.backend_pid
+            and endpoint.backend_start == required.backend_start
+            and endpoint.process_start_ticks == 10000 + failed.identity.block
+            and endpoint.clock_ticks == 100),
+                'A42341_FAILED_POINT_INVALID')
+    for i, tick in enumerate(obs.ticks):
+        require(tick.sequence == i and sample.window_started_ns <= tick.started_ns
+            < tick.finished_ns <= failed.observed_until_ns
+            and tick.wall_ms == (tick.finished_ns - tick.started_ns) / 1e6,
+            'A42341_FAILED_POINT_INVALID')
+        if i:
+            require(obs.ticks[i - 1].finished_ns <= tick.started_ns,
+                    'A42341_FAILED_POINT_INVALID')
+    if not obs.joined:
+        require(failed.identity.mode == 'ON'
+            and failed.failure_code in {'A42341_JOIN_TIMEOUT', 'A42341_OBSERVER_INVALID'}
+            and obs.state == 'STOP_TIMEOUT' and obs.worker_finished_ns is None
+            and obs.worker_started_ns is not None
+            and sample.window_started_ns <= obs.worker_started_ns < sample.lookup_started_ns
+            and obs.lifecycle == ['INIT', 'RUNNING', 'STOP_REQUESTED']
+            and resources.observer_thread_cpu_seconds is None
+            and resources.observer_worker_elapsed_ms is None
+            and not sample.cleanup_complete, 'A42341_FAILED_POINT_INVALID')
+    else:
+        require(failed.failure_code != 'A42341_JOIN_TIMEOUT', 'A42341_FAILED_POINT_INVALID')
+    # Reproduce the claimed validation failure against the unchanged raw point, not a
+    # synthesized COMPLETE copy. Geometry/lifecycle checks above cannot be bypassed by it.
+    wanted = ('A42341_OBSERVER_INVALID' if failed.failure_code == 'A42341_JOIN_TIMEOUT'
+              else failed.failure_code)
+    try:
+        check_sample_evidence(sample, expected)
+    except Fault as error:
+        require(error.code == wanted, 'A42341_FAILED_POINT_INVALID')
+    else:
+        raise Fault('A42341_FAILED_POINT_INVALID')
+
+
+def validate_cleanup_consistency(data):
+    failed, codes = data.failed_point, data.cleanup_failure_codes
+    expected_codes = ['A42341_CLEANUP_FAILED'] if 'A42341_CLEANUP_FAILED' in codes else []
+    partial = failed.partial_sample if failed else None
+    if partial is not None and not partial.observation.joined:
+        expected_codes.append('A42341_JOIN_TIMEOUT')
+    require(codes == expected_codes and data.cleanup_complete == (not codes),
+            'A42341_LIFECYCLE_INVALID')
+    if partial is not None:
+        require(partial.cleanup_complete == (partial.observation.joined
+            and 'A42341_CLEANUP_FAILED' not in codes), 'A42341_LIFECYCLE_INVALID')
+    if data.collection_status == 'COMPLETE':
+        require(failed is None and data.first_failure_code is None and not codes
+            and data.cleanup_complete, 'A42341_COLLECTION_INCOMPLETE')
+    elif failed is None:
+        require(len(data.samples) == 128 and codes == ['A42341_CLEANUP_FAILED']
+            and data.first_failure_code == 'A42341_CLEANUP_FAILED', 'A42341_FALSE_INCOMPLETE')
+
+
 def review(value, expected: Identity):
     try:
         validate_identity(expected)
@@ -130,44 +313,10 @@ def review(value, expected: Identity):
         require(data.lifecycle == [
             'INIT', 'MOCK_RUNNING', 'MOCK_STOPPING', 'MOCK_CLOSED', 'RECEIPT'],
                 'A42341_LIFECYCLE_INVALID')
-        for i, s in enumerate(data.samples):
-            require(s.identity.model_dump() == schedule()[i], 'A42341_SAMPLE_ORDER_INVALID')
-            check_sample(s, expected)
-            if i:
-                require(data.samples[i - 1].window_finished_ns <= s.window_started_ns,
-                        'A42341_BLOCK_CONCURRENCY')
-        require(data.parent_started_ns < data.parent_finished_ns
-            and (data.parent_finished_ns - data.parent_started_ns) / 1e6 <= 1_200_000
-            and data.workflow_elapsed_ms >= (data.parent_finished_ns
-                - data.parent_started_ns) / 1e6, 'A42341_BUDGET_EXCEEDED')
-        for b, block in enumerate(data.blocks):
-            c = condition(expected, b, 'C0')
-            require(block.block == b and block.process_identity == c.process_identity
-                and block.connection_identity == c.connection_identity
-                and data.parent_started_ns <= block.started_ns < block.finished_ns
-                    <= data.parent_finished_ns
-                and (block.finished_ns - block.started_ns) / 1e6 <= 300_000,
-                'A42341_BLOCK_CONCURRENCY')
-            if b:
-                require(data.blocks[b - 1].finished_ns < block.started_ns,
-                        'A42341_BLOCK_CONCURRENCY')
-            require(all(block.started_ns <= s.window_started_ns < s.window_finished_ns
-                <= block.finished_ns for s in data.samples if s.identity.block == b),
-                'A42341_BLOCK_CONCURRENCY')
+        validate_prefix_and_timeline(data, expected)
+        validate_failed_point(data, expected)
+        validate_cleanup_consistency(data)
         if data.collection_status == 'INCOMPLETE':
-            require(data.cleanup_complete == (not data.cleanup_failure_codes),
-                    'A42341_LIFECYCLE_INVALID')
-            require(data.first_failure_code is not None and
-                (data.failed_point is not None or bool(data.cleanup_failure_codes)),
-                'A42341_FALSE_INCOMPLETE')
-            if data.failed_point is not None:
-                require(len(data.samples) < 128 and data.failed_point.identity.model_dump()
-                    == schedule()[len(data.samples)]
-                    and data.failed_point.failure_code == data.first_failure_code,
-                    'A42341_FAILED_POINT_INVALID')
-                partial = data.failed_point.partial_sample
-                require(partial is None or partial.identity == data.failed_point.identity,
-                        'A42341_FAILED_POINT_INVALID')
             return dict(**Safety().model_dump(), collection_status='INCOMPLETE',
                 calibration_decision='SIMULATED_REJECT', prepared_evidence_status='UNDETERMINED',
                 environment_stability_status='INCOMPLETE',
@@ -175,39 +324,6 @@ def review(value, expected: Identity):
                 cleanup_failure_codes=data.cleanup_failure_codes, sample_count=len(data.samples),
                 failed_point=data.failed_point.model_dump() if data.failed_point else None,
                 overall_status='BLOCKED_NEEDS_USER_PROTOCOL_DECISION')
-        require(len(data.samples) == 128 and len(data.blocks) == 4 and len(data.warmups) == 16
-            and len(data.probes) == 12 and data.failed_point is None
-            and data.first_failure_code is None and not data.cleanup_failure_codes
-            and data.cleanup_complete, 'A42341_COLLECTION_INCOMPLETE')
-        for row, definition in zip(data.warmups, warmup_schedule(), strict=True):
-            c = condition(expected, row.block, row.variant, row.lookup_number * 4)
-            c = c.model_copy(update={'warmup_lookup_count': row.lookup_number})
-            require({k: getattr(row, k) for k in definition} == definition
-                and row.process_identity == c.process_identity
-                and row.connection_identity == c.connection_identity
-                and row.hypothetical_sql_count == row.lookup_number * 4
-                and row.condition_after == c
-                and row.hypothetical_batch_cache_keys == [c.prepare_cache_key_sha256] * 4,
-                'A42341_PREPARE_IDENTITY_MISMATCH')
-        for i, probe in enumerate(data.probes):
-            b, phase = divmod(i, 3)
-            executions = (0, 8, 72)[phase]
-            require(probe.block == b and probe.phase == (
-                'PRE_WARMUP', 'BLOCK_START', 'BLOCK_END')[phase]
-                and probe.environment == data.samples[b * 32].environment_before
-                and probe.finished_ns > probe.started_ns
-                and data.blocks[b].started_ns <= probe.started_ns < probe.finished_ns
-                    <= data.blocks[b].finished_ns, 'A42341_ENVIRONMENT_DRIFT')
-            wanted = [condition(expected, b, v, executions) for v in ('C0', 'C1')]
-            if phase == 0:
-                wanted = [c.model_copy(update={'warmup_lookup_count': 0}) for c in wanted]
-            require(probe.conditions == wanted, 'A42341_PREPARED_STABILITY_NOT_PROVEN')
-            if phase < 2:
-                require(probe.finished_ns <= data.samples[b * 32].window_started_ns,
-                        'A42341_ENVIRONMENT_DRIFT')
-            else:
-                require(probe.started_ns >= data.samples[b * 32 + 31].window_finished_ns,
-                        'A42341_ENVIRONMENT_DRIFT')
         pairs = []
         cpu_qualifies = True
         for i in range(0, 128, 2):
@@ -316,16 +432,28 @@ def review_bundle(directory, expected):
 
 
 def main(argv=None):
+    import json
     import sys
 
     args = sys.argv[1:] if argv is None else list(argv)
     try:
-        require(len(args) == 4 and args[0] == '--directory' and args[2] == '--expected',
+        require(len(args) == 4 and args[0] == '--directory' and args[2] == '--expected'
+            and not args[1].startswith('--') and not args[3].startswith('--'),
                 'A42341_EXECUTION_NOT_AUTHORIZED')
         value = review_bundle(Path(args[1]), Identity.model_validate(load(args[3])))
-        return 0 if value['calibration_decision'] == 'SIMULATED_ACCEPT' else 1
+        accepted = value['calibration_decision'] == 'SIMULATED_ACCEPT'
+        result = ('MOCK_VALID_SIMULATED_ACCEPT_NOT_AUTHORIZED' if accepted
+                  else 'MOCK_VALID_NOT_QUALIFIED')
+        print(json.dumps(dict(**Safety().model_dump(), result=result,
+            mock_contract_validated=True,
+            simulated_threshold_decision=value['calibration_decision'],
+            real_performance_eligible=False), sort_keys=True))
+        return 2 if accepted else 3
     except BaseException as error:
-        print(error.code if isinstance(error, Fault) else 'A42341_OFFLINE_REVIEW_REJECTED')
+        code = error.code if isinstance(error, Fault) else 'A42341_OFFLINE_REVIEW_REJECTED'
+        print(json.dumps(dict(**Safety().model_dump(), result=code,
+            mock_contract_validated=False, simulated_threshold_decision=None,
+            real_performance_eligible=False), sort_keys=True))
         return 1
 
 

@@ -1,5 +1,15 @@
 # 项目开发规则
 
+## A42342 未完成证据与模拟 CLI 不准入
+
+仅修 A42341 Reviewer 及现有单测，不改 mock.v1 模型、runner、冻结提案、旧协议和正式工作流。
+INCOMPLETE 同样须校验连续样本/已开始 block 的预热与探针前缀、时间预算及失败末点身份。
+未 join 的稳定快照不等于 cleanup 完成；清理码不覆盖首发错误，只有全部 128 点完成才可仅报最终清理失败。
+离线模拟 CLI 恒非零：2=模拟接受但未授权，3=合法模拟不合格，1=结构/身份/参数拒绝；只输出固定 JSON。
+这些数字和 mock_contract_validated=true 不能作为真实性能/生产 Gate 凭据，CI 成功仍来自 pytest/Ruff。
+旧 v2 总 8 次、v3 USER_APPROVAL_PENDING、两道人审及所有真实准入 false 保持；到代码验收即停止。
+详情见 docs/acceptance/a42342_remediation_closeout.md，原 A42341 历史记录不回写。
+
 ## A42341 模拟工具与两道人审
 
 基线f5c0fe4d08f37c01714a3085d49f30da4bc4f1d4。旧v2/manifest/input/guard/contract与历史证据仍冻结，

@@ -346,3 +346,168 @@ def test_AT20_export_complete_and_incomplete_mock_fixtures_only_in_ci(good, tmp_
         resources=MockResources(cleanup_failure=True))
     off.write_bundle(directory / 'mock-incomplete', partial, expected)
     assert off.review_bundle(directory / 'mock-incomplete', expected)['sample_count'] == 3
+
+
+@pytest.fixture(scope='module')
+def a42342_failed(good):
+    return good[0], simulate(good[0], observer=MockObserver(fail_at=1))
+
+
+@pytest.mark.parametrize('change', [
+    'joined', 'local_cleanup', 'status', 'duplicate_position', 'skipped_position',
+    'cross_block', 'process', 'connection', 'window_inverse', 'window_future',
+    'observed_past', 'observed_future', 'during_with_partial', 'post_without_partial',
+    'first_error', 'join_cleanup_missing', 'unexpected_cleanup', 'duplicate_cleanup',
+    'top_cleanup', 'worker_finished', 'worker_cpu', 'tick_future', 'tick_duplicate',
+    'gc_future', 'segment_future', 'backend_future', 'backend_pid', 'backend_container',
+    'missing_warmup', 'duplicate_warmup',
+    'warmup_order', 'missing_probe', 'duplicate_probe', 'probe_order', 'probe_future',
+    'probe_counter', 'missing_block', 'extra_block',
+])
+def test_A42342_T03_T08_T11_contradictory_failure_evidence_rejected(a42342_failed, change):
+    expected, original = a42342_failed
+    value = copy.deepcopy(original)
+    failed = value['failed_point']
+    point = failed['partial_sample']
+    obs = point['observation']
+    if change == 'joined':
+        obs.update(joined=True, state='MOCK_JOINED',
+            worker_finished_ns=point['window_finished_ns'],
+            lifecycle=['INIT', 'RUNNING', 'STOP_REQUESTED', 'JOINED', 'RECEIPT'])
+    elif change == 'local_cleanup':
+        point['cleanup_complete'] = True
+    elif change == 'status':
+        point['status'] = 'COMPLETE'
+    elif change in ('duplicate_position', 'skipped_position', 'cross_block'):
+        position = {'duplicate_position': 0, 'skipped_position': 2, 'cross_block': 32}[change]
+        failed['identity'] = c.schedule()[position]
+        point['identity'] = c.schedule()[position]
+    elif change in ('process', 'connection'):
+        point[change + '_identity'] = 'a' * 64
+    elif change == 'window_inverse':
+        point['window_started_ns'] = point['window_finished_ns'] + 1
+    elif change == 'window_future':
+        point['window_finished_ns'] = value['parent_finished_ns'] + 1
+    elif change == 'observed_past':
+        failed['observed_until_ns'] = value['samples'][0]['window_started_ns']
+    elif change == 'observed_future':
+        failed['observed_until_ns'] = value['parent_finished_ns'] + 1
+    elif change == 'during_with_partial':
+        failed['phase'] = 'DURING_LOOKUP'
+    elif change == 'post_without_partial':
+        failed['partial_sample'] = None
+    elif change == 'first_error':
+        value['first_failure_code'] = 'A42341_SQL_TIMEOUT'
+    elif change == 'join_cleanup_missing':
+        value['cleanup_failure_codes'] = []
+        value['cleanup_complete'] = True
+    elif change == 'unexpected_cleanup':
+        value['cleanup_failure_codes'].append('A42341_SQL_TIMEOUT')
+    elif change == 'duplicate_cleanup':
+        value['cleanup_failure_codes'] *= 2
+    elif change == 'top_cleanup':
+        value['cleanup_complete'] = True
+    elif change == 'worker_finished':
+        obs['worker_finished_ns'] = point['window_finished_ns']
+    elif change == 'worker_cpu':
+        point['resources']['observer_thread_cpu_seconds'] = .001
+    elif change == 'tick_future':
+        obs['ticks'][-1]['finished_ns'] = failed['observed_until_ns'] + 1
+    elif change == 'tick_duplicate':
+        obs['ticks'][-1] = copy.deepcopy(obs['ticks'][0])
+    elif change in ('gc_future', 'segment_future'):
+        target = (point['gc_events'][0] if change == 'gc_future'
+                  else point['segments']['python_json'])
+        target['finished_ns'] = failed['observed_until_ns'] + 1
+    elif change == 'backend_future':
+        point['resources']['backend_after']['observed_ns'] = failed['observed_until_ns'] + 1
+    elif change == 'backend_pid':
+        point['resources']['backend_after']['pid'] += 1
+    elif change == 'backend_container':
+        point['resources']['backend_before']['container_sha256'] = 'a' * 64
+    elif change == 'missing_warmup':
+        value['warmups'].pop()
+    elif change == 'duplicate_warmup':
+        value['warmups'][-1] = copy.deepcopy(value['warmups'][0])
+    elif change == 'warmup_order':
+        value['warmups'].reverse()
+    elif change == 'missing_probe':
+        value['probes'].pop()
+    elif change == 'duplicate_probe':
+        value['probes'][1] = copy.deepcopy(value['probes'][0])
+    elif change == 'probe_order':
+        value['probes'].reverse()
+    elif change == 'probe_future':
+        value['probes'][1]['started_ns'] = failed['observed_until_ns'] + 1
+    elif change == 'probe_counter':
+        value['probes'][0]['conditions'][0]['custom_plans'] += 1
+    elif change == 'missing_block':
+        value['blocks'] = []
+    else:
+        value['blocks'].append(copy.deepcopy(value['blocks'][0]))
+    with pytest.raises(c.Fault):
+        off.review(c.seal(value), expected)
+
+
+@pytest.mark.parametrize('position', [0, 3, 31, 32, 33, 63, 64, 95, 96, 127])
+def test_A42342_T02_T08_T10_legal_failure_prefix_at_every_block_boundary(good, position):
+    expected = good[0]
+    value = simulate(expected, workload=MockWorkload(fail_at=position,
+        failure_code='A42341_SQL_TIMEOUT'), resources=MockResources(cleanup_failure=True))
+    original = copy.deepcopy(value)
+    result = off.review(value, expected)
+    assert result['sample_count'] == position
+    assert result['failed_point'] == original['failed_point']
+    assert result['first_failure_code'] == 'A42341_SQL_TIMEOUT'
+    assert result['cleanup_failure_codes'] == ['A42341_CLEANUP_FAILED']
+    assert result['calibration_decision'] == 'SIMULATED_REJECT'
+    assert result['prepared_evidence_status'] == 'UNDETERMINED'
+    assert value == original
+
+
+def test_A42342_T09_only_final_cleanup_failure_keeps_all_128_points(good, tmp_path):
+    expected = good[0]
+    value = simulate(expected, resources=MockResources(cleanup_failure=True))
+    result = off.write_bundle(tmp_path / 'cleanup-only', value, expected)
+    assert result['sample_count'] == 128 and result['failed_point'] is None
+    assert result['first_failure_code'] == 'A42341_CLEANUP_FAILED'
+    assert result['collection_status'] == 'INCOMPLETE'
+    assert result['calibration_decision'] == 'SIMULATED_REJECT'
+    assert off.review_bundle(tmp_path / 'cleanup-only', expected) == result
+
+
+@pytest.mark.parametrize('change', ['missing_point', 'fake_first', 'missing_completed_block'])
+def test_A42342_T09_T10_cleanup_cannot_justify_truncated_or_false_sampling_failure(good, change):
+    expected = good[0]
+    value = simulate(expected, resources=MockResources(cleanup_failure=True))
+    if change == 'missing_point':
+        value['samples'].pop()
+    elif change == 'fake_first':
+        value['first_failure_code'] = 'A42341_SQL_TIMEOUT'
+    else:
+        value['blocks'].pop()
+    with pytest.raises(c.Fault):
+        off.review(c.seal(value), expected)
+
+
+@pytest.mark.parametrize('code', ['A42341_JOIN_TIMEOUT', 'A42341_OBSERVER_INVALID'])
+def test_A42342_T11_stable_partial_snapshot_is_returned_without_rewriting(a42342_failed, code):
+    expected = a42342_failed[0]
+    value = simulate(expected, observer=MockObserver(fail_at=1, failure_code=code),
+                     resources=MockResources(cleanup_failure=True))
+    original = copy.deepcopy(value)
+    result = off.review(value, expected)
+    assert result['failed_point'] == value['failed_point']
+    assert result['failed_point']['partial_sample']['cleanup_complete'] is False
+    assert result['cleanup_failure_codes'] == ['A42341_CLEANUP_FAILED', 'A42341_JOIN_TIMEOUT']
+    assert value == original
+
+
+@pytest.mark.parametrize('change', ['raw_error', 'dsn'])
+def test_A42342_T12_partial_unknown_fields_rejected_without_raw_text(a42342_failed, change):
+    expected, original = a42342_failed
+    value = copy.deepcopy(original)
+    value['failed_point']['partial_sample'][change] = 'SECRET_A42342_DSN'
+    with pytest.raises(c.Fault) as error:
+        off.review(c.seal(value), expected)
+    assert 'SECRET_A42342_DSN' not in str(error.value)

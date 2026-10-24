@@ -4,6 +4,8 @@ import ast
 import copy
 import importlib.util
 import json
+import subprocess
+import sys
 import warnings
 from pathlib import Path
 
@@ -11,6 +13,7 @@ import pytest
 import yaml
 
 from scripts import a42341_calibration_guard as guard
+from scripts import a42341_calibration_review as reviewer
 from scripts import a42341_contract as c
 from scripts.a42341_calibration_review import review
 from scripts.a42341_calibration_runner import MockResources, MockWorkload, simulate
@@ -224,3 +227,130 @@ def test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change():
                  'publication-v13.yml', 'a4232-statistics-tail-diagnostic.yml'):
         assert (ROOT / '.github/workflows' / name).read_bytes() == c.git(
             ROOT, 'show', c.BASELINE + ':.github/workflows/' + name, binary=True)
+
+
+def a42342_cli(directory, expected_file, *extra):
+    import os
+
+    env = dict(os.environ, PYTHONPATH=str(ROOT), LLM_ENABLED='false',
+        DATABASE_URL='postgresql+psycopg://disabled:disabled@127.0.0.1:1/a42342_disabled_test',
+        TEST_DATABASE_URL='postgresql+psycopg://disabled:disabled@127.0.0.1:1/a42342_disabled_test')
+    result = subprocess.run([sys.executable, '-m', 'scripts.a42341_calibration_review',
+        '--directory', str(directory), '--expected', str(expected_file), *extra],
+        cwd=ROOT, env=env, capture_output=True, text=True, timeout=20, check=False)
+    assert not result.stderr and len(result.stdout) < 4000
+    assert 'SECRET_A42342_DSN' not in result.stdout
+    assert str(directory) not in result.stdout and str(expected_file) not in result.stdout
+    output = json.loads(result.stdout)
+    assert output['authorization_status'] == 'NOT_RUN_NOT_AUTHORIZED'
+    assert output['real_performance_eligible'] is False
+    for name, value in c.Safety().model_dump().items():
+        assert output[name] == value
+    return result.returncode, output
+
+
+@pytest.mark.parametrize('scenario,exit_code,decision', [
+    ('accept', 2, 'SIMULATED_ACCEPT'), ('reject', 3, 'SIMULATED_REJECT'),
+    ('incomplete', 3, 'SIMULATED_REJECT'),
+])
+def test_A42342_T13_T15_real_cli_mock_results_never_exit_zero(good, tmp_path,
+                                                            scenario, exit_code, decision):
+    expected = good[0]
+    workload = (MockWorkload(on_wall_ms=70.0) if scenario == 'reject' else
+        MockWorkload(fail_at=3, failure_code='A42341_SQL_TIMEOUT')
+        if scenario == 'incomplete' else MockWorkload())
+    data = simulate(expected, workload=workload)
+    directory, expected_file = tmp_path / 'mock', tmp_path / 'independent.json'
+    reviewer.write_bundle(directory, data, expected)
+    c.write_new(expected_file, expected.model_dump())
+    actual, output = a42342_cli(directory, expected_file)
+    assert actual == exit_code and actual != 0
+    assert output['mock_contract_validated'] is True
+    assert output['simulated_threshold_decision'] == decision
+    assert output['result'] == ('MOCK_VALID_SIMULATED_ACCEPT_NOT_AUTHORIZED'
+        if scenario == 'accept' else 'MOCK_VALID_NOT_QUALIFIED')
+
+
+@pytest.mark.parametrize('change', ['expected_head', 'expected_attempt', 'expected_run',
+    'self_reported_expected', 'sample_head', 'sample_attempt', 'failure', 'manifest',
+    'manifest_raw_error', 'missing', 'extra', 'symlink', 'traversal'])
+def test_A42342_T16_T18_real_cli_corruption_and_wrong_identity_rejected(good, tmp_path, change):
+    expected, data = good
+    directory, expected_file = tmp_path / 'mock', tmp_path / 'independent.json'
+    reviewer.write_bundle(directory, data, expected)
+    c.write_new(expected_file, expected.model_dump())
+    manifest = c.load(directory / 'manifest.json')
+    modified = None
+    if change.startswith('expected_'):
+        value = expected.model_dump()
+        field = change.removeprefix('expected_')
+        key = {'head': 'head_sha', 'run': 'run_id', 'attempt': 'attempt'}[field]
+        value[key] = 'a' * 40 if field == 'head' else '999999' if field == 'run' else 999
+        expected_file.write_text(json.dumps(value))
+    elif change == 'self_reported_expected':
+        expected_file = directory / 'manifest.json'
+    elif change in ('sample_head', 'sample_attempt'):
+        modified = 'samples.json'
+        value = c.load(directory / modified)
+        value['identity']['head_sha' if change == 'sample_head' else 'attempt'] = (
+            'a' * 40 if change == 'sample_head' else 999)
+        (directory / modified).write_text(json.dumps(c.seal(value)))
+    elif change == 'failure':
+        modified = 'failure.json'
+        value = c.load(directory / modified)
+        value['first_failure_code'] = 'A42341_SQL_TIMEOUT'
+        (directory / modified).write_text(json.dumps(value))
+    elif change == 'manifest':
+        manifest['identity']['attempt'] = 999
+    elif change == 'manifest_raw_error':
+        manifest['raw_error'] = 'SECRET_A42342_DSN'
+    elif change == 'missing':
+        (directory / 'failure.json').unlink()
+    elif change == 'extra':
+        (directory / 'extra.json').write_text('{}')
+    elif change == 'symlink':
+        target = tmp_path / 'outside.json'
+        target.write_text('SECRET_A42342_DSN')
+        (directory / 'samples.json').unlink()
+        (directory / 'samples.json').symlink_to(target)
+    else:
+        manifest['files']['../outside.json'] = manifest['files'].pop('samples.json')
+    if modified:
+        path = directory / modified
+        manifest['files'][modified] = dict(sha256=c.file_sha(path), bytes=path.stat().st_size)
+    (directory / 'manifest.json').write_text(json.dumps(c.seal(manifest)))
+    code, output = a42342_cli(directory, expected_file)
+    assert code == 1 and output['mock_contract_validated'] is False
+    assert output['simulated_threshold_decision'] is None
+    assert output['result'].startswith('A42341_')
+
+
+@pytest.mark.parametrize('option', ['--execute', '--approve', '--force', '--repeat', '--profile',
+    '--token', '--budget', '--validate-mock', '--unknown'])
+def test_A42342_T17_real_cli_flags_cannot_unlock_execution(tmp_path, option):
+    # Rejected before any file lookup, including when paths do not exist.
+    code, output = a42342_cli(tmp_path / 'no-bundle', tmp_path / 'no-expected',
+                               option, 'SECRET_A42342_DSN')
+    assert code == 1 and output['result'] == 'A42341_EXECUTION_NOT_AUTHORIZED'
+    assert output['mock_contract_validated'] is False
+
+
+def test_A42342_T19_T20_no_workflow_schema_or_other_tool_change():
+    baseline = 'a05ab9ffa77d54126aedbdc4fee5396359326edc'
+    for name in c.SOURCES:
+        if name != 'scripts/a42341_calibration_review.py':
+            assert (ROOT / name).read_bytes() == c.git(ROOT, 'show', baseline + ':' + name,
+                                                     binary=True)
+    assert not c.git(ROOT, 'diff', baseline, '--', 'backend', 'config', 'migrations', 'frontend',
+        '.github', 'docs/acceptance/evidence')
+    assert c.definitions()['effective_warmups_total'] == 8
+
+
+@pytest.mark.parametrize('index', [1, 3])
+def test_A42342_T17_execute_switch_is_not_interpreted_as_input_path(index, capsys):
+    args = ['--directory', 'unused', '--expected', 'unused']
+    args[index] = '--execute'
+    assert reviewer.main(args) == 1
+    output = json.loads(capsys.readouterr().out)
+    assert output['result'] == 'A42341_EXECUTION_NOT_AUTHORIZED'
+    assert output['mock_contract_validated'] is False
