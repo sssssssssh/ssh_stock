@@ -1,5 +1,19 @@
 # 项目开发规则
 
+## A42341 模拟工具与两道人审
+
+基线f5c0fe4d08f37c01714a3085d49f30da4bc4f1d4。旧v2/manifest/input/guard/contract与历史证据仍冻结，
+不为新模块扩充旧guard来源白名单；原execute硬拒绝、8次prepared_readiness阻塞保持。
+新v3为PROPOSED/USER_APPROVAL_PENDING：16次仅在同真实连接/driver SQL/参数OID键前提下的必要下界。
+只实现a42341纯内存Mock与独立离线一致性审阅，不连接数据库或GC/线程/容器采集，不调用实际lookup。
+模拟128点/64对与16条候选预热记录不等于执行预热；mock统计合格也只能SIMULATED_ACCEPT，全部准入false。
+首错sticky、末不完整点/未join快照保留；worker未知CPU为None，不把未join报为cleanup完成。
+先由用户批准协议/预热预算，再在工具验收后单独批准真实exact SHA/profile/token/预算/环境和角色能力。
+本轮Git提交/推送授权不通过这两道门，旧one-shot不能复用。真实CPU/物理fixture/cached plan仍未实证，
+当前BLOCKED_NEEDS_USER_PROTOCOL_DECISION，工具代码验收与真实性能不混同。
+只许专项新增三步+三paths精确白名单及对应旧测试显式投影，原五workflow/Gate/policy及生产目录不变。
+边界/真实结果见docs/acceptance/a42341_closeout.md；交付后停止等待人工审阅。
+
 ## A4234 校准准备停止线
 
 基线5215145152ae732fdba2cc5104c022eb0bed2618；A4233.1最终同SHA验收归档于

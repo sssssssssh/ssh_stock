@@ -13,6 +13,22 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ('ci.yml', 'ab-read-a4-baseline.yml', 'ab-read-a4-2.yml',
              'publication-v13.yml', 'a4232-statistics-tail-diagnostic.yml')
 
+# A42341 explicitly authorized ONLY these three additions. Old assertions below remain.
+A42341_ADDITIONS = [
+    dict(name='A42341 proposal and pure mock contracts only',
+        env={'A42341_ARTIFACT_ROOT': '.codex_tmp/a42341'},
+        run='python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN '
+            'tests/unit/test_a42341_prepared_capability.py '
+            'tests/unit/test_a42341_runner_review.py tests/unit/test_a42341_environment_guard.py '
+            '--junitxml=.codex_tmp/a42341-internal/tests.xml'),
+    dict(name='A42341 sanitized unit counts (never calibration)', **{'if': 'always()'},
+        run='python -m scripts.a42341_calibration_guard '
+            '--tests .codex_tmp/a42341-internal/tests.xml --output .codex_tmp/a42341/tests.json'),
+    dict(uses='actions/upload-artifact@v4', **{'if': 'always()', 'with': {
+        'name': 'a42341-contract-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}',
+        'path': '.codex_tmp/a42341', 'include-hidden-files': True, 'if-no-files-found': 'error'}}),
+]
+
 
 def frozen(path):
     return subprocess.check_output(['git', 'show', contract.BASELINE + ':' + path], cwd=ROOT)
@@ -66,10 +82,12 @@ def test_additive_low_cost_workflow_keeps_old_steps_and_uploads_and_budgets():
     assert set(current['jobs']) == {'contracts'}
     before, after = old['jobs']['contracts'], current['jobs']['contracts']
     assert after['timeout-minutes'] == before['timeout-minutes'] == 12
-    original_steps = iter(after['steps'])
+    assert all(after['steps'].count(s) == 1 for s in A42341_ADDITIONS)
+    projected_steps = [s for s in after['steps'] if s not in A42341_ADDITIONS]
+    original_steps = iter(projected_steps)
     for step in before['steps']:
         assert any(s == step for s in original_steps), step
-    additions = [s for s in after['steps'] if s not in before['steps']]
+    additions = [s for s in projected_steps if s not in before['steps']]
     assert len(additions) == 3
     run = next(s for s in additions if 'pytest' in s.get('run', ''))
     assert 'test_a4234_calibration_guard.py' in run['run']

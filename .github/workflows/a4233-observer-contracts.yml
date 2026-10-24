@@ -14,6 +14,9 @@ name: a4233-observer-contracts
       - 'docs/acceptance/*a4_2_3_4*'
       - 'docs/acceptance/*a4_2_3_3*'
       - '.github/workflows/a4233-observer-contracts.yml'
+      - 'scripts/a42341_*.py'
+      - 'tests/**/test_a42341*.py'
+      - 'docs/acceptance/*a42341*'
   pull_request:
     paths:
       - 'scripts/a4233_*.py'
@@ -26,6 +29,9 @@ name: a4233-observer-contracts
       - 'docs/acceptance/*a4_2_3_4*'
       - 'docs/acceptance/*a4_2_3_3*'
       - '.github/workflows/a4233-observer-contracts.yml'
+      - 'scripts/a42341_*.py'
+      - 'tests/**/test_a42341*.py'
+      - 'docs/acceptance/*a42341*'
 
 permissions:
   contents: read
@@ -82,6 +88,19 @@ jobs:
           python -m scripts.a4234_calibration_guard
           --tests .codex_tmp/a4234-internal/tests.xml
           --output .codex_tmp/a4234/tests.json
+      - name: A42341 proposal and pure mock contracts only
+        env:
+          A42341_ARTIFACT_ROOT: .codex_tmp/a42341
+        run: >-
+          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
+          tests/unit/test_a42341_prepared_capability.py
+          tests/unit/test_a42341_runner_review.py tests/unit/test_a42341_environment_guard.py
+          --junitxml=.codex_tmp/a42341-internal/tests.xml
+      - name: A42341 sanitized unit counts (never calibration)
+        if: always()
+        run: >-
+          python -m scripts.a42341_calibration_guard
+          --tests .codex_tmp/a42341-internal/tests.xml --output .codex_tmp/a42341/tests.json
       - run: python -m ruff check backend tests migrations scripts .github/actions
       - id: cleanup
         if: always()
@@ -110,5 +129,12 @@ jobs:
         with:
           name: a4234-contract-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a4234
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a42341-contract-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/a42341
           include-hidden-files: true
           if-no-files-found: error

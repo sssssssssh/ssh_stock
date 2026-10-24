@@ -1,5 +1,14 @@
 # A4-CI 工作流盘点
 
+## A42341 增量：精确白名单，不增加测量入口
+
+基线f5c0fe4，仅a4233-observer-contracts.yml追加三个路径监听和三步：新三文件unit、always去敏计数、
+always独立a42341-contract-SHA-run-attempt上传。12分钟、read PG资源、旧A4233/109项步骤和清理完全保留。
+旧test_a4234_ci_governance仅增加三步常量投影，原三步断言保留；新合同逐字段比较完整基线+精确增量，
+并固定白名单canonical SHA a0b73b261ca730fa9d056d3230a4c75373c2735068ca3f244e610db6ce0517dc。
+原完整ci.yml及其余四workflow逐字节不变，无dispatch/schedule/workflow_run、高成本profile或新Environment。
+新artifact只存单位计数、完整/不完整mock样本与固定失败收据；模拟接受不提供真实校准/性能/发布资格。
+
 ## A4234 增量（仅低成本阻塞准备合同）
 
 在5215145基线上仅追加a4233-observer-contracts.yml的a4234脚本/测试/文档paths，

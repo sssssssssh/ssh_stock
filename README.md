@@ -1,5 +1,15 @@
 # A 股机会发现与趋势研究系统
 
+## A42341 预热修订提案与模拟工具（待人审）
+
+在f5c0fe4上新增v3**待审批**提案、同连接prepare条件、128点纯内存模拟器、资源/漂移合同及离线Reviewer。
+总8次的旧v2与原guard保持原字节；方案A的16次仅必要下界，未获用户批准，也不证明prepared/计划稳态。
+内部SIMULATED_ACCEPT仅验证mock合同，所有真实执行/性能/容量/生产准入恒false；
+当前BLOCKED_NEEDS_USER_PROTOCOL_DECISION，真实CPU、同会话prepared与cached plan能力仍未验证。
+详见[提案](docs/acceptance/v14_a4_2_3_4_calibration_protocol_v3_proposal.md)、
+[决策记录](docs/acceptance/a42341_protocol_decision.md)与[交付/AT矩阵](docs/acceptance/a42341_closeout.md)。
+开发/推送许可不等于批准8→16或真实校准；原主CI与正式Gate不变，专项只增精确白名单的轻量mock合同。
+
 ## A4234 校准准备：8次总预热能力阻塞
 
 上一轮A4233.1同SHA主CI/专项及工件已独立复核：代码验收通过，性能仍未授权，见
