@@ -240,6 +240,33 @@ def test_a42351_AT19_committed_patch_hash_not_just_git_clean(monkeypatch):
         guard.frozen_files()
 
 
+def test_a42351_AT19_hidden_protected_byte_change_not_waived_by_clean_index(monkeypatch):
+    original = guard.git
+    head = original(ROOT, 'rev-parse', 'HEAD').decode().strip()
+    def fake(root, *args):
+        if args[:3] == ('ls-tree', '-r', head):
+            return b'100644 blob ' + b'0' * 40 + b'\tbackend/app/__init__.py\n'
+        return original(root, *args)
+    monkeypatch.setattr(guard, 'git', fake)
+    with pytest.raises(Fault, match='HEAD_BYTES_MISMATCH'):
+        guard.frozen_files()
+
+
+def test_a42351_AT19_head_must_not_change_during_identity_binding(monkeypatch):
+    original = guard.git
+    reads = 0
+    def fake(root, *args):
+        nonlocal reads
+        if args == ('rev-parse', 'HEAD'):
+            reads += 1
+            if reads == 1:
+                return b'f' * 40
+        return original(root, *args)
+    monkeypatch.setattr(guard, 'git', fake)
+    with pytest.raises(Fault, match='HEAD_MISMATCH'):
+        guard.expected_identity()
+
+
 @pytest.mark.parametrize('args', [['--probe-synthetic'], ['--execute'], ['--approve'],
                                 ['--force'], ['--token', 'SECRET_DO_NOT_PRINT'], ['--repeat'],
                                 ['--budget', '128'], ['--run'], ['--check-static', '--execute']])

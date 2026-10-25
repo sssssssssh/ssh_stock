@@ -33,7 +33,7 @@ NEW_PATHS = frozenset((*SOURCES, *(f'tests/unit/test_a4235_{name}.py' for name i
         'capability_limitations', 'observation_feasibility', 'closeout'))))
 PATCH_BASE = '55bd6328c3481f2b2ce767fcb843caaa8e0a2ad8'
 OVERLAY_MANIFEST = 'docs/acceptance/a42351_reviewer_overlay_manifest.json'
-OVERLAY_MANIFEST_SHA = '84cc6a5bf257773b8cd697c0335b592e3b847e954d6c4d1e1a959d8708f9d901'
+OVERLAY_MANIFEST_SHA = 'ea795278e3fb84e4eebabeba737d23a92a4a0c42e6402cc828bf3801d3c9f648'
 PATCH_PATHS = frozenset((
     'scripts/a42341_calibration_review.py', 'tests/unit/test_a42341_runner_review.py',
     'tests/unit/test_a4235_pg_identity.py', 'tests/unit/test_a4235_capability_review.py',
@@ -130,12 +130,13 @@ def frozen_files(root: Path = ROOT) -> str:
 
 def expected_identity(root: Path = ROOT, *, run_id: str = 'local', attempt: int = 1) -> Identity:
     """Independent Git/files + caller CI context; never accepts bundle's own expected object."""
-    return Identity(head_sha=git(root, 'rev-parse', 'HEAD').decode().strip(),
-                    run_id=run_id, attempt=attempt,
-                    source_sha256=digest(dict(
-                        sources={name: path_sha(root / name) for name in SOURCES},
-                        overlay_sha256=overlay_fingerprint(root))),
-                    protocol_sha256=path_sha(root / PACKET), frozen_sha256=frozen_files(root))
+    head = git(root, 'rev-parse', 'HEAD').decode().strip()
+    frozen = frozen_files(root)
+    source = digest(dict(sources={name: path_sha(root / name) for name in SOURCES},
+                         overlay_sha256=overlay_fingerprint(root)))
+    require(head == git(root, 'rev-parse', 'HEAD').decode().strip(), 'A4235_HEAD_MISMATCH')
+    return Identity(head_sha=head, run_id=run_id, attempt=attempt, source_sha256=source,
+                    protocol_sha256=path_sha(root / PACKET), frozen_sha256=frozen)
 
 
 def check_static(target: str, root: Path = ROOT) -> dict:
@@ -146,7 +147,8 @@ def check_static(target: str, root: Path = ROOT) -> dict:
             'A4235_AMBIENT_CONNECTION_REJECTED')
     # JSON schema validates full SHA before comparing; never read .env or resolve a DSN.
     identity = expected_identity(root)
-    require(target == identity.head_sha == git(root, 'rev-parse', 'origin/master').decode().strip(),
+    require(target == identity.head_sha == git(root, 'rev-parse', 'HEAD').decode().strip()
+        == git(root, 'rev-parse', 'origin/master').decode().strip(),
             'A4235_HEAD_MISMATCH')
     require(not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
     return dict(Capability(identity=identity, evidence_kind='STATIC_ONLY').model_dump(),

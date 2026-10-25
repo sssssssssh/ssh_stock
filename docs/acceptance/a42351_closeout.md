@@ -25,6 +25,15 @@ switch, history rewrite, real probe, new PG/container, /proc or manual dispatch.
 - W05: final targeted/full unit, Ruff, diff checks and same-SHA ordinary CI PENDING
   at drafting. Existing workflows are unchanged; no expensive capacity run requested.
 
+### Local execution update before final push
+
+At `fa55e4ee78c6433b17983afedd4b6400e4aa4e07`, the combined seven-file target
+returned **600 passed in 77.00s**, zero failures/skips: A42341 279 (old241 +38),
+A4235 236 (old221 +15), new G1 design85. A42341+design separately:364 passed40.98s.
+Actual frozen tree and new independent overlay/source fingerprint construction passed
+on that clean committed tree. Additional index-hidden byte/HEAD-race regressions are
+added next; the final full unit run must include them. No real probes were used.
+
 ## Exact changed-file inventory
 
 Modified source: `scripts/a42341_calibration_review.py`,
