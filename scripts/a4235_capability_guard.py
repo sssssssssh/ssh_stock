@@ -55,6 +55,17 @@ NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
     *(f'docs/acceptance/a4236_{name}.md' for name in (
         'baseline', 'trust_and_red', 'closeout', 'capability_matrix',
         'g1_authorization_request_TEMPLATE', 'unresolved_methods'))))
+LIVE_MANIFEST_SHA = '464fc5fd5f2b68d3d4f077b579838d4c7834eecccb6eaf43fa932bcae894f7b5'
+
+
+def live_paths():
+    from scripts.a42361_source_guard import STAGE_PATHS as paths
+    return paths
+
+
+def live_protected_paths():
+    from scripts.a42361_source_guard import AUTHORITY, INFRA
+    return live_paths() - AUTHORITY - set(INFRA)
 
 
 def git(root: Path, *args: str) -> bytes:
@@ -78,8 +89,12 @@ def validate_next_paths(changed):
 
 def next_overlay_fingerprint(root: Path, head: str) -> str:
     """Exact af08f872 delta; legacy manifests and their patch bytes remain unchanged."""
+    from scripts import a42361_source_guard as live
+    # First validate the actual immutable historical commit, not a fabricated diff.
     validate_next_paths(git(root, 'diff', '--no-ext-diff', '--name-only', NEXT_BASE,
+                            live.BASELINE,
                             '--', *PROTECTED).decode().splitlines())
+    live_overlay = live.validate(sys.modules[__name__], root, head)
     require(path_sha(root / NEXT_MANIFEST) == NEXT_MANIFEST_SHA,
             'A4235_NEXT_OVERLAY_INVALID')
     try:
@@ -94,9 +109,12 @@ def next_overlay_fingerprint(root: Path, head: str) -> str:
             require(current == hashlib.sha256(git(root, 'show', f'{head}:{name}')).hexdigest(),
                     'A4235_HEAD_BYTES_MISMATCH')
             if name in NEXT_PATCH_PATHS:
-                require(current == manifest['patch_sha256'][name], 'A4235_NEXT_OVERLAY_INVALID')
+                original = hashlib.sha256(git(root, 'show', f'{live.BASELINE}:{name}')).hexdigest()
+                require(original == manifest['patch_sha256'][name], 'A4235_NEXT_OVERLAY_INVALID')
+                if name != live.OLD_TEST:
+                    require(current == original, 'A4235_NEXT_OVERLAY_INVALID')
         return digest(dict(head_sha=head, manifest_sha256=NEXT_MANIFEST_SHA,
-                           patch_sha256=manifest['patch_sha256']))
+                           patch_sha256=manifest['patch_sha256'], live_overlay_sha256=live_overlay))
     except Fault:
         raise
     except Exception:
@@ -115,7 +133,8 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
     require(not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
     changed = set(git(root, 'diff', '--no-ext-diff', '--name-only', PATCH_BASE,
                       '--', *PROTECTED).decode().splitlines())
-    require(changed == STAGE_PATHS | NEXT_STAGE_PATHS, 'A4235_FROZEN_FILE_CHANGED')
+    require(changed == STAGE_PATHS | NEXT_STAGE_PATHS | live_protected_paths(),
+        'A4235_FROZEN_FILE_CHANGED')
     require(path_sha(root / OVERLAY_MANIFEST) == OVERLAY_MANIFEST_SHA,
             'A4235_OVERLAY_MANIFEST_INVALID')
     try:
@@ -166,7 +185,7 @@ def frozen_files(root: Path = ROOT) -> str:
     legacy_patch = {'scripts/a42341_calibration_review.py',
                     'tests/unit/test_a42341_runner_review.py'}
     require(originals.intersection(changed) == legacy_patch
-        and changed <= NEW_PATHS | STAGE_PATHS | NEXT_STAGE_PATHS,
+        and changed <= NEW_PATHS | STAGE_PATHS | NEXT_STAGE_PATHS | live_paths(),
             'A4235_FROZEN_FILE_CHANGED')
     overlay_fingerprint(root)
     require(path_sha(root / PACKET) == PACKET_SHA, 'A4235_PROTOCOL_CHANGED')

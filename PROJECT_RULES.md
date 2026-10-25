@@ -1021,3 +1021,9 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - Git/工件哈希仅证明字节绑定，不是审批签名。没有独立issuer/持久消费/受信harness时状态PARTIAL/BLOCKED，真实G1硬拒绝，不以Fake替代现实信任链。
 - SQL16条含投影的100ms/2s/8行预算只是未批准G1草案；不等于16预热。G2有效总8，G3真实128点未授权；cached结构、CPU映射、维护缺口不得转成稳态/生产/容量/因果PASS。
 - 资源生命周期和清理审计必须精确归属；离线工件首错sticky、cleanup单列、owner-only且manifest最后发布，失败marker不能被当作完整证据。详见docs/acceptance/a4236_closeout.md。
+
+## A42361 真实适配器整改边界
+
+- 仅新命名空间/独立infra源、测试与文档；第三精确overlay维持旧manifest/历史树，旧source_guard一函数按用户明确例外逐层兼容，不削弱其他308断言。
+- 本轮未形成完整可部署服务端链，状态PARTIAL_OFFLINE_TESTED/BLOCKED；客户端接口/真实密码学/Mock不能代替持久、独立身份、OS终止或absent实证。
+- 没有G1运行授权，不读业务.env/库，不启动新PG/容器/云；G2总8/G3未授权，生产/性能/容量/因果资格全部false。见docs/acceptance/a42361_unresolved_methods.md。

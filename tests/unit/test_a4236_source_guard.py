@@ -56,6 +56,8 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
 
 
 def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
+    from scripts import a42361_source_guard as live
+
     changed = set(g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE).decode().split("\0")) - {""}
     authority = {
         "README.md",
@@ -63,12 +65,27 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         "docs/股票机会发现系统_PRD_V1.0.md",
         "docs/股票机会发现系统_系统设计_V1.0.md",
     }
-    assert changed == g.NEXT_STAGE_PATHS | authority and len(changed) == 26
+    historical = set(
+        g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE, live.BASELINE)
+        .decode().split("\0")
+    ) - {""}
+    assert historical == g.NEXT_STAGE_PATHS | authority and len(historical) == 26
+    assert changed == historical | live.STAGE_PATHS
+    live.validate_paths(
+        set(g.git(ROOT, "diff", "--name-only", "-z", live.BASELINE).decode().split("\0")) - {""}
+    )
     manifest = json.loads((ROOT / g.NEXT_MANIFEST).read_bytes())
     assert len(manifest["patch_sha256"]) == 14
     assert len(g.NEXT_STAGE_PATHS) == 22
     for name in g.NEXT_PATCH_PATHS:
-        assert manifest["patch_sha256"][name] == g.path_sha(ROOT / name)
+        original = hashlib.sha256(g.git(ROOT, "show", f"{live.BASELINE}:{name}")).hexdigest()
+        assert manifest["patch_sha256"][name] == original
+        if name != live.OLD_TEST:
+            assert original == g.path_sha(ROOT / name)
+        else:
+            overlay = json.loads((ROOT / live.MANIFEST).read_bytes())
+            assert original == overlay["old_sha256"][name]
+            assert g.path_sha(ROOT / name) == overlay["patch_sha256"][name]
     assert hashlib.sha256((ROOT / g.NEXT_MANIFEST).read_bytes()).hexdigest() == g.NEXT_MANIFEST_SHA
 
 

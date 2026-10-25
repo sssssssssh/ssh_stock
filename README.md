@@ -2007,3 +2007,10 @@ LLM_API_KEY=your-rotated-eas-token
 只做静态检查，成功exit2；`--directory <离线工件>`合法也仅exit3，所有live入口exit1。
 不得通过.env、token、push或Git hash放行。见[a4236交付](docs/acceptance/a4236_closeout.md)与
 [能力缺口](docs/acceptance/a4236_unresolved_methods.md)；G1未授权，G2总8次待决，G3未授权。
+
+### A42361 真实适配器整改（尚未完成可部署链）
+
+新增真实Ed25519、专用控制库事务适配器、受限PG17命令/固定16SQL worker、watchdog原语和安全证据IO，
+只开发及离线测试，未部署/连接PG或启动G1。状态仍PARTIAL/BLOCKED，不能用token/.env/CI激活。
+owner/审计服务端、部分创建回收、完整隔离supervisor尚未齐，见[交付与缺口](docs/acceptance/a42361_closeout.md)。
+旧CLI/run_live继续硬拒绝，G2总8/G3未授权，不改“空间”业务功能。
