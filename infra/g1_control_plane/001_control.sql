@@ -21,6 +21,7 @@ CREATE TABLE g1_control.g1_approvals (
 );
 CREATE TABLE g1_control.g1_consumptions (
  token_id uuid PRIMARY KEY, nonce uuid NOT NULL UNIQUE,
+ fixture_uuid uuid NOT NULL UNIQUE,
  approval_id uuid NOT NULL UNIQUE REFERENCES g1_control.g1_approvals(approval_id),
  payload_sha256 text NOT NULL, head_sha text NOT NULL, run_id text NOT NULL,
  attempt integer NOT NULL CHECK(attempt>0), committed_at timestamptz NOT NULL

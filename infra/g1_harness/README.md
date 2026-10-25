@@ -14,3 +14,8 @@ FixtureController 只构造固定 PG17 命令；network=none，无 public ports/
 任一缺口均 CLEANUP_NOT_VERIFIED，不通过 prune、按前缀删除或扩大权限解决。
 创建中途超时可能已有资源；当前只能记 INCOMPLETE 并阻断，尚缺可信部分资源 reconciliation。
 这项代码缺口必须先补齐、审阅，再讨论独立部署和一次性 G1；不得通过追加批准掩盖工程缺口。
+
+worker新协议：owner/run先提供无backend_start的probe-lease.v2，绑定lease_id、worker PID与creation；
+worker连接使用固定g1_probe/只读/100ms和lease特有application_name，然后owner/receipt才证明该实际backend
+的start/instance/role/会话配置并返回probe-session.v2。此时还未发第一条探针SQL，不额外占用/扩展16条。
+owner不能通过自身pg_settings查询证明另一会话当前GUC；该服务端原始证明方法仍是启动前阻断。

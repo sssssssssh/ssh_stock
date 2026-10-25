@@ -53,3 +53,18 @@
 追加AT03在首次推送后获明确授权。12项负例先12 failed、正常正例1 passed；不更改真实用户index flags，
 以临时目录真实文件和独立Git协议夹具保持diff/status干净。修复后21 passed/0.36s；后续全unit/新SHA CI另核。
 首次CI4151/0skip仅绑定6b29f5d；新测试总数由新JUnit计数，不以旧绿灯填补新SHA。
+
+## 2026-10-26续作RED/GREEN
+
+原始4项RED实际运行4 failed/0.19s：receiver源码不存在、提交回执未重验新连接身份、畸形lookup未在连接前
+拒绝、前/后连接session接口缺失。RED已分阶段提交1a0d815；未删失败样本、未改历史测试。
+补丁后store+worker相关集实际125 passed/0.43s。新增故障模型包括：B固定peer/方法拒绝、重新原字节验签/
+source/digest漂移、fresh commit先后/新连接身份/同writer/缺行/关闭失败、journal新连接读回、请求畸形，
+以及分片帧、错误长度/EOF、外来UID、绝对deadline不续期和异常去敏。网络层是字节模型，不是真实监听服务。
+lease/session字段漂移/预测backend_start/过期/错误PID与实际run_owned连接→owner核验→固定执行器次序覆盖；
+无隐藏identity SQL、无第17条、无真实连接；这些测试不能证明owner已经部署或实际GUC可观测。
+全量unit、最终精确冻结/最终SHA CI另记录，不以这125项代替全部回归。物理项继续NOT_RUN，不是pytest skip。
+
+随后增加ControlService完整回执字段（run/attempt/payload/instance等）漂移拒绝和journal名称必须绑定已消费的
+签名fixture UUID；消费表新源码持久化唯一fixture_uuid，预约CAS同时匹配派生名称，不能以合法前缀预约别的fixture。
+补充相关测试后134 passed/0.29s；专用控制schema仍未执行，不是PG17集成PASS，更不修改股票迁移。

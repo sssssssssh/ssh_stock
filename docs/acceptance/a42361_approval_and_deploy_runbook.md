@@ -5,7 +5,7 @@
 
 ## 先补工程，再讨论授权
 
-当前不是“给一个 token 就能运行”。须先补齐 owner 服务端、B receiver、独立 E 审计、D 隔离 launcher/
+当前不是“给一个 token 就能运行”。B receiver仅源码已补，须先补齐 owner 服务端、独立审批写入、E 审计、D 隔离 launcher/
 写盘 watchdog 与部分创建 reconciliation，重新代码审阅；不得以临时 JSON、单进程扮多域或调大预算替代。
 init_owner.sql/probe_roles.sql 是未完成的方法草案，不是可运行一键部署脚本。
 
@@ -38,3 +38,16 @@ init_owner.sql/probe_roles.sql 是未完成的方法草案，不是可运行一�
 使用项目 .venv，设置 synthetic 端口1 DATABASE_URL，显式 Settings.env_file=None，运行既有
 scripts.a42331_pytest_safety 插件。只跑纯 unit/密码学/协议故障模型，不运行新基础设施迁移。
 全量 PG17 验收只由最终一次 push 的既有 CI 执行原回归；不得把这次原业务 CI 称为 G1 实机测试。
+
+## B FD接收协议（源码审阅材料，不是启动步骤）
+
+独立管理员未来须预置root-controlled安装、专用控制实例/角色/Unix peer映射及仅必要peer可访问的socket，
+通过服务管理器交付监听FD和已验证部署FD。仓库不提供自动bind/listen、环境开关或可运行占位配置。
+B接收器只处理一连接/一请求；自身UID与对端SO_PEERCRED必须符合固定ACL。fresh receipt直接由B的另一
+DB连接读取，不需要另开自身RPC线程；控制库隔离owner服务缺失时仍在libpq连接前拒绝。
+commit后断连/回执丢失不能自动重发消费，禁止按相同审批换token/nonce重跑。
+socket网络deadline仅限制accept/read/write，阻塞handler和fsync仍需独立supervisor；本实现不宣称物理硬时限。
+
+owner部署审查必须使用新的pre-connect lease/post-connect session协议，不能提前填probe backend_start。
+lease密码只经私有服务传给worker，不进入argv、环境、证据；owner实际会话GUC证明尚待审定，不能用owner
+连接的pg_settings或角色默认配置假冒probe当前值。没有可行原始证据就停止，不增加探针SQL/初始化预算。

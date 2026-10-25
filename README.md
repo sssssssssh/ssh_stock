@@ -2014,3 +2014,11 @@ LLM_API_KEY=your-rotated-eas-token
 只开发及离线测试，未部署/连接PG或启动G1。状态仍PARTIAL/BLOCKED，不能用token/.env/CI激活。
 owner/审计服务端、部分创建回收、完整隔离supervisor尚未齐，见[交付与缺口](docs/acceptance/a42361_closeout.md)。
 旧CLI/run_live继续硬拒绝，G2总8/G3未授权，不改“空间”业务功能。
+
+### A42361 2026-10-26续作：消费接收与会话绑定
+
+补入仅管理员监听FD可调用的B接收器、固定Unix peer ACL、规范帧/绝对传输期限。
+消费与资源预约提交后由另一连接重验控制实例并读回执，不再RPC回调自身；未知提交仍永久停止、不重试。
+worker改为预连接lease v2→连接后session v2核验，不提前猜测backend_start，不增加16条SQL预算。
+这仍是源码/离线测试交付：owner原始身份/角色/会话证明、审批写入、独立清理审计、部分创建回收和完整supervisor
+仍阻断，未部署/运行任何G1或控制库，不能标CODE_READY。详见a42361交付/缺口与部署前手册。

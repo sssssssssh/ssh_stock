@@ -9,9 +9,14 @@ import os
 import resource
 import time
 from dataclasses import dataclass
+from typing import Annotated, Literal
 
+from pydantic import Field
+
+from scripts.a4235_calibration_adapter_contract import Hash, Strict
+from scripts.a4236_g1_harness_contract import UUID
 from scripts.a4236_g1_probe import ALLOWLIST_SHA, TEMPLATES, request, validate_request
-from scripts.a42361_contract import Fault, canonical, require, sha
+from scripts.a42361_contract import Fault, Positive, canonical, checked, require, sha
 from scripts.a42361_deployment import LocalService, installed
 from scripts.a42361_fixture_controller import created
 
@@ -21,6 +26,77 @@ SCHEDULE = (
     + ("I8",) * 5
     + ("PROJECTION", "I8", "PROJECTION")
 )
+
+
+class ProbeLease(Strict):
+    schema_version: Literal["a42361.probe-lease.v2"]
+    lease_id: UUID
+    worker_pid: Positive
+    payload_sha256: Hash
+    creation_sha256: Hash
+    socket_directory: str
+    database: str
+    password: Annotated[str, Field(min_length=32, max_length=128, pattern=r"^[a-zA-Z0-9_-]+$")]
+    supervised: Literal[True]
+    statement_timeout_ms: Literal[100]
+    read_only: Literal[True]
+    probe_role_sha256: Hash
+    lease_expires_at: Positive
+
+
+class ProbeSession(Strict):
+    schema_version: Literal["a42361.probe-session.v2"]
+    lease_id: UUID
+    worker_pid: Positive
+    payload_sha256: Hash
+    creation_sha256: Hash
+    backend_pid: Positive
+    backend_start_sha256: Hash
+    system_identifier_sha256: Hash
+    probe_role_sha256: Hash
+    checkout_generation: Literal[1]
+    read_only: Literal[True]
+    statement_timeout_ms: Literal[100]
+    pg_major: Literal[17]
+    driver_version: Literal["3.3.4"]
+    application_name: str
+
+
+def validate_probe_lease(value, fixture, worker_pid, now):
+    """Pre-connect lease cannot claim the start time of a nonexistent backend."""
+    value = checked(ProbeLease, value)
+    p = fixture.consumption.grant.payload
+    require(
+        value.socket_directory == fixture.socket_directory
+        and value.database == "a42361_" + p.binding.fixture_uuid.replace("-", "")
+        and value.creation_sha256 == fixture.receipt_sha256
+        and value.payload_sha256 == fixture.consumption.grant.payload_sha256
+        and value.probe_role_sha256 == fixture.pg_identity["probe_role_sha256"]
+        and value.worker_pid == worker_pid
+        and now < value.lease_expires_at <= p.expires_at,
+        "A42361_PROBE_LEASE_UNTRUSTED",
+    )
+    return value
+
+
+def validate_probe_session(value, lease, fixture, backend_pid, now):
+    """Owner-side post-connect attestation; no extra SQL on the measured connection."""
+    value = checked(ProbeSession, value)
+    require(
+        type(backend_pid) is int
+        and backend_pid > 0
+        and value.backend_pid == backend_pid
+        and value.lease_id == lease.lease_id
+        and value.worker_pid == lease.worker_pid
+        and value.creation_sha256 == lease.creation_sha256
+        and value.payload_sha256 == lease.payload_sha256
+        and value.system_identifier_sha256 == fixture.pg_identity["system_identifier_sha256"]
+        and value.probe_role_sha256 == lease.probe_role_sha256
+        and value.application_name == "a42361-" + lease.lease_id.replace("-", "")
+        and now < lease.lease_expires_at,
+        "A42361_SESSION_IDENTITY_UNPROVEN",
+    )
+    return value.model_dump()
 
 
 @dataclass
@@ -131,39 +207,11 @@ class ProbeWorker:
             allowlist_sha256=ALLOWLIST_SHA,
             schedule=list(SCHEDULE),
         )
-        lease = LocalService(self.deployment, "pg_owner").call("run", body)
-        require(
-            type(lease) is dict
-            and set(lease)
-            == {
-                "socket_directory",
-                "database",
-                "password",
-                "backend_start_sha256",
-                "creation_sha256",
-                "supervised",
-                "statement_timeout_ms",
-                "read_only",
-                "probe_role_sha256",
-                "lease_expires_at",
-            },
-            "A42361_PROBE_LEASE_UNTRUSTED",
-        )
-        require(
-            lease["socket_directory"] == fixture.socket_directory
-            and lease["database"]
-            == "a42361_" + fixture.consumption.grant.payload.binding.fixture_uuid.replace("-", "")
-            and lease["creation_sha256"] == fixture.receipt_sha256
-            and lease["probe_role_sha256"] == fixture.pg_identity["probe_role_sha256"]
-            and lease["supervised"] is True
-            and lease["read_only"] is True
-            and type(lease["statement_timeout_ms"]) is int
-            and lease["statement_timeout_ms"] == 100
-            and type(lease["lease_expires_at"]) is int
-            and int(time.time()) < lease["lease_expires_at"]
-            and type(lease["password"]) is str
-            and 32 <= len(lease["password"]) <= 128,
-            "A42361_PROBE_LEASE_UNTRUSTED",
+        lease = validate_probe_lease(
+            LocalService(self.deployment, "pg_owner").call("run", body),
+            fixture,
+            body["worker_pid"],
+            int(time.time()),
         )
         import psycopg
 
@@ -173,15 +221,15 @@ class ProbeWorker:
             connection = psycopg.connect(
                 host=fixture.socket_directory,
                 port=5432,
-                dbname=lease["database"],
+                dbname=lease.database,
                 user="g1_probe",
-                password=lease.pop("password"),
+                password=lease.password,
                 passfile="",
                 sslmode="disable",
                 connect_timeout=1,
                 autocommit=True,
                 prepare_threshold=5,
-                application_name="a42361-g1-probe",
+                application_name="a42361-" + lease.lease_id.replace("-", ""),
                 options=(
                     "-c statement_timeout=100 -c default_transaction_read_only=on "
                     "-c search_path=pg_catalog"
@@ -191,20 +239,15 @@ class ProbeWorker:
             # separately budgeted connection. No identity SQL hidden in probe budget.
             identity = LocalService(self.deployment, "pg_owner").call(
                 "receipt",
-                dict(purpose="PROBE_SESSION", backend_pid=connection.info.backend_pid, **body),
-            )
-            require(
-                identity
-                == dict(
+                dict(
+                    purpose="PROBE_SESSION",
+                    lease_id=lease.lease_id,
                     backend_pid=connection.info.backend_pid,
-                    backend_start_sha256=lease["backend_start_sha256"],
-                    creation_sha256=fixture.receipt_sha256,
-                    read_only=True,
-                    statement_timeout_ms=100,
-                    pg_major=17,
-                    driver_version="3.3.4",
+                    **body,
                 ),
-                "A42361_SESSION_IDENTITY_UNPROVEN",
+            )
+            identity = validate_probe_session(
+                identity, lease, fixture, connection.info.backend_pid, int(time.time())
             )
             return self._execute_fixed(connection, identity)
         except Fault:

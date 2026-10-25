@@ -4,9 +4,11 @@
 不得标 CODE_READY，不得通过授权或 Mock 掩盖：
 
 1. PG owner 初始化、角色ACL审计、credential lease 服务端未齐。现有两份 SQL 只是方法草案；
-   不满足完整8条初始化合同。短期凭据必须绑定实际 probe backend_start/被监督PID，不能自报。
-2. B 原子事务适配器/schema已有，但独立 RPC receiver/审批写入者、并发新连接提交回执服务未部署/未形成完整安装包。
-   调用自己的 consumer RPC 如无独立线程/进程会死锁；不得部署单线程回调自己。
+   不满足完整8条初始化合同。worker现已将预连接lease与连接后session回执分离，但真实lease发行与
+   backend_start/被监督PID/角色/timeout原始核验仍须独立owner实现，不能自报。
+2. B 原子事务/schema与有界receiver现已写入；消费/预约提交后直接使用另一条重新核验身份的连接读回执，
+   不再RPC回调自身，不依赖并发receiver才能避免死锁。独立审批写入者、受信安装/服务管理、控制库隔离
+   attestation后端仍未齐；真实持久性/进程崩溃/并发及FD交付集成均NOT_RUN，不是已部署服务。
 3. rootless Podman固定命令的发行版兼容、私有runtime环境、socket共享GID/userns/mount身份需独立实现审定；
    部分创建安全 reconciliation、durable逐资源ledger及socket目录回收尚未闭环。
 4. 独立 E absent/namespace 原始审计服务端未齐；不能把C返回的 JSON 复述为独立原始证据。
@@ -25,3 +27,10 @@
 补充：首次推送后发现的9个根文件隐藏index字节覆盖缺口，已获用户明确授权追加精确修复。
 AT03新增独立全HEAD tracked树walk（不改原PROTECTED历史digest）、NUL路径、mode、no-follow FD及竞态验证，
 12项先RED、补丁后21项GREEN。该源码缺口已补，最终同SHA CI待另核；不关闭上列服务端/实机阻断。
+
+2026-10-26续作：旧追加补丁a1bd4cec7e8c4fd9d44c91b018614243a9ad119a的CI40213654303/attempt1/
+job121230040204已实际核验4172 passed、coverage89.28%，四ZIP字节/摘要和内容核验完成；不是本次新增代码CI。
+本次只补B接收/读回执和worker前后两阶段会话绑定，不能将其描述为C/E/完整supervisor已补齐。
+特别是owner从另一backend查询pg_settings得到的是owner自身设置，不是probe的实际会话GUC；不能把角色默认值
+或预连接猜测写成actual read_only/statement_timeout实测。必须先审定独立可行的证明方法及基础设施计数，
+或另行申请协议决策；本次不增加第17条探针SQL、不放大8条初始化预算，也不靠提权或补跑解决。

@@ -237,6 +237,184 @@ def test_probe_lease_requires_post_connection_session_binding_source_gap():
     assert callable(getattr(w, "validate_probe_session", None))
 
 
+def session_model():
+    """OFFLINE_MODEL for phase binding only: no owner, lease issuer or database."""
+    from scripts.a42361_offline_cases import payload
+
+    p = payload()
+    fixture = NS(
+        consumption=NS(grant=NS(payload=p, payload_sha256="a" * 64)),
+        receipt_sha256="b" * 64,
+        socket_directory="/run/a42361-offline/fixture",
+        pg_identity=dict(probe_role_sha256="c" * 64, system_identifier_sha256="d" * 64),
+    )
+    lease = dict(
+        schema_version="a42361.probe-lease.v2",
+        lease_id="92345678-1234-4234-8234-123456789012",
+        worker_pid=123,
+        payload_sha256="a" * 64,
+        creation_sha256="b" * 64,
+        socket_directory=fixture.socket_directory,
+        database="a42361_" + p.binding.fixture_uuid.replace("-", ""),
+        password="OFFLINE_TEST_VALUE_NOT_A_CREDENTIAL_1",
+        supervised=True,
+        statement_timeout_ms=100,
+        read_only=True,
+        probe_role_sha256="c" * 64,
+        lease_expires_at=150,
+    )
+    session = dict(
+        schema_version="a42361.probe-session.v2",
+        lease_id=lease["lease_id"],
+        worker_pid=123,
+        payload_sha256="a" * 64,
+        creation_sha256="b" * 64,
+        backend_pid=234,
+        backend_start_sha256="e" * 64,
+        system_identifier_sha256="d" * 64,
+        probe_role_sha256="c" * 64,
+        checkout_generation=1,
+        read_only=True,
+        statement_timeout_ms=100,
+        pg_major=17,
+        driver_version="3.3.4",
+        application_name="a42361-" + lease["lease_id"].replace("-", ""),
+    )
+    return fixture, lease, session
+
+
+def test_post_connection_attestation_has_actual_start_not_predicted_by_lease():
+    fixture, raw, session = session_model()
+    assert "backend_start_sha256" not in raw
+    lease = w.validate_probe_lease(raw, fixture, 123, 110)
+    result = w.validate_probe_session(session, lease, fixture, 234, 110)
+    assert result["backend_start_sha256"] == "e" * 64
+
+
+@pytest.mark.parametrize(
+    "change,value",
+    [
+        ("backend_start_sha256", "e" * 64),
+        ("worker_pid", 124),
+        ("payload_sha256", "0" * 64),
+        ("creation_sha256", "0" * 64),
+        ("probe_role_sha256", "0" * 64),
+        ("read_only", False),
+        ("statement_timeout_ms", True),
+        ("socket_directory", "/tmp/untrusted"),
+        ("lease_expires_at", 110),
+        ("lease_expires_at", 999),
+        ("supervised", False),
+    ],
+)
+def test_pre_connect_lease_mismatch_rejected_without_backend(change, value):
+    fixture, lease, _ = session_model()
+    lease[change] = value
+    with pytest.raises(Fault):
+        w.validate_probe_lease(lease, fixture, 123, 110)
+
+
+@pytest.mark.parametrize(
+    "change,value",
+    [
+        ("backend_pid", 235),
+        ("backend_pid", True),
+        ("backend_start_sha256", None),
+        ("lease_id", "82345678-1234-4234-8234-123456789012"),
+        ("worker_pid", 124),
+        ("payload_sha256", "0" * 64),
+        ("creation_sha256", "0" * 64),
+        ("system_identifier_sha256", "0" * 64),
+        ("probe_role_sha256", "0" * 64),
+        ("application_name", "another-lease"),
+        ("checkout_generation", 2),
+        ("statement_timeout_ms", 101),
+        ("read_only", False),
+        ("pg_major", 16),
+        ("driver_version", "3.3.5"),
+        ("approved", True),
+    ],
+)
+def test_post_connect_session_drift_cannot_send_first_probe_sql(change, value):
+    fixture, raw, session = session_model()
+    lease = w.validate_probe_lease(raw, fixture, 123, 110)
+    session[change] = value
+    with pytest.raises(Fault):
+        w.validate_probe_session(session, lease, fixture, 234, 110)
+
+
+def test_post_connect_lease_expiry_stops_before_probe():
+    fixture, raw, session = session_model()
+    lease = w.validate_probe_lease(raw, fixture, 123, 110)
+    with pytest.raises(Fault, match="SESSION_IDENTITY_UNPROVEN"):
+        w.validate_probe_session(session, lease, fixture, 234, 150)
+
+
+@pytest.mark.parametrize("failure", [None, "lease", "session", "expiry", "disconnect"])
+def test_owned_worker_connect_then_attest_then_execute_no_hidden_identity_sql(monkeypatch, failure):
+    import psycopg
+
+    fixture, lease, session = session_model()
+    config = NS(worker_uid=1000)
+    calls = []
+    connection = NS(info=NS(backend_pid=234), close=lambda: calls.append("close"))
+    monkeypatch.setattr(w, "installed", lambda _: config)
+    monkeypatch.setattr(w, "created", lambda _: fixture)
+    monkeypatch.setattr(w.os, "getuid", lambda: 1000)
+    monkeypatch.setattr(w.os, "getpid", lambda: 123)
+    monkeypatch.setattr(w.time, "time", lambda: 110)
+    for key in tuple(w.os.environ):
+        if key.startswith("PG") or key in ("DATABASE_URL", "TEST_DATABASE_URL"):
+            monkeypatch.delenv(key)
+    if failure == "lease":
+        lease["backend_start_sha256"] = "e" * 64  # The old premature prediction is forbidden.
+    if failure == "session":
+        session["lease_id"] = "82345678-1234-4234-8234-123456789012"
+
+    def service(self, method, body):
+        assert self.domain == "pg_owner"
+        calls.append(method)
+        assert body["worker_pid"] == 123 and body["schedule"] == list(w.SCHEDULE)
+        if method == "run":
+            assert "backend_pid" not in body
+            return lease.copy()
+        assert calls == ["run", "connect", "receipt"]
+        assert body["backend_pid"] == 234 and body["lease_id"] == lease["lease_id"]
+        if failure == "expiry":
+            monkeypatch.setattr(w.time, "time", lambda: 150)
+        return session.copy()
+
+    def connect(*args, **kwargs):
+        calls.append("connect")
+        assert not args and kwargs["prepare_threshold"] == 5
+        assert kwargs["host"] == fixture.socket_directory and kwargs["user"] == "g1_probe"
+        assert kwargs["application_name"] == session["application_name"]
+        assert kwargs["options"] == (
+            "-c statement_timeout=100 -c default_transaction_read_only=on -c search_path=pg_catalog"
+        )
+        if failure == "disconnect":
+            raise RuntimeError("OFFLINE_SECRET_SENTINEL")
+        return connection
+
+    def execute(self, conn, identity):
+        calls.append("execute")
+        assert conn is connection and identity == session
+        assert "password" not in identity
+        return dict(status="OFFLINE_MODEL_ONLY")
+
+    monkeypatch.setattr(w.LocalService, "call", service)
+    monkeypatch.setattr(psycopg, "connect", connect)
+    monkeypatch.setattr(w.ProbeWorker, "_execute_fixed", execute)
+    if failure:
+        with pytest.raises(Fault):
+            w.ProbeWorker(object()).run_owned(fixture)
+        assert "execute" not in calls and calls.count("connect") <= 1
+        assert ("connect" not in calls) if failure == "lease" else True
+    else:
+        assert w.ProbeWorker(object()).run_owned(fixture) == dict(status="OFFLINE_MODEL_ONLY")
+        assert calls == ["run", "connect", "receipt", "execute", "close"]
+
+
 class DriverModel:
     def __init__(self, fault=None):
         self.prepare_threshold = 5

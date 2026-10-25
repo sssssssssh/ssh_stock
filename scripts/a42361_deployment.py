@@ -289,7 +289,119 @@ class LocalService:
                 result = decode(read_exact(size))
                 remaining()
                 require(path.stat() == meta, "A42361_SOCKET_CHANGED")
+                if type(result) is dict and result.get("schema_version") == "a42361.rpc-error.v1":
+                    require(set(result) == {"schema_version", "code"}, "A42361_RPC_INCOMPLETE")
+                    raise Fault(result["code"])
                 return result
+        except Fault:
+            raise
+        except Exception:
+            raise Fault("A42361_SERVICE_UNAVAILABLE") from None
+
+
+class LocalReceiver:
+    """One request on an administrator-installed listening FD; never binds/listens.
+
+    An independent service manager owns the loop, process lifetime and FD delivery.
+    Network framing has one absolute deadline. It cannot interrupt a blocked handler:
+    process-level supervision is still required before deployment (not proven here).
+    """
+
+    domain = None
+
+    def __init__(self, deployment=None):
+        self.deployment = deployment
+
+    def allowed_uids(self, config):
+        raise Fault("A42361_SERVICE_NOT_CONFIGURED")
+
+    def dispatch(self, peer_uid, method, body):
+        raise Fault("A42361_SERVICE_NOT_CONFIGURED")
+
+    def serve_once(self, listening_fd, timeout_ms=1000):
+        config = installed(self.deployment)  # Before FD inspection, socket I/O or dispatch.
+        require(self.domain == "consumer", "A42361_SERVICE_NOT_CONFIGURED")
+        endpoint = getattr(config, self.domain)
+        require(os.getuid() == endpoint.peer_uid, "A42361_SERVICE_PRINCIPAL_MISMATCH")
+        require(
+            type(listening_fd) is int
+            and listening_fd >= 0
+            and type(timeout_ms) is int
+            and 0 < timeout_ms <= 2000,
+            "A42361_RPC_BUDGET_INVALID",
+        )
+        deadline = time.monotonic_ns() + timeout_ms * 1_000_000
+        path = Path(config.root_directory) / (endpoint.socket_name + ".sock")
+        try:
+            require(hasattr(socket, "SO_PEERCRED"), "A42361_PEER_IDENTITY_UNAVAILABLE")
+            require(not any(p.is_symlink() for p in (path, *path.parents)), "A42361_UNSAFE_SOCKET")
+            meta = path.stat()
+            require(
+                stat.S_ISSOCK(meta.st_mode)
+                and meta.st_uid == endpoint.peer_uid
+                and meta.st_mode & 0o007 == 0,
+                "A42361_UNSAFE_SOCKET",
+            )
+            with socket.fromfd(listening_fd, socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                require(
+                    listener.family == socket.AF_UNIX
+                    and listener.type == socket.SOCK_STREAM
+                    and listener.getsockname() == str(path)
+                    and listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) == 1,
+                    "A42361_LISTENER_UNTRUSTED",
+                )
+
+                def remaining(connection):
+                    value = deadline - time.monotonic_ns()
+                    require(value > 0, "A42361_RPC_TIMEOUT")
+                    connection.settimeout(value / 1_000_000_000)
+
+                remaining(listener)
+                connection, _ = listener.accept()
+                with connection:
+                    _, uid, _ = struct.unpack(
+                        "3i",
+                        connection.getsockopt(
+                            socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")
+                        ),
+                    )
+                    require(uid in self.allowed_uids(config), "A42361_PEER_IDENTITY_MISMATCH")
+
+                    def read_exact(n):
+                        result = b""
+                        while len(result) < n:
+                            remaining(connection)
+                            chunk = connection.recv(n - len(result))
+                            require(bool(chunk), "A42361_RPC_INCOMPLETE")
+                            result += chunk
+                        return result
+
+                    try:
+                        size = struct.unpack("!I", read_exact(4))[0]
+                        require(0 < size <= 65536, "A42361_RPC_TOO_LARGE")
+                        request = decode(read_exact(size))
+                        require(
+                            type(request) is dict
+                            and set(request) == {"schema_version", "method", "body"}
+                            and request["schema_version"] == "a42361.rpc.v1"
+                            and type(request["method"]) is str
+                            and type(request["body"]) is dict,
+                            "A42361_RPC_METHOD_REJECTED",
+                        )
+                        require(path.stat() == meta, "A42361_SOCKET_CHANGED")
+                        remaining(connection)
+                        response = self.dispatch(uid, request["method"], request["body"])
+                    except Exception as error:
+                        response = dict(
+                            schema_version="a42361.rpc-error.v1",
+                            code=error.code
+                            if isinstance(error, Fault)
+                            else "A42361_SERVICE_UNAVAILABLE",
+                        )
+                    raw = canonical(response)
+                    remaining(connection)
+                    require(path.stat() == meta, "A42361_SOCKET_CHANGED")
+                    connection.sendall(struct.pack("!I", len(raw)) + raw)
         except Fault:
             raise
         except Exception:

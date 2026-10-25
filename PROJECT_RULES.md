@@ -1027,3 +1027,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 仅新命名空间/独立infra源、测试与文档；第三精确overlay维持旧manifest/历史树，旧source_guard一函数按用户明确例外逐层兼容，不削弱其他308断言。
 - 本轮未形成完整可部署服务端链，状态PARTIAL_OFFLINE_TESTED/BLOCKED；客户端接口/真实密码学/Mock不能代替持久、独立身份、OS终止或absent实证。
 - 没有G1运行授权，不读业务.env/库，不启动新PG/容器/云；G2总8/G3未授权，生产/性能/容量/因果资格全部false。见docs/acceptance/a42361_unresolved_methods.md。
+
+### A42361 2026-10-26续作边界
+
+- B接收器仅受控监听FD、固定SO_PEERCRED ACL；消费/日志确认必须commit后新连接重验控制实例读取，禁止自RPC回调与未知提交重试。
+- probe预连接lease不可自报backend_start；连接后独立owner session回执交叉绑定租约/进程/实例/角色，失败前不发送探针SQL。
+- 没有扩大原16探针SQL/8初始化SQL或其他预算；不能以owner自身pg_settings或角色默认值冒称probe实际会话GUC。
+- 仍PARTIAL/BLOCKED：owner/E/partial-create回收/独立launcher与写盘监督等未齐，无实机/部署授权；不能由本轮代码或CI升级资格。

@@ -9,6 +9,7 @@ import time
 
 from scripts.a42361_contract import Binding, Fault, canonical, checked, require, sha
 from scripts.a42361_deployment import LocalService, installed
+from scripts.a42361_one_shot_store import ConsumptionReceipt, expected_receipt
 from scripts.a42361_trust_verifier import TrustVerifier
 from scripts.a42361_trusted_evidence import FailureLedger
 
@@ -49,14 +50,10 @@ class ControlService:
         receipt = consumer.call(
             "receipt", dict(token_id=grant.payload.token_id, payload_sha256=grant.payload_sha256)
         )
+        receipt = checked(ConsumptionReceipt, receipt).model_dump()
         require(
             sha(canonical(receipt)) == response["receipt_sha256"]
-            and receipt.get("committed") is True
-            and receipt.get("event") == "CONSUMED"
-            and receipt.get("token_id") == grant.payload.token_id
-            and receipt.get("nonce") == expected.nonce
-            and receipt.get("approval_id") == grant.payload.approval_id
-            and receipt.get("head_sha") == expected.identity.head_sha,
+            and receipt == expected_receipt(grant, config),
             "A42361_COMMIT_UNKNOWN_NO_RETRY",
         )
         require(int(time.time()) < grant.payload.expires_at, "A42361_GRANT_EXPIRED")

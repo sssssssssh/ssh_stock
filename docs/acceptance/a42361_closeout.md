@@ -54,3 +54,19 @@ G2有效8次待决，16/32未批准；G3真实128点/64对未授权；production
 追加完整unit初次在8cf2677实测1 failed/3344 passed/5 warnings/244.92s：新全树检查提前发现旧补丁篡改，
 错误分类先变成HEAD_BYTES_MISMATCH，旧冻结断言要求OVERLAY_BYTES_MISMATCH。没有改/放宽旧测试；
 新层先重复核验原六个manifest pin，再完整全树检查，保持首错分类和所有后续防护。
+
+## 2026-10-26继续未完成工程
+
+续作起点master/origin为a1bd4cec7e8c4fd9d44c91b018614243a9ad119a，干净。该SHA本地3345项、
+既有主CI40213654303/attempt1/job121230040204实测4172 passed/674 warnings/1951.40s、coverage89.28%；
+四验收ZIP（12607288715、12607408491、12607358478、12607533220）API摘要与实际字节/内容已核验。
+三个辅助既有CI成功，旧Observer/高成本/正式容量未运行；这不替代续作新SHA CI。
+
+用户另行授权本轮master分阶段提交、最终一次推送，不含部署/G1。首次RED提交1a0d815及四失败保留；
+实现B监听FD receiver/peer ACL、消费和journal的新连接身份校验/已提交读取、未知提交不重试。
+worker以lease v2/session v2替代预连接backend_start预测；实际run_owned离线测试证明失败前不进入固定SQL。
+相关125项通过，后续全unit/冻结/最终CI计数必须从实际日志与工件读取。
+
+**仍PARTIAL_OFFLINE_TESTED/BLOCKED，不是整任务完成。** B死锁/新连接身份和worker预测session的源码缺口已补；
+独立审批写入、owner初始化与会话GUC原始证明、E审计、partial-create安全回收、runtime/socket映射与完整独立
+launcher/fsync监督仍需审定实现。未扩大任何预算/权限，不以Mock计数替代工程闭环，不连接PG/云/业务.env。
