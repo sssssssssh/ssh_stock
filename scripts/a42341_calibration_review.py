@@ -206,6 +206,60 @@ def validate_prefix_and_timeline(data, expected):
                     'A42341_ENVIRONMENT_DRIFT')
 
 
+def validate_partial_observer(sample, failure_code):
+    """Authenticity is independent of the claimed payload-validation failure."""
+    obs, resources = sample.observation, sample.resources
+    require(resources.process_cpu_seconds > 0 and resources.process_elapsed_ms > 0,
+            'A42341_FAILED_POINT_INVALID')
+    if sample.identity.mode == 'OFF':
+        require(obs.state == 'OBSERVER_OFF' and obs.joined and not obs.ticks
+            and not obs.lifecycle and obs.overflow == 0
+            and obs.worker_started_ns is None and obs.worker_finished_ns is None
+            and resources.observer_thread_cpu_seconds is None
+            and resources.observer_worker_elapsed_ms is None
+            and failure_code != 'A42341_JOIN_TIMEOUT', 'A42341_FAILED_POINT_INVALID')
+        return
+    require(obs.worker_started_ns is not None
+        and sample.window_started_ns <= obs.worker_started_ns < sample.lookup_started_ns,
+        'A42341_FAILED_POINT_INVALID')
+    if obs.joined:
+        require(failure_code != 'A42341_JOIN_TIMEOUT' and obs.state == 'MOCK_JOINED'
+            and obs.worker_finished_ns is not None
+            and sample.lookup_finished_ns < obs.worker_finished_ns <= sample.window_finished_ns
+            and obs.lifecycle == ['INIT', 'RUNNING', 'STOP_REQUESTED', 'JOINED', 'RECEIPT']
+            and resources.observer_thread_cpu_seconds is not None
+            and resources.observer_thread_cpu_seconds <= resources.process_cpu_seconds
+            and resources.observer_worker_elapsed_ms is not None
+            and resources.observer_worker_elapsed_ms > 0
+            and resources.observer_worker_elapsed_ms == (
+                obs.worker_finished_ns - obs.worker_started_ns) / 1e6
+            and len(obs.ticks) == obs.planned_ticks
+            and any(t.finished_ns < sample.lookup_started_ns for t in obs.ticks)
+            and any(t.started_ns > sample.lookup_finished_ns for t in obs.ticks),
+            'A42341_FAILED_POINT_INVALID')
+    else:
+        require(failure_code in {'A42341_JOIN_TIMEOUT', 'A42341_OBSERVER_INVALID'}
+            and obs.state == 'STOP_TIMEOUT' and obs.worker_finished_ns is None
+            and obs.lifecycle == ['INIT', 'RUNNING', 'STOP_REQUESTED']
+            and resources.observer_thread_cpu_seconds is None
+            and resources.observer_worker_elapsed_ms is None
+            and not sample.cleanup_complete, 'A42341_FAILED_POINT_INVALID')
+    for i, tick in enumerate(obs.ticks):
+        require(tick.sequence == i
+            and obs.worker_started_ns <= tick.started_ns < tick.finished_ns
+                <= (obs.worker_finished_ns if obs.joined else sample.window_finished_ns)
+            and tick.wall_ms == (tick.finished_ns - tick.started_ns) / 1e6
+            and 0 < tick.wall_ms <= 25 and all(v <= 100 for v in tick.sql_wall_ms)
+            and sum(tick.sql_wall_ms) <= tick.wall_ms
+            and (not tick.partial or i == len(obs.ticks) - 1),
+            'A42341_FAILED_POINT_INVALID')
+        if i:
+            previous = obs.ticks[i - 1]
+            require(previous.finished_ns <= tick.started_ns
+                and 200_000_000 <= tick.started_ns - previous.started_ns <= 500_000_000,
+                'A42341_FAILED_POINT_INVALID')
+
+
 def validate_failed_point(data, expected):
     failed = data.failed_point
     if failed is None:
@@ -239,7 +293,7 @@ def validate_failed_point(data, expected):
             <= sample.lookup_finished_ns for s in sample.segments.values())
         and all(sample.lookup_started_ns <= g.started_ns < g.finished_ns
             <= sample.lookup_finished_ns for g in sample.gc_events), 'A42341_FAILED_POINT_INVALID')
-    resources, obs = sample.resources, sample.observation
+    resources = sample.resources
     require(resources.process_elapsed_ms == (sample.window_finished_ns
         - sample.window_started_ns) / 1e6, 'A42341_FAILED_POINT_INVALID')
     for endpoint, timestamp in ((resources.backend_before, sample.window_started_ns),
@@ -251,26 +305,7 @@ def validate_failed_point(data, expected):
             and endpoint.process_start_ticks == 10000 + failed.identity.block
             and endpoint.clock_ticks == 100),
                 'A42341_FAILED_POINT_INVALID')
-    for i, tick in enumerate(obs.ticks):
-        require(tick.sequence == i and sample.window_started_ns <= tick.started_ns
-            < tick.finished_ns <= failed.observed_until_ns
-            and tick.wall_ms == (tick.finished_ns - tick.started_ns) / 1e6,
-            'A42341_FAILED_POINT_INVALID')
-        if i:
-            require(obs.ticks[i - 1].finished_ns <= tick.started_ns,
-                    'A42341_FAILED_POINT_INVALID')
-    if not obs.joined:
-        require(failed.identity.mode == 'ON'
-            and failed.failure_code in {'A42341_JOIN_TIMEOUT', 'A42341_OBSERVER_INVALID'}
-            and obs.state == 'STOP_TIMEOUT' and obs.worker_finished_ns is None
-            and obs.worker_started_ns is not None
-            and sample.window_started_ns <= obs.worker_started_ns < sample.lookup_started_ns
-            and obs.lifecycle == ['INIT', 'RUNNING', 'STOP_REQUESTED']
-            and resources.observer_thread_cpu_seconds is None
-            and resources.observer_worker_elapsed_ms is None
-            and not sample.cleanup_complete, 'A42341_FAILED_POINT_INVALID')
-    else:
-        require(failed.failure_code != 'A42341_JOIN_TIMEOUT', 'A42341_FAILED_POINT_INVALID')
+    validate_partial_observer(sample, failed.failure_code)
     # Reproduce the claimed validation failure against the unchanged raw point, not a
     # synthesized COMPLETE copy. Geometry/lifecycle checks above cannot be bypassed by it.
     wanted = ('A42341_OBSERVER_INVALID' if failed.failure_code == 'A42341_JOIN_TIMEOUT'

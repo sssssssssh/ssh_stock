@@ -41,6 +41,137 @@ def test_a42351_AT02_observer_invalid_cannot_mask_false_join_and_cleanup(good):
         off.review(c.seal(value), expected)
 
 
+@pytest.fixture(scope='module')
+def a42351_joined_failure(good):
+    expected, complete = good
+    value = simulate(expected, observer=MockObserver(
+        fail_at=1, failure_code='A42341_OBSERVER_INVALID'))
+    point = value['failed_point']['partial_sample']
+    point['observation'] = copy.deepcopy(complete['samples'][1]['observation'])
+    # The payload fault is genuine, but the worker really ended and has a receipt.
+    point['observation']['ticks'][-1]['partial'] = True
+    point['resources'] = copy.deepcopy(complete['samples'][1]['resources'])
+    point['cleanup_complete'] = value['cleanup_complete'] = True
+    value['cleanup_failure_codes'] = []
+    return expected, c.seal(value)
+
+
+def test_a42351_AT10_joined_payload_failure_is_not_rejected_wholesale(a42351_joined_failure):
+    expected, value = a42351_joined_failure
+    original = copy.deepcopy(value)
+    result = off.review(value, expected)
+    assert result['collection_status'] == 'INCOMPLETE'
+    assert result['first_failure_code'] == 'A42341_OBSERVER_INVALID'
+    assert result['failed_point']['partial_sample']['observation']['joined'] is True
+    assert result['failed_point']['partial_sample']['observation']['ticks'][-1]['partial']
+    assert value == original  # No normalization/resealing/rewriting by the Reviewer.
+
+
+@pytest.mark.parametrize('change', [
+    'missing_end', 'three_states', 'stop_timeout', 'missing_cpu', 'missing_elapsed',
+    'wrong_elapsed', 'excess_cpu', 'end_before_lookup', 'worker_start_after_tick',
+    'tick_budget', 'sql_budget', 'sql_sum', 'partial_prefix', 'no_before', 'no_after',
+    'interval', 'local_cleanup', 'top_cleanup', 'join_code', 'process_cpu_zero',
+])
+def test_a42351_AT03_AT06_joined_invalid_payload_cannot_mask_structure(
+        a42351_joined_failure, change):
+    expected, original = a42351_joined_failure
+    value = copy.deepcopy(original)
+    point = value['failed_point']['partial_sample']
+    obs, resources = point['observation'], point['resources']
+    if change == 'missing_end':
+        obs['worker_finished_ns'] = None
+    elif change == 'three_states':
+        obs['lifecycle'] = ['INIT', 'RUNNING', 'STOP_REQUESTED']
+    elif change == 'stop_timeout':
+        obs['state'] = 'STOP_TIMEOUT'
+    elif change in ('missing_cpu', 'excess_cpu'):
+        resources['observer_thread_cpu_seconds'] = None if change == 'missing_cpu' else 1.0
+    elif change in ('missing_elapsed', 'wrong_elapsed'):
+        resources['observer_worker_elapsed_ms'] = None if change == 'missing_elapsed' else 1.0
+    elif change == 'end_before_lookup':
+        obs['worker_finished_ns'] = point['lookup_started_ns']
+    elif change == 'worker_start_after_tick':
+        obs['worker_started_ns'] += 1
+        resources['observer_worker_elapsed_ms'] -= .000001
+    elif change == 'tick_budget':
+        obs['ticks'][-1]['wall_ms'] = 26.0
+    elif change in ('sql_budget', 'sql_sum'):
+        obs['ticks'][-1]['sql_wall_ms'][0] = 101.0 if change == 'sql_budget' else 1.0
+    elif change == 'partial_prefix':
+        obs['ticks'][0]['partial'] = True
+    elif change in ('no_before', 'no_after'):
+        obs['ticks'].pop(0 if change == 'no_before' else -1)
+    elif change == 'interval':
+        obs['ticks'][1]['started_ns'] += 1_000_000
+    elif change == 'local_cleanup':
+        point['cleanup_complete'] = False
+    elif change == 'top_cleanup':
+        value['cleanup_complete'] = False
+    elif change == 'join_code':
+        value['first_failure_code'] = value['failed_point']['failure_code'] = 'A42341_JOIN_TIMEOUT'
+    else:
+        resources['process_cpu_seconds'] = 0.0
+    with pytest.raises(c.Fault, match='^A42341_(FAILED_POINT|LIFECYCLE)_INVALID$'):
+        off.review(c.seal(value), expected)
+
+
+@pytest.mark.parametrize('change', ['end', 'cpu', 'elapsed', 'local', 'top', 'tick_partial'])
+def test_a42351_AT07_AT08_unjoined_invalid_cannot_mask_unknowns(good, change):
+    expected = good[0]
+    value = simulate(expected, observer=MockObserver(
+        fail_at=1, failure_code='A42341_OBSERVER_INVALID'))
+    point = value['failed_point']['partial_sample']
+    if change == 'end':
+        point['observation']['worker_finished_ns'] = point['window_finished_ns']
+    elif change == 'cpu':
+        point['resources']['observer_thread_cpu_seconds'] = 0.0
+    elif change == 'elapsed':
+        point['resources']['observer_worker_elapsed_ms'] = 0.0
+    elif change == 'local':
+        point['cleanup_complete'] = True
+    elif change == 'top':
+        value['cleanup_complete'] = True
+    else:
+        point['observation']['ticks'][0]['partial'] = True
+    with pytest.raises(c.Fault):
+        off.review(c.seal(value), expected)
+
+
+@pytest.mark.parametrize('change', ['none', 'worker', 'ticks', 'lifecycle', 'cpu', 'join_code'])
+def test_a42351_AT09_off_partial_semantics(good, change):
+    expected = good[0]
+    value = simulate(expected, resources=MockResources(rss_available=False))
+    point = value['failed_point']['partial_sample']
+    assert point['identity']['mode'] == 'OFF'
+    if change == 'none':
+        assert off.review(value, expected)['collection_status'] == 'INCOMPLETE'
+        return
+    if change == 'worker':
+        point['observation']['worker_started_ns'] = point['window_started_ns']
+    elif change == 'ticks':
+        point['observation']['ticks'] = copy.deepcopy(good[1]['samples'][1]['observation']['ticks'])
+    elif change == 'lifecycle':
+        point['observation']['lifecycle'] = ['INIT']
+    elif change == 'cpu':
+        point['resources']['observer_thread_cpu_seconds'] = 0.0
+    else:
+        value['first_failure_code'] = value['failed_point']['failure_code'] = 'A42341_JOIN_TIMEOUT'
+    with pytest.raises(c.Fault, match='^A42341_FAILED_POINT_INVALID$'):
+        off.review(c.seal(value), expected)
+
+
+@pytest.mark.parametrize('code', ['A42341_SQL_TIMEOUT', 'A42341_CANCELLED', 'A42341_SIGNAL'])
+def test_a42351_AT11_first_error_sticky_and_cleanup_order(good, code):
+    expected = good[0]
+    value = simulate(expected, workload=MockWorkload(fail_at=1, failure_code=code),
+                     resources=MockResources(cleanup_failure=True))
+    result = off.review(value, expected)
+    assert result['first_failure_code'] == code
+    assert result['cleanup_failure_codes'] == ['A42341_CLEANUP_FAILED']
+    assert result['failed_point']['partial_sample'] is None
+
+
 def test_AT02_AT18_full_mock_roundtrip_never_authorizes_or_proves_real_prepare(good, tmp_path):
     expected, data = good
     result = off.review(data, expected)
