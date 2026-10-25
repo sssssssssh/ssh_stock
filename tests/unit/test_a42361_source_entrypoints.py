@@ -209,6 +209,14 @@ def complete_overlay_model(tmp_path):
     snapshot.update({name: b"baseline-root" for name in ROOT_FREEZE_FILES})
     snapshot["docs/Chinese_中文\nname.txt"] = b"baseline-nul-path"
     snapshot[live.OLD_GUARD] = b"LIVE_MANIFEST_SHA = '" + b"0" * 64 + b"'\n"
+    snapshot.update({name: b"legacy-bytes" for name in g.PATCH_PATHS})
+    snapshot[g.OVERLAY_MANIFEST] = json.dumps(
+        dict(
+            patch_sha256={
+                name: hashlib.sha256(snapshot[name]).hexdigest() for name in g.PATCH_PATHS
+            }
+        )
+    ).encode()
     old = {live.OLD_GUARD: b"old-guard", live.OLD_TEST: b"old-test"}
     manifest = dict(
         schema_version="a42361.exact-overlay.v1",
@@ -258,6 +266,9 @@ def complete_overlay_model(tmp_path):
         path_sha=g.path_sha,
         git=git,
         LIVE_MANIFEST_SHA=hashlib.sha256(raw).hexdigest(),
+        PATCH_PATHS=g.PATCH_PATHS,
+        OVERLAY_MANIFEST=g.OVERLAY_MANIFEST,
+        OVERLAY_MANIFEST_SHA=hashlib.sha256(snapshot[g.OVERLAY_MANIFEST]).hexdigest(),
     )
     return guard, root, head, calls
 

@@ -51,3 +51,6 @@ G2有效8次待决，16/32未批准；G3真实128点/64对未授权；production
 和最终路径摘要拒绝；正常中文/换行NUL路径、3竞态和5路径边界共21项GREEN。
 新增层不会遍历忽略的.env；普通diff/status/index flags都不能免除对HEAD文件实际字节的核验。
 新完整unit/同SHA CI的实际结果由补充交付回执记录，未出结果不预填；其他服务端工程缺口仍BLOCKED。
+追加完整unit初次在8cf2677实测1 failed/3344 passed/5 warnings/244.92s：新全树检查提前发现旧补丁篡改，
+错误分类先变成HEAD_BYTES_MISMATCH，旧冻结断言要求OVERLAY_BYTES_MISMATCH。没有改/放宽旧测试；
+新层先重复核验原六个manifest pin，再完整全树检查，保持首错分类和所有后续防护。

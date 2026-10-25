@@ -262,6 +262,20 @@ def validate(g, root, head):
             == oid,
             "A4235_HEAD_BYTES_MISMATCH",
         )
+    # Keep the historical first-error contract: a committed-byte substitution
+    # against the six original immutable patch pins must still be classified as
+    # OVERLAY_BYTES_MISMATCH, not masked by the additional HEAD tree comparison.
+    # This duplicates (never waives) the old check; the complete byte walk follows.
+    require(
+        g.path_sha(root / g.OVERLAY_MANIFEST) == g.OVERLAY_MANIFEST_SHA,
+        "A4235_OVERLAY_MANIFEST_INVALID",
+    )
+    legacy = json.loads((root / g.OVERLAY_MANIFEST).read_bytes())
+    require(set(legacy["patch_sha256"]) == g.PATCH_PATHS, "A4235_OVERLAY_MANIFEST_INVALID")
+    for name in g.PATCH_PATHS:
+        require(
+            g.path_sha(root / name) == legacy["patch_sha256"][name], "A4235_OVERLAY_BYTES_MISMATCH"
+        )
     verify_full_worktree(g, root, head)
     require(
         head == g.git(root, "rev-parse", "HEAD").decode().strip()
