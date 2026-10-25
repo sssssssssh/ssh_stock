@@ -55,7 +55,7 @@ NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
     *(f'docs/acceptance/a4236_{name}.md' for name in (
         'baseline', 'trust_and_red', 'closeout', 'capability_matrix',
         'g1_authorization_request_TEMPLATE', 'unresolved_methods'))))
-LIVE_MANIFEST_SHA = 'd4c03d8d266eaeafad532b4d36ac50996ed4d343863ad63e016a58c830b2af2e'
+LIVE_MANIFEST_SHA = '6f30bcef95e36ac23a15882c2bbde2176eb49d5133924d1e98de5c7657219633'
 
 
 def live_paths():

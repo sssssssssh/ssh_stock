@@ -21,6 +21,10 @@ old A42351/A4236 manifest原字节、旧Reviewer/协议/授权/生产/工作流/
 ## 测试证据与CI层级
 
 先真实运行4项RED（4 failed/0.06s）；真实RFC8032 positive与篡改负例已运行，不是FakeIssuer。
+本地完整unit在f8287c3e9bb8655391033312738892ff6b091fd5运行：**3324 passed / 5 warnings / 225.32s**，
+JUnit核对0 failure/error/skip；其中新A42361为145项，旧A4236为308、A42341为279、A4235为238、A42351为85。
+本次中文路径NUL修复前目标163项曾3 fail/160 pass；定位修复后全unit通过。Ruff全backend/tests/migrations/
+scripts/.github/actions与git diff --check通过。本段文档/摘要冻结后的final SHA另跑目标回归及既有CI。
 仅针对新增文件运行安全pytest、全unit、Ruff和diff；最终实测计数由末次本地记录/最终交付回执报告。
 任何失败不通过skip/xfail/改阈值吞掉。新PG/控制库/fixture/worker/OSkill全部未执行，SQL实际发送0。
 最终一次push后只核对既有CI的新exact SHA；分开记录API metadata、实际日志、ZIP字节摘要和内容。
