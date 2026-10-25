@@ -1014,3 +1014,10 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 0051 三张归档表以 owner/chat/turn/audit 复合外键和 UPDATE 不可变 Trigger 保护；父对象删除受 RESTRICT 阻止。存在归档时拒绝 downgrade，不添加隐式 TTL 或普通删除 API。
 - Evidence v2 原 canonical/content/identity 算法保持原样；内部投影不进入模型或公开工具响应。完整性、冻结事实复核、M14/M15 口径复核和算法重跑必须分别标识，SHA 只证明一致性，不提供防数据库管理员篡改保证。
 - 启用后的新 Turn 以同一事务写 Archive/Binding/Manifest、Assistant 和 COMPLETED。失败回滚后保存 FAILED；同 request_id 幂等复用已提交结果，缓存保留 origin 审计。提交前受原 Deadline 与写 SQL 超时约束；已提交结果不能因网络响应丢失而被重写为失败。
+
+## A4236 能力诊断离线边界
+
+- af08f872后仅新精确overlay、Mock合同、默认拒绝接口、测试及文档；既有生产SQL、模型、工作流、依赖和历史协议/授权记录不改。
+- Git/工件哈希仅证明字节绑定，不是审批签名。没有独立issuer/持久消费/受信harness时状态PARTIAL/BLOCKED，真实G1硬拒绝，不以Fake替代现实信任链。
+- SQL16条含投影的100ms/2s/8行预算只是未批准G1草案；不等于16预热。G2有效总8，G3真实128点未授权；cached结构、CPU映射、维护缺口不得转成稳态/生产/容量/因果PASS。
+- 资源生命周期和清理审计必须精确归属；离线工件首错sticky、cleanup单列、owner-only且manifest最后发布，失败marker不能被当作完整证据。详见docs/acceptance/a4236_closeout.md。

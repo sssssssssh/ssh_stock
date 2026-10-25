@@ -42,6 +42,19 @@ STAGE_PATHS = PATCH_PATHS | frozenset((
     'scripts/a4235_capability_guard.py', OVERLAY_MANIFEST,
     *(f'docs/acceptance/a42351_{name}.md' for name in (
         'baseline_and_red', 'g1_runbook_and_trust', 'capability_decision_matrix', 'closeout'))))
+NEXT_BASE = 'af08f8724e988121402988b4e8fb70c8ef5b53f2'
+NEXT_MANIFEST = 'docs/acceptance/a4236_overlay_manifest.json'
+NEXT_MANIFEST_SHA = 'cf5cd4ac8838e0bb2e6e4b5d60916b8a44ed28352083e06043743aaaa74ff1b7'
+NEXT_SOURCES = tuple(f'scripts/a4236_{name}.py' for name in (
+    'g1_harness_contract', 'grant_verifier', 'g1_probe', 'session_prepared',
+    'resource_probe', 'observer_feasibility', 'evidence', 'cli', 'mock'))
+NEXT_PATCH_PATHS = frozenset((*NEXT_SOURCES, *(f'tests/unit/test_a4236_{name}.py' for name in (
+    'harness_grant', 'probe_prepared', 'resources_observer', 'evidence_cli', 'source_guard'))))
+NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
+    'scripts/a4235_capability_guard.py', NEXT_MANIFEST,
+    *(f'docs/acceptance/a4236_{name}.md' for name in (
+        'baseline', 'trust_and_red', 'closeout', 'capability_matrix',
+        'g1_authorization_request_TEMPLATE', 'unresolved_methods'))))
 
 
 def git(root: Path, *args: str) -> bytes:
@@ -59,6 +72,37 @@ def path_sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def validate_next_paths(changed):
+    require(set(changed) == NEXT_STAGE_PATHS, 'A4235_FROZEN_FILE_CHANGED')
+
+
+def next_overlay_fingerprint(root: Path, head: str) -> str:
+    """Exact af08f872 delta; legacy manifests and their patch bytes remain unchanged."""
+    validate_next_paths(git(root, 'diff', '--no-ext-diff', '--name-only', NEXT_BASE,
+                            '--', *PROTECTED).decode().splitlines())
+    require(path_sha(root / NEXT_MANIFEST) == NEXT_MANIFEST_SHA,
+            'A4235_NEXT_OVERLAY_INVALID')
+    try:
+        manifest = json.loads((root / NEXT_MANIFEST).read_bytes())
+        require(set(manifest) == {'schema_version', 'baseline_sha', 'stage_paths', 'patch_sha256'}
+            and manifest['schema_version'] == 'a4236.next-overlay.v1'
+            and manifest['baseline_sha'] == NEXT_BASE
+            and manifest['stage_paths'] == sorted(NEXT_STAGE_PATHS)
+            and set(manifest['patch_sha256']) == NEXT_PATCH_PATHS, 'A4235_NEXT_OVERLAY_INVALID')
+        for name in NEXT_STAGE_PATHS:
+            current = path_sha(root / name)
+            require(current == hashlib.sha256(git(root, 'show', f'{head}:{name}')).hexdigest(),
+                    'A4235_HEAD_BYTES_MISMATCH')
+            if name in NEXT_PATCH_PATHS:
+                require(current == manifest['patch_sha256'][name], 'A4235_NEXT_OVERLAY_INVALID')
+        return digest(dict(head_sha=head, manifest_sha256=NEXT_MANIFEST_SHA,
+                           patch_sha256=manifest['patch_sha256']))
+    except Fault:
+        raise
+    except Exception:
+        raise Fault('A4235_NEXT_OVERLAY_INVALID') from None
+
+
 def overlay_fingerprint(root: Path = ROOT) -> str:
     """Local byte/tree binding, NOT a human signature or a real-execution grant.
 
@@ -71,7 +115,7 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
     require(not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
     changed = set(git(root, 'diff', '--no-ext-diff', '--name-only', PATCH_BASE,
                       '--', *PROTECTED).decode().splitlines())
-    require(changed == STAGE_PATHS, 'A4235_FROZEN_FILE_CHANGED')
+    require(changed == STAGE_PATHS | NEXT_STAGE_PATHS, 'A4235_FROZEN_FILE_CHANGED')
     require(path_sha(root / OVERLAY_MANIFEST) == OVERLAY_MANIFEST_SHA,
             'A4235_OVERLAY_MANIFEST_INVALID')
     try:
@@ -84,6 +128,7 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
             and manifest['stage_paths'] == sorted(STAGE_PATHS)
             and set(manifest['patch_sha256']) == PATCH_PATHS,
             'A4235_OVERLAY_MANIFEST_INVALID')
+        next_overlay = next_overlay_fingerprint(root, head)
         for name in STAGE_PATHS:
             current = path_sha(root / name)
             committed = hashlib.sha256(git(root, 'show', f'{head}:{name}')).hexdigest()
@@ -106,7 +151,7 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
         require(head == git(root, 'rev-parse', 'HEAD').decode().strip()
             and not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
         return digest(dict(head_sha=head, manifest_sha256=OVERLAY_MANIFEST_SHA,
-                           patch_sha256=manifest['patch_sha256']))
+                           patch_sha256=manifest['patch_sha256'], next_overlay_sha256=next_overlay))
     except Fault:
         raise
     except Exception:
@@ -121,7 +166,7 @@ def frozen_files(root: Path = ROOT) -> str:
     legacy_patch = {'scripts/a42341_calibration_review.py',
                     'tests/unit/test_a42341_runner_review.py'}
     require(originals.intersection(changed) == legacy_patch
-        and changed <= NEW_PATHS | STAGE_PATHS,
+        and changed <= NEW_PATHS | STAGE_PATHS | NEXT_STAGE_PATHS,
             'A4235_FROZEN_FILE_CHANGED')
     overlay_fingerprint(root)
     require(path_sha(root / PACKET) == PACKET_SHA, 'A4235_PROTOCOL_CHANGED')

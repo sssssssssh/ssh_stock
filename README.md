@@ -1998,3 +1998,12 @@ LLM_API_KEY=your-rotated-eas-token
 - 修改 `.env` 后重启 Backend 进程或相关容器；只重启前端不会更新后端配置。本仓库 Compose 的 Backend 使用项目目录 `.env` 作为 `env_file`；其他部署方式须自行把这些变量注入 Backend 容器。令 `LLM_ENABLED=false` 并重启可关闭新请求，历史会话仍可查看。
 - LLM 只在登录后的“智能研究”工作台发送问题时调用：解析问题、按授权调用九个只读研究工具，并生成经服务端 Evidence 校验的回答。数据拉取、基础信息同步、因子/趋势计算、股票池生成、回测和定时任务不调用 LLM，也不会因配置 LLM 而自动执行。
 - 未验证 EAS 实际网络请求前，先在自己的环境检查 HTTPS 可达、Token 权限、模型 ID 与 tool calling 兼容性。已在聊天或其他公开渠道暴露的 Token 应先在 EAS 轮换，再填入 `.env`。
+
+### A4236 受控 PG17 能力探针：仅离线开发
+
+本轮仅提供纯Mock合同、安全工件与默认拒绝骨架，代码状态PARTIAL/BLOCKED。
+独立签发、持久消费、真实fixture harness未配置；没有新建或连接数据库、Docker或云资源。
+`python -m scripts.a4236_cli --check-static --target-sha <完整HEAD>` 在无连接环境且HEAD等于origin时
+只做静态检查，成功exit2；`--directory <离线工件>`合法也仅exit3，所有live入口exit1。
+不得通过.env、token、push或Git hash放行。见[a4236交付](docs/acceptance/a4236_closeout.md)与
+[能力缺口](docs/acceptance/a4236_unresolved_methods.md)；G1未授权，G2总8次待决，G3未授权。
