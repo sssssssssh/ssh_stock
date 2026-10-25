@@ -61,6 +61,21 @@ git diff --check
 以及metadata/下载字节/内部字段的核验级别。既有工作流与依赖完全未改，没有dispatch/retry/G1 job。
 普通CI使用其原隔离测试服务，不代表本轮G1已运行。
 
+### 推送前实际验收快照
+
+实现提交ba76b7f59b83b5fe94eeb2de8641b43c8ea58a12；修正提交
+179b29c377542bd8d3696fea2be8ae134da1331f（保留上述首次失败记录，不改历史）。
+在179b29c的新完整定向合同 **308 passed / 8.48s**，零失败/错误/跳过；
+全部unit **3179 passed / 5既有warnings / 146.11s**，零失败/错误/跳过。
+基线unit2871→3179，恰好增加308项；不是性能提升证据。
+全目录Ruff（含.github/actions）与git diff --check通过。
+生产/模型/工作流/依赖diff为空；四权威Markdown仅增加32行、零删除。
+新next-stage manifest SHA256：d93bf795a59cb0a168f0e96f4382d58efcbdc2833bc43e22ebde3254a09c1156；
+旧manifest与六patch字节不变，精确26路径和所有blob/隐藏index/HEAD竞态测试通过。
+最终文档提交后还要核对Git身份及同SHA CI，push只执行一次；CI结果见最终独立交付回执。
+Observer专项旧workflow的paths不匹配a4236增量时不强制dispatch、不修改触发条件；
+未触发必须写NOT_TRIGGERED，主CI完整pytest仍覆盖全部旧unit与新308项。
+
 ## 最终停止线
 
 G1_NOT_RUN_NOT_AUTHORIZED，实际PG17 fixture=NO、SQL=0；清理NOT_APPLICABLE_NO_FIXTURE。
