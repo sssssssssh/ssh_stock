@@ -1,5 +1,17 @@
 # A 股机会发现与趋势研究系统
 
+## A4235 PG17 能力准备（未运行真实探针）
+
+新增独立离线身份/最小权限、prepared、资源、环境、长窗及四 JSON 工件合同；不改生产或旧工具。
+静态 CLI `python -m scripts.a4235_capability_guard --check-static --target-sha <完整SHA>`
+只读 Git/文件且拒绝环境 DSN/代理、脏树、漂移；有效检查 exit2，不是运行许可。
+离线 `python -m scripts.a4235_capability_review --directory <新工件目录>` 有效也只 exit3，拒绝 exit1。
+live 探针/execute/approve/force/token/repeat/budget 均硬拒绝，不会连接数据库。
+G1 未批准、G2 待 A/B/C 裁决、G3 未授权；8 次旧协议不变，16/32 只是未批准固定候选。
+状态 BLOCKED_WITH_EVIDENCE / CAPABILITY_IMPLEMENTED_NOT_YET_PROVEN，不代表可测或性能通过。
+详见[能力矩阵](docs/acceptance/a4235_capability_matrix.md)、[交付状态](docs/acceptance/a4235_closeout.md)。
+旧 CI 已真实核对，但遗留 Reviewer 矛盾缺口未关闭，见[追加回执](docs/acceptance/a42342_final_review.md)。
+
 ## A42342 模拟证据与 Reviewer 安全整改
 
 仅补强 A42341 离线审阅：完整/未完成工件共同校验事件前缀、失败末点、Observer 终态和清理一致性。

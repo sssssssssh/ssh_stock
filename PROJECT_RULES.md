@@ -1,5 +1,15 @@
 # 项目开发规则
 
+## A4235 能力合同与三道独立人审
+
+基线 7681b57；只新增 a4235 离线合同/反例/文档，冻结全部旧工具、工作流、协议、Gate 和生产目录。
+新工件只可 STATIC_ONLY/MOCK_ONLY；匹配的模拟 fixture/grant 不能证明物理身份、签名或持久单次消费。
+G1=NOT_RUN_NOT_AUTHORIZED、G2=PENDING、G3=NOT_AUTHORIZED，分别判断，任何一个不自动提升另两个。
+旧8次不变，16/32均未批准，不动态升档、补采或 rerun；不读业务.env、不启动新PG/云/探针/128点。
+新CLI无0退出；新real骨架无完整workload方法，probe无条件拒绝。真实CPU不可得不填0，cached plan未验证。
+旧Reviewer STOP_TIMEOUT/joined矛盾仍开放，新合同另行严格拒绝，不回写旧证据或以CI绿灯抹去该缺口。
+当前BLOCKED_WITH_EVIDENCE，详情见docs/acceptance/a4235_closeout.md；交付后停等人审。
+
 ## A42342 未完成证据与模拟 CLI 不准入
 
 仅修 A42341 Reviewer 及现有单测，不改 mock.v1 模型、runner、冻结提案、旧协议和正式工作流。
