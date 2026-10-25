@@ -31,6 +31,17 @@ NEW_PATHS = frozenset((*SOURCES, *(f'tests/unit/test_a4235_{name}.py' for name i
     'docs/acceptance/a42342_final_review.md', *(f'docs/acceptance/a4235_{name}.md' for name in (
         'baseline_freeze', 'protocol_decision_packet', 'capability_matrix',
         'capability_limitations', 'observation_feasibility', 'closeout'))))
+PATCH_BASE = '55bd6328c3481f2b2ce767fcb843caaa8e0a2ad8'
+OVERLAY_MANIFEST = 'docs/acceptance/a42351_reviewer_overlay_manifest.json'
+OVERLAY_MANIFEST_SHA = '84cc6a5bf257773b8cd697c0335b592e3b847e954d6c4d1e1a959d8708f9d901'
+PATCH_PATHS = frozenset((
+    'scripts/a42341_calibration_review.py', 'tests/unit/test_a42341_runner_review.py',
+    'tests/unit/test_a4235_pg_identity.py', 'tests/unit/test_a4235_capability_review.py',
+    'scripts/a42351_g1_preflight_contract.py', 'tests/unit/test_a42351_g1_preflight.py'))
+STAGE_PATHS = PATCH_PATHS | frozenset((
+    'scripts/a4235_capability_guard.py', OVERLAY_MANIFEST,
+    *(f'docs/acceptance/a42351_{name}.md' for name in (
+        'baseline_and_red', 'g1_runbook_and_trust', 'capability_decision_matrix', 'closeout'))))
 
 
 def git(root: Path, *args: str) -> bytes:
@@ -48,13 +59,71 @@ def path_sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def overlay_fingerprint(root: Path = ROOT) -> str:
+    """Local byte/tree binding, NOT a human signature or a real-execution grant.
+
+    The manifest pins patch bytes; the guard pins its manifest bytes. HEAD is obtained
+    independently from Git (not embedded in a self-referential manifest). check_static
+    additionally binds it to a caller-supplied full target and origin/master.
+    """
+    head = git(root, 'rev-parse', 'HEAD').decode().strip()
+    require(re.fullmatch(r'[0-9a-f]{40}', head) is not None, 'A4235_FULL_SHA_REQUIRED')
+    require(not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
+    changed = set(git(root, 'diff', '--no-ext-diff', '--name-only', PATCH_BASE,
+                      '--', *PROTECTED).decode().splitlines())
+    require(changed == STAGE_PATHS, 'A4235_FROZEN_FILE_CHANGED')
+    require(path_sha(root / OVERLAY_MANIFEST) == OVERLAY_MANIFEST_SHA,
+            'A4235_OVERLAY_MANIFEST_INVALID')
+    try:
+        manifest = json.loads((root / OVERLAY_MANIFEST).read_bytes())
+        require(set(manifest) == {'schema_version', 'historical_baseline', 'patch_base',
+                                  'patch_sha256', 'stage_paths'}
+            and manifest['schema_version'] == 'a42351.reviewer-overlay.v1'
+            and manifest['historical_baseline'] == BASELINE
+            and manifest['patch_base'] == PATCH_BASE
+            and manifest['stage_paths'] == sorted(STAGE_PATHS)
+            and set(manifest['patch_sha256']) == PATCH_PATHS,
+            'A4235_OVERLAY_MANIFEST_INVALID')
+        for name in STAGE_PATHS:
+            current = path_sha(root / name)
+            committed = hashlib.sha256(git(root, 'show', f'{head}:{name}')).hexdigest()
+            require(current == committed, 'A4235_HEAD_BYTES_MISMATCH')
+            if name in PATCH_PATHS:
+                require(current == manifest['patch_sha256'][name], 'A4235_OVERLAY_BYTES_MISMATCH')
+        # Git status/diff can hide assume-unchanged files. Compare real protected bytes
+        # to the committed object IDs too; no index flag can waive this invariant.
+        for row in git(root, 'ls-tree', '-r', head, '--', *PROTECTED).splitlines():
+            metadata, name = row.split(b'\t', 1)
+            mode, kind, object_id = metadata.split()
+            require(mode in {b'100644', b'100755'} and kind == b'blob',
+                    'A4235_HEAD_BYTES_MISMATCH')
+            path = root / name.decode()
+            path_sha(path)  # Reject missing, symlink, oversized or traversing paths.
+            raw = path.read_bytes()
+            blob = b'blob ' + str(len(raw)).encode() + b'\0' + raw
+            require(hashlib.sha1(blob).hexdigest().encode() == object_id,
+                    'A4235_HEAD_BYTES_MISMATCH')
+        require(head == git(root, 'rev-parse', 'HEAD').decode().strip()
+            and not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
+        return digest(dict(head_sha=head, manifest_sha256=OVERLAY_MANIFEST_SHA,
+                           patch_sha256=manifest['patch_sha256']))
+    except Fault:
+        raise
+    except Exception:
+        raise Fault('A4235_OVERLAY_MANIFEST_INVALID') from None
+
+
 def frozen_files(root: Path = ROOT) -> str:
     entries = git(root, 'ls-tree', '-r', BASELINE, '--', *PROTECTED)
     originals = {row.split(b'\t', 1)[1].decode() for row in entries.splitlines()}
     changed = set(git(root, 'diff', '--no-ext-diff', '--name-only', BASELINE,
                       '--', *PROTECTED).decode().splitlines())
-    require(not originals.intersection(changed) and changed <= NEW_PATHS,
+    legacy_patch = {'scripts/a42341_calibration_review.py',
+                    'tests/unit/test_a42341_runner_review.py'}
+    require(originals.intersection(changed) == legacy_patch
+        and changed <= NEW_PATHS | STAGE_PATHS,
             'A4235_FROZEN_FILE_CHANGED')
+    overlay_fingerprint(root)
     require(path_sha(root / PACKET) == PACKET_SHA, 'A4235_PROTOCOL_CHANGED')
     return hashlib.sha256(entries).hexdigest()
 
@@ -63,7 +132,9 @@ def expected_identity(root: Path = ROOT, *, run_id: str = 'local', attempt: int 
     """Independent Git/files + caller CI context; never accepts bundle's own expected object."""
     return Identity(head_sha=git(root, 'rev-parse', 'HEAD').decode().strip(),
                     run_id=run_id, attempt=attempt,
-                    source_sha256=digest({name: path_sha(root / name) for name in SOURCES}),
+                    source_sha256=digest(dict(
+                        sources={name: path_sha(root / name) for name in SOURCES},
+                        overlay_sha256=overlay_fingerprint(root))),
                     protocol_sha256=path_sha(root / PACKET), frozen_sha256=frozen_files(root))
 
 

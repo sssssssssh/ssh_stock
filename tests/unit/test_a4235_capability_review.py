@@ -227,7 +227,8 @@ def test_AT05_frozen_path_change_is_rejected_without_touching_original(monkeypat
     original_git = guard.git
     def fake_git(root, *args):
         if args[0] == 'diff':
-            return b'scripts/a42341_calibration_review.py\n'
+            # Reviewer is now an exact-byte overlay, not an arbitrary path exemption.
+            return b'scripts/a42341_calibration_review.py\nscripts/a42341_contract.py\n'
         return original_git(root, *args)
     monkeypatch.setattr(guard, 'git', fake_git)
     with pytest.raises(Fault, match='FROZEN_FILE_CHANGED'):

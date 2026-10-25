@@ -1,5 +1,6 @@
 """AT01-10, 26-28: independent simulated identities never grant live execution."""
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -172,6 +173,71 @@ def test_AT05_static_success_only_static(monkeypatch, identity):
     assert value['scope'] == value['evidence_kind'] == 'STATIC_ONLY'
     assert value['capability_probe_status'] == 'NOT_RUN_NOT_AUTHORIZED'
     assert value['execution_enabled'] is value['performance_eligible'] is False
+
+
+def test_a42351_AT16_actual_overlay_binds_new_source_without_redefining_history():
+    value = guard.expected_identity()
+    assert value.frozen_sha256 == 'b7aecb955fb32bf285ae71ff3bdf6cfdc6aa15828e70bb46c507d31bfc1418e9'
+    assert value.source_sha256 != '694f946eda5f239c74dbbf21ee638428989ad90e807ce6be10c479251253640e'
+    assert len(guard.overlay_fingerprint()) == 64
+    assert guard.PATCH_BASE == '55bd6328c3481f2b2ce767fcb843caaa8e0a2ad8'
+
+
+@pytest.mark.parametrize('name', ['scripts/a42341_contract.py', 'backend/app/new.py',
+    '.github/workflows/ci.yml', 'scripts/a4235_prepared_probe.py',
+    'docs/acceptance/a4235_baseline_freeze.md', 'tests/unit/extra_old_test.py'])
+def test_a42351_AT17_additional_protected_path_fails(monkeypatch, name):
+    original = guard.git
+    def fake(root, *args):
+        if args[0] == 'diff':
+            return original(root, *args) + name.encode() + b'\n'
+        return original(root, *args)
+    monkeypatch.setattr(guard, 'git', fake)
+    with pytest.raises(Fault, match='FROZEN_FILE_CHANGED'):
+        guard.frozen_files()
+
+
+@pytest.mark.parametrize('change', ['patch', 'manifest', 'missing', 'head-blob',
+                                  'short-head', 'dirty', 'path-set'])
+def test_a42351_AT18_AT19_overlay_requires_exact_bytes_and_committed_tree(monkeypatch, change):
+    original_git, original_sha = guard.git, guard.path_sha
+    def fake_git(root, *args):
+        if change == 'head-blob' and args[0] == 'show':
+            return b'changed-committed-bytes'
+        if change == 'short-head' and args[:2] == ('rev-parse', 'HEAD'):
+            return b'abc'
+        if change == 'dirty' and args[0] == 'status':
+            return b' M tracked'
+        if change == 'path-set' and args[0] == 'diff':
+            return b''
+        return original_git(root, *args)
+    def fake_sha(path):
+        if change == 'patch' and str(path).endswith('a42341_calibration_review.py'):
+            return 'f' * 64
+        if str(path).endswith(guard.OVERLAY_MANIFEST):
+            if change == 'manifest':
+                return 'f' * 64
+            if change == 'missing':
+                raise Fault('A4235_FILE_INVALID')
+        return original_sha(path)
+    monkeypatch.setattr(guard, 'git', fake_git)
+    monkeypatch.setattr(guard, 'path_sha', fake_sha)
+    with pytest.raises(Fault, match='^A4235_'):
+        guard.overlay_fingerprint()
+
+
+def test_a42351_AT19_committed_patch_hash_not_just_git_clean(monkeypatch):
+    original = guard.path_sha
+    replacement_sha = hashlib.sha256(b'unapproved-patch').hexdigest()
+    monkeypatch.setattr(guard, 'path_sha', lambda path: replacement_sha
+                        if str(path).endswith('a42341_calibration_review.py') else original(path))
+    original_git = guard.git
+    monkeypatch.setattr(guard, 'git', lambda root, *args: b'unapproved-patch'
+                        if args[0] == 'show' and args[1].endswith('a42341_calibration_review.py')
+                        else original_git(root, *args))
+    # Both independent Git-byte and manifest-byte constraints are checked.
+    with pytest.raises(Fault, match='OVERLAY_BYTES_MISMATCH'):
+        guard.frozen_files()
 
 
 @pytest.mark.parametrize('args', [['--probe-synthetic'], ['--execute'], ['--approve'],

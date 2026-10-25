@@ -172,6 +172,23 @@ def test_a42351_AT11_first_error_sticky_and_cleanup_order(good, code):
     assert result['failed_point']['partial_sample'] is None
 
 
+def test_a42351_AT14_AT15_old_identity_schema_is_not_silently_upgraded(good):
+    from scripts.a42341_calibration_runner import Bundle
+
+    expected, original = good
+    value = copy.deepcopy(original)
+    # Schema-compatibility projection, NOT a rewritten historical artifact.
+    value['identity']['head_sha'] = '55bd6328c3481f2b2ce767fcb843caaa8e0a2ad8'
+    value['identity']['source_sha256'] = (
+        '3edf9ad70bb8a0f20a3afa3078a00e5fe0fe72969a4c97aac772da12c203bdc9')
+    parsed = Bundle.model_validate(value)
+    assert parsed.identity.head_sha == value['identity']['head_sha']
+    assert parsed.content_sha256 == value['content_sha256']  # No reseal by parser.
+    with pytest.raises(c.Fault, match='^A42341_PROTOCOL_OR_SOURCE_CHANGED$'):
+        off.review(parsed.model_dump(), parsed.identity)
+    assert original['identity'] == expected.model_dump()
+
+
 def test_AT02_AT18_full_mock_roundtrip_never_authorizes_or_proves_real_prepare(good, tmp_path):
     expected, data = good
     result = off.review(data, expected)

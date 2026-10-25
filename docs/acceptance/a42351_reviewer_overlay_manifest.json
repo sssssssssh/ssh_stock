@@ -1,0 +1,27 @@
+{
+  "schema_version": "a42351.reviewer-overlay.v1",
+  "historical_baseline": "7681b57b68aa2f402e1bac2dc59ade606700f759",
+  "patch_base": "55bd6328c3481f2b2ce767fcb843caaa8e0a2ad8",
+  "patch_sha256": {
+    "scripts/a42341_calibration_review.py": "c659810643c789fcd5fe87d9627a6a1356b737f9552ce386596bddb7939fec08",
+    "tests/unit/test_a42341_runner_review.py": "12014a648dd031a9afebfdc5aa683cc1b48f4ce5991a60d0e08e7e5956ae740b",
+    "tests/unit/test_a4235_pg_identity.py": "5ec0e026684424797cbcfeb59384b5c2697caa3039b02d3d3d66be1d81022e29",
+    "tests/unit/test_a4235_capability_review.py": "206d80cc37a6319b078ea5a767a5103bc5ae8a1e6fa4279836ab86689be8cf72",
+    "scripts/a42351_g1_preflight_contract.py": "e3fa459833a058bb16678d161bc8627fae23602bd580cf633437deed90c041d0",
+    "tests/unit/test_a42351_g1_preflight.py": "e90e06a715b05bbe25bd5ea31875a5f8432aa9c7ee13cd6bb69f5afc01743fdf"
+  },
+  "stage_paths": [
+    "docs/acceptance/a42351_baseline_and_red.md",
+    "docs/acceptance/a42351_capability_decision_matrix.md",
+    "docs/acceptance/a42351_closeout.md",
+    "docs/acceptance/a42351_g1_runbook_and_trust.md",
+    "docs/acceptance/a42351_reviewer_overlay_manifest.json",
+    "scripts/a42341_calibration_review.py",
+    "scripts/a42351_g1_preflight_contract.py",
+    "scripts/a4235_capability_guard.py",
+    "tests/unit/test_a42341_runner_review.py",
+    "tests/unit/test_a42351_g1_preflight.py",
+    "tests/unit/test_a4235_capability_review.py",
+    "tests/unit/test_a4235_pg_identity.py"
+  ]
+}

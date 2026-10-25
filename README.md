@@ -1,5 +1,15 @@
 # A 股机会发现与趋势研究系统
 
+## A42351 Reviewer 整改与 G1 前置审查
+
+本轮新增失败证据终态独立校验及精确字节冻结叠层，原先已记录的 joined/STOP_TIMEOUT 漏检
+用先 RED 后 GREEN 回归关闭；历史 A4235 报告保留其当时事实，不回写为已修复。
+A4235 静态身份新增绑定 Reviewer/叠层与当前完整 HEAD，历史 frozen_sha256 含义不变；
+有效静态检查仍 exit2，不是人工签名或运行许可。工作区/源字节/目标与 origin/master 必须一致。
+G1 仅新增离线设计合同和[前置清单](docs/acceptance/a42351_g1_runbook_and_trust.md)，实机 NOT_RUN_NOT_AUTHORIZED；
+16 条拟议短 SQL 不等于 16 次预热，本轮真实 SQL 为 0。G2=PENDING/有效8次，G3=NOT_AUTHORIZED。
+所有真实入口继续硬拒绝，生产与工作流不变。实际验证及未关闭项见[交付](docs/acceptance/a42351_closeout.md)。
+
 ## A4235 PG17 能力准备（未运行真实探针）
 
 新增独立离线身份/最小权限、prepared、资源、环境、长窗及四 JSON 工件合同；不改生产或旧工具。
