@@ -27,6 +27,20 @@ def changed(good):
     return good[0], copy.deepcopy(good[1])
 
 
+def test_a42351_AT02_observer_invalid_cannot_mask_false_join_and_cleanup(good):
+    expected = good[0]
+    value = simulate(expected, observer=MockObserver(
+        fail_at=1, failure_code='A42341_OBSERVER_INVALID'))
+    partial = value['failed_point']['partial_sample']
+    partial['observation']['joined'] = True
+    partial['cleanup_complete'] = True
+    value['cleanup_complete'] = True
+    value['cleanup_failure_codes'] = []
+    # A safe rejection decision is NOT enough: contradictory evidence is invalid input.
+    with pytest.raises(c.Fault, match='^A42341_FAILED_POINT_INVALID$'):
+        off.review(c.seal(value), expected)
+
+
 def test_AT02_AT18_full_mock_roundtrip_never_authorizes_or_proves_real_prepare(good, tmp_path):
     expected, data = good
     result = off.review(data, expected)
