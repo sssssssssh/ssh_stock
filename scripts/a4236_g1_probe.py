@@ -82,6 +82,7 @@ class SqlBudget:
     stopped: bool = False
 
     def reserve(self):
+        self.budget = checked(Budget, self.budget)
         require(type(self.clock) is FakeClock, "A4236_REAL_CLOCK_NOT_ALLOWED")
         require(type(self.clock.ns) is int and self.clock.ns > 0, "A4236_CLOCK_INVALID")
         require(not self.stopped, "A4236_PROBE_ALREADY_STOPPED")
@@ -133,7 +134,9 @@ class FakeConnection:
         try:
             value = validate_request(value, harness_allowlist)
             require(
-                self.read_only and 0 < self.statement_timeout_ms <= 100,
+                self.read_only is True
+                and type(self.statement_timeout_ms) is int
+                and 0 < self.statement_timeout_ms <= 100,
                 "A4236_SERVER_TIMEOUT_UNPROVEN",
             )
             budget.reserve()
@@ -154,6 +157,8 @@ class FakeConnection:
                 and type(reply.wall_ms) is int
                 and type(reply.overhead_ms) is int
                 and type(reply.rows) is int
+                and type(reply.server_timeout_ms) is int
+                and type(reply.terminable) is bool
                 and reply.wall_ms >= 0
                 and reply.overhead_ms >= 0
                 and reply.rows >= 0

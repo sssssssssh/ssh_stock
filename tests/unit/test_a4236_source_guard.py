@@ -56,7 +56,7 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
 
 
 def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
-    changed = set(g.git(ROOT, "diff", "--name-only", g.NEXT_BASE).decode().splitlines())
+    changed = set(g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE).decode().split("\0")) - {""}
     authority = {
         "README.md",
         "PROJECT_RULES.md",

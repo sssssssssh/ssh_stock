@@ -40,6 +40,8 @@ def test_AT09_AT14_mock_chain_positive_never_becomes_physical():
     assert validate_creation(m.fixture(), *receipts)["physical_status"] == "PHYSICAL_NOT_PROVEN"
     assert validate_cleanup(m.fixture(), harness.destroy(m.fixture()))["mock_destroyed"] is True
     assert not harness.created
+    with pytest.raises(Fault, match="FIXTURE_REUSE"):
+        harness.create(consumed)  # Destroying a model resource never reopens its grant.
 
 
 @pytest.mark.parametrize(

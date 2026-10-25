@@ -41,6 +41,11 @@ Baseline：af08f8724e988121402988b4e8fb70c8ef5b53f2；保持master。
 这是开发脚手架的缺失校验，不是八个历史生产漏洞。RED commit在实现前冻结，最终一起推送。
 后续实际结果由下方本地验收记录及最终交付回执给出，不能沿用基线3698计数。
 
+首次提交后实际新测试305 passed/1 failed（9.04s），unit3176 passed/1 failed（151.76s、5条既有warning）。
+同一失败是新白名单测试把Git的中文quotePath转义当文件名；修复为NUL分隔读取，未减少26路径集合。
+复核同时增加预算对象篡改和generic→custom反向模式漂移回归，并禁止已销毁Fake fixture复用。
+不涉及性能采样，不通过重复试验筛选结果。修复后须重新执行完整验证，前述失败记录保留。
+
 本地只使用虚拟环境Python、禁用Settings.env_file、synthetic disabled loopback URL/端口1及既有
 `scripts.a42331_pytest_safety`插件。模板命令：
 

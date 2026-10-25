@@ -66,6 +66,15 @@ def test_AT17_seventeenth_refuses_before_execute_and_budget_never_refunds():
     assert len(conn.calls) == 16
 
 
+def test_AT17_injected_budget_cannot_raise_limit_or_approve_execution():
+    conn = FakeConnection(FakeClock())
+    budget = SqlBudget(conn.clock)
+    budget.budget = budget.budget.model_copy(update={"max_sql": 17, "approved": True})
+    with pytest.raises(Fault, match="SCHEMA_INVALID"):
+        conn.execute(request("I4"), budget)
+    assert not conn.calls and budget.stopped and budget.count == 0
+
+
 @pytest.mark.parametrize(
     "reply",
     [
@@ -241,6 +250,22 @@ def test_AT20_projection_names_are_hashed_no_statement_text_or_parameters():
     assert len(rows[0].identifier_sha256) == 64
     assert "PRIVATE_PREPARED_NAME" not in str(rows)
     assert "statement" not in type(rows[0]).model_fields
+
+
+def test_AT22_reverse_generic_to_custom_mode_switch_is_drift_too():
+    session, _, first = m.prepared()
+    first = first.model_copy(
+        update={"row": first.row.model_copy(update={"generic_plans": 1, "custom_plans": 0})}
+    )
+    later = first.model_copy(
+        update={
+            "observed_ns": 3000,
+            "driver_executions": 7,
+            "row": first.row.model_copy(update={"custom_plans": 1}),
+        }
+    )
+    with pytest.raises(Fault, match="PLAN_MODE_DRIFT"):
+        compare(first, later, session, "I4")
 
 
 @pytest.mark.parametrize(

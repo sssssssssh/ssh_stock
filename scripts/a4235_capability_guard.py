@@ -44,7 +44,7 @@ STAGE_PATHS = PATCH_PATHS | frozenset((
         'baseline_and_red', 'g1_runbook_and_trust', 'capability_decision_matrix', 'closeout'))))
 NEXT_BASE = 'af08f8724e988121402988b4e8fb70c8ef5b53f2'
 NEXT_MANIFEST = 'docs/acceptance/a4236_overlay_manifest.json'
-NEXT_MANIFEST_SHA = 'cf5cd4ac8838e0bb2e6e4b5d60916b8a44ed28352083e06043743aaaa74ff1b7'
+NEXT_MANIFEST_SHA = 'd93bf795a59cb0a168f0e96f4382d58efcbdc2833bc43e22ebde3254a09c1156'
 NEXT_SOURCES = tuple(f'scripts/a4236_{name}.py' for name in (
     'g1_harness_contract', 'grant_verifier', 'g1_probe', 'session_prepared',
     'resource_probe', 'observer_feasibility', 'evidence', 'cli', 'mock'))

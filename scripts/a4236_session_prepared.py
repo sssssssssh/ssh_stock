@@ -94,7 +94,8 @@ def compare(before, after, expected_session, template):
         )
         require(
             not (b.generic_plans > a.generic_plans and b.custom_plans > a.custom_plans)
-            and not (a.generic_plans == 0 < b.generic_plans and a.custom_plans > 0),
+            and not (a.generic_plans == 0 < b.generic_plans and a.custom_plans > 0)
+            and not (a.custom_plans == 0 < b.custom_plans and a.generic_plans > 0),
             "A4236_PLAN_MODE_DRIFT",
         )
     return dict(
