@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import os
 import re
+import stat
+from pathlib import PurePosixPath
 
 from scripts.a42361_contract import BASELINE
 
@@ -86,6 +89,114 @@ def validate_paths(actual):
     require(set(actual) == STAGE_PATHS, "A4235_FROZEN_FILE_CHANGED")
 
 
+def verify_full_worktree(g, root, head):
+    """Independent full HEAD tree walk; never trusts index flags or status alone.
+
+    Does not change PROTECTED or its historical tree digest. NUL records preserve
+    Unicode/newlines; held no-follow directory/file FDs bind reads across rename races.
+    Only tracked HEAD blobs are read; ignored .env and runtime files are not traversed.
+    """
+    from scripts.a4235_calibration_adapter_contract import Fault
+
+    def integrity_meta(value):
+        # A normal read can advance atime; it is not a content/ownership change.
+        return tuple(
+            getattr(value, key)
+            for key in (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_nlink",
+                "st_uid",
+                "st_gid",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+        )
+
+    root_fd = None
+    try:
+        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        root_meta = os.fstat(root_fd)
+        rows = g.git(root, "ls-tree", "-r", "-z", head)
+        g.require(rows.endswith(b"\0"), "A4235_HEAD_BYTES_MISMATCH")
+        seen = set()
+        for row in rows[:-1].split(b"\0"):
+            metadata, name = row.split(b"\t", 1)
+            mode, kind, oid = metadata.split()
+            relative = PurePosixPath(name.decode("utf-8", "strict"))
+            g.require(
+                mode in (b"100644", b"100755")
+                and kind == b"blob"
+                and re.fullmatch(b"[0-9a-f]{40}", oid) is not None
+                and not relative.is_absolute()
+                and relative.parts
+                and not {"..", ".git"}.intersection(relative.parts)
+                and str(relative).encode() == name
+                and name not in seen,
+                "A4235_HEAD_BYTES_MISMATCH",
+            )
+            seen.add(name)
+            parent = os.dup(root_fd)
+            descriptor = None
+            try:
+                for part in relative.parts[:-1]:
+                    next_fd = os.open(
+                        part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent
+                    )
+                    os.close(parent)
+                    parent = next_fd
+                descriptor = os.open(
+                    relative.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent
+                )
+                before = os.fstat(descriptor)
+                g.require(
+                    stat.S_ISREG(before.st_mode)
+                    and before.st_nlink == 1
+                    and before.st_size <= 16_000_000
+                    and bool(before.st_mode & stat.S_IXUSR) == (mode == b"100755"),
+                    "A4235_HEAD_BYTES_MISMATCH",
+                )
+                raw = bytearray()
+                while True:
+                    chunk = os.read(descriptor, min(65536, 16_000_001 - len(raw)))
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
+                    g.require(len(raw) <= 16_000_000, "A4235_HEAD_BYTES_MISMATCH")
+                g.require(
+                    len(raw) == before.st_size
+                    and integrity_meta(os.fstat(descriptor)) == integrity_meta(before)
+                    and integrity_meta(os.stat(relative.name, dir_fd=parent, follow_symlinks=False))
+                    == integrity_meta(before),
+                    "A4235_HEAD_BYTES_MISMATCH",
+                )
+                git_blob = b"blob " + str(len(raw)).encode() + b"\0" + raw
+                g.require(
+                    hashlib.sha1(git_blob).hexdigest().encode() == oid
+                    and g.path_sha(root.joinpath(*relative.parts))
+                    == hashlib.sha256(raw).hexdigest(),
+                    "A4235_HEAD_BYTES_MISMATCH",
+                )
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+                os.close(parent)
+        g.require(
+            integrity_meta(os.fstat(root_fd)) == integrity_meta(root_meta)
+            and integrity_meta(root.stat()) == integrity_meta(root_meta),
+            "A4235_HEAD_BYTES_MISMATCH",
+        )
+    except Fault:
+        raise
+    except Exception:
+        raise Fault("A4235_HEAD_BYTES_MISMATCH") from None
+    finally:
+        if root_fd is not None:
+            os.close(root_fd)
+
+
 def validate(g, root, head):
     """Uses guard's independent git/path readers, so legacy tamper tests still apply."""
     require = g.require
@@ -151,6 +262,7 @@ def validate(g, root, head):
             == oid,
             "A4235_HEAD_BYTES_MISMATCH",
         )
+    verify_full_worktree(g, root, head)
     require(
         head == g.git(root, "rev-parse", "HEAD").decode().strip()
         and not g.git(root, "status", "--porcelain").strip(),

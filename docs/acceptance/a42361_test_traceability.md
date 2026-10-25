@@ -7,7 +7,7 @@
 |---|---|---|
 |01|test_a42361_source_entrypoints actual_source_freeze；旧source_guard identity|PURE_UNIT，clean/完整SHA/历史树；最终远端另核|
 |02|actual_source_freeze；旧308原函数AST/14blob/manifests|PURE_UNIT，不回填旧记录|
-|03|new_layer_content、no_prefix、symlink；旧manifest/HEAD/index竞态8负例|PURE_UNIT，精确39路径与真实bytes|
+|03|new_layer_content、no_prefix、symlink；旧manifest/HEAD/index竞态8负例；追加root/full_tree21项|PURE_UNIT，精确39路径+全部HEAD tracked真实bytes、mode及FD竞态|
 |04|actual_source_freeze git diff业务/工作流/依赖为空|PURE_UNIT|
 |05|test_a42361_trust real_RFC8032_test2_nonempty_vector|CRYPTO_VECTOR，本机OpenSSL真实验签|
 |06|real_crypto_tamper、strict_encoding、closed_schema|CRYPTO_VECTOR+PURE_UNIT，无回退|
@@ -49,3 +49,7 @@
 原始RED：四实现方法缺失4 failed/0.06s。后续真实修复过程曾发现 synthetic run_id不合法、wire JSON tuple
 严格转换、配置正例误用TEST_ONLY、driver模型上下文等测试失败；据实际根因改码/夹具，不降低断言。
 受信存储/PG17/OS物理集成不是pytest skip/xfail，明确不属于此次运行集合，统一NOT_RUN待独立授权。
+
+追加AT03在首次推送后获明确授权。12项负例先12 failed、正常正例1 passed；不更改真实用户index flags，
+以临时目录真实文件和独立Git协议夹具保持diff/status干净。修复后21 passed/0.36s；后续全unit/新SHA CI另核。
+首次CI4151/0skip仅绑定6b29f5d；新测试总数由新JUnit计数，不以旧绿灯填补新SHA。

@@ -75,3 +75,14 @@ HARNESS_NOT_CONFIGURED、G1_NOT_RUN_NOT_AUTHORIZED，未创建/连接任何资�
 命令使用既有安全pytest插件、禁用Settings.env_file和synthetic端口1 URL；没有改日志插件。
 断言只证明可部署代码曾缺失，不是四次物理运行失败，也不把方法存在当完成标准；
 后续须保留四断言并以RFC密码学、事务/执行器故障合同和全量回归验证实现。
+
+## 用户追加授权：只补全树隐藏索引防护
+
+初次推送6b29f5d619f41b9e5e88a90f9fb89c3b6def99b7后，只读复核发现旧保护树/infra/登记路径以外的9个根文件
+仍依赖diff/status。用户明确允许追加一次精确修复和推送，并重新核验新SHA CI；不是G1授权。
+范围仅新a42361 guard、新测试/文档和对应manifest/旧guard唯一digest literal；不增加路径，不改旧test其余内容。
+在临时目录使用真实文件及独立Git协议fixture复现：9根文件内容+symlink/缺失/mode共12 failed，正常正例1 passed。
+未操作用户真实index flags；没有读取忽略的业务.env。新walk覆盖全部HEAD tracked blobs，以NUL读取路径、
+独立blob ID、实际文件模式和no-follow FD前后metadata验证，不改变旧PROTECTED/历史frozen digest。
+新增21项包括12拒绝、正常中文/换行路径、3项读期间write/replace/symlink竞态、5项路径转义负例；
+修复后21 passed/0.36s。旧服务端/部署/物理证明缺口不因此关闭，仍PARTIAL/BLOCKED。
