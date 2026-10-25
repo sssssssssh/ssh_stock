@@ -70,3 +70,9 @@ worker以lease v2/session v2替代预连接backend_start预测；实际run_owned
 **仍PARTIAL_OFFLINE_TESTED/BLOCKED，不是整任务完成。** B死锁/新连接身份和worker预测session的源码缺口已补；
 独立审批写入、owner初始化与会话GUC原始证明、E审计、partial-create安全回收、runtime/socket映射与完整独立
 launcher/fsync监督仍需审定实现。未扩大任何预算/权限，不以Mock计数替代工程闭环，不连接PG/云/业务.env。
+
+本轮实现提交0e819612cbcb9556354878268cb5556e86f032b6后，本地完整unit实际**3424 passed / 5 warnings /
+249.16s**，JUnit核验0 failure/error/skip。新A42361=245项（原166+79），旧308/279/238/85保持。
+全范围Ruff、git diff --check通过，业务/工作流/依赖/旧测试差异为空；两旧manifest摘要逐字节不变。
+后续只冻结本段验收事实与对应摘要，并对最终提交再运行目标/旧冻结回归，然后执行本轮唯一一次push。
+新SHA的既有CI与工件仍待推送后逐级核验，不预填PASS；专用控制DDL/新PG/G1/物理kill均NOT_RUN。

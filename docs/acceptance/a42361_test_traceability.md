@@ -68,3 +68,7 @@ lease/session字段漂移/预测backend_start/过期/错误PID与实际run_owned
 随后增加ControlService完整回执字段（run/attempt/payload/instance等）漂移拒绝和journal名称必须绑定已消费的
 签名fixture UUID；消费表新源码持久化唯一fixture_uuid，预约CAS同时匹配派生名称，不能以合法前缀预约别的fixture。
 补充相关测试后134 passed/0.29s；专用控制schema仍未执行，不是PG17集成PASS，更不修改股票迁移。
+
+实现冻结提交0e819612cbcb9556354878268cb5556e86f032b6的全量unit：3424 passed/5 warnings/249.16s，
+0 fail/error/skip；新245、旧A4236=308/A42341=279/A4235=238/A42351=85。RED原始XML、各阶段目标XML、
+完整unit XML均单独保留，不覆盖首次失败。全Ruff/diff通过；最终文档冻结后目标回归及新SHA CI另核。
