@@ -12,18 +12,19 @@ at start. User explicitly authorized staged commits and one final push. No branc
 switch, history rewrite, real probe, new PG/container, /proc or manual dispatch.
 
 - W00: baseline CI freshly rechecked, pure-memory exploit reproduced. RED commit
-  `448a9ac` (full SHA available in Git); 1 failed/133 deselected, exit1. Details in
+  `448a9acfc1512d13c53ae667fcc7ecb8fe5156ca`; 1 failed/133 deselected, exit1. Details in
   [baseline and RED](a42351_baseline_and_red.md).
 - W01: independent ON joined/unjoined and OFF authenticity checks, unchanged raw
   partial validation and cleanup cross-checks. Initial repair commit `a1e472c`;
-  initial 170-case Reviewer regression passed (25.36s), including RED→GREEN.
+  `a1e472cabcf2d4dbcc560482736eb2c5ad6964e9`; initial 170-case Reviewer regression
+  passed (25.36s), including RED→GREEN.
 - W02: exact source/test overlay and independent HEAD/blob/working-byte binding;
-  actual committed-tree and complete unit verification PENDING at drafting.
+  actual committed-tree and complete unit verification PASS locally (details below).
 - W03/W04: pure design guard, [trust runbook](a42351_g1_runbook_and_trust.md),
   [decision matrix](a42351_capability_decision_matrix.md); initial offline design
   run 85 passed (0.73s). No physical evidence claimed.
-- W05: final targeted/full unit, Ruff, diff checks and same-SHA ordinary CI PENDING
-  at drafting. Existing workflows are unchanged; no expensive capacity run requested.
+- W05: targeted/full unit, Ruff and diff checks PASS locally; final-SHA ordinary CI
+  PENDING before push. Existing workflows unchanged; no capacity run requested.
 
 ### Local execution update before final push
 
@@ -31,8 +32,31 @@ At `fa55e4ee78c6433b17983afedd4b6400e4aa4e07`, the combined seven-file target
 returned **600 passed in 77.00s**, zero failures/skips: A42341 279 (old241 +38),
 A4235 236 (old221 +15), new G1 design85. A42341+design separately:364 passed40.98s.
 Actual frozen tree and new independent overlay/source fingerprint construction passed
-on that clean committed tree. Additional index-hidden byte/HEAD-race regressions are
-added next; the final full unit run must include them. No real probes were used.
+on that clean committed tree. Additional index-hidden byte/HEAD-race regressions were
+then committed in `8c6d859ea823c92659633e106de298d9d9b80714`.
+
+At that latter SHA, **all unit tests: 2871 passed, 5 existing warnings in 114.33s**,
+zero failures/errors/skips. All 602 target cases were included (A42341 279, A4235 238,
+G1 design85), as well as all old A4233/A4234 unit regressions. Ruff over backend/tests/
+migrations/scripts/.github/actions and git diff --check passed. The safety pytest
+plugin was retained; .env loading was disabled before pytest import, with only an
+unreachable synthetic loopback test URL. No local PostgreSQL/container was created or
+connected. Existing isolated PG17 integration, migration, frontend and browser
+verification is deliberately left to the unchanged ordinary push CI, not run locally.
+
+Exact changed path set: 16, matching declared scope. Business/workflow/dependency
+diffs are empty. All four historical authority document bodies remain verbatim;
+numstat has 11/10/7/11 additions and **zero deletions** respectively.
+Two initial read-only scope-audit assertions were overly strict (quoted Unicode Git
+paths, then inserted-section contiguity); corrected unquoted exact-set/body-preservation
+checks passed. No source was altered to accommodate those audit assertions.
+
+Manifest SHA256: `ea795278e3fb84e4eebabeba737d23a92a4a0c42e6402cc828bf3801d3c9f648`.
+At 8c6d859, independently calculated overlay SHA256:
+`5192b1a422dffb31d7d9464c7bfbd38cb3567937762e6196f11a0e28b7fdf5f4`;
+source SHA256 `cd30c8c235668911997c848a8fff678401b0c577a61ca6e44c5bbcacea2415b1`.
+These fingerprints bind **that SHA**, not the later final documentation commit.
+Final fingerprints must be read again at the actual final HEAD. No real probes used.
 
 ## Exact changed-file inventory
 
@@ -55,9 +79,9 @@ Numbers refer to this taskbook, not older AT numbering. Tests are in runner_revi
 pg_identity, capability_review and new g1_preflight files. No old test is deleted,
 skipped or weakened. Explicit final execution evidence is recorded below after run.
 
-| AT | Executable coverage | Draft status |
+| AT | Executable coverage | Actual local status (CI separately pending) |
 |---|---|---|
-| 01 | baseline/old receipt byte equality, production/workflow boundary, pure imports | PENDING final run |
+| 01 | baseline/old receipt byte equality, production/workflow boundary, pure imports | PASS |
 | 02 | original OBSERVER_INVALID false join/cleanup asserts fixed Fault | RED observed; GREEN in initial 170 |
 | 03–06 | joined end/lifecycle/state/CPU/elapsed/tick/bracket contradictions | GREEN in initial 170 |
 | 07–08 | unjoined end/CPU/elapsed/local/top cleanup/partial prefix | GREEN in initial 170 |
@@ -66,20 +90,20 @@ skipped or weakened. Explicit final execution evidence is recorded below after r
 | 11 | SQL_TIMEOUT/CANCELLED/SIGNAL sticky first error with cleanup | GREEN in initial 170 |
 | 12 | original 128-point cleanup-only failure without failed_point | GREEN in initial 170 |
 | 13 | unchanged 128/64, slow/negative and Decimal-inclusive cases | GREEN in initial 170 |
-| 14–15 | fixed redacted schema/source faults; old identity parsed, never upgraded/resealed | PENDING final run |
-| 16 | actual clean overlay/new source fingerprint/historical frozen SHA separation | PENDING committed run |
-| 17 | extra old source/production/workflow/protocol/test rejects | PENDING committed run |
-| 18 | manifest/hash/path-set/byte drift rejects | PENDING committed run |
-| 19 | full HEAD, dirty tree, blob mismatch, independent remote/target checks | PENDING committed run |
-| 20 | READY/true flags/unknown fields rejected | 85 design cases GREEN; old cases pending |
-| 21 | nonce/expiry/replay/profile/allowlist/budget non-authority | 85 design cases GREEN; old cases pending |
+| 14–15 | fixed redacted schema/source faults; old identity parsed, never upgraded/resealed | PASS |
+| 16 | actual clean overlay/new source fingerprint/historical frozen SHA separation | PASS |
+| 17 | extra old source/production/workflow/protocol/test rejects | PASS |
+| 18 | manifest/hash/path-set/byte drift rejects | PASS |
+| 19 | full HEAD, dirty tree, blob mismatch, independent remote/target checks | PASS |
+| 20 | READY/true flags/unknown fields rejected | PASS |
+| 21 | nonce/expiry/replay/profile/allowlist/budget non-authority | PASS |
 | 22 | nonlocal/existing/possibly business endpoint and excess-role rejection | GREEN in 85 |
 | 23 | no physical/cleanup proof; all seven capabilities NOT_RUN/NOT_PROVEN | GREEN in 85 |
 | 24 | C0/C1/cache/zero-filled CPU/cleanup self-upgrade rejects | GREEN in 85 |
 | 25 | model-only full bracket and missing/timing/budget failure | GREEN in 85 |
-| 26 | hard-denying CLI/event/env; old real adapter remains denied | GREEN in 85; old cases pending |
-| 27 | final targeted/full unit/Ruff and existing CI PG17/migration/browser | PENDING |
-| 28 | independent exact SHA/run/attempt/source tests and final CI audit | PENDING |
+| 26 | hard-denying CLI/event/env; old real adapter remains denied | PASS |
+| 27 | final targeted/full unit/Ruff and existing CI PG17/migration/browser | Local PASS; final CI PENDING |
+| 28 | independent exact SHA/run/attempt/source tests and final CI audit | Identity tests PASS; CI/artifacts PENDING |
 
 ## Overlay and historical identities
 
