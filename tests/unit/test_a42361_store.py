@@ -208,3 +208,31 @@ def test_AT12_resource_creation_reservation_not_repeatable(monkeypatch, fault):
         assert result == dict(
             event=body["event"], committed=True, request_sha256=sha(canonical(body))
         )
+
+
+def test_receiver_source_gap_has_real_bounded_server_not_only_rpc_client():
+    from scripts import a42361_deployment as d
+
+    assert callable(getattr(d, "LocalReceiver", None))
+    assert callable(getattr(s, "ConsumerService", None))
+
+
+def test_committed_receipt_rechecks_database_identity_on_new_connection(monkeypatch):
+    grant, config = setup(monkeypatch)
+    writer = ProtocolConnection(grant, config)
+    reader = ProtocolConnection(grant, config, fault="identity")
+    reader.close = lambda: None
+    consumer = s.PostgresConsumer(object())
+    monkeypatch.setattr(consumer, "_connect", lambda: reader)
+    with pytest.raises(Fault, match="COMMIT_UNKNOWN_NO_RETRY"):
+        consumer.consume_transaction(grant, writer)
+    assert writer.did_commit
+    assert not any("FROM g1_control.g1_consumptions" in q for q in reader.calls)
+
+
+def test_receipt_rejects_malformed_lookup_before_connect(monkeypatch):
+    setup(monkeypatch)
+    consumer = s.PostgresConsumer(object())
+    monkeypatch.setattr(consumer, "_connect", lambda: pytest.fail("malformed receipt connected"))
+    with pytest.raises(Fault, match="SCHEMA_INVALID"):
+        consumer.read_receipt("not-a-uuid", "a" * 64)

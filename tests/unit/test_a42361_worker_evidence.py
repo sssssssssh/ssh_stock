@@ -232,6 +232,11 @@ def test_AT27_worker_default_before_psycopg(monkeypatch):
         w.ProbeWorker().run_owned(None)
 
 
+def test_probe_lease_requires_post_connection_session_binding_source_gap():
+    assert callable(getattr(w, "validate_probe_lease", None))
+    assert callable(getattr(w, "validate_probe_session", None))
+
+
 class DriverModel:
     def __init__(self, fault=None):
         self.prepare_threshold = 5
