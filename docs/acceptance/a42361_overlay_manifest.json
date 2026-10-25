@@ -33,7 +33,7 @@
     "scripts/a42361_live_probe_worker.py": "9ce31cebac7182dc97b702930ab2bd1dcbd584ae60e638eb3d98c034734d6924",
     "scripts/a42361_offline_cases.py": "cde79da90988fb87f9c29c2eb28b1bd53e7e3ad1bf3858882c55a8f6622092ea",
     "scripts/a42361_one_shot_store.py": "8998a37ee3748f5371a46958696925462ed391531e03043ce8211e9682831693",
-    "scripts/a42361_source_guard.py": "c4e3c7565bf4aa8823ceb7dd1793dfc465d6edb1188864869703e47da1255fc2",
+    "scripts/a42361_source_guard.py": "1f3fb3cad65b8ec3d7f446f3b9b3359f9fff0fe3e6e360ffc9dd3a731377a45b",
     "scripts/a42361_trust_verifier.py": "a7572988ef884dc599e11d6e36941adad20d890f04844ac2d28bb2890bbd4d0b",
     "scripts/a42361_trusted_evidence.py": "ed99b92987c267e9f37072c41e344eaa137d37a098b975e71a5fdb25076e7fe3",
     "scripts/a42361_watchdog.py": "4ca3d54bb5739cc17be97218da8674cc3dd2b96c928ce940bf644028af16596b",

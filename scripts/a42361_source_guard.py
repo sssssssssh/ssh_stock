@@ -90,7 +90,10 @@ def validate(g, root, head):
     """Uses guard's independent git/path readers, so legacy tamper tests still apply."""
     require = g.require
     validate_paths(
-        g.git(root, "diff", "--no-ext-diff", "--name-only", BASELINE).decode().splitlines()
+        set(
+            g.git(root, "diff", "--no-ext-diff", "--name-only", "-z", BASELINE).decode().split("\0")
+        )
+        - {""}
     )
     require(g.path_sha(root / MANIFEST) == g.LIVE_MANIFEST_SHA, "A4235_LIVE_OVERLAY_INVALID")
     manifest = json.loads((root / MANIFEST).read_bytes())
