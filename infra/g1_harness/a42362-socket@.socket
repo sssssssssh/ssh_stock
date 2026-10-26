@@ -1,0 +1,12 @@
+# REVIEW TEMPLATE ONLY; no sockets are created by development/tests outside temp fixtures.
+[Unit]
+Description=Space G1 %i administrator-owned Unix listener (NOT INSTALLED)
+
+[Socket]
+ListenStream=/run/a42361-review/%i.sock
+SocketUser=space-g1-%i
+SocketGroup=space-g1-%i
+SocketMode=0600
+DirectoryMode=0700
+Service=a42362-service@%i.service
+# Cross-domain group/ACL delivery is NOT validated by this template. Do not broaden mode.

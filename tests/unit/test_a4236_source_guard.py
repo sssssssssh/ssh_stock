@@ -70,10 +70,15 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         .decode().split("\0")
     ) - {""}
     assert historical == g.NEXT_STAGE_PATHS | authority and len(historical) == 26
-    assert changed == historical | live.STAGE_PATHS
+    from scripts import a42362_source_guard as services
+
+    assert changed == historical | live.STAGE_PATHS | services.STAGE_PATHS
     live.validate_paths(
-        set(g.git(ROOT, "diff", "--name-only", "-z", live.BASELINE).decode().split("\0")) - {""}
+        set(g.git(ROOT, "diff", "--name-only", "-z", live.BASELINE, services.BASELINE)
+            .decode().split("\0")) - {""}
     )
+    services.validate_paths(set(g.git(ROOT, "diff", "--name-only", "-z", services.BASELINE)
+                                .decode().split("\0")) - {""})
     manifest = json.loads((ROOT / g.NEXT_MANIFEST).read_bytes())
     assert len(manifest["patch_sha256"]) == 14
     assert len(g.NEXT_STAGE_PATHS) == 22
@@ -85,7 +90,10 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         else:
             overlay = json.loads((ROOT / live.MANIFEST).read_bytes())
             assert original == overlay["old_sha256"][name]
-            assert g.path_sha(ROOT / name) == overlay["patch_sha256"][name]
+            assert hashlib.sha256(g.git(ROOT, "show", f"{services.BASELINE}:{name}")).hexdigest() \
+                == overlay["patch_sha256"][name]
+            latest = json.loads((ROOT / services.MANIFEST).read_bytes())
+            assert g.path_sha(ROOT / name) == latest["patch_sha256"][name]
     assert hashlib.sha256((ROOT / g.NEXT_MANIFEST).read_bytes()).hexdigest() == g.NEXT_MANIFEST_SHA
 
 

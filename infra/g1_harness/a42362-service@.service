@@ -1,0 +1,27 @@
+# REVIEW TEMPLATE ONLY. No live manager/bootstrap is supplied or authorized by this task.
+# Do not install: source status is PARTIAL; the command intentionally exits blocked.
+[Unit]
+Description=Space G1 isolated %i source-review service (NOT AUTHORIZED)
+Requires=a42362-socket@%i.socket
+After=a42362-socket@%i.socket
+
+[Service]
+Type=exec
+User=space-g1-%i
+Group=space-g1-%i
+ExecStart=/opt/space-g1/python -I /opt/space-g1/scripts/a42362_service_host.py
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX
+KillMode=control-group
+TimeoutStopSec=2
+TasksMax=32
+MemoryMax=512M
+CPUQuota=100%
+UMask=0077
+# A reviewed manager must supply root-owned readonly deployment/policy FDs and digest,
+# exact preinstalled listener FD, separate worker UID and nondelegated execution scope.
+# Repository JSON / systemd unit presence is NOT approval or a source of G1 authority.

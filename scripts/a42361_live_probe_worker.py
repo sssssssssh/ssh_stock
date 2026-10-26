@@ -19,6 +19,10 @@ from scripts.a4236_g1_probe import ALLOWLIST_SHA, TEMPLATES, request, validate_r
 from scripts.a42361_contract import Fault, Positive, canonical, checked, require, sha
 from scripts.a42361_deployment import LocalService, installed
 from scripts.a42361_fixture_controller import created
+from scripts.a42362_pg_owner_service import require_session_method
+
+SESSION_GUC_METHOD = "CONFIGURED_NOT_INDEPENDENTLY_OBSERVED"
+# METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION: no approved same-session SQL template exists.
 
 SCHEDULE = (
     ("I4",) * 5
@@ -198,6 +202,7 @@ class ProbeWorker:
             ),
             "A42361_AMBIENT_CONNECTION_REJECTED",
         )
+        require_session_method()  # Before credentials, owner RPC, connect, or the first probe SQL.
         # This independent service must attest this precise worker PID, fixture and
         # hard deadline BEFORE it releases a short-lived probe-only credential.
         body = dict(

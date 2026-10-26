@@ -233,9 +233,9 @@ class LocalService:
             in {
                 "registry": ("key-status",),
                 "approval": ("approval", "receipt"),
-                "consumer": ("consume", "receipt", "journal"),
+                "consumer": ("consume", "receipt", "journal", "resource-append", "resource-scan"),
                 "pg_owner": ("create", "receipt", "run"),
-                "controller": ("create", "destroy", "receipt"),
+                "controller": ("create", "destroy", "receipt", "reconcile"),
                 "absence_auditor": ("journal", "absent", "receipt"),
                 "supervisor": ("run", "terminate", "receipt"),
             }.get(self.domain, ()),
@@ -291,6 +291,10 @@ class LocalService:
                 require(path.stat() == meta, "A42361_SOCKET_CHANGED")
                 if type(result) is dict and result.get("schema_version") == "a42361.rpc-error.v1":
                     require(set(result) == {"schema_version", "code"}, "A42361_RPC_INCOMPLETE")
+                    if str(result["code"]).startswith("A42362_"):
+                        from scripts.a42362_contract import Fault as ServiceFault
+
+                        raise ServiceFault(result["code"])
                     raise Fault(result["code"])
                 return result
         except Fault:
@@ -320,7 +324,8 @@ class LocalReceiver:
 
     def serve_once(self, listening_fd, timeout_ms=1000):
         config = installed(self.deployment)  # Before FD inspection, socket I/O or dispatch.
-        require(self.domain == "consumer", "A42361_SERVICE_NOT_CONFIGURED")
+        require(self.domain in ("registry", "approval", "consumer", "pg_owner", "controller",
+                                "absence_auditor", "supervisor"), "A42361_SERVICE_NOT_CONFIGURED")
         endpoint = getattr(config, self.domain)
         require(os.getuid() == endpoint.peer_uid, "A42361_SERVICE_PRINCIPAL_MISMATCH")
         require(

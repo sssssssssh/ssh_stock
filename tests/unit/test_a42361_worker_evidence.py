@@ -360,6 +360,8 @@ def test_owned_worker_connect_then_attest_then_execute_no_hidden_identity_sql(mo
     connection = NS(info=NS(backend_pid=234), close=lambda: calls.append("close"))
     monkeypatch.setattr(w, "installed", lambda _: config)
     monkeypatch.setattr(w, "created", lambda _: fixture)
+    # This test exercises the old driver *model*, not the newly blocked real entrance.
+    monkeypatch.setattr(w, "require_session_method", lambda: None)
     monkeypatch.setattr(w.os, "getuid", lambda: 1000)
     monkeypatch.setattr(w.os, "getpid", lambda: 123)
     monkeypatch.setattr(w.time, "time", lambda: 110)

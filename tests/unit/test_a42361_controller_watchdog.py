@@ -190,6 +190,7 @@ def test_AT26_model_TERM_KILL_reap_not_physical_proof(monkeypatch):
     result = watchdog.terminate_owned(child)
     assert signals == [(child.pid, signal.SIGTERM), (child.pid, signal.SIGKILL)]
     assert result["reaped"] and result["actual_proof"] == "REQUIRES_INDEPENDENT_AUDIT"
+    assert result["execution_scope_terminated"] is False
 
 
 def test_AT26_nonterminable_model_is_not_proven(monkeypatch):

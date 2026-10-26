@@ -2022,3 +2022,16 @@ owner/审计服务端、部分创建回收、完整隔离supervisor尚未齐，�
 worker改为预连接lease v2→连接后session v2核验，不提前猜测backend_start，不增加16条SQL预算。
 这仍是源码/离线测试交付：owner原始身份/角色/会话证明、审批写入、独立清理审计、部分创建回收和完整supervisor
 仍阻断，未部署/运行任何G1或控制库，不能标CODE_READY。详见a42361交付/缺口与部署前手册。
+
+### A42362 服务端与安全回收整改（PARTIAL / 方法阻断）
+
+本轮新增 A 外部签名审批导入、专用控制账本 SQL/新连接回执、逐资源恢复和独立 E 拒绝合同，
+修复旧 Watchdog 直接子进程退出即提前返回的问题；新增受控 Unix IPC/子进程阻塞故障测试。
+但 Owner 实际初始化/租约后端、C/E/D 服务接线、E 独立审计存储、完整 cgroup/worker/工件
+监督与管理员 FD 启动器仍未闭合，不能把新增类或测试绿灯写成 CODE_READY。
+目标 probe 的实际 statement_timeout/read_only 无合法独立证明，保持
+METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION；worker/旧创建入口在凭据、连接或资源创建前停止。
+没有增加第17条 SQL、改变总8次预热、运行G1或安装服务。样例配置过期且无密钥，units仅审阅模板。
+完整源码缺口见 [A42362交付](docs/acceptance/a42362_closeout.md)、
+[方法决策](docs/acceptance/a42362_method_decisions.md)及 [72项追踪](docs/acceptance/a42362_test_traceability.md)。
+新 002 DDL 只供未来全新专用控制面审阅，不得对现有业务库/控制库执行。

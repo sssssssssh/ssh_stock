@@ -233,6 +233,12 @@ class PostgresConsumer:
                 "(token_id,event,payload_sha256) VALUES (%s::uuid,%s,%s)",
                 (p.token_id, "CONSUMED", grant.payload_sha256),
             )
+            # Immutable full payload for later resource reservations; control SQL, not probe SQL.
+            connection.execute(
+                "INSERT INTO g1_control.consumed_payloads(token_id,payload,payload_sha256) "
+                "VALUES (%s::uuid,%s::jsonb,%s)",
+                (p.token_id, canonical(p.model_dump()).decode(), grant.payload_sha256),
+            )
             commit_sent = True
             connection.commit()  # No fixture may be constructed before this returns.
             # Fresh connection on B reads committed state. Never call our own RPC:
@@ -443,6 +449,10 @@ class ConsumerService(LocalReceiver):
 
     domain = "consumer"
 
+    def __init__(self, deployment=None, policy=None):
+        super().__init__(deployment)
+        self.policy = policy
+
     def allowed_uids(self, config):
         return {
             getattr(config, k).peer_uid
@@ -453,15 +463,23 @@ class ConsumerService(LocalReceiver):
         config = installed(self.deployment)
         require(os.getuid() == config.consumer.peer_uid, "A42361_SERVICE_PRINCIPAL_MISMATCH")
         require(type(peer_uid) is int, "A42361_PEER_IDENTITY_MISMATCH")
-        require(method in ("consume", "receipt", "journal"), "A42361_RPC_METHOD_REJECTED")
+        require(method in ("consume", "receipt", "journal", "resource-append", "resource-scan"),
+                "A42361_RPC_METHOD_REJECTED")
         allowed = (
             {config.supervisor.peer_uid}
             if method == "consume"
             else {config.controller.peer_uid}
-            if method == "journal"
+            if method in ("journal", "resource-append")
             else self.allowed_uids(config)
         )
         require(peer_uid in allowed, "A42361_PEER_IDENTITY_MISMATCH")
+        if method in ("resource-append", "resource-scan"):
+            from scripts.a42362_ledger import ResourceLedger
+            from scripts.a42362_service_host import ControlRepository, installation
+
+            installation(self.policy)  # No repository/connection from an uninstalled receiver.
+            ledger = ResourceLedger(ControlRepository(self.policy))
+            return ledger.append(body) if method == "resource-append" else ledger.scan(body)
         consumer = PostgresConsumer(self.deployment)
         if method == "consume":
             request = checked(ConsumeRequest, body)

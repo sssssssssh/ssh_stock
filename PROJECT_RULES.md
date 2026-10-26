@@ -1034,3 +1034,18 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - probe预连接lease不可自报backend_start；连接后独立owner session回执交叉绑定租约/进程/实例/角色，失败前不发送探针SQL。
 - 没有扩大原16探针SQL/8初始化SQL或其他预算；不能以owner自身pg_settings或角色默认值冒称probe实际会话GUC。
 - 仍PARTIAL/BLOCKED：owner/E/partial-create回收/独立launcher与写盘监督等未齐，无实机/部署授权；不能由本轮代码或CI升级资格。
+
+### A42362 精确叠层、方法阻断和非资格回执
+
+- 新层以 b32b927 为基线精确固定48路径，历史三份manifest不改；保留旧完整HEAD/NUL/中文/
+  assume-unchanged/no-follow/竞态检查，不以目录前缀放行。authority文档只追加。
+- 持久消费同时保存完整已验签payload；资源预约/动作必须有B提交后新连接回执，UNKNOWN不退款/
+  不重建。C自身成功或相似命名前缀不授权删除，E无原始独立观察不得ABSENT。
+- 子进程被reap不等于整个执行域终止。无不可逃逸scope、独立UID和fd隔离证明时保持
+  TERMINATION_NOT_PROVEN；首错与清理错误独立，阻塞IO测试不代表实际G1硬终止已验证。
+- 目标会话GUC目前只能标CONFIGURED_NOT_INDEPENDENTLY_OBSERVED，方法为
+  METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION；旧worker/创建入口在连接/资源前拒绝，不追加SQL。
+- 整体PARTIAL_OFFLINE_TESTED：真实Owner后端、C/E/D接线、E持久审计、完整launcher/cgroup/
+  工件监督和安装manager尚缺，不得标SOURCE_CLOSED或CODE_READY。详见a42362_closeout.md。
+- 普通CI和受控本地进程/UnixIPC只证明代码/故障合同。G1物理NOT_RUN、G2总8待决、G3未授权；
+  生产/性能/容量/因果资格恒false。本轮不触及业务.env/库、PG/Podman/云/服务安装或手动dispatch。

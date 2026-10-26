@@ -199,6 +199,10 @@ def verify_full_worktree(g, root, head):
 
 def validate(g, root, head):
     """Uses guard's independent git/path readers, so legacy tamper tests still apply."""
+    if hasattr(g, "SERVICE_MANIFEST_SHA"):
+        from scripts.a42362_source_guard import validate as validate_service
+
+        return validate_service(g, root, head)
     require = g.require
     validate_paths(
         set(

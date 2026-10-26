@@ -56,16 +56,19 @@ NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
         'baseline', 'trust_and_red', 'closeout', 'capability_matrix',
         'g1_authorization_request_TEMPLATE', 'unresolved_methods'))))
 LIVE_MANIFEST_SHA = 'a88d62d980751cfe182bcffc0a450c21d57195810bdce4e24c80f43c4ff1fb64'
+SERVICE_MANIFEST_SHA = '056156c9e338dc4247ab04f0eaa590babee6c55bda2f89445470ae605b690063'
 
 
 def live_paths():
     from scripts.a42361_source_guard import STAGE_PATHS as paths
-    return paths
+    from scripts.a42362_source_guard import STAGE_PATHS as service_paths
+    return paths | service_paths
 
 
 def live_protected_paths():
     from scripts.a42361_source_guard import AUTHORITY, INFRA
-    return live_paths() - AUTHORITY - set(INFRA)
+    from scripts.a42362_source_guard import INFRA as service_infra
+    return live_paths() - AUTHORITY - set(INFRA) - service_infra
 
 
 def git(root: Path, *args: str) -> bytes:

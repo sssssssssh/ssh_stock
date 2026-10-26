@@ -11,7 +11,7 @@ from scripts.a42361_contract import Binding, Fault, canonical, checked, require,
 from scripts.a42361_deployment import LocalService, installed
 from scripts.a42361_one_shot_store import ConsumptionReceipt, expected_receipt
 from scripts.a42361_trust_verifier import TrustVerifier
-from scripts.a42361_trusted_evidence import FailureLedger
+from scripts.a42362_contract import FailureLedger
 
 
 class ControlService:
@@ -82,6 +82,8 @@ class ControlService:
             )
         except BaseException as error:
             ledger.fail(error.code if isinstance(error, Fault) else "A42361_CONTROL_INCOMPLETE")
+            for code in getattr(error, "cleanup_codes", ()):
+                ledger.fail(code, cleanup=True)
         finally:
             if creation is not None:
                 try:
@@ -110,7 +112,21 @@ class ControlService:
                     ledger.fail("A42361_CLEANUP_NOT_VERIFIED", cleanup=True)
             elif ledger.first_error is not None:
                 # A timed-out create may have committed resources. Never label absent.
-                ledger.fail("A42361_PARTIAL_CREATION_REQUIRES_OWNER_RECONCILIATION", cleanup=True)
+                try:
+                    recovery = controller.call("reconcile", dict(
+                        token_id=grant.payload.token_id, **common), 2000)
+                    require(type(recovery) is dict
+                            and recovery.get("status") in (
+                                "INCOMPLETE_QUARANTINED", "DESTROYED_PENDING_INDEPENDENT_E")
+                            and recovery.get("qualifies") is False,
+                            "A42361_PARTIAL_CREATION_REQUIRES_OWNER_RECONCILIATION")
+                    # A recoverable request is not independent E proof or success.
+                    if recovery.get("status") != "DESTROYED_PENDING_INDEPENDENT_E":
+                        ledger.fail("A42361_PARTIAL_CREATION_REQUIRES_OWNER_RECONCILIATION",
+                                    cleanup=True)
+                except BaseException:
+                    ledger.fail("A42361_PARTIAL_CREATION_REQUIRES_OWNER_RECONCILIATION",
+                                cleanup=True)
         return dict(
             status="INCOMPLETE" if ledger.first_error else "PENDING_INDEPENDENT_G1_REVIEW",
             first_error=ledger.first_error,

@@ -33,6 +33,9 @@ def test_AT01_AT02_AT04_actual_source_freeze_and_history():
     )
     assert g.path_sha(g.ROOT / g.NEXT_MANIFEST) == g.NEXT_MANIFEST_SHA
     assert g.path_sha(g.ROOT / g.OVERLAY_MANIFEST) == g.OVERLAY_MANIFEST_SHA
+    from scripts import a42362_source_guard as services
+
+    assert g.path_sha(g.ROOT / services.MANIFEST) == g.SERVICE_MANIFEST_SHA
     assert not g.git(
         g.ROOT,
         "diff",

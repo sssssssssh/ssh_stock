@@ -45,23 +45,26 @@ class Watchdog:
         )
         started = time.monotonic_ns()
         try:
-            if child.process.poll() is not None:
-                return dict(terminated=True, reaped=True, actual_proof="REQUIRES_INDEPENDENT_AUDIT")
             # An unreaped direct child cannot have its PID reused; never target a received PID.
-            require(os.getpgid(child.pid) == child.pid, "A42361_PROCESS_OWNERSHIP_UNPROVEN")
-            os.killpg(child.pid, signal.SIGTERM)
-            try:
-                child.process.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                os.killpg(child.pid, signal.SIGKILL)
-                remaining = 2 - (time.monotonic_ns() - started) / 1_000_000_000
-                require(remaining > 0, "A42361_TERMINATION_NOT_PROVEN")
-                child.process.wait(timeout=remaining)
+            if child.process.poll() is None:
+                require(os.getpgid(child.pid) == child.pid, "A42361_PROCESS_OWNERSHIP_UNPROVEN")
+                os.killpg(child.pid, signal.SIGTERM)
+                try:
+                    child.process.wait(timeout=0.5)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL)
+                    remaining = 2 - (time.monotonic_ns() - started) / 1_000_000_000
+                    require(remaining > 0, "A42361_TERMINATION_NOT_PROVEN")
+                    child.process.wait(timeout=remaining)
+            from scripts.a42362_supervisor_service import scope_empty
+
+            require(scope_empty(child.pid), "A42361_TERMINATION_NOT_PROVEN")
             require(
                 child.process.poll() is not None and time.monotonic_ns() - started <= 2_000_000_000,
                 "A42361_TERMINATION_NOT_PROVEN",
             )
-            return dict(terminated=True, reaped=True, actual_proof="REQUIRES_INDEPENDENT_AUDIT")
+            return dict(terminated=True, reaped=True, actual_proof="REQUIRES_INDEPENDENT_AUDIT",
+                        execution_scope_terminated=False)
         except Fault:
             raise
         except BaseException:

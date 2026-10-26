@@ -1,0 +1,17 @@
+{
+  "schema_version": "a42362.installation.v1",
+  "domain": "approval",
+  "uid": 21002,
+  "operator_uid": 21999,
+  "controller_uid": 21005,
+  "read_uids": [21003, 21007],
+  "collector_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "attestation_public_key_hex": null,
+  "openssl_path": "/opt/space-g1/bin/openssl",
+  "openssl_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "openssl_version": "UNCONFIGURED",
+  "expires_at": 1,
+  "namespace_sha256": null,
+  "scope_epoch": null,
+  "platform": "PLATFORM_NOT_VERIFIED"
+}

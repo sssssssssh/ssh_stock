@@ -158,6 +158,10 @@ class FixtureController:
             ),
             "A42361_RESOURCE_RESERVATION_UNPROVEN",
         )
+        from scripts.a42362_pg_owner_service import require_session_method
+
+        # Do not create a partial real fixture merely to encounter a known GUC-method block.
+        require_session_method()
         try:
             rootless = self._command(("info", "--format", "{{.Host.Security.Rootless}}")).strip()
             require(rootless == b"true", "A42361_ROOTLESS_NOT_PROVEN")
