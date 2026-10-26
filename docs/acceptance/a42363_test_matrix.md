@@ -104,4 +104,3 @@ actual C/O/D/E receiver algorithms in child processes using independently persis
 file-backed DB models and private ordinary resources; no model can issue G1 proof.
 Inherited A42361/A42362 crypto, one-shot, socket, frozen worker and source guards remain
 mandatory. Missing an exact scenario is an acceptance gap, never an implicit PASS.
-

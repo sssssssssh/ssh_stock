@@ -62,6 +62,10 @@ changing the old assertion. Eight other failures are one inherited Watchdog mode
 /proc plus seven inherited Linux IPC/process scenarios (SO_PEERCRED, /proc and pidfd).
 These were actually attempted and failed locally, not counted as skipped/passed. No old
 Linux implementation/test is weakened for macOS; the ordinary Linux CI must execute all.
+After the compatibility repair, the final targeted set (new contracts/processes, ten RED
+inventory cases, exact fifth overlay and the unchanged historical regression) passed
+167 cases in9.70s. Ruff backend/tests/migrations/scripts passed. The complete baseline diff
+check also caught an extra Markdown EOF blank line; it is removed before final delivery.
 No production SQL/model/formula, workflow/dependency, old protocol/manifest or prior
 one-time authorization was modified. Performance comparisons and603040-row capacity
 are NOT_RUN in this source-only task, not inferred from offline latency.
