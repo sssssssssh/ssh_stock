@@ -94,6 +94,36 @@ def validate_paths(paths):
     require(set(paths) == STAGE_PATHS, "A4235_FROZEN_FILE_CHANGED")
 
 
+def verify_inherited_checks(g, root, head):
+    """Retain both legacy independent checks and their first-error classification."""
+    require = g.require
+    require(
+        g.path_sha(root / g.OVERLAY_MANIFEST) == g.OVERLAY_MANIFEST_SHA,
+        "A4235_OVERLAY_MANIFEST_INVALID",
+    )
+    legacy = json.loads((root / g.OVERLAY_MANIFEST).read_bytes())
+    require(set(legacy["patch_sha256"]) == g.PATCH_PATHS, "A4235_OVERLAY_MANIFEST_INVALID")
+    for name in g.PATCH_PATHS:
+        require(
+            g.path_sha(root / name) == legacy["patch_sha256"][name],
+            "A4235_OVERLAY_BYTES_MISMATCH",
+        )
+    # This historical targeted read is additional to, never a replacement for, the
+    # final entire-HEAD NUL/no-follow FD walk below.
+    for row in g.git(root, "ls-tree", "-r", head, "--", "infra").splitlines():
+        metadata, name = row.split(b"\t", 1)
+        mode, kind, oid = metadata.split()
+        require(mode in {b"100644", b"100755"} and kind == b"blob", "A4235_HEAD_BYTES_MISMATCH")
+        path = root / name.decode()
+        g.path_sha(path)
+        raw = path.read_bytes()
+        require(
+            hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest().encode()
+            == oid,
+            "A4235_HEAD_BYTES_MISMATCH",
+        )
+
+
 def validate(g, root, head):
     from scripts import a42361_source_guard as old
 
@@ -184,6 +214,7 @@ def validate(g, root, head):
         == manifest["normalized_guard_sha256"],
         "A4235_LIVE_OVERLAY_INVALID",
     )
+    verify_inherited_checks(g, root, head)
     # The original entire-HEAD FD walk remains the final authority, including index flags.
     old.verify_full_worktree(g, root, head)
     require(

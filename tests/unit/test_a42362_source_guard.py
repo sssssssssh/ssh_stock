@@ -4,11 +4,13 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from scripts import a42362_source_guard as g
 from scripts.a4235_calibration_adapter_contract import Fault
+from scripts.a4235_calibration_adapter_contract import require as legacy_require
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -63,6 +65,38 @@ def test_AT04_normalization_excludes_only_the_new_self_reference_literal():
     assert g.normalize_guard(old.replace(b"True", b"False")) != value
     with pytest.raises(ValueError):
         g.normalize_guard(b"unrecognized source")
+
+
+@pytest.mark.parametrize("threat", ["committed_patch", "hidden_infra"])
+def test_AT03_inherited_checks_remain_independent_before_full_fd_walk(tmp_path, threat):
+    patch, manifest = "immutable.py", "manifest.json"
+    (tmp_path / patch).write_bytes(b"APPROVED")
+    (tmp_path / manifest).write_text(
+        json.dumps({"patch_sha256": {patch: hashlib.sha256(b"APPROVED").hexdigest()}})
+    )
+    (tmp_path / "infra").mkdir()
+    (tmp_path / "infra/immutable.sql").write_bytes(b"APPROVED_INFRA")
+
+    def path_sha(path):
+        if threat == "committed_patch" and path.name == patch:
+            return hashlib.sha256(b"UNAPPROVED").hexdigest()
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+
+    def git(root, *args):
+        assert args == ("ls-tree", "-r", "f" * 40, "--", "infra")
+        return b"100644 blob " + b"0" * 40 + b"\tinfra/immutable.sql\n"
+
+    guard = SimpleNamespace(
+        require=legacy_require,
+        path_sha=path_sha,
+        git=git,
+        PATCH_PATHS={patch},
+        OVERLAY_MANIFEST=manifest,
+        OVERLAY_MANIFEST_SHA=path_sha(tmp_path / manifest),
+    )
+    code = "OVERLAY_BYTES_MISMATCH" if threat == "committed_patch" else "HEAD_BYTES_MISMATCH"
+    with pytest.raises(Fault, match=code):
+        g.verify_inherited_checks(guard, tmp_path, "f" * 40)
 
 
 def test_AT70_no_production_migrations_workflows_dependencies_or_old_protocol_changes():

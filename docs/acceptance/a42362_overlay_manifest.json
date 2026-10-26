@@ -57,7 +57,7 @@
     "docs/acceptance/a42362_architecture.md": "387429c09333fa55d93c9e285c53428b38d8941e8291f17bc247c23f51529ddc",
     "docs/acceptance/a42362_baseline.md": "095fc24d8e1ef5ae21cf44a5bc2bbb489bbc1bc55beed1670059e8e0ce975718",
     "docs/acceptance/a42362_capability_matrix.md": "d348e48d9825e64cf1a402e47885b214155d4a0343ad94470558e2cd1cd50e94",
-    "docs/acceptance/a42362_closeout.md": "b5dbaa3a7a1a8f3741b0354d1bcfae580359649fa0119ac8cba7394589455626",
+    "docs/acceptance/a42362_closeout.md": "47b5cbd84aeb8f6e6727a8218aa6a9e11de3038d4f804522004db8ef5836578e",
     "docs/acceptance/a42362_g1_deployment_request_TEMPLATE.md": "b51ad04f4500e1a9102ab46019b742db56e86e110b71745d55b5b6ccae013807",
     "docs/acceptance/a42362_method_decisions.md": "352917f81b287e92242ad4c2165551ea50fac41e6e2264cd9a599a3298c9fdea",
     "docs/acceptance/a42362_recovery_and_faults.md": "18d9ace36361d84f97457a954833a39748067bcda5d072fc5be555d2d7078ef9",
@@ -86,7 +86,7 @@
     "scripts/a42362_pg_owner_service.py": "e2c175e40f4d0cbb7f4ab6958252c65bd487fb3a7a60c2c041c33007d2f0858b",
     "scripts/a42362_reconcile.py": "db3675b4e841e4424e7044a16232576ce9a9107050c8dca3241e30ca138bf53c",
     "scripts/a42362_service_host.py": "f62cfb9c9688e858de9be6aba4bafd387e2e965eb9dec29c39c3b2d0e4d9fb09",
-    "scripts/a42362_source_guard.py": "f1fea9b9960d441dc137e16f888ddd21d1dbd5174aea0cd8085e3ccbbaa7fa2d",
+    "scripts/a42362_source_guard.py": "fd0fcb8d81d841d8d36ba224277634f796b570cd25496d2cda74f930d6a4e27a",
     "scripts/a42362_supervisor_service.py": "84e8b577c982526ac55d308cb7427cc9008caa4b5740d333b4c8523a32b4b692",
     "tests/integration_offline/test_a42362_ipc_process.py": "03a64a62592821853e6f95c05c829079376fd59176b7ab648515506d41ebe9c4",
     "tests/unit/test_a42361_controller_watchdog.py": "ff9e3efcc1272ea992d970aa36ab6918973a2ef0e89922a72974743aa1963c99",
@@ -96,7 +96,7 @@
     "tests/unit/test_a42362_audit_supervisor.py": "45e93722459c66840f542f5395ab6d72976823f01b481db7906f4e0a6b558a8f",
     "tests/unit/test_a42362_contract.py": "c1cbbd4786ad19d8603580c7c573096c7b0d06c776c1723ece77e363cfb7448d",
     "tests/unit/test_a42362_owner_recovery.py": "80594beafe9cad069aca3e66b5d5e5797515fe5ad1ac44e4c02294b5a0b8c753",
-    "tests/unit/test_a42362_source_guard.py": "0127e359fab169b2ffbef4d125527381fcb88db8e7d8f8e99fd3a25cdfe91d51",
+    "tests/unit/test_a42362_source_guard.py": "0d4017a7ca3ba46a1ac95f9a4017831c073e73305fbaae4d9a263b88ff913364",
     "tests/unit/test_a4236_source_guard.py": "7a1189958a737c182de12a07ed99dec07a9be26e661a2096a9fa9b2f9036a127"
   },
   "old_sha256": {
