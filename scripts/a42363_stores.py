@@ -15,6 +15,10 @@ class DomainStore:
 
     def append(self, scope, event, record):
         require(type(event) is str and event.isascii() and 0 < len(event) <= 64, "EVENT")
+        if self.domain in ("pg_owner", "controller", "supervisor", "absence_auditor"):
+            verifier = getattr(self.repository, "verify_scope", None)
+            if verifier is not None:
+                verifier(scope)  # Real Repository verifies B before this domain's write.
         writer, sent = self.repository.connect(self.domain), False
         try:
             self.repository.verify(writer, self.domain)
@@ -102,7 +106,12 @@ class ReceiptSet:
         result = {}
         for domain, source in self.sources.items():
             ref = checked(Receipt, references[domain])
-            actual = source.read(scope, ref.event)
+            try:
+                actual = source.read(scope, ref.event)
+            except Fault:
+                raise
+            except Exception:
+                raise Fault("A42363_INDEPENDENT_SOURCE_UNAVAILABLE") from None
             require(actual == ref, "INDEPENDENT_RECEIPT_MISMATCH")
             result[domain] = actual
         return result

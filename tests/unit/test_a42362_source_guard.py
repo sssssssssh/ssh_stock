@@ -33,6 +33,7 @@ def test_AT02_no_directory_or_prefix_exemptions(name):
 
 
 def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchanged():
+    from scripts import a42363_complete_guard as complete
     from scripts import a42363_source_guard as closeout
 
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
@@ -63,7 +64,14 @@ def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchang
         current = subprocess.check_output(["git", "show", f"{head}:{name}"], cwd=ROOT)
         if name in closeout.PINNED:
             latest = json.loads((ROOT / closeout.MANIFEST).read_bytes())
-            assert hashlib.sha256(current).hexdigest() == latest["patch_sha256"][name]
+            closing = subprocess.check_output(
+                ["git", "show", f"{complete.BASELINE}:{name}"], cwd=ROOT)
+            assert hashlib.sha256(closing).hexdigest() == latest["patch_sha256"][name]
+            if name in complete.PINNED:
+                final = json.loads((ROOT / complete.MANIFEST).read_bytes())
+                assert hashlib.sha256(current).hexdigest() == final["patch_sha256"][name]
+            else:
+                assert current == closing
         else:
             assert current == actual
 

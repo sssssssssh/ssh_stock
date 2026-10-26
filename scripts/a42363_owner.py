@@ -45,6 +45,8 @@ class OwnerRuntime:
         control_database,
         control_instance_sha256,
         probe_secret_fd=None,
+        identity=None,
+        fixture=None,
     ):
         self.driver, self.control_connection = driver, control_connection
         self.control_database, self.control_instance_sha256 = (
@@ -52,6 +54,21 @@ class OwnerRuntime:
             control_instance_sha256,
         )
         self.probe_secret_fd = probe_secret_fd
+        self.identity, self.fixture = identity, fixture
+
+    def initialization_plan(self, scope):
+        from scripts.a42363_harness import InitializationPlan
+
+        require(self.identity is not None and self.fixture is not None, "OWNER_FIXTURE_REQUIRED")
+        self.identity.verify(scope)
+        require(
+            self.fixture.identity == self.identity and self.driver.identity == self.identity,
+            "FIXTURE_IDENTITY",
+        )
+        plan = InitializationPlan.build(self.identity)
+        plan.preflight()  # No PG connect, credentials, commands or DDL on infeasible budget.
+        require(self.fixture.state == "READY_FOR_OWNER_AUDIT", "PG_NOT_READY")
+        return plan
 
     def lease_fd(self, scope, worker_pid, owner_digest):
         # This is reachable only after an independently approved session method.
@@ -67,15 +84,10 @@ class OwnerRuntime:
         )
         credentials = decode(os.pread(self.probe_secret_fd, 65536, 0))
         require(
-            type(credentials) is dict
-            and set(credentials) == {"host", "database", "user", "password"}
-            and credentials["database"] == "a42363_fixture"
-            and credentials["user"] == "a42363_probe"
-            and type(credentials["host"]) is str
-            and credentials["host"].startswith("/run/a42361-")
-            and type(credentials["password"]) is str,
-            "CREDENTIAL_INSTALLATION",
+            self.identity is not None and self.fixture is not None and self.fixture.ready,
+            "OWNER_FIXTURE_REQUIRED",
         )
+        self.identity.verify(scope).verify_credentials(credentials)
         require(os.fstat(self.probe_secret_fd) == meta, "CREDENTIAL_CHANGED")
         import fcntl
 
@@ -89,6 +101,7 @@ class OwnerRuntime:
                     owner_digest=owner_digest,
                     credentials=credentials,
                     schema_version="a42363.credential.v2",
+                    fixture_identity=self.identity.model_dump(),
                 )
             )
             require(os.write(fd, raw) == len(raw), "CREDENTIAL_WRITE")
@@ -135,16 +148,19 @@ class OwnerRuntime:
             connection.close()
 
     def verify_owner_connection(self, connection, scope):
-        from scripts.a42362_contract import resources
-
-        parent = os.readlink("/proc/self/fd/" + str(self.driver.socket_directory.parent_fd))
-        expected_host = parent + "/" + resources(scope)[0].name
+        require(self.identity is not None, "OWNER_FIXTURE_REQUIRED")
+        self.identity.verify(scope)
         require(
-            connection.info.dbname == "a42363_fixture"
-            and connection.info.user == "postgres"
-            and connection.info.host == expected_host
+            connection.info.dbname == self.identity.database
+            and connection.info.user == self.identity.owner_role
+            and connection.info.host == self.identity.socket_host
             and connection.info.port == 5432,
             "OWNER_CONNECTION_IDENTITY",
+        )
+        require(
+            type(connection.info.server_version) is int
+            and 170000 <= connection.info.server_version < 180000,
+            "PG17_REQUIRED",
         )
         self.inspect_owner(scope)
 
@@ -180,10 +196,27 @@ class RawOwnerBackend:
     def initialize(self, scope):
         scope = checked(Scope, scope)
         started = time.monotonic_ns()
-        connection = self.connection_factory(scope)
+        # Legacy injected row models remain DB_MODEL_ONLY regression fixtures. The
+        # actual OwnerRuntime must provide an executable, budget-approved target plan.
+        plan = (
+            self.runtime.initialization_plan(scope) if type(self.runtime) is OwnerRuntime else None
+        )
+        if plan is not None:
+            require(
+                self.store.maybe_read(scope, "OWNER_INIT_ATTEMPTED") is None,
+                "OWNER_NO_SECOND_INITIALIZATION",
+            )
+            self.store.append(
+                scope,
+                "OWNER_INIT_ATTEMPTED",
+                dict(identity=self.runtime.identity.model_dump(), qualifies=False),
+            )
+            connection = plan.initialize_database(self.connection_factory)
+        else:
+            connection = self.connection_factory(scope)
         try:
             self.runtime.verify_owner_connection(connection, scope)
-            for statement in INIT_SQL:
+            for statement in plan.statements[1:] if plan is not None else INIT_SQL:
                 cursor = connection.execute(statement)
             row = cursor.fetchone()
             connection.commit()
@@ -218,7 +251,7 @@ class RawOwnerBackend:
             runtime,
             pg_major=17,
             system_identifier_sha256=sha(str(system_id).encode()),
-            initialization_sql=len(INIT_SQL),
+            initialization_sql=len(plan.statements) if plan is not None else len(INIT_SQL),
             initialization_ms=elapsed,
             role_audit=dict(
                 superuser=False,
@@ -237,20 +270,23 @@ class RawOwnerBackend:
             ),
         )
         verify_raw_owner_identity(raw, scope)
+        record = dict(
+            raw=raw,
+            provenance=dict(
+                server="pg_control_system/server_version_num",
+                acl="pg_roles/pg_auth_members/has_*_privilege",
+                runtime="independent pinned runtime inspect",
+                timing="monotonic_ns",
+            ),
+            session_guc="CONFIGURED_NOT_INDEPENDENTLY_OBSERVED",
+            qualifies=False,
+        )
+        if plan is not None:
+            record["fixture_identity"] = self.runtime.identity.model_dump()
         return self.store.append(
             scope,
             "OWNER_RAW",
-            dict(
-                raw=raw,
-                provenance=dict(
-                    server="pg_control_system/server_version_num",
-                    acl="pg_roles/pg_auth_members/has_*_privilege",
-                    runtime="independent pinned runtime inspect",
-                    timing="monotonic_ns",
-                ),
-                session_guc="CONFIGURED_NOT_INDEPENDENTLY_OBSERVED",
-                qualifies=False,
-            ),
+            record,
         ).model_dump()
 
     def inspect(self, scope):
@@ -270,8 +306,9 @@ class WorkerProgram:
     and its installed Owner session client. There is no public execution switch.
     """
 
-    def __init__(self, expected_scope, worker_uid, session_source):
+    def __init__(self, expected_scope, worker_uid, session_source, identity=None):
         self.scope, self.uid, self.session_source = expected_scope, worker_uid, session_source
+        self.identity = identity
 
     def run(self, credential_fd):
         # This gate is unconditional until a separate frozen protocol decision is approved.
@@ -302,6 +339,7 @@ class WorkerProgram:
                 "owner_digest",
                 "credentials",
                 "schema_version",
+                "fixture_identity",
             },
             "WORKER_LEASE_SCHEMA",
         )
@@ -319,13 +357,9 @@ class WorkerProgram:
             "WORKER_AMBIENT_DATABASE",
         )
         credentials = raw["credentials"]
-        require(
-            set(credentials) == {"host", "database", "user", "password"}
-            and credentials["user"] == "a42363_probe"
-            and credentials["database"] == "a42363_fixture"
-            and credentials["host"].startswith("/run/a42361-"),
-            "WORKER_CONNECTION_TARGET",
-        )
+        require(self.identity is not None, "WORKER_FIXTURE_REQUIRED")
+        self.identity.verify(self.scope).verify_credentials(credentials)
+        require(raw["fixture_identity"] == self.identity.model_dump(), "FIXTURE_IDENTITY")
         import psycopg
 
         require(psycopg.__version__ == "3.3.4", "DRIVER_VERSION")
@@ -351,6 +385,7 @@ class WorkerProgram:
                 session,
                 self.scope,
                 dict(scope_sha256=sha(canonical(self.scope.model_dump())), worker_pid=os.getpid()),
+                identity=self.identity,
             )
             from scripts.a42361_live_probe_worker import ProbeWorker
 
@@ -381,7 +416,7 @@ def validate_lease_v2(lease, scope, worker_pid, now):
     return lease
 
 
-def validate_session_v2(session, scope, lease):
+def validate_session_v2(session, scope, lease, identity=None):
     require(
         type(session) is dict
         and set(session)
@@ -404,7 +439,8 @@ def validate_session_v2(session, scope, lease):
         and type(session["backend_pid"]) is int
         and session["backend_pid"] > 1
         and bool(session["backend_start"])
-        and session["role"] == "a42363_probe"
+        and session["role"]
+        == (identity.verify(scope).probe_role if identity is not None else "a42363_probe")
         and type(session["connection_generation"]) is int
         and session["connection_generation"] > 0,
         "SESSION_IDENTITY",

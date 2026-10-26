@@ -1058,3 +1058,16 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
 - 独立 E 与 D 原始证据缺失、事务结果未知、工件未完成均不得升级物理成功。
 - A42363 仍限 L0/L1；方法审批、源码缺口、安装配置与物理能力分别报告，见 a42363_closeout.md。
 - G1/L2 NOT_RUN_NOT_AUTHORIZED、SQL0、G2有效总8 PENDING、G3未授权及生产等资格false不变。
+
+### A42363 集中整改不变量
+
+- 新第六叠层精确登记修改并逐层核验旧五份 manifest/历史 blob；旧模板/授权不重写。
+- FixtureIdentity 从已消费 Scope 与独立安装规范派生；动态数据库/角色/Socket/资源身份不混用。
+- CREATED 不代表 RUNNING/READY；初始化建库、角色认证及镜像 bootstrap 不得隐藏在预算外。
+  当前至少9>8条 SQL、初始化命令预算不足时，在凭据/连接/资源前拒绝，不放宽标准。
+- Volume inspect 的 ID/StorageID 不证明 rm 的不可变目标语义；未证明隔离排他回收时，保持
+  SAFE_DELETE_UNPROVEN/隔离，禁止按名称或前缀删除。UNKNOWN 不重复副作用、不退款。
+- E 在两轮及结束时复核独立账本/销毁回执；D 最终 TERMINATED 必须在工件发布确认后提交。
+  Guardian 必须先 arm，所有运行时命令须约束完整后代；普通文件和进程组不是内核证明。
+- 整体 ENGINEERING_BLOCKED，源码工程/协议/平台缺口分别列举；G1 SQL0、G2总8待决、
+  G3未授权、全部生产/性能/容量/归因资格 false，详见 a42363_complete_closeout.md。

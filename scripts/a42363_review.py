@@ -36,7 +36,9 @@ class Reviewer:
             receipts[x] for x in ("consumer", "controller", "supervisor", "absence_auditor")
         )
         require(
-            b.event == "CONSUMED"
+            receipts["approval"].event == "APPROVED"
+            and receipts["pg_owner"].event == "OWNER_RAW"
+            and b.event == "CONSUMED"
             and c.event == "RECONCILED"
             and d.event == "TERMINATED"
             and e.event == "ABSENT",
@@ -93,4 +95,9 @@ class Reviewer:
             g1_physical="NOT_RUN_NOT_AUTHORIZED",
             references={k: v.digest for k, v in receipts.items()},
             method_decision="METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION",
+            implementation="ENGINEERING_BLOCKED",
+            cached_plan_structure="CACHED_PLAN_STRUCTURE_NOT_VERIFIED",
+            backend_cpu_ns=None,
+            metric_status="METRIC_UNAVAILABLE",
+            bracket="BRACKET_UNCOVERED",
         )

@@ -1,12 +1,12 @@
 """Installed FD capabilities and external deadlines. No public launch switches."""
 
 import ctypes
+import hashlib
 import os
 import select
 import selectors
 import signal
 import stat
-import subprocess
 import time
 
 from scripts.a42361_contract import canonical, decode, sha
@@ -14,41 +14,29 @@ from scripts.a42362_contract import file_identity
 from scripts.a42363_contract import Fault, lookup, require, scope_hash, session_method
 
 
-def run_installed_command(executable, arguments, pass_fds=()):
-    child = subprocess.Popen(
-        (executable, *arguments),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        env={},
-        close_fds=True,
-        pass_fds=pass_fds,
-        start_new_session=True,
-    )
-    deadline, result = time.monotonic_ns() + 1_000_000_000, bytearray()
-    try:
-        os.set_blocking(child.stdout.fileno(), False)
-        with selectors.DefaultSelector() as selector:
-            selector.register(child.stdout, selectors.EVENT_READ)
-            while selector.get_map():
-                remaining = (deadline - time.monotonic_ns()) / 1e9
-                require(remaining > 0, "COMMAND_DEADLINE")
-                for key, _ in selector.select(remaining):
-                    chunk = os.read(key.fd, 4096)
-                    result.extend(chunk)
-                    require(len(result) <= 65536, "COMMAND_OUTPUT_LIMIT")
-                    if not chunk:
-                        selector.unregister(key.fd)
-        remaining = (deadline - time.monotonic_ns()) / 1e9
-        require(remaining > 0, "COMMAND_DEADLINE")
-        child.wait(timeout=remaining)
-        return child.returncode, bytes(result)
-    finally:
-        # Only our unreaped direct child can be signalled. No PGID success claim.
-        if child.poll() is None:
-            child.kill()
-            child.wait(timeout=1)
-        child.stdout.close()
+def run_installed_command(executable, arguments, pass_fds=(), command_scope=None):
+    # Direct-child exit alone cannot certify all runtime subprocesses. Real callers
+    # need a manager-installed nondelegated kernel scope; never fallback to PGID.
+    require(type(command_scope) is CgroupScope, "COMMAND_SCOPE_REQUIRED")
+    return command_scope.run_command(executable, arguments, pass_fds)
+
+
+def _collect_command(child, stdout_fd, deadline):
+    result = bytearray()
+    os.set_blocking(stdout_fd, False)
+    with selectors.DefaultSelector() as selector:
+        selector.register(stdout_fd, selectors.EVENT_READ)
+        while selector.get_map():
+            remaining = (deadline - time.monotonic_ns()) / 1e9
+            require(remaining > 0, "COMMAND_DEADLINE")
+            for key, _ in selector.select(remaining):
+                chunk = os.read(key.fd, 4096)
+                result.extend(chunk)
+                require(len(result) <= 65536, "COMMAND_OUTPUT_LIMIT")
+                if not chunk:
+                    selector.unregister(key.fd)
+    child.reap(max(1, (deadline - time.monotonic_ns()) // 1_000_000), close_fd=False)
+    return os.waitstatus_to_exitcode(child.status), bytes(result)
 
 
 def bounded_child(operation, *, timeout_ms=2000):
@@ -131,6 +119,75 @@ class CgroupScope:
         require(type(pid) is int and pid > 1, "OWNED_CHILD_REQUIRED")
         os.write(self.procs_fd, str(pid).encode())
 
+    def run_command(self, executable, arguments, pass_fds):
+        """Blocked fork -> attach -> exec FD, guardian -> all descendants -> reap.
+
+        This internal manager capability is never an RPC argv interface. Ordinary
+        private files cannot instantiate this class, including in L1 tests.
+        """
+        require(type(arguments) is tuple and 0 < len(arguments) <= 64, "COMMAND_ARGUMENTS")
+        executable_fd = os.open(executable, os.O_RDONLY | os.O_NOFOLLOW)
+        meta = os.fstat(executable_fd)
+        require(
+            stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o022 == 0,
+            "COMMAND_EXECUTABLE",
+        )
+        guardian = FDDeadlineGuardian(self.kill_fd, 1000)
+        read_fd, write_fd = os.pipe()
+        gate_r, gate_w = os.pipe()
+        child = None
+        first = None
+        try:
+            pid = os.fork()
+            if pid == 0:
+                try:
+                    os.close(read_fd)
+                    os.close(gate_w)
+                    os.close(guardian.write_fd)  # Child may not keep parent-death pipe alive.
+                    require(os.read(gate_r, 1) == b"G", "COMMAND_GATE")
+                    os.dup2(write_fd, 1)
+                    null = os.open(os.devnull, os.O_RDWR)
+                    os.dup2(null, 0)
+                    os.dup2(null, 2)
+                    keep = {0, 1, 2, executable_fd, *pass_fds}
+                    for name in os.listdir("/proc/self/fd"):
+                        fd = int(name)
+                        if fd not in keep:
+                            try:
+                                os.close(fd)
+                            except OSError:
+                                pass
+                    for fd in keep:
+                        os.set_inheritable(fd, True)
+                    os.execve(executable_fd, [executable, *arguments], {})
+                except BaseException:
+                    os._exit(126)
+            child = _adopt_forked_child(pid)
+            os.close(write_fd)
+            write_fd = None
+            self.attach(pid)
+            os.write(gate_w, b"G")
+            result = _collect_command(child, read_fd, time.monotonic_ns() + 1_000_000_000)
+            return result
+        except BaseException as error:
+            first = error
+            raise
+        finally:
+            cleanup = []
+            if child is not None:
+                try:
+                    self.terminate(child)  # Also when leader exited and closed stdout.
+                    guardian.finish()
+                except BaseException:
+                    cleanup.append("A42363_COMMAND_SCOPE_TERMINATION_UNKNOWN")
+            for fd in (read_fd, write_fd, gate_r, gate_w, executable_fd):
+                if fd is not None:
+                    os.close(fd)
+            if cleanup:
+                if first is None:
+                    raise Fault(cleanup[0]) from None
+                first.cleanup_codes = list(getattr(first, "cleanup_codes", [])) + cleanup
+
     def terminate(self, child):
         require(file_identity(os.fstat(self.directory_fd))[:6] == self.identity, "CGROUP_REPLACED")
         # A pinned pidfd identifies the exact leader; descendants, including setsid, stay
@@ -164,18 +221,47 @@ class OwnedChild:
                 self.status = status
         return self.status
 
-    def reap(self, timeout_ms):
+    def reap(self, timeout_ms, *, close_fd=True):
         deadline = time.monotonic_ns() + timeout_ms * 1_000_000
         while self.poll() is None and time.monotonic_ns() < deadline:
             time.sleep(0.005)
         require(self.status is not None, "WORKER_NOT_REAPED")
-        os.close(self.pidfd)
+        if close_fd and self.pidfd is not None:
+            os.close(self.pidfd)
+            self.pidfd = None
+
+
+def _adopt_forked_child(pid):
+    """If pidfd acquisition fails, only our still-unreaped fork may be signalled."""
+    try:
+        return OwnedChild(pid)
+    except BaseException:
+        observed, _ = os.waitpid(pid, os.WNOHANG)
+        if not observed:
+            os.kill(pid, signal.SIGKILL)
+            deadline = time.monotonic_ns() + 2_000_000_000
+            while True:
+                observed, _ = os.waitpid(pid, os.WNOHANG)
+                if observed:
+                    break
+                require(time.monotonic_ns() < deadline, "OWNED_CHILD_REAP_UNPROVEN")
+                time.sleep(0.005)
+        raise
 
 
 class InstalledWorkerLauncher:
     """Root-manager-only constructor; worker source and credentials arrive as trusted FDs."""
 
-    def __init__(self, python_fd, worker_fd, worker_sha256, worker_uid, worker_gid, supervisor_uid):
+    def __init__(
+        self,
+        python_fd,
+        worker_fd,
+        worker_sha256,
+        worker_uid,
+        worker_gid,
+        supervisor_uid,
+        python_sha256=None,
+    ):
         require(
             os.getuid() == 0 and worker_uid > 0 and worker_uid != supervisor_uid,
             "DISTINCT_INSTALLED_WORKER_UID",
@@ -188,7 +274,23 @@ class InstalledWorkerLauncher:
             stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o022 == 0,
             "PYTHON_FD_UNTRUSTED",
         )
+        require(
+            type(python_sha256) is str
+            and len(python_sha256) == 64
+            and 0 < meta.st_size <= 64_000_000,
+            "PYTHON_DIGEST_REQUIRED",
+        )
+        digest, offset = hashlib.sha256(), 0
+        while offset < meta.st_size:
+            raw = os.pread(python_fd, min(65536, meta.st_size - offset), offset)
+            require(raw, "PYTHON_FD_CHANGED")
+            digest.update(raw)
+            offset += len(raw)
+        require(
+            digest.hexdigest() == python_sha256 and os.fstat(python_fd) == meta, "PYTHON_FD_CHANGED"
+        )
         self.python_fd, self.worker_fd = python_fd, worker_fd
+        self.python_identity, self.worker_sha256 = file_identity(meta), worker_sha256
         require(python_fd > 3 and worker_fd > 3 and python_fd != worker_fd, "RESERVED_WORKER_FDS")
         self.uid, self.gid = worker_uid, worker_gid
 
@@ -198,6 +300,12 @@ class InstalledWorkerLauncher:
         import socket
 
         require(type(cgroup) is CgroupScope and callable(credential_source), "INSTALLED_LAUNCHER")
+        require(
+            file_identity(os.fstat(self.python_fd)) == self.python_identity, "PYTHON_FD_CHANGED"
+        )
+        from scripts.a42362_supervisor_service import verify_worker_fd
+
+        verify_worker_fd(self.worker_fd, self.worker_sha256)
         parent, gate = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         pid = os.fork()
         if pid == 0:
@@ -237,7 +345,11 @@ class InstalledWorkerLauncher:
             except BaseException:
                 os._exit(1)
         gate.close()
-        child = OwnedChild(pid)
+        try:
+            child = _adopt_forked_child(pid)
+        except BaseException:
+            parent.close()
+            raise
         credential_fd = None
         try:
             cgroup.attach(pid)  # Child is blocked until moved to nondelegated scope.
@@ -261,6 +373,32 @@ class ArtifactPublisher:
         self.fd = directory_fd
 
     def publish(self, record):
+        raw = canonical(record)
+
+        def write():
+            self._publish_inside(raw)
+
+        try:
+            bounded_child(write)
+        except BaseException as first:
+            # All filesystem mutations, including the marker, are in independently
+            # bounded children. If the filesystem cannot even restore a marker, the
+            # missing final D receipt remains an independent rejection condition.
+            def restore():
+                fd = os.open(
+                    ".incomplete", os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=self.fd
+                )
+                os.close(fd)
+                os.fsync(self.fd)
+
+            try:
+                bounded_child(restore)
+            except BaseException:
+                first.cleanup_codes = ["A42363_ARTIFACT_MARKER_RESTORE_UNPROVEN"]
+            raise
+        return dict(qualifies=False, artifact_sha256=sha(raw))
+
+    def _publish_inside(self, raw):
         meta = os.fstat(self.fd)
         require(
             stat.S_ISDIR(meta.st_mode)
@@ -268,8 +406,7 @@ class ArtifactPublisher:
             and stat.S_IMODE(meta.st_mode) == 0o700,
             "ARTIFACT_OWNER",
         )
-        raw = canonical(record)
-        # Marker exists before launching a child that could block in fsync.
+        # The outer guardian supervises this entire fixed operation.
         marker = os.open(
             ".incomplete",
             os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
@@ -308,18 +445,9 @@ class ArtifactPublisher:
                     os.close(fd)
             os.fsync(self.fd)
 
-        bounded_child(write)
-        # Only a second supervised operation removes the marker, after durable manifest.
-        # If it stalls/fails, parent restores marker; success never inferred from JSON alone.
-        try:
-            bounded_child(lambda: (os.unlink(".incomplete", dir_fd=self.fd), os.fsync(self.fd)))
-        except BaseException:
-            fd = os.open(
-                ".incomplete", os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600, dir_fd=self.fd
-            )
-            os.close(fd)
-            raise
-        return dict(qualifies=False, artifact_sha256=sha(raw))
+        write()
+        os.unlink(".incomplete", dir_fd=self.fd)
+        os.fsync(self.fd)
 
 
 class SupervisorService:
@@ -350,8 +478,14 @@ class SupervisorService:
         result = self.cgroup.terminate(self.child)
         # D's L1 receipt never upgrades to physical G1 even if kernel proof is configured.
         result.update(qualifies=False, physical_proven=False, terminated_ns=time.monotonic_ns())
+        proved = self.store.maybe_read(scope, "TERMINATION_PROVEN")
+        if proved is None:
+            proved = self.store.append(scope, "TERMINATION_PROVEN", result)
+        published = self.publisher.publish(proved.model_dump())
+        # A final committed success must never precede artifact publication. Unknown
+        # publication ACK stops this attempt; no automatically valid half-evidence.
+        result["publication"] = published
         committed = self.store.append(scope, "TERMINATED", result)
-        self.publisher.publish(committed.model_dump())
         return committed.model_dump()
 
 
@@ -385,18 +519,20 @@ class RootManager:
             session_method()
             require(not self.attempted, "NO_SECOND_WORKER")
             self.attempted = True  # Sticky even when lease, fork, attach or ACK fails.
-            self.child = self.launcher.launch(
-                self.cgroup, lambda pid: self.owner.lease(self.scope, pid)
-            )
             try:
                 self.guardian = FDDeadlineGuardian(self.cgroup.kill_fd, 3000)
+                self.child = self.launcher.launch(
+                    self.cgroup, lambda pid: self.owner.lease(self.scope, pid)
+                )
             except BaseException:
-                self.failure = "GUARDIAN_ARM_FAILED"
-                # Never leave an unguarded launched worker after a fork/pipe failure.
-                try:
-                    self.cgroup.terminate(self.child)
-                except BaseException:
-                    self.failure = "GUARDIAN_ARM_AND_CLEANUP_FAILED"
+                self.failure = "GUARDIAN_ARM_FAILED" if self.guardian is None else "LAUNCH_UNKNOWN"
+                # No worker can start before the guardian. If launch ACK is unknown,
+                # keep the guardian armed; do not cancel an unknown live scope.
+                if self.child is not None:
+                    try:
+                        self.cgroup.terminate(self.child)
+                    except BaseException:
+                        self.failure = "GUARDIAN_ARM_AND_CLEANUP_FAILED"
                 raise Fault("A42363_" + self.failure) from None
             return dict(status="RUNNING", qualifies=False, scope_sha256=scope_hash(self.scope))
         if self.result is not None:
@@ -429,10 +565,19 @@ class FDDeadlineGuardian:
     def __init__(self, kill_fd, timeout_ms):
         require(type(timeout_ms) is int and 0 < timeout_ms <= 3000, "GUARDIAN_BUDGET")
         read_fd, write_fd = os.pipe()
-        pid = os.fork()
+        ack_r, ack_w = os.pipe()
+        try:
+            pid = os.fork()
+        except BaseException:
+            for fd in (read_fd, write_fd, ack_r, ack_w):
+                os.close(fd)
+            raise
         if pid == 0:
             os.close(write_fd)
+            os.close(ack_r)
             try:
+                os.write(ack_w, b"ARMED")
+                os.close(ack_w)
                 ready, _, _ = select.select([read_fd], [], [], timeout_ms / 1000)
                 if ready and os.read(read_fd, 1) == b"D":
                     os._exit(0)
@@ -441,6 +586,17 @@ class FDDeadlineGuardian:
             except BaseException:
                 os._exit(3)
         os.close(read_fd)
+        os.close(ack_w)
+        try:
+            armed, _, _ = select.select([ack_r], [], [], 0.2)
+            require(armed and os.read(ack_r, 6) == b"ARMED", "GUARDIAN_ARM_FAILED")
+        except BaseException:
+            os.close(write_fd)
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+            raise
+        finally:
+            os.close(ack_r)
         self.pid, self.write_fd, self.status = pid, write_fd, None
 
     def finish(self):

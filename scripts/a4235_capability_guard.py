@@ -58,13 +58,15 @@ NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
 LIVE_MANIFEST_SHA = 'a88d62d980751cfe182bcffc0a450c21d57195810bdce4e24c80f43c4ff1fb64'
 SERVICE_MANIFEST_SHA = '692b2ca9f3f1f95404a6ec953b557d6a6b510123a522b9f357163d3b016b1817'
 CLOSEOUT_MANIFEST_SHA = '92f67e70c19eee81ef2ce19283aa9969748480cbc36921df01ebba902bc64662'
+COMPLETE_MANIFEST_SHA = 'd3f5bdce5c9a05b578eda1f599f9404f78f696170d233a3da1d105008ebbd9ff'
 
 
 def live_paths():
     from scripts.a42361_source_guard import STAGE_PATHS as paths
     from scripts.a42362_source_guard import STAGE_PATHS as service_paths
+    from scripts.a42363_complete_guard import STAGE_PATHS as complete_paths
     from scripts.a42363_source_guard import STAGE_PATHS as closeout_paths
-    return paths | service_paths | closeout_paths
+    return paths | service_paths | closeout_paths | complete_paths
 
 
 def live_protected_paths():

@@ -199,6 +199,10 @@ def verify_full_worktree(g, root, head):
 
 def validate(g, root, head):
     """Uses guard's independent git/path readers, so legacy tamper tests still apply."""
+    if hasattr(g, "COMPLETE_MANIFEST_SHA"):
+        from scripts.a42363_complete_guard import validate as validate_complete
+
+        return validate_complete(g, root, head)
     if hasattr(g, "CLOSEOUT_MANIFEST_SHA"):
         from scripts.a42363_source_guard import validate as validate_closeout
 

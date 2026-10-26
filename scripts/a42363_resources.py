@@ -1,6 +1,9 @@
 """Fixed four-resource commands, committed-before-create and destroy-only recovery."""
 
 import json
+import os
+import re
+import stat
 import time
 
 from scripts.a42361_contract import canonical, checked, sha
@@ -10,9 +13,10 @@ from scripts.a42363_contract import Fault, lookup, require, scope_hash, session_
 
 
 class ResourceDriver:
-    def __init__(self, commands, socket_directory, secret_fd, independent_observer):
+    def __init__(self, commands, socket_directory, secret_fd, independent_observer, identity=None):
         self.commands, self.socket_directory = commands, socket_directory
         self.secret_fd, self.independent_observer = secret_fd, independent_observer
+        self.identity = identity
 
     def begin_cleanup(self):
         self.commands.begin_cleanup()
@@ -38,6 +42,20 @@ class ResourceDriver:
             return ("secret", "create", *labels, item.name, "/proc/self/fd/" + str(self.secret_fd))
         require(item.kind == "CONTAINER", "RESOURCE_KIND")
         rs = resources(item.scope)
+        fixture_options = ()
+        if self.identity is not None:
+            i = self.identity.verify(item.scope)
+            fixture_options = (
+                "--userns=keep-id:uid=999,gid=999",
+                "--mount",
+                "type=bind,src=" + i.socket_host + ",dst=/run/postgresql,rw",
+                "--tmpfs",
+                "/tmp:rw,noexec,nosuid,size=16m",
+                "--env",
+                "PGDATA=/var/lib/postgresql/data/pgdata",
+                "--entrypoint=/usr/local/libexec/space-g1-pg17-bootstrap",
+                "--health-cmd=pg_isready -q -h /run/postgresql -p 5432",
+            )
         return (
             "create",
             "--name",
@@ -57,10 +75,18 @@ class ResourceDriver:
             rs[1].name + ":/var/lib/postgresql/data:Z",
             "--secret",
             rs[2].name,
+            *fixture_options,
             item.scope.image_digest,
         )
 
     def create(self, item):
+        if self.identity is not None:
+            self.identity.verify(item.scope)
+            require(self.independent_observer is not None, "INDEPENDENT_E_REQUIRED")
+            require(
+                self.independent_observer.observe(item)["result"] == "ABSENT",
+                "RESOURCE_ALREADY_PRESENT_OR_UNKNOWN",
+            )
         if item.kind == "SOCKET_DIR":
             return self.socket_directory.create(item)
         code, _ = self.commands.run(
@@ -128,12 +154,34 @@ class ResourceDriver:
             )
             mounts = raw.get("Mounts", [])
             require(
-                len(mounts) == 1
+                len(mounts) == (2 if self.identity is not None else 1)
                 and mounts[0].get("Name") == resources(item.scope)[1].name
                 and mounts[0].get("Destination") == "/var/lib/postgresql/data",
                 "CONTAINER_MOUNTS",
             )
-        return sha(canonical(raw))
+            if self.identity is not None:
+                self.verify_socket_mount(raw, self.identity.verify(item.scope))
+        # Starting/stopping PG changes State; MountCount changes while a volume is
+        # mounted. These are observations, not creation identities. Every original
+        # owner/label/ID/creation/mount/config field is still bound to the ledger hash.
+        stable = {k: v for k, v in raw.items() if k not in ("State", "MountCount")}
+        return sha(canonical(stable))
+
+    def verify_socket_mount(self, raw, identity):
+        identity.verify(identity.scope)
+        mounts = raw.get("Mounts", [])
+        sockets = [m for m in mounts if m.get("Destination") == "/run/postgresql"]
+        require(
+            len(sockets) == 1
+            and sockets[0].get("Source") == identity.socket_host
+            and sockets[0].get("RW") is True
+            and sockets[0].get("Type") == "bind",
+            "PG_SOCKET_MOUNT_UNPROVEN",
+        )
+        require(
+            raw.get("HostConfig", {}).get("UsernsMode") == "keep-id:uid=999,gid=999",
+            "PG_UID_MAPPING_UNPROVEN",
+        )
 
     def remove(self, item, raw):
         self.verify(item, raw)
@@ -142,6 +190,17 @@ class ResourceDriver:
         # Exact immutable ID, never a name that could now designate another object.
         identity = raw.get("ID", raw.get("Id"))
         require(type(identity) is str and bool(identity), "REMOVE_ID_REQUIRED")
+        # Podman volume rm accepts names, not StorageID/immutable ID. Even an ID
+        # appearing in inspect JSON cannot prove the remove API's target semantics.
+        require(item.kind != "VOLUME", "SAFE_DELETE_UNPROVEN")
+        require(
+            re.fullmatch(
+                r"[0-9a-f]{64}" if item.kind == "CONTAINER" else r"(?:[0-9a-f]{25}|[0-9a-f]{64})",
+                identity,
+            )
+            is not None,
+            "REMOVE_IMMUTABLE_ID_UNPROVEN",
+        )
         code, _ = self.commands.run((item.kind.lower(), "rm", identity))
         require(code == 0, "REMOVE_ACK_UNKNOWN")
 
@@ -150,10 +209,135 @@ class ResourceDriver:
         return self.independent_observer.observe(item)["result"] == "ABSENT"
 
 
+class FixtureSocketDirectory:
+    """Held parent and exact marker, plus only PG's socket and lock while running.
+
+    The namespace mapping must map container999 to C and the installed shared GID.
+    Creation is not permission proof; readiness additionally checks mount/UID mapping.
+    No unlink of PG files, no recursive cleanup, no following socket/marker symlinks.
+    """
+
+    def __init__(self, parent_fd, identity):
+        self.parent_fd, self.identity = parent_fd, identity.verify(identity.scope)
+        meta = os.fstat(parent_fd)
+        require(
+            stat.S_ISDIR(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o022 == 0,
+            "SOCKET_PARENT_UNTRUSTED",
+        )
+        require(
+            os.readlink("/proc/self/fd/" + str(parent_fd)) == identity.installation.socket_parent,
+            "SOCKET_PARENT_TARGET",
+        )
+        self.parent_identity = meta.st_dev, meta.st_ino
+
+    def open_fixture(self):
+        p = os.fstat(self.parent_fd)
+        require((p.st_dev, p.st_ino) == self.parent_identity, "SOCKET_PARENT_REPLACED")
+        return os.open(
+            self.identity.socket_name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=self.parent_fd,
+        )
+
+    def create(self, item):
+        require(item == resources(self.identity.scope)[0], "FIXTURE_IDENTITY")
+        require(
+            os.getuid() == self.identity.controller_uid
+            and self.identity.installation.socket_gid in {os.getgid(), *os.getgroups()},
+            "SOCKET_UID_MAPPING_UNPROVEN",
+        )
+        os.mkdir(item.name, mode=0o770, dir_fd=self.parent_fd)
+        fd = self.open_fixture()
+        try:
+            os.fchown(fd, self.identity.controller_uid, self.identity.installation.socket_gid)
+            os.fchmod(fd, 0o770)
+            marker = os.open(
+                ".a42363-owner",
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+                dir_fd=fd,
+            )
+            try:
+                raw = canonical(self.identity.model_dump())
+                require(os.write(marker, raw) == len(raw), "SOCKET_MARKER_WRITE")
+                os.fsync(marker)
+            finally:
+                os.close(marker)
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        return self.inspect(item)
+
+    def inspect(self, item):
+        require(item == resources(self.identity.scope)[0], "FIXTURE_IDENTITY")
+        fd = self.open_fixture()
+        try:
+            meta = os.fstat(fd)
+            require(
+                meta.st_uid == self.identity.controller_uid
+                and meta.st_gid == self.identity.installation.socket_gid
+                and stat.S_IMODE(meta.st_mode) == 0o770,
+                "SOCKET_OWNER_UNKNOWN",
+            )
+            require(
+                set(os.listdir(fd)) <= {".a42363-owner", ".s.PGSQL.5432", ".s.PGSQL.5432.lock"},
+                "SOCKET_CONTENTS_UNKNOWN",
+            )
+            marker = os.open(".a42363-owner", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=fd)
+            try:
+                m = os.fstat(marker)
+                raw = os.pread(marker, 65536, 0)
+                require(
+                    stat.S_ISREG(m.st_mode)
+                    and m.st_uid == meta.st_uid
+                    and m.st_nlink == 1
+                    and raw == canonical(self.identity.model_dump()),
+                    "SOCKET_MARKER_UNKNOWN",
+                )
+            finally:
+                os.close(marker)
+            for name in set(os.listdir(fd)) - {".a42363-owner"}:
+                f = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                require(
+                    f.st_uid == meta.st_uid
+                    and (
+                        stat.S_ISSOCK(f.st_mode)
+                        if name == ".s.PGSQL.5432"
+                        else stat.S_ISREG(f.st_mode) and f.st_nlink == 1
+                    ),
+                    "SOCKET_CONTENTS_UNKNOWN",
+                )
+            linked = os.stat(item.name, dir_fd=self.parent_fd, follow_symlinks=False)
+            require((linked.st_dev, linked.st_ino) == (meta.st_dev, meta.st_ino), "SOCKET_REPLACED")
+            return dict(
+                device=meta.st_dev,
+                inode=meta.st_ino,
+                uid=meta.st_uid,
+                gid=meta.st_gid,
+                binding_sha256=sha(raw),
+            )
+        finally:
+            os.close(fd)
+
+    def remove(self, item, raw):
+        require(self.inspect(item) == raw, "SOCKET_REPLACED")
+        fd = self.open_fixture()
+        try:
+            require(set(os.listdir(fd)) == {".a42363-owner"}, "SOCKET_CONTENTS_UNKNOWN")
+            os.unlink(".a42363-owner", dir_fd=fd)
+            os.rmdir(item.name, dir_fd=self.parent_fd)
+        finally:
+            os.close(fd)
+
+
 class ControllerService:
-    def __init__(self, ledger, driver, store, consumption):
+    def __init__(self, ledger, driver, store, consumption, fixture=None):
         self.ledger, self.driver, self.store, self.consumption = ledger, driver, store, consumption
         self.engine = RecoveryEngine(ledger, driver)
+        self.fixture = fixture
+        if fixture is not None:
+            require(fixture.driver is driver, "FIXTURE_DRIVER_BINDING")
+            fixture.engine = self.engine
 
     def dispatch(self, method, body):
         scope = lookup(body)
@@ -166,7 +350,14 @@ class ControllerService:
     def _mutate(self, method, scope):
         if method == "create":
             session_method()  # No partial real fixture when the session proof is unapproved.
-            result = self.engine.create(scope)
+            if type(self.driver) is ResourceDriver and self.driver.identity is not None:
+                require(self.fixture is not None, "PG_FIXTURE_REQUIRED")
+                self.driver.identity.verify(scope)
+                self.fixture.prepare()
+                self.fixture.start()
+                result = self.fixture.readiness()
+            else:
+                result = self.engine.create(scope)
             return self.store.append(scope, "CREATED", result).model_dump()
         require(method in ("destroy", "reconcile"), "CONTROLLER_METHOD")
         previous = self.store.maybe_read(scope, "RECONCILED")
@@ -174,7 +365,21 @@ class ControllerService:
             return previous.model_dump()  # Durable ACK recovery, never another remove.
         if self.store.maybe_read(scope, "DESTROY_REQUESTED") is None:
             self.store.append(scope, "DESTROY_REQUESTED", dict(resource_ids=self.identities(scope)))
+        stop_error = None
+        if self.fixture is not None:
+            try:
+                if self.fixture.container_id is None:
+                    self.fixture.restore()
+                self.fixture.stop()
+            except BaseException as error:
+                stop_error = getattr(error, "code", "A42363_PG_STOP_ACK_UNKNOWN")
         result = self.engine.recover(scope)
+        if stop_error:
+            result.update(
+                status="INCOMPLETE_QUARANTINED",
+                first_error=stop_error,
+                cleanup_codes=list(dict.fromkeys([stop_error, *result["cleanup_codes"]])),
+            )
         result.update(
             scope_sha256=scope_hash(scope),
             destroyed_ns=time.monotonic_ns(),
@@ -260,7 +465,8 @@ class RecoveryEngine(Reconciler):
                 require(len(identities) == 1, "OWNERSHIP_UNKNOWN_QUARANTINE")
                 # A prior remove may have succeeded despite an unknown ACK. Ask E first;
                 # never infer absence from C's inspect error or replay a removal blindly.
-                if events[-1].event == "REMOVE_ATTEMPTED" and self.driver.absent(item):
+                if events[-1].event == "REMOVE_ATTEMPTED":
+                    require(self.driver.absent(item), "REMOVE_ACK_UNKNOWN")
                     self._event(item, "OBSERVED_ABSENT")
                     removed.append(item.kind)
                     continue

@@ -31,11 +31,12 @@ METHODS = {
 class FixedCommandRunner:
     """Administrator-pinned executable and namespace; no shell or caller argv RPC."""
 
-    def __init__(self, executable, digest, namespace_fd):
+    def __init__(self, executable, digest, namespace_fd, command_scope=None):
         from scripts.a42361_deployment import checked_executable
 
         self.executable = checked_executable(executable, digest)
         self.digest, self.namespace_fd, self.count = digest, namespace_fd, 0
+        self.command_scope = command_scope
         self.cleanup_count, self.read_count, self.cleaning = 0, 0, False
         self.namespace_identity = (os.fstat(namespace_fd).st_dev, os.fstat(namespace_fd).st_ino)
         self.namespace_sha256 = sha(os.readlink("/proc/self/ns/user").encode())
@@ -69,7 +70,6 @@ class FixedCommandRunner:
 
     def _run(self, arguments, pass_fds=()):
         from scripts.a42361_deployment import checked_executable
-        from scripts.a42362_supervisor_service import run_fixed_offline
 
         require(
             type(arguments) is tuple and arguments and len(arguments) <= 64,
@@ -89,17 +89,11 @@ class FixedCommandRunner:
         require(
             (current.st_dev, current.st_ino) == self.namespace_identity, "WRONG_RUNTIME_NAMESPACE"
         )
-        # Existing helper retains its historical eight-argument limit. New long fixed
-        # templates use the bounded output collector, never a shell or caller argv.
-        if len(arguments) <= 8:
-            return run_fixed_offline(
-                self.executable,
-                arguments,
-                token_sha256=self.digest,
-                timeout_ms=1000,
-                pass_fds=pass_fds,
-            )
-        return run_installed_command(self.executable, arguments, pass_fds=pass_fds)
+        # Short commands also need descendant confinement. Never route them through
+        # the legacy direct-child-only helper just because their argv is short.
+        return run_installed_command(
+            self.executable, arguments, pass_fds=pass_fds, command_scope=self.command_scope
+        )
 
 
 class ManagerFDs:
@@ -202,6 +196,9 @@ class ServiceHost(LocalReceiver):
         operator = method in ("import", "revoke")
         require(peer_uid == p.operator_uid if operator else peer_uid in p.read_uids, "PEER_ACL")
         require(type(body) is dict and len(canonical(body)) <= 65536, "BODY_SCHEMA")
+        from scripts.a42363_rpc import request_contract
+
+        request_contract(self.domain, method).validate(body)
         if self.domain in ("registry", "approval"):
             from scripts.a42362_approval_registry_service import ApprovalRegistryService
 
@@ -270,6 +267,9 @@ class ServiceHost(LocalReceiver):
             backend = self.backends["owner"]
             if method == "create":
                 require(peer_uid == self.policy.deployment.controller.peer_uid, "OWNER_CREATE_ACL")
+                from scripts.a42363_owner import OwnerRuntime
+
+                require(type(backend.runtime) is OwnerRuntime, "OWNER_RUNTIME_REQUIRED")
             if method == "run":
                 from scripts.a42363_contract import session_method
 
@@ -304,7 +304,7 @@ def compose(policy=None, capabilities=None):
         "approval": set(),
         "consumer": set(),
         "pg_owner": {"owner_connection", "owner_runtime"},
-        "controller": {"ledger", "resource_driver", "consumption"},
+        "controller": {"ledger", "resource_driver", "consumption", "fixture"},
         "absence_auditor": {"observer", "controller_store", "ledger"},
         "supervisor": {"root_manager", "scope", "publisher"},
     }[p.domain]
@@ -319,6 +319,7 @@ def compose(policy=None, capabilities=None):
             capabilities["resource_driver"],
             store,
             capabilities["consumption"],
+            capabilities["fixture"],
         )
     elif p.domain == "absence_auditor":
         backend[p.domain] = AbsenceService(

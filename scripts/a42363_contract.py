@@ -79,9 +79,9 @@ def verify_receipt(raw, domain, scope, event=None):
 
 
 class State(Strict):
-    source_status: Literal["PARTIAL_SOURCE_BLOCKED", "SOURCE_IMPLEMENTED_EXCEPT_METHOD_BLOCKED"] = (
-        "PARTIAL_SOURCE_BLOCKED"
-    )
+    source_status: Literal[
+        "PARTIAL_SOURCE_BLOCKED", "SOURCE_IMPLEMENTED_EXCEPT_METHOD_BLOCKED", "ENGINEERING_BLOCKED"
+    ] = "ENGINEERING_BLOCKED"
     offline_level: Literal["L0_L1_ONLY"] = "L0_L1_ONLY"
     method_decision: Literal["METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION"] = (
         "METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION"

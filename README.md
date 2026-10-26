@@ -2043,3 +2043,14 @@ E 独立审计适配器、cgroup FD 与外层工件监督、六源回执审阅�
 仅 L0/L1 开发验证；不提供可直接安装/启用的命令。GUC 方法仍待独立批准，
 源码状态与未闭合项以 [A42363 交付](docs/acceptance/a42363_closeout.md) 为准。
 003 SQL 只供未来专用控制面审阅，不对业务库执行。G1 SQL0、G2 总8待决、G3未授权。
+
+### A42363 集中整改（ENGINEERING_BLOCKED）
+
+新增同源 FixtureIdentity、容器 prepare/start/readiness/stop 状态与原始身份恢复、闭合 RPC
+参数合同，修复卷删除 API 身份混淆、E 两轮间账本漂移、Guardian 安装顺序和工件发布前
+提前确认 D 终态的问题。运行时命令无真实后代隔离能力即拒绝启动。
+动态建库至少9条初始化 SQL，与原8条预算冲突，资源前明确阻断；完整镜像 bootstrap/
+认证和安全卷回收仍未闭合，不能称为可部署 G1。没有修改旧16SQL/allowlist或执行实机。
+集中范围、60项证据分级、协议候选与剩余工程见
+[集中交付](docs/acceptance/a42363_complete_closeout.md)、
+[协议 ADR](docs/acceptance/a42363_complete_protocol_ADR.md)。普通 CI 不授予 G1/L2/G2/G3资格。
