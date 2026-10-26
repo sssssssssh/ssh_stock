@@ -43,7 +43,7 @@ class Key(Strict):
 
 
 class Deployment(Strict):
-    schema_version: Literal["a42361.deployment.v1"] = "a42361.deployment.v1"
+    schema_version: Literal["a42361.deployment.v1", "a42363.deployment.v2"] = "a42361.deployment.v1"
     root_directory: str
     control_database: Name
     control_role: Name
@@ -129,7 +129,9 @@ def validate_deployment(value, now):
     require(
         len({e.socket_name for e in endpoints}) == 7
         and len({e.peer_uid for e in endpoints}) == 7
-        and value.worker_uid == value.supervisor.peer_uid
+        and (value.worker_uid == value.supervisor.peer_uid
+             if value.schema_version == "a42361.deployment.v1"
+             else value.worker_uid not in {e.peer_uid for e in endpoints})
         and value.controller_uid == value.controller.peer_uid,
         "A42361_TRUST_DOMAINS_NOT_INDEPENDENT",
     )
@@ -231,9 +233,10 @@ class LocalService:
             )
             and method
             in {
-                "registry": ("key-status",),
-                "approval": ("approval", "receipt"),
-                "consumer": ("consume", "receipt", "journal", "resource-append", "resource-scan"),
+                "registry": ("key-status", "import", "receipt"),
+                "approval": ("approval", "receipt", "import", "revoke"),
+                "consumer": ("consume", "receipt", "journal", "resource-append",
+                             "resource-scan", "committed-receipt"),
                 "pg_owner": ("create", "receipt", "run"),
                 "controller": ("create", "destroy", "receipt", "reconcile"),
                 "absence_auditor": ("journal", "absent", "receipt"),

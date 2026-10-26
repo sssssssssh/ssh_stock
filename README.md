@@ -2035,3 +2035,11 @@ METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION；worker/旧创建入口在凭据、连�
 完整源码缺口见 [A42362交付](docs/acceptance/a42362_closeout.md)、
 [方法决策](docs/acceptance/a42362_method_decisions.md)及 [72项追踪](docs/acceptance/a42362_test_traceability.md)。
 新 002 DDL 只供未来全新专用控制面审阅，不得对现有业务库/控制库执行。
+
+### A42363 G1 服务端收尾源码（默认关闭）
+
+新增独立 host 装配、v2 Worker UID 隔离、固定四资源命令、保留原始身份的恢复、
+E 独立审计适配器、cgroup FD 与外层工件监督、六源回执审阅及第五精确冻结叠层。
+仅 L0/L1 开发验证；不提供可直接安装/启用的命令。GUC 方法仍待独立批准，
+源码状态与未闭合项以 [A42363 交付](docs/acceptance/a42363_closeout.md) 为准。
+003 SQL 只供未来专用控制面审阅，不对业务库执行。G1 SQL0、G2 总8待决、G3未授权。

@@ -1049,3 +1049,12 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
   工件监督和安装manager尚缺，不得标SOURCE_CLOSED或CODE_READY。详见a42362_closeout.md。
 - 普通CI和受控本地进程/UnixIPC只证明代码/故障合同。G1物理NOT_RUN、G2总8待决、G3未授权；
   生产/性能/容量/因果资格恒false。本轮不触及业务.env/库、PG/Podman/云/服务安装或手动dispatch。
+
+### A42363 收尾源码与证据分级边界
+
+- 新增第五精确叠层；旧四份 manifest、历史协议、probe SQL、生产源码和 CI 工作流不变。
+- v1 UID 兼容保留；新 v2 Worker 必须与七域 UID 分离。新 RPC 方法按显式矩阵和 OS peer ACL 校验。
+- UNKNOWN 后恢复必须保留此前 OBSERVED_CREATED 身份，禁止用最新同名 inspect 替代历史身份。
+- 独立 E 与 D 原始证据缺失、事务结果未知、工件未完成均不得升级物理成功。
+- A42363 仍限 L0/L1；方法审批、源码缺口、安装配置与物理能力分别报告，见 a42363_closeout.md。
+- G1/L2 NOT_RUN_NOT_AUTHORIZED、SQL0、G2有效总8 PENDING、G3未授权及生产等资格false不变。

@@ -33,9 +33,13 @@ def test_AT02_no_directory_or_prefix_exemptions(name):
 
 
 def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchanged():
+    from scripts import a42363_source_guard as closeout
+
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
+    historical_head = closeout.BASELINE
     changed = set(
-        subprocess.check_output(["git", "diff", "--name-only", "-z", g.BASELINE, head], cwd=ROOT)
+        subprocess.check_output(
+            ["git", "diff", "--name-only", "-z", g.BASELINE, historical_head], cwd=ROOT)
         .decode()
         .split("\0")
     ) - {""}
@@ -49,13 +53,19 @@ def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchang
             ["git", "show", f"{head}:{name}"], cwd=ROOT
         ) == subprocess.check_output(["git", "show", f"{g.BASELINE}:{name}"], cwd=ROOT)
     manifest = json.loads(
-        subprocess.check_output(["git", "show", f"{head}:{g.MANIFEST}"], cwd=ROOT)
+        subprocess.check_output(["git", "show", f"{historical_head}:{g.MANIFEST}"], cwd=ROOT)
     )
     assert manifest["stage_paths"] == sorted(g.STAGE_PATHS)
     assert set(manifest["patch_sha256"]) == g.PINNED
     for name in g.PINNED:
-        actual = subprocess.check_output(["git", "show", f"{head}:{name}"], cwd=ROOT)
+        actual = subprocess.check_output(["git", "show", f"{historical_head}:{name}"], cwd=ROOT)
         assert hashlib.sha256(actual).hexdigest() == manifest["patch_sha256"][name]
+        current = subprocess.check_output(["git", "show", f"{head}:{name}"], cwd=ROOT)
+        if name in closeout.PINNED:
+            latest = json.loads((ROOT / closeout.MANIFEST).read_bytes())
+            assert hashlib.sha256(current).hexdigest() == latest["patch_sha256"][name]
+        else:
+            assert current == actual
 
 
 def test_AT04_normalization_excludes_only_the_new_self_reference_literal():

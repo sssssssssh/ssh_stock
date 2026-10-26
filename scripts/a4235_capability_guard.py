@@ -57,18 +57,21 @@ NEXT_STAGE_PATHS = NEXT_PATCH_PATHS | frozenset((
         'g1_authorization_request_TEMPLATE', 'unresolved_methods'))))
 LIVE_MANIFEST_SHA = 'a88d62d980751cfe182bcffc0a450c21d57195810bdce4e24c80f43c4ff1fb64'
 SERVICE_MANIFEST_SHA = '692b2ca9f3f1f95404a6ec953b557d6a6b510123a522b9f357163d3b016b1817'
+CLOSEOUT_MANIFEST_SHA = '0da88649e214a17d8f2d03df34b91009e4b8985d8d574393f43af6c466588cb8'
 
 
 def live_paths():
     from scripts.a42361_source_guard import STAGE_PATHS as paths
     from scripts.a42362_source_guard import STAGE_PATHS as service_paths
-    return paths | service_paths
+    from scripts.a42363_source_guard import STAGE_PATHS as closeout_paths
+    return paths | service_paths | closeout_paths
 
 
 def live_protected_paths():
     from scripts.a42361_source_guard import AUTHORITY, INFRA
     from scripts.a42362_source_guard import INFRA as service_infra
-    return live_paths() - AUTHORITY - set(INFRA) - service_infra
+    return (live_paths() - AUTHORITY - set(INFRA) - service_infra
+            - {'infra/g1_control_plane/003_closeout.sql'})
 
 
 def git(root: Path, *args: str) -> bytes:
