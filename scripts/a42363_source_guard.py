@@ -133,7 +133,8 @@ def validate(g, root, head):
             current = g.git(root, "show", f"{BASELINE}:{path}")
             if path not in fd_guard.STAGE_PATHS | previous.STAGE_PATHS:
                 require(
-                    hashlib.sha256(current).hexdigest() == expected, "A4235_LIVE_OVERLAY_INVALID"
+                    hashlib.sha256(current).hexdigest() == expected,
+                    "A4235_OVERLAY_BYTES_MISMATCH",
                 )
     frozen = json.loads(g.git(root, "show", f"{BASELINE}:{previous.MANIFEST}"))
     require(

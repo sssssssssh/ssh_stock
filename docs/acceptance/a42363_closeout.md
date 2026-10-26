@@ -50,12 +50,18 @@ L2 is NOT_RUN_NOT_AUTHORIZED; approval of option A is a distinct future decision
 | W08 | strict domain composition, manager FDs, peer/method ACL, externally supervised handlers | L0/L1; disabled review template only |
 | W09 | concrete C/O/D/E algorithms through actual child processes, private files/Unix FDs, normal +12 fault types | DB_MODEL_ONLY/NONQUALIFYING; no G1 claim |
 | W10 | six independently fetched source receipts, original approval/consumption/raw Owner and D/E chain validation | L0/L1 forged/rehashed source rejection |
-| W11 | latest targeted149 passed4.33s; prior failure8 retained and fixed by canonical JSON records/framed streams | full final-HEAD regression still required |
+| W11 | targeted149 passed4.33s; full local3645 passed/9 failed438.56s | one guard error-code compatibility fixed; eight inherited Linux prerequisites unavailable on macOS; final Linux CI required |
 | W12 | nine stage documents, exact AT01–AT88 obligations/test nodes, four append-only authorities | source acceptance matrix retains gaps, never88/88 physical PASS |
 | W13 | one final push and same-SHA existing ordinary CI/artifact audit | actual identifiers only after push; no rerun/dispatch of expensive experiments |
 
 Later targeted149 cases supersede146/139/108/94 runs; counts describe different suites,
 not additive evidence. The8-failure intermediate run remains in local raw JUnit.
+Full offline JUnit a42363-full-offline.xml is retained with all9 failures. The new
+historical-byte guard preserves the old OVERLAY_BYTES_MISMATCH error contract, without
+changing the old assertion. Eight other failures are one inherited Watchdog model using
+/proc plus seven inherited Linux IPC/process scenarios (SO_PEERCRED, /proc and pidfd).
+These were actually attempted and failed locally, not counted as skipped/passed. No old
+Linux implementation/test is weakened for macOS; the ordinary Linux CI must execute all.
 No production SQL/model/formula, workflow/dependency, old protocol/manifest or prior
 one-time authorization was modified. Performance comparisons and603040-row capacity
 are NOT_RUN in this source-only task, not inferred from offline latency.
