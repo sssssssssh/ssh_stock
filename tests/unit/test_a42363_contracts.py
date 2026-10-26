@@ -582,3 +582,13 @@ def test_AT36_owner_reader_cannot_initialize_fixture(monkeypatch):
     service = host.ServiceHost(policy, {"owner": owner})
     with pytest.raises(Fault, match="OWNER_CREATE_ACL"):
         service.dispatch(2001, "create", dict(scope=scope().model_dump()))
+
+
+@pytest.mark.parametrize("item", resources(scope())[1:])
+def test_AT49_failed_create_command_never_certifies_an_inspected_existing_object(item):
+    driver = ResourceDriver(NS(run=lambda *args, **kwargs: (125, b"")), None, 123, None)
+    observed = []
+    driver.inspect = lambda _: observed.append("inspected") or dict(ID="existing-object")
+    with pytest.raises(Fault, match="CREATE_ACK_UNKNOWN"):
+        driver.create(item)
+    assert observed == []

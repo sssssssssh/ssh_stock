@@ -43,7 +43,7 @@ L2 is NOT_RUN_NOT_AUTHORIZED; approval of option A is a distinct future decision
 | W01 | registry/approval import/revoke/receipt, operator-only direct-host negative, inherited Ed25519 | source + L0; real key custody NOT_CONFIGURED |
 | W02 | reviewed SQL003, append-only role-derived records, new-connection receipts, unknown ACK quarantine | DB_MODEL_ONLY; actual PG privileges NOT_RUN |
 | W03 | raw Owner/8 SQL audit, sealed FD lease/bootstrap, v2 pre/post-connect split, method ADR | METHOD_BLOCKED; not target-session verified |
-| W04 | four fixed creation adapters, reservation/attempted-before-create | PARTIAL_SOURCE_BLOCKED: volume immutable removal contract unavailable |
+| W04 | four fixed creation adapters, reservation/attempted-before-create, nonzero create exit rejects before inspect | PARTIAL_SOURCE_BLOCKED: volume immutable removal and complete PG fixture bootstrap unavailable |
 | W05 | original identity retained across UNKNOWN, reverse recovery, no second create/remove after ACK uncertainty | L0 + real file-model L1; volume quarantines |
 | W06 | distinct observer UID contract, held namespace/store, raw info/exists, independent journal/two rounds | source + L0/file L1; real delegated multi-UID visibility NOT_PROVEN |
 | W07 | private root channel, exact cgroup FDs, pidfd, root launcher, durable run attempt, guardian/artifact deadlines | source + portable L1; kernel/credential deployment NOT_RUN |
@@ -77,8 +77,18 @@ Remaining decision/action owners:
 2. Runtime/safety reviewer: select a provable immutable-volume removal/exclusion mechanism.
    Current name-only Podman interface cannot satisfy this contract; source quarantines
    before rm. This is an engineering/capability gap, not hidden as ordinary deployment.
+   The fixed container adapter currently prepares a container; it does not provide a
+   proven started PG server with the required shared socket/UID/authentication bootstrap.
+   Closing that independent runtime construction chain remains a source gap. Do not
+   call the file-model chain a runnable PG fixture or promote C CREATED to PG readiness.
 3. Independent administrator after source review: install pinned bootstrap/capability FDs,
    authenticate the restricted probe role, dedicated control-plane DDL/roles and E's readonly
    multi-UID namespace/store delegation. All installation and physical verification NOT_RUN.
 4. User after those gates: separately authorize isolated L2/G1. No token reset, retry for
    PASS, production SQL change or business database operation is included in this delivery.
+
+Post-push safety review additionally reproduced three create-exit failures (volume,
+secret, container): old code inspected even after command exit125. The adapter now
+rejects nonzero exit before inspect; RecoveryEngine retains UNKNOWN/quarantine with no
+second create. The three RED cases and first pushed SHA/CI remain recorded. This safety
+repair requires a follow-up final SHA/ordinary CI; prior push is not final-SHA evidence.

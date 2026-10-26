@@ -28,6 +28,11 @@ Container templates fix digest, UID, no network, readonly root, dropped caps, no
 FD, never a password in argv/env. Epoch/namespace/owner/scope labels and creation metadata
 must match. Runtime incompatibility is a blocked capability, not an automatic weaker mode.
 
+Nonzero create command exits fail before inspect, so an existing object cannot turn a
+failed create into success. Current container template prepares the object only. Complete
+PG startup, socket delegation and restricted-role authentication are not implemented as
+a verified runtime bootstrap; this is explicitly PARTIAL_SOURCE_BLOCKED, not PG readiness.
+
 DESTROY_REQUESTED/RECONCILED use independent durable domain receipts. Unknown C ack can
 be recovered by a fresh receipt read. A reconciled incomplete token stays quarantined;
 ordinary retry never silently creates another run or overwrites its first failure.

@@ -63,9 +63,10 @@ class ResourceDriver:
     def create(self, item):
         if item.kind == "SOCKET_DIR":
             return self.socket_directory.create(item)
-        self.commands.run(
+        code, _ = self.commands.run(
             self.creation_command(item), pass_fds=(self.secret_fd,) if item.kind == "SECRET" else ()
         )
+        require(code == 0, "CREATE_ACK_UNKNOWN")
         return self.inspect(item)
 
     def inspect(self, item):

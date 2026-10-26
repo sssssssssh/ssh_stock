@@ -2,7 +2,7 @@
 
 Each row preserves the exact taskbook obligation. A cited test proves only its stated
 L0/L1 scenario; it does not certify the entire physical obligation. DB models are
-DB_MODEL_ONLY. Portable targeted run:149 passed in4.33s; initial RED10 failures retained.
+DB_MODEL_ONLY. Portable targeted run:152 passed in4.55s; initial RED10 failures retained.
 Linux-only pidfd/setsid is NOT_RUN locally on macOS and must be read from CI JUnit
 property linux_setsid_pidfd_executed. L2 is NOT_RUN_NOT_AUTHORIZED for every row.
 Final full-unit/CI results and downloaded artifact identities are reported in the
@@ -58,7 +58,7 @@ external delivery evidence; this frozen file never predicts a Run ID or future S
 | AT46 | Socket 已创建但 ACK 丢失：下一次仅 reconcile，禁止二次 mkdir/清除外国 socket。 | `tests/unit/test_a42363_contracts.py::test_AT41_AT50_partial_creation_ack_loss_never_recreates` | L0 + file L1; Podman NOT_RUN |
 | AT47 | Volume 创建后响应丢失：不得再次 volume create；要以账本+独立 inspect 对账。 | `tests/unit/test_a42363_contracts.py::test_AT41_AT50_partial_creation_ack_loss_never_recreates` | L0 + file L1; Podman NOT_RUN |
 | AT48 | Secret 创建成功、ID 未入账：不得按相似 secret 名清理。 | `tests/unit/test_a42363_contracts.py::test_AT41_AT50_partial_creation_ack_loss_never_recreates` | L0 + file L1; Podman NOT_RUN |
-| AT49 | Container 创建中断、运行时失败：仅在 exact ID/epoch 确认后可精准删除。 | `tests/unit/test_a42363_contracts.py::test_AT41_AT50_partial_creation_ack_loss_never_recreates` | L0 + file L1; Podman NOT_RUN |
+| AT49 | Container 创建中断、运行时失败：仅在 exact ID/epoch 确认后可精准删除。 | `tests/unit/test_a42363_contracts.py::test_AT49_failed_create_command_never_certifies_an_inspected_existing_object` | L0 + file L1; Podman NOT_RUN |
 | AT50 | B event append ACK 丢失或事件缺失不能重置消费/第二次创建。 | `tests/unit/test_a42363_contracts.py::test_AT41_AT50_partial_creation_ack_loss_never_recreates` | L0 + file L1; Podman NOT_RUN |
 | AT51 | 资源创建后被置换、标签变化、namespace 漂移只能 `OWNERSHIP_UNKNOWN_QUARANTINE`。 | `tests/unit/test_a42363_contracts.py::test_AT51_unknown_suffix_keeps_original_identity_and_never_removes_replacement` | L0 + file L1; Podman NOT_RUN |
 | AT52 | C recover 严格按账本、倒序目标资源，只处理本 token，不枚举相似资源。 | `tests/unit/test_a42363_contracts.py::test_AT51_unknown_suffix_keeps_original_identity_and_never_removes_replacement` | L0 + file L1; Podman NOT_RUN |
