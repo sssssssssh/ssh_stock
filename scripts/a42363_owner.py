@@ -35,6 +35,17 @@ INIT_SQL = (
 )
 
 
+def fixed_initialization_sql(identity=None):
+    """One renderer for the unchanged eight templates; no caller identifiers/SQL."""
+    if identity is None:
+        return INIT_SQL  # Historical injected-row contracts, never a new live route.
+    identity.verify(identity.scope)
+    return tuple(
+        s.replace("a42363_fixture", identity.database).replace("a42363_probe", identity.probe_role)
+        for s in INIT_SQL
+    )
+
+
 class OwnerRuntime:
     """Raw runtime inspector and dedicated control-plane isolation receiver backend."""
 
@@ -216,7 +227,12 @@ class RawOwnerBackend:
             connection = self.connection_factory(scope)
         try:
             self.runtime.verify_owner_connection(connection, scope)
-            for statement in plan.statements[1:] if plan is not None else INIT_SQL:
+            statements = (
+                plan.statements[1:]
+                if plan is not None
+                else fixed_initialization_sql(getattr(self.runtime, "identity", None))
+            )
+            for statement in statements:
                 cursor = connection.execute(statement)
             row = cursor.fetchone()
             connection.commit()

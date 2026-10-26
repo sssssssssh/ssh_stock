@@ -299,15 +299,9 @@ def compose(policy=None, capabilities=None):
     repository = Repository(policy)
     store = DomainStore(p.domain, repository)
     backend = {"repository": repository}
-    required = {
-        "registry": set(),
-        "approval": set(),
-        "consumer": set(),
-        "pg_owner": {"owner_connection", "owner_runtime"},
-        "controller": {"ledger", "resource_driver", "consumption", "fixture"},
-        "absence_auditor": {"observer", "controller_store", "ledger"},
-        "supervisor": {"root_manager", "scope", "publisher"},
-    }[p.domain]
+    from scripts.a42363_installation import CAPABILITIES
+
+    required = CAPABILITIES[p.domain]
     require(set(capabilities) == required, "CAPABILITY_SET")
     if p.domain == "pg_owner":
         backend["owner"] = RawOwnerBackend(
@@ -338,6 +332,33 @@ def compose(policy=None, capabilities=None):
             capabilities["publisher"],
         )
     return ServiceHost(policy, backend)
+
+
+def compose_installed(policy, document, scope, capabilities, code_fds):
+    """Manager-only FD-bound factory. Creates no sockets, processes or SQL connections."""
+    from scripts.a42363_installation import InstalledFDDocument
+
+    p = installation(policy)
+    require(
+        type(document) is InstalledFDDocument
+        and document.domain == p.domain
+        and document.uid == p.uid
+        and os.getuid() == p.uid,
+        "INSTALLATION_PRINCIPAL",
+    )
+    document.verify_scope(scope, int(time.time())).verify_code_fds(code_fds)
+    require(set(capabilities) == set(code_fds), "INSTALLATION_CAPABILITIES")
+    if p.domain == "controller":
+        require(
+            capabilities["resource_driver"].identity == capabilities["fixture"].identity,
+            "FIXTURE_IDENTITY",
+        )
+        capabilities["fixture"].identity.verify(scope)
+    elif p.domain == "pg_owner":
+        capabilities["owner_runtime"].identity.verify(scope)
+    elif p.domain == "supervisor":
+        require(capabilities["scope"] == scope, "WORKER_SCOPE_BINDING")
+    return compose(policy, capabilities)
 
 
 class Orchestrator:

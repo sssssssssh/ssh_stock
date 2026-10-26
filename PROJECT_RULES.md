@@ -1071,3 +1071,17 @@ Markdown 是源码级文档，`.docx` 是面向阅读的导出版。
   Guardian 必须先 arm，所有运行时命令须约束完整后代；普通文件和进程组不是内核证明。
 - 整体 ENGINEERING_BLOCKED，源码工程/协议/平台缺口分别列举；G1 SQL0、G2总8待决、
   G3未授权、全部生产/性能/容量/归因资格 false，详见 a42363_complete_closeout.md。
+
+
+### A42363 20261027 集中工程审查整改
+
+补充资源删除不重放、原始创建身份/首错持久、PG停止回执恢复、E前中后复核、
+Guardian失败关闭和发布不确定保护；新增只读安装FD合同、离线候选GUC parser及
+六域Orchestrator跨进程文件SQL模型。生产代码、旧16SQL/allowlist/预算/历史授权与
+六份manifest、全部旧测试保持原字节。精确第七层独立校验新差异和全HEAD。
+
+状态ENGINEERING_BLOCKED：审核镜像bootstrap、安全Volume排他删除源码仍缺失；
+三份独立ADR默认NOT_APPROVED，安装NOT_DEPLOYED，真实G1/PG17/Podman/cgroup
+NOT_RUN_NOT_AUTHORIZED。模型/普通CI不能提升资格，real_probe_sql_executed=0，
+G2有效预热8，G3未授权。详见docs/acceptance/a42363_review_closeout.md及三个ADR；
+最终SHA的CI/JUnit/ZIP审计单列交付报告，不复用基线绿色证据。

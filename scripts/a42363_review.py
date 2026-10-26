@@ -87,6 +87,31 @@ class Reviewer:
         require(
             not c.record.get("first_error") and not c.record.get("cleanup_codes"), "FIRST_ERROR"
         )
+        require(
+            all(
+                not r.record.get("first_error") and not r.record.get("cleanup_codes")
+                for r in receipts.values()
+            ),
+            "FIRST_ERROR",
+        )
+        if "creation_facts" in c.record:
+            facts = c.record["creation_facts"]
+            require(set(facts) == {r.kind for r in resources(scope)}, "FOUR_ORIGINAL_IDENTITIES")
+            for item in resources(scope):
+                fact = verify_receipt(
+                    facts[item.kind], "controller", scope, "CREATION_" + item.kind
+                )
+                require(
+                    fact.sequence < c.sequence
+                    and fact.record["identity_sha256"] == c.record["resource_ids"][item.kind]
+                    and fact.record["resource"] == item.model_dump()
+                    and fact.record["epoch"] == scope.epoch
+                    and fact.record["namespace_sha256"] == scope.namespace_sha256
+                    and type(fact.record["original_id"]) is str
+                    and bool(fact.record["original_id"])
+                    and fact.record["source_sha256"] == scope.binding.identity.source_sha256,
+                    "ORIGINAL_IDENTITY_BINDING",
+                )
         # Even independently fetched controlled L1 records do not qualify as physical G1.
         return dict(
             status="OFFLINE_CROSS_DOMAIN_VERIFIED",

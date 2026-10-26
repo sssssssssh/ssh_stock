@@ -2054,3 +2054,17 @@ E 独立审计适配器、cgroup FD 与外层工件监督、六源回执审阅�
 集中范围、60项证据分级、协议候选与剩余工程见
 [集中交付](docs/acceptance/a42363_complete_closeout.md)、
 [协议 ADR](docs/acceptance/a42363_complete_protocol_ADR.md)。普通 CI 不授予 G1/L2/G2/G3资格。
+
+
+### A42363 20261027 集中工程审查整改
+
+补充资源删除不重放、原始创建身份/首错持久、PG停止回执恢复、E前中后复核、
+Guardian失败关闭和发布不确定保护；新增只读安装FD合同、离线候选GUC parser及
+六域Orchestrator跨进程文件SQL模型。生产代码、旧16SQL/allowlist/预算/历史授权与
+六份manifest、全部旧测试保持原字节。精确第七层独立校验新差异和全HEAD。
+
+状态ENGINEERING_BLOCKED：审核镜像bootstrap、安全Volume排他删除源码仍缺失；
+三份独立ADR默认NOT_APPROVED，安装NOT_DEPLOYED，真实G1/PG17/Podman/cgroup
+NOT_RUN_NOT_AUTHORIZED。模型/普通CI不能提升资格，real_probe_sql_executed=0，
+G2有效预热8，G3未授权。详见docs/acceptance/a42363_review_closeout.md及三个ADR；
+最终SHA的CI/JUnit/ZIP审计单列交付报告，不复用基线绿色证据。

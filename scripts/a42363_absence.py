@@ -78,10 +78,12 @@ class DelegatedReadOnlyCollector:
         self.runner, self.namespace_fd, self.store_fd = runner, namespace_fd, store_fd
         self.expected, self.socket_directory = expected, socket_directory
         self.collector_fd = collector_fd
+        self._visibility_verified = None
         self.namespace_identity = (os.fstat(namespace_fd).st_dev, os.fstat(namespace_fd).st_ino)
         self.store_identity = (os.fstat(store_fd).st_dev, os.fstat(store_fd).st_ino)
 
     def visibility(self, delegation):
+        self._visibility_verified = None
         require(
             os.getuid() == self.expected["observer_uid"]
             and self.expected["observer_uid"] != self.expected["controller_uid"],
@@ -124,6 +126,7 @@ class DelegatedReadOnlyCollector:
         graph = os.stat(info["store"]["graphRoot"], follow_symlinks=False)
         require((graph.st_dev, graph.st_ino) == self.store_identity, "AUDIT_WRONG_STORE_FD")
         require(os.fstat(self.collector_fd) == meta, "COLLECTOR_CHANGED")
+        self._visibility_verified = (self.namespace_identity, self.store_identity, meta)
         # Installation data are checked against held kernel objects, not C's JSON.
         return {
             k: self.expected[k]
@@ -139,6 +142,18 @@ class DelegatedReadOnlyCollector:
         }
 
     def read_exact(self, item):
+        proof, self._visibility_verified = self._visibility_verified, None
+        require(proof is not None, "READONLY_DELEGATION_REQUIRED")
+        require(
+            item.scope.controller_uid == self.expected["controller_uid"]
+            and item.scope.epoch == self.expected["epoch"]
+            and item.scope.namespace_sha256 == self.expected["namespace_sha256"],
+            "AUDIT_VISIBILITY",
+        )
+        for fd, expected in ((self.namespace_fd, proof[0]), (self.store_fd, proof[1])):
+            actual = os.fstat(fd)
+            require((actual.st_dev, actual.st_ino) == expected, "DELEGATION_FD_CHANGED")
+        require(os.fstat(self.collector_fd) == proof[2], "COLLECTOR_CHANGED")
         if item.kind == "SOCKET_DIR":
             try:
                 meta = os.stat(
@@ -204,6 +219,11 @@ class AbsenceService:
                 observations.append(raw)
         require(
             self.ledger.scan(dict(scope=scope.model_dump())) == snapshot, "AUDIT_LEDGER_CHANGED"
+        )
+        require(
+            self.controller_store.read(scope, "RECONCILED") == destroyed
+            and self.controller_store.read(scope, "DESTROY_REQUESTED") == requested,
+            "AUDIT_DESTRUCTION_CHANGED",
         )
         require(
             all(

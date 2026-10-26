@@ -17,6 +17,7 @@ class ResourceDriver:
         self.commands, self.socket_directory = commands, socket_directory
         self.secret_fd, self.independent_observer = secret_fd, independent_observer
         self.identity = identity
+        self._remove_attempted = set()
 
     def begin_cleanup(self):
         self.commands.begin_cleanup()
@@ -111,6 +112,7 @@ class ResourceDriver:
         return result
 
     def verify(self, item, raw):
+        require(item in resources(item.scope), "RESOURCE_SCOPE")
         if item.kind == "SOCKET_DIR":
             require(raw == self.socket_directory.inspect(item), "SOCKET_REPLACED")
             return sha(canonical(raw))
@@ -201,7 +203,15 @@ class ResourceDriver:
             is not None,
             "REMOVE_IMMUTABLE_ID_UNPROVEN",
         )
-        code, _ = self.commands.run((item.kind.lower(), "rm", identity))
+        key = (scope_hash(item.scope), item.kind, identity)
+        require(key not in self._remove_attempted, "NO_SECOND_REMOVE")
+        self._remove_attempted.add(key)  # Never refund an unknown external result.
+        try:
+            code, _ = self.commands.run((item.kind.lower(), "rm", identity))
+        except Fault:
+            raise
+        except Exception:
+            raise Fault("A42363_REMOVE_ACK_UNKNOWN") from None
         require(code == 0, "REMOVE_ACK_UNKNOWN")
 
     def absent(self, item):
@@ -333,7 +343,7 @@ class FixtureSocketDirectory:
 class ControllerService:
     def __init__(self, ledger, driver, store, consumption, fixture=None):
         self.ledger, self.driver, self.store, self.consumption = ledger, driver, store, consumption
-        self.engine = RecoveryEngine(ledger, driver)
+        self.engine = RecoveryEngine(ledger, driver, creation_store=store)
         self.fixture = fixture
         if fixture is not None:
             require(fixture.driver is driver, "FIXTURE_DRIVER_BINDING")
@@ -377,7 +387,7 @@ class ControllerService:
         if stop_error:
             result.update(
                 status="INCOMPLETE_QUARANTINED",
-                first_error=stop_error,
+                first_error=result.get("persistent_first_error") or stop_error,
                 cleanup_codes=list(dict.fromkeys([stop_error, *result["cleanup_codes"]])),
             )
         result.update(
@@ -385,6 +395,12 @@ class ControllerService:
             destroyed_ns=time.monotonic_ns(),
             resource_ids=self.identities(scope),
         )
+        facts = {}
+        for item in resources(scope):
+            saved = self.store.maybe_read(scope, "CREATION_" + item.kind)
+            if saved is not None:
+                facts[item.kind] = saved.model_dump()
+        result["creation_facts"] = facts
         return self.store.append(scope, "RECONCILED", result).model_dump()
 
     def identities(self, scope):
@@ -411,25 +427,75 @@ class RecoveryEngine(Reconciler):
     Missing identity means quarantine; negative evidence must come from independent E.
     """
 
+    def __init__(self, ledger=None, driver=None, creation_store=None):
+        super().__init__(ledger, driver)
+        self.creation_store = creation_store
+
+    def _creation_fact(self, item, raw, digest):
+        if self.creation_store is None:
+            return
+        # Persist only fixed metadata, never secret inspect payloads or credentials.
+        original = raw.get("ID", raw.get("Id", raw.get("id")))
+        if item.kind == "SOCKET_DIR":
+            original = sha(canonical({k: raw.get(k) for k in ("device", "inode", "uid", "gid")}))
+        if item.kind == "VOLUME" and original is None:
+            original = raw.get("StorageID", raw.get("Mountpoint"))
+        require(type(original) is str and bool(original), "CREATION_ID_REQUIRED")
+        self.creation_store.append(
+            item.scope,
+            "CREATION_" + item.kind,
+            dict(
+                resource=item.model_dump(),
+                original_id=original,
+                identity_sha256=digest,
+                epoch=item.scope.epoch,
+                namespace_sha256=item.scope.namespace_sha256,
+                source_sha256=item.scope.binding.identity.source_sha256,
+                created_at=raw.get("CreatedAt", raw.get("Created")),
+                qualifies=False,
+            ),
+        )
+
     def create(self, scope):
         require(self.ledger is not None and self.driver is not None, "CONTROLLER_NOT_CONFIGURED")
         require(
             self.ledger.scan(dict(scope=scope.model_dump()))["events"] == [], "NO_SECOND_CREATE"
         )
+        if self.creation_store is not None:
+            require(
+                self.creation_store.maybe_read(scope, "CREATE_SCOPE_ATTEMPTED") is None,
+                "NO_SECOND_CREATE",
+            )
+            self.creation_store.append(
+                scope,
+                "CREATE_SCOPE_ATTEMPTED",
+                dict(scope_sha256=scope_hash(scope), qualifies=False),
+            )
         started = time.monotonic_ns()
         for item in resources(scope):
-            self._event(item, "RESERVED")
-            self._event(item, "CREATE_ATTEMPTED")
             try:
+                self._event(item, "RESERVED")
+                self._event(item, "CREATE_ATTEMPTED")
                 require(time.monotonic_ns() - started < 2_000_000_000, "INITIALIZATION_TIMEOUT")
                 raw = self.driver.create(item)
-                self._event(item, "OBSERVED_CREATED", observed=self.driver.verify(item, raw))
+                digest = self.driver.verify(item, raw)
+                self._creation_fact(item, raw, digest)
+                self._event(item, "OBSERVED_CREATED", observed=digest)
             except BaseException as error:
                 # Historical B schema has its own error namespace. Preserve original
                 # failure separately instead of replacing it with the journal's code.
                 first = getattr(error, "code", "A42363_CREATE_ACK_UNKNOWN")
                 failure = Fault(first)
                 failure.first_error, failure.cleanup_codes = first, []
+                if self.creation_store is not None:
+                    try:
+                        self.creation_store.append(
+                            scope,
+                            "CREATION_FAILED",
+                            dict(first_error=first, resource=item.model_dump(), qualifies=False),
+                        )
+                    except BaseException:
+                        failure.cleanup_codes.append("A42363_JOURNAL_COMMIT_UNKNOWN_NO_RETRY")
                 try:
                     self._event(item, "UNKNOWN", error="A42362_CREATE_ACK_UNKNOWN")
                 except BaseException:
@@ -453,6 +519,14 @@ class RecoveryEngine(Reconciler):
             history.setdefault(q.resource.kind, []).append(q)
         require(history, "NO_LEDGER_QUARANTINE")
         started, errors, removed = time.monotonic_ns(), [], []
+        original_failure, creation_failure = None, None
+        if self.creation_store is not None:
+            previous = self.creation_store.maybe_read(scope, "CREATION_FAILED")
+            if previous is not None:
+                creation_failure = original_failure = previous.record["first_error"]
+            prior_cleanup = self.creation_store.maybe_read(scope, "RECOVERY_FAILED")
+            if prior_cleanup is not None:
+                original_failure = original_failure or prior_cleanup.record["first_error"]
         for item in reversed(resources(scope)):
             events = history.get(item.kind, [])
             if not events or events[-1].event == "OBSERVED_ABSENT":
@@ -463,6 +537,15 @@ class RecoveryEngine(Reconciler):
                     r.observed_identity_sha256 for r in events if r.event == "OBSERVED_CREATED"
                 }
                 require(len(identities) == 1, "OWNERSHIP_UNKNOWN_QUARANTINE")
+                if self.creation_store is not None:
+                    fact = self.creation_store.read(scope, "CREATION_" + item.kind)
+                    require(
+                        fact.record["identity_sha256"] in identities
+                        and fact.record["resource"] == item.model_dump()
+                        and fact.record["epoch"] == scope.epoch
+                        and fact.record["source_sha256"] == scope.binding.identity.source_sha256,
+                        "CREATION_FACT_DRIFT",
+                    )
                 # A prior remove may have succeeded despite an unknown ACK. Ask E first;
                 # never infer absence from C's inspect error or replay a removal blindly.
                 if events[-1].event == "REMOVE_ATTEMPTED":
@@ -481,9 +564,27 @@ class RecoveryEngine(Reconciler):
             except BaseException as error:
                 code = getattr(error, "code", "A42363_OWNERSHIP_UNKNOWN_QUARANTINE")
                 errors.append(code)
+        if errors and self.creation_store is not None and prior_cleanup is None:
+            try:
+                self.creation_store.append(
+                    scope,
+                    "RECOVERY_FAILED",
+                    dict(
+                        first_error=original_failure or errors[0],
+                        cleanup_codes=errors,
+                        scope_sha256=scope_hash(scope),
+                        qualifies=False,
+                    ),
+                )
+            except BaseException:
+                errors.append("A42363_JOURNAL_COMMIT_UNKNOWN_NO_RETRY")
         return dict(
-            status="INCOMPLETE_QUARANTINED" if errors else "DESTROYED_PENDING_INDEPENDENT_E",
-            first_error=errors[0] if errors else None,
+            status="INCOMPLETE_QUARANTINED"
+            if errors or original_failure
+            else "DESTROYED_PENDING_INDEPENDENT_E",
+            first_error=original_failure or (errors[0] if errors else None),
+            creation_first_error=creation_failure,
+            persistent_first_error=original_failure,
             cleanup_codes=list(dict.fromkeys(errors)),
             removed_kinds=removed,
             independent_absent=False,

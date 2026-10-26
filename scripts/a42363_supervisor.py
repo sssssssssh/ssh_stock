@@ -39,11 +39,25 @@ def _collect_command(child, stdout_fd, deadline):
     return os.waitstatus_to_exitcode(child.status), bytes(result)
 
 
+def _wait_owned(pid, deadline):
+    while True:
+        observed, status = os.waitpid(pid, os.WNOHANG)
+        if observed:
+            return status
+        require(time.monotonic_ns() < deadline, "OWNED_CHILD_REAP_UNPROVEN")
+        time.sleep(0.005)
+
+
 def bounded_child(operation, *, timeout_ms=2000):
     """Direct unreaped child only. Never signal a request PID or recycled process group."""
     require(type(timeout_ms) is int and 0 < timeout_ms <= 2000, "DEADLINE_BUDGET")
     rfd, wfd = os.pipe()
-    pid = os.fork()
+    try:
+        pid = os.fork()
+    except BaseException:
+        os.close(rfd)
+        os.close(wfd)
+        raise
     if pid == 0:
         os.close(rfd)
         try:
@@ -55,21 +69,30 @@ def bounded_child(operation, *, timeout_ms=2000):
     os.close(wfd)
     deadline = time.monotonic_ns() + timeout_ms * 1_000_000
     reaped = False
+    first = None
     try:
         ready, _, _ = select.select([rfd], [], [], max(0, (deadline - time.monotonic_ns()) / 1e9))
         if not ready:
-            os.kill(pid, signal.SIGKILL)
-            os.waitpid(pid, 0)
-            reaped = True
             raise Fault("A42363_OUTER_DEADLINE")
         raw = os.read(rfd, 3)
-        _, status = os.waitpid(pid, 0)
+        status = _wait_owned(pid, deadline)
         reaped = True
         require(raw == b"OK" and status == 0, "CHILD_INCOMPLETE")
+    except BaseException as error:
+        first = error
+        raise
     finally:
         if not reaped:
-            os.kill(pid, signal.SIGKILL)
-            os.waitpid(pid, 0)
+            try:
+                os.kill(pid, signal.SIGKILL)
+                _wait_owned(pid, time.monotonic_ns() + 2_000_000_000)
+            except BaseException:
+                if first is None:
+                    raise Fault("A42363_OWNED_CHILD_REAP_UNPROVEN") from None
+                first.cleanup_codes = [
+                    *getattr(first, "cleanup_codes", []),
+                    "A42363_OWNED_CHILD_REAP_UNPROVEN",
+                ]
         os.close(rfd)
 
 
@@ -126,18 +149,20 @@ class CgroupScope:
         private files cannot instantiate this class, including in L1 tests.
         """
         require(type(arguments) is tuple and 0 < len(arguments) <= 64, "COMMAND_ARGUMENTS")
-        executable_fd = os.open(executable, os.O_RDONLY | os.O_NOFOLLOW)
-        meta = os.fstat(executable_fd)
-        require(
-            stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o022 == 0,
-            "COMMAND_EXECUTABLE",
-        )
-        guardian = FDDeadlineGuardian(self.kill_fd, 1000)
-        read_fd, write_fd = os.pipe()
-        gate_r, gate_w = os.pipe()
+        executable_fd = read_fd = write_fd = gate_r = gate_w = None
+        guardian = None
         child = None
         first = None
         try:
+            executable_fd = os.open(executable, os.O_RDONLY | os.O_NOFOLLOW)
+            meta = os.fstat(executable_fd)
+            require(
+                stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o022 == 0,
+                "COMMAND_EXECUTABLE",
+            )
+            guardian = FDDeadlineGuardian(self.kill_fd, 1000)
+            read_fd, write_fd = os.pipe()
+            gate_r, gate_w = os.pipe()
             pid = os.fork()
             if pid == 0:
                 try:
@@ -180,6 +205,16 @@ class CgroupScope:
                     guardian.finish()
                 except BaseException:
                     cleanup.append("A42363_COMMAND_SCOPE_TERMINATION_UNKNOWN")
+                    if guardian is not None:
+                        try:
+                            guardian.abandon()
+                        except BaseException:
+                            cleanup.append("A42363_GUARDIAN_REAP_NOT_PROVEN")
+            elif guardian is not None:
+                try:
+                    guardian.abandon()  # No cancel after an uncertain fork/adoption.
+                except BaseException:
+                    cleanup.append("A42363_GUARDIAN_REAP_NOT_PROVEN")
             for fd in (read_fd, write_fd, gate_r, gate_w, executable_fd):
                 if fd is not None:
                     os.close(fd)
@@ -457,6 +492,7 @@ class SupervisorService:
 
     def dispatch(self, method, body):
         scope = lookup(body)
+        require(method in ("run", "terminate", "receipt"), "SUPERVISOR_METHOD")
         if method == "receipt":
             return self.store.read(scope, "TERMINATED").model_dump()
         if method == "run":
@@ -481,6 +517,13 @@ class SupervisorService:
         proved = self.store.maybe_read(scope, "TERMINATION_PROVEN")
         if proved is None:
             proved = self.store.append(scope, "TERMINATION_PROVEN", result)
+        require(
+            self.store.maybe_read(scope, "PUBLICATION_ATTEMPTED") is None,
+            "PUBLICATION_ACK_UNKNOWN_NO_RETRY",
+        )
+        self.store.append(
+            scope, "PUBLICATION_ATTEMPTED", dict(termination_digest=proved.digest, qualifies=False)
+        )
         published = self.publisher.publish(proved.model_dump())
         # A final committed success must never precede artifact publication. Unknown
         # publication ACK stops this attempt; no automatically valid half-evidence.
@@ -507,6 +550,7 @@ class RootManager:
         self.launcher, self.owner, self.child, self.result = launcher, owner, None, None
         self.attempted, self.guardian = False, None
         self.failure = None
+        self.cleanup_codes = []
 
     def dispatch(self, peer_uid, method, body):
         require(
@@ -524,16 +568,28 @@ class RootManager:
                 self.child = self.launcher.launch(
                     self.cgroup, lambda pid: self.owner.lease(self.scope, pid)
                 )
-            except BaseException:
-                self.failure = "GUARDIAN_ARM_FAILED" if self.guardian is None else "LAUNCH_UNKNOWN"
+            except BaseException as error:
+                fallback = (
+                    "A42363_GUARDIAN_ARM_FAILED"
+                    if self.guardian is None
+                    else "A42363_LAUNCH_UNKNOWN"
+                )
+                self.failure = Fault(getattr(error, "code", fallback)).code
                 # No worker can start before the guardian. If launch ACK is unknown,
                 # keep the guardian armed; do not cancel an unknown live scope.
                 if self.child is not None:
                     try:
                         self.cgroup.terminate(self.child)
                     except BaseException:
-                        self.failure = "GUARDIAN_ARM_AND_CLEANUP_FAILED"
-                raise Fault("A42363_" + self.failure) from None
+                        self.cleanup_codes.append("A42363_TERMINATION_NOT_PROVEN")
+                if self.guardian is not None:
+                    try:
+                        self.guardian.abandon()
+                    except BaseException:
+                        self.cleanup_codes.append("A42363_GUARDIAN_REAP_NOT_PROVEN")
+                failure = Fault(self.failure)
+                failure.first_error, failure.cleanup_codes = self.failure, self.cleanup_codes.copy()
+                raise failure from None
             return dict(status="RUNNING", qualifies=False, scope_sha256=scope_hash(self.scope))
         if self.result is not None:
             return self.result
@@ -547,8 +603,14 @@ class RootManager:
             )
             if self.guardian is not None:
                 result["guardian_status"] = self.guardian.finish()
-        except BaseException:
-            self.failure = "TERMINATION_NOT_PROVEN"
+        except BaseException as error:
+            self.failure = Fault(getattr(error, "code", "A42363_TERMINATION_NOT_PROVEN")).code
+            if self.guardian is not None and self.guardian.status is None:
+                try:
+                    self.guardian.abandon()
+                except BaseException:
+                    self.cleanup_codes.append("A42363_GUARDIAN_REAP_NOT_PROVEN")
+            error.first_error, error.cleanup_codes = self.failure, self.cleanup_codes.copy()
             raise
         self.result = result  # Cache only after the guardian has also been reaped.
         return self.result
@@ -565,7 +627,12 @@ class FDDeadlineGuardian:
     def __init__(self, kill_fd, timeout_ms):
         require(type(timeout_ms) is int and 0 < timeout_ms <= 3000, "GUARDIAN_BUDGET")
         read_fd, write_fd = os.pipe()
-        ack_r, ack_w = os.pipe()
+        try:
+            ack_r, ack_w = os.pipe()
+        except BaseException:
+            os.close(read_fd)
+            os.close(write_fd)
+            raise
         try:
             pid = os.fork()
         except BaseException:
@@ -607,6 +674,15 @@ class FDDeadlineGuardian:
             pass  # The independent deadline may already have fired.
         finally:
             os.close(self.write_fd)
+        return self._reap()
+
+    def abandon(self):
+        """Unknown cleanup must trigger the held scope, never cancel its deadline."""
+        require(self.status is None, "GUARDIAN_ALREADY_REAPED")
+        os.close(self.write_fd)
+        return self._reap()
+
+    def _reap(self):
         deadline = time.monotonic_ns() + 2_000_000_000
         while True:
             observed, status = os.waitpid(self.pid, os.WNOHANG)

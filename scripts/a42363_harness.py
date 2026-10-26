@@ -23,15 +23,10 @@ class InitializationPlan:
     @classmethod
     def build(cls, identity):
         identity.verify(identity.scope)
-        from scripts.a42363_owner import INIT_SQL
+        from scripts.a42363_owner import fixed_initialization_sql
 
         # Derived identifiers contain only ASCII letters/digits/underscore; no caller SQL.
-        statements = tuple(
-            s.replace("a42363_fixture", identity.database).replace(
-                "a42363_probe", identity.probe_role
-            )
-            for s in INIT_SQL
-        )
+        statements = fixed_initialization_sql(identity)
         return cls(identity, ("CREATE DATABASE " + identity.database, *statements))
 
     def preflight(self):
@@ -82,6 +77,12 @@ class PgFixtureRuntime:
 
     def preflight(self):
         self.identity.verify(self.identity.scope)
+        from scripts.a42363_proposals import InitializationCost
+
+        # Independently expose both lower-bound violations. Neither is hidden by
+        # the first failing query-budget check or charged to an image entrypoint.
+        self.preflight_report = InitializationCost(sql=9, commands=17).as_record()
+        InitializationCost(sql=9, commands=17).enforce_current()
         InitializationPlan.build(self.identity).preflight()
         session_method()
         require(
@@ -131,17 +132,22 @@ class PgFixtureRuntime:
         )
 
     def _record(self, state, raw):
-        self.store.append(
-            self.identity.scope,
-            "PG_" + state,
-            dict(
-                container_id=self.container_id,
-                raw=raw,
-                identity_sha256=sha(canonical(self.identity.model_dump())),
-                qualifies=False,
-            ),
-        )
+        try:
+            committed = self.store.append(
+                self.identity.scope,
+                "PG_" + state,
+                dict(
+                    container_id=self.container_id,
+                    raw=raw,
+                    identity_sha256=sha(canonical(self.identity.model_dump())),
+                    qualifies=False,
+                ),
+            )
+        except BaseException as error:
+            self._fail(error)
+            raise
         self.state = state
+        return committed
 
     def _fail(self, error):
         self.first_error = self.first_error or getattr(error, "code", "A42363_PG_ACK_UNKNOWN")
@@ -163,6 +169,10 @@ class PgFixtureRuntime:
 
     def start(self):
         require(self.state == "PREPARED", "PG_NOT_PREPARED")
+        require(
+            self.store.maybe_read(self.identity.scope, "PG_START_ATTEMPTED") is None,
+            "PG_START_ACK_UNKNOWN",
+        )
         self._time()
         self._inspect()
         # Durable attempt before start; an ACK loss never grants a second start.
@@ -201,6 +211,7 @@ class PgFixtureRuntime:
             raise
 
     def owner_audited(self, raw_receipt):
+        from scripts.a42362_pg_owner_service import verify_raw_owner_identity
         from scripts.a42363_contract import verify_receipt
 
         require(self.state == "READY_FOR_OWNER_AUDIT", "PG_NOT_READY")
@@ -212,6 +223,28 @@ class PgFixtureRuntime:
         )
         require(
             r.record.get("fixture_identity") == self.identity.model_dump(), "OWNER_TARGET_UNPROVEN"
+        )
+        require(type(r.record.get("raw")) is dict, "OWNER_RAW_REQUIRED")
+        verify_raw_owner_identity(r.record["raw"], self.identity.scope)
+        require(r.record["raw"]["container_id"] == self.container_id, "OWNER_RAW_CONTAINER")
+        previous = 0
+        for event in (
+            "PG_PREPARED",
+            "PG_START_ATTEMPTED",
+            "PG_RUNNING",
+            "PG_READY_FOR_OWNER_AUDIT",
+        ):
+            step = self.store.read(self.identity.scope, event)
+            require(
+                step.sequence > previous and step.record["container_id"] == self.container_id,
+                "OWNER_HEALTH_HISTORY",
+            )
+            previous = step.sequence
+        current = self._inspect()
+        require(
+            current.get("State", {}).get("Running") is True
+            and current.get("State", {}).get("Health", {}).get("Status") == "healthy",
+            "OWNER_HEALTH_UNPROVEN",
         )
         self._record("OWNER_AUDITED", dict(receipt_digest=r.digest))
         self.ready = True
@@ -256,6 +289,16 @@ class PgFixtureRuntime:
     def stop(self):
         require(self.container_id is not None, "PG_OWNERSHIP_UNKNOWN")
         self.ready = False
+        previous = self.store.maybe_read(self.identity.scope, "PG_STOPPED")
+        if previous is not None:
+            require(
+                previous.record["container_id"] == self.container_id
+                and previous.record["identity_sha256"]
+                == sha(canonical(self.identity.model_dump())),
+                "PG_HISTORY_DRIFT",
+            )
+            self.state = "STOPPED"
+            return dict(scope_sha256=scope_hash(self.identity.scope), qualifies=False)
         self.driver.begin_cleanup()
         raw = self._inspect()
         if raw.get("State", {}).get("Running") is True:
