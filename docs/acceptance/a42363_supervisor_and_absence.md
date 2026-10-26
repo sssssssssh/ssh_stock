@@ -24,3 +24,19 @@ never a request PID or a reaped/reused group. They do not claim descendant conta
 Unimplemented/unproven runtime binding remains a source/deployment blocker, not an L1
 success. Worker JSON, C destroy JSON and B receipt cannot replace independent D/E facts.
 The current method gate stops Drun before issuing a lease or starting any actual worker.
+
+D uses RootManagerClient over a held kernel-root Unix peer channel; privileged launch,
+credential FD transfer and cgroup operations stay in RootManager. WorkerProgram checks the
+method gate before FD/credential/connection access, then sealed v2 lease, installed UID,
+actual post-connect session evidence and the unchanged fixed16-query worker. Independent
+target-session observation remains unapproved; the source does not invent that proof.
+
+FDDeadlineGuardian is a separate process holding the exact kill FD. Its hard wall is
+authorization1s plus SQL2s; handler blocking/death cannot suppress it. Proven termination
+cancels and reaps it under a2s bound. Arming failure triggers exact-scope cleanup; unknown
+termination quarantines the manager, never caches a success. Private ordinary-file L1
+tests exercise firing/cancellation and never label those files as kernel cgroups.
+
+E verifies the held namespace against the current kernel namespace and raw graphRoot
+device/inode against its held store FD. Its command adapter permits only info/exists reads.
+This is source validation; independent multi-UID filesystem delegation is NOT_PROVEN.

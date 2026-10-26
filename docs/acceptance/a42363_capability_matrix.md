@@ -15,6 +15,8 @@ G3 NOT_AUTHORIZED, production/performance/capacity/attribution false, candidate 
 | E independent visibility and two-round algorithm | controlled raw collector | multi-UID delegation NOT_PROVEN |
 | held cgroup and installed launcher source | default rejection contracts | kernel L2 NOT_RUN |
 | bounded artifact/handler subprocesses | real local L1 | not G1 termination proof |
+| independent FD guardian and durable no-second-worker attempt | real local L1 + L0 commit model | no kernel cgroup claim |
+| WorkerProgram sealed lease / installed UID / session gate | source + before-FD rejection | METHOD_BLOCKED; bootstrap NOT_CONFIGURED |
 | six source receipts / FD transport / forged-reference rejection | local Unix L1, DB_MODEL_ONLY sources | nonqualifying |
 
 No table cell promotes a mock into deployment approval. Engineering gaps, method choices,

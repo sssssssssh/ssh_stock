@@ -4,7 +4,7 @@ import os
 import stat
 import time
 
-from scripts.a42361_contract import Approval, canonical, checked
+from scripts.a42361_contract import Approval, canonical, checked, sha
 from scripts.a42361_deployment import LocalReceiver, LocalService, installed
 from scripts.a42362_service_host import ControlRepository, installation
 from scripts.a42363_contract import lookup, receipt, require
@@ -36,9 +36,38 @@ class FixedCommandRunner:
 
         self.executable = checked_executable(executable, digest)
         self.digest, self.namespace_fd, self.count = digest, namespace_fd, 0
+        self.cleanup_count, self.read_count, self.cleaning = 0, 0, False
         self.namespace_identity = (os.fstat(namespace_fd).st_dev, os.fstat(namespace_fd).st_ino)
+        self.namespace_sha256 = sha(os.readlink("/proc/self/ns/user").encode())
 
     def run(self, arguments, pass_fds=()):
+        if self.cleaning:
+            require(self.cleanup_count < 12, "CLEANUP_COMMAND_BUDGET")
+            self.cleanup_count += 1
+        else:
+            require(self.count < 12, "INITIALIZATION_COMMAND_BUDGET")
+            self.count += 1
+        return self._run(arguments, pass_fds)
+
+    def begin_cleanup(self):
+        self.cleaning = True  # Monotonic phase; never reset initialization counts.
+
+    def read(self, arguments):
+        require(
+            arguments == ("info", "--format", "json")
+            or (
+                len(arguments) == 3
+                and arguments[0] in ("volume", "secret", "container")
+                and arguments[1] == "exists"
+            ),
+            "AUDITOR_READ_ONLY",
+        )
+        # Count all E reads separately. They cannot spend or reset the initialization
+        # budget; the receiver's external deadline bounds each fixed audit sequence.
+        self.read_count += 1
+        return self._run(arguments)
+
+    def _run(self, arguments, pass_fds=()):
         from scripts.a42361_deployment import checked_executable
         from scripts.a42362_supervisor_service import run_fixed_offline
 
@@ -50,14 +79,16 @@ class FixedCommandRunner:
             arguments[0] in ("volume", "secret", "container", "create", "info"),
             "FIXED_COMMAND_REQUIRED",
         )
-        require(self.count < 12, "INITIALIZATION_COMMAND_BUDGET")
         require(
             checked_executable(self.executable, self.digest) == self.executable,
             "EXECUTABLE_CHANGED",
         )
         meta = os.fstat(self.namespace_fd)
         require((meta.st_dev, meta.st_ino) == self.namespace_identity, "NAMESPACE_CHANGED")
-        self.count += 1
+        current = os.stat("/proc/self/ns/user")
+        require(
+            (current.st_dev, current.st_ino) == self.namespace_identity, "WRONG_RUNTIME_NAMESPACE"
+        )
         # Existing helper retains its historical eight-argument limit. New long fixed
         # templates use the bounded output collector, never a shell or caller argv.
         if len(arguments) <= 8:
@@ -237,6 +268,8 @@ class ServiceHost(LocalReceiver):
                 return raw
             scope = lookup(body)
             backend = self.backends["owner"]
+            if method == "create":
+                require(peer_uid == self.policy.deployment.controller.peer_uid, "OWNER_CREATE_ACL")
             if method == "run":
                 from scripts.a42363_contract import session_method
 
@@ -261,7 +294,7 @@ def compose(policy=None, capabilities=None):
     from scripts.a42363_owner import RawOwnerBackend
     from scripts.a42363_resources import ControllerService
     from scripts.a42363_stores import DomainStore
-    from scripts.a42363_supervisor import SupervisorService
+    from scripts.a42363_supervisor import DelegatedExecution, SupervisorService
 
     repository = Repository(policy)
     store = DomainStore(p.domain, repository)
@@ -273,7 +306,7 @@ def compose(policy=None, capabilities=None):
         "pg_owner": {"owner_connection", "owner_runtime"},
         "controller": {"ledger", "resource_driver", "consumption"},
         "absence_auditor": {"observer", "controller_store", "ledger"},
-        "supervisor": {"launcher", "owner", "cgroup", "publisher"},
+        "supervisor": {"root_manager", "scope", "publisher"},
     }[p.domain]
     require(set(capabilities) == required, "CAPABILITY_SET")
     if p.domain == "pg_owner":
@@ -295,10 +328,11 @@ def compose(policy=None, capabilities=None):
             capabilities["ledger"],
         )
     elif p.domain == "supervisor":
+        delegated = DelegatedExecution(capabilities["root_manager"], capabilities["scope"])
         backend[p.domain] = SupervisorService(
-            capabilities["launcher"],
-            capabilities["owner"],
-            capabilities["cgroup"],
+            delegated,
+            None,
+            delegated,
             store,
             capabilities["publisher"],
         )

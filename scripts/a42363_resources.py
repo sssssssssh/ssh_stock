@@ -14,6 +14,9 @@ class ResourceDriver:
         self.commands, self.socket_directory = commands, socket_directory
         self.secret_fd, self.independent_observer = secret_fd, independent_observer
 
+    def begin_cleanup(self):
+        self.commands.begin_cleanup()
+
     @staticmethod
     def labels(scope):
         return dict(
@@ -156,6 +159,10 @@ class ControllerService:
         self.consumption(scope)  # Independent B committed payload, including epoch/namespace.
         if method == "receipt":
             return self.store.read(scope, "RECONCILED").model_dump()
+        with self.store.lock(scope):
+            return self._mutate(method, scope)
+
+    def _mutate(self, method, scope):
         if method == "create":
             session_method()  # No partial real fixture when the session proof is unapproved.
             result = self.engine.create(scope)
@@ -225,6 +232,8 @@ class RecoveryEngine(Reconciler):
         return dict(status="CREATED_PENDING_OWNER_ATTESTATION", qualifies=False)
 
     def recover(self, scope):
+        if isinstance(self.driver, ResourceDriver):
+            self.driver.begin_cleanup()
         snapshot = self.ledger.scan(dict(scope=scope.model_dump()))
         require(
             sha(canonical(snapshot["events"])) == snapshot["snapshot_sha256"], "LEDGER_SNAPSHOT"

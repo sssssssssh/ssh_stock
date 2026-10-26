@@ -31,3 +31,14 @@ must match. Runtime incompatibility is a blocked capability, not an automatic we
 DESTROY_REQUESTED/RECONCILED use independent durable domain receipts. Unknown C ack can
 be recovered by a fresh receipt read. A reconciled incomplete token stays quarantined;
 ordinary retry never silently creates another run or overwrites its first failure.
+
+Initialization commands remain capped at12. Cleanup has its own counted, bounded phase;
+readonly E observations cannot spend or refund initialization credits. Command success
+and scope completion are separate proofs. All outer2s deadlines remain unchanged.
+
+Runtime API gap: the official [volume inspect](https://docs.podman.io/en/latest/markdown/podman-volume-inspect.1.html)
+lists Name/Mountpoint/CreatedAt and optional StorageID; [volume rm](https://docs.podman.io/en/latest/markdown/podman-volume-rm.1.html)
+accepts names. These do not establish an atomic immutable-ID removal contract. The source
+rejects a volume having only name/mountpoint before issuing rm (new AT43 regression).
+No live command was executed to investigate this. Closing the gap needs a reviewed runtime
+capability/ownership exclusion proof, not an unverified name fallback or weaker assertion.

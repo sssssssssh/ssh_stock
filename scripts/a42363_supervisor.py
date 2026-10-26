@@ -9,9 +9,9 @@ import stat
 import subprocess
 import time
 
-from scripts.a42361_contract import canonical, sha
+from scripts.a42361_contract import canonical, decode, sha
 from scripts.a42362_contract import file_identity
-from scripts.a42363_contract import Fault, lookup, require, session_method
+from scripts.a42363_contract import Fault, lookup, require, scope_hash, session_method
 
 
 def run_installed_command(executable, arguments, pass_fds=()):
@@ -66,16 +66,22 @@ def bounded_child(operation, *, timeout_ms=2000):
             os._exit(1)
     os.close(wfd)
     deadline = time.monotonic_ns() + timeout_ms * 1_000_000
+    reaped = False
     try:
         ready, _, _ = select.select([rfd], [], [], max(0, (deadline - time.monotonic_ns()) / 1e9))
         if not ready:
             os.kill(pid, signal.SIGKILL)
             os.waitpid(pid, 0)
+            reaped = True
             raise Fault("A42363_OUTER_DEADLINE")
         raw = os.read(rfd, 3)
         _, status = os.waitpid(pid, 0)
+        reaped = True
         require(raw == b"OK" and status == 0, "CHILD_INCOMPLETE")
     finally:
+        if not reaped:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
         os.close(rfd)
 
 
@@ -183,40 +189,70 @@ class InstalledWorkerLauncher:
             "PYTHON_FD_UNTRUSTED",
         )
         self.python_fd, self.worker_fd = python_fd, worker_fd
+        require(python_fd > 3 and worker_fd > 3 and python_fd != worker_fd, "RESERVED_WORKER_FDS")
         self.uid, self.gid = worker_uid, worker_gid
 
-    def launch(self, cgroup, credential_fd):
+    def launch(self, cgroup, credential_source):
         # This method is an internal manager capability, never an RPC argument surface.
-        require(type(cgroup) is CgroupScope and type(credential_fd) is int, "INSTALLED_LAUNCHER")
-        gate_r, gate_w = os.pipe()
+        import array
+        import socket
+
+        require(type(cgroup) is CgroupScope and callable(credential_source), "INSTALLED_LAUNCHER")
+        parent, gate = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         pid = os.fork()
         if pid == 0:
             try:
-                os.close(gate_w)
-                require(os.read(gate_r, 1) == b"G", "LAUNCH_GATE")
-                os.close(gate_r)
+                parent.close()
+                raw, ancillary, flags, _ = gate.recvmsg(1, socket.CMSG_SPACE(4))
+                fds = array.array("i")
+                for level, kind, data in ancillary:
+                    require(
+                        level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS, "CREDENTIAL_FD"
+                    )
+                    fds.frombytes(data)
+                require(raw == b"G" and flags == 0 and len(fds) == 1, "LAUNCH_GATE")
+                credential_fd = fds[0]
+                gate.close()
+                # Fixed descriptor3, never argv/env credential discovery. Preserve worker
+                # source and Python FDs; close all other inherited privileged descriptors.
+                if credential_fd != 3:
+                    os.dup2(credential_fd, 3)
+                allowed = {0, 1, 2, 3, self.python_fd, self.worker_fd}
+                for entry in os.listdir("/proc/self/fd"):
+                    fd = int(entry)
+                    if fd not in allowed:
+                        try:
+                            os.close(fd)
+                        except OSError:
+                            pass
                 os.setgroups([])
                 os.setgid(self.gid)
                 os.setuid(self.uid)
                 require(ctypes.CDLL(None).prctl(38, 1, 0, 0, 0) == 0, "NO_NEW_PRIVILEGES")
-                for fd in (self.python_fd, self.worker_fd, credential_fd):
+                for fd in (self.python_fd, self.worker_fd, 3):
                     os.set_inheritable(fd, True)
                 os.execve(
                     self.python_fd, ["python", "-I", "/proc/self/fd/" + str(self.worker_fd)], {}
                 )
             except BaseException:
                 os._exit(1)
-        os.close(gate_r)
+        gate.close()
         child = OwnedChild(pid)
+        credential_fd = None
         try:
             cgroup.attach(pid)  # Child is blocked until moved to nondelegated scope.
-            os.write(gate_w, b"G")
+            credential_fd = credential_source(pid)
+            parent.sendmsg(
+                [b"G"], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, array.array("i", [credential_fd]))]
+            )
         except BaseException:
             signal.pidfd_send_signal(child.pidfd, signal.SIGKILL)
             child.reap(2000)
             raise
         finally:
-            os.close(gate_w)
+            parent.close()
+            if credential_fd is not None:
+                os.close(credential_fd)
         return child
 
 
@@ -297,10 +333,226 @@ class SupervisorService:
             return self.store.read(scope, "TERMINATED").model_dump()
         if method == "run":
             session_method()  # No credentials or launch before independent protocol approval.
-        require(method == "terminate" and self.child is not None, "NO_OWNED_EXECUTION_SCOPE")
+            require(self.store.maybe_read(scope, "RUN_ATTEMPTED") is None, "NO_SECOND_WORKER")
+            self.store.append(scope, "RUN_ATTEMPTED", dict(qualifies=False))
+            self.child = self.launcher.launch(self.cgroup, lambda pid: self.owner.lease(scope, pid))
+            return self.store.append(scope, "RUNNING", dict(qualifies=False)).model_dump()
+        previous = self.store.maybe_read(scope, "TERMINATED")
+        if previous is not None:
+            return previous.model_dump()
+        require(method == "terminate", "SUPERVISOR_METHOD")
+        running = self.store.read(scope, "RUN_ATTEMPTED")
+        require(running.scope_sha256 == scope_hash(scope), "NO_OWNED_EXECUTION_SCOPE")
+        require(
+            self.cgroup.scope_sha256 == scope_hash(scope) and self.cgroup.epoch == scope.epoch,
+            "WORKER_SCOPE_BINDING",
+        )
         result = self.cgroup.terminate(self.child)
         # D's L1 receipt never upgrades to physical G1 even if kernel proof is configured.
-        result.update(qualifies=False, physical_proven=False)
+        result.update(qualifies=False, physical_proven=False, terminated_ns=time.monotonic_ns())
         committed = self.store.append(scope, "TERMINATED", result)
         self.publisher.publish(committed.model_dump())
         return committed.model_dump()
+
+
+class RootManager:
+    """Privileged installed manager receiver; separate from D and Worker identities.
+
+    Manager receives only its independently installed single scope, cgroup and source
+    capabilities. It never accepts a request PID, argv, environment, DSN or path.
+    Transport supplies the kernel peer UID, not a JSON principal.
+    """
+
+    def __init__(self, supervisor_uid, scope, cgroup, launcher, owner):
+        require(os.getuid() == 0 and supervisor_uid > 0, "ROOT_MANAGER_REQUIRED")
+        require(
+            cgroup.scope_sha256 == scope_hash(scope) and cgroup.epoch == scope.epoch,
+            "ROOT_SCOPE_BINDING",
+        )
+        self.uid, self.scope, self.cgroup = supervisor_uid, scope, cgroup
+        self.launcher, self.owner, self.child, self.result = launcher, owner, None, None
+        self.attempted, self.guardian = False, None
+        self.failure = None
+
+    def dispatch(self, peer_uid, method, body):
+        require(
+            os.getuid() == 0 and peer_uid == self.uid and lookup(body) == self.scope,
+            "ROOT_MANAGER_PEER_OR_SCOPE",
+        )
+        require(method in ("run", "terminate", "receipt"), "ROOT_METHOD")
+        require(self.failure is None, "ROOT_EXECUTION_QUARANTINED")
+        if method == "run":
+            session_method()
+            require(not self.attempted, "NO_SECOND_WORKER")
+            self.attempted = True  # Sticky even when lease, fork, attach or ACK fails.
+            self.child = self.launcher.launch(
+                self.cgroup, lambda pid: self.owner.lease(self.scope, pid)
+            )
+            try:
+                self.guardian = FDDeadlineGuardian(self.cgroup.kill_fd, 3000)
+            except BaseException:
+                self.failure = "GUARDIAN_ARM_FAILED"
+                # Never leave an unguarded launched worker after a fork/pipe failure.
+                try:
+                    self.cgroup.terminate(self.child)
+                except BaseException:
+                    self.failure = "GUARDIAN_ARM_AND_CLEANUP_FAILED"
+                raise Fault("A42363_" + self.failure) from None
+            return dict(status="RUNNING", qualifies=False, scope_sha256=scope_hash(self.scope))
+        if self.result is not None:
+            return self.result
+        require(method == "terminate" and self.child is not None, "TERMINATION_NOT_PROVEN")
+        try:
+            result = dict(
+                self.cgroup.terminate(self.child),
+                manager_uid=0,
+                supervisor_uid=self.uid,
+                qualifies=False,
+            )
+            if self.guardian is not None:
+                result["guardian_status"] = self.guardian.finish()
+        except BaseException:
+            self.failure = "TERMINATION_NOT_PROVEN"
+            raise
+        self.result = result  # Cache only after the guardian has also been reaped.
+        return self.result
+
+
+class FDDeadlineGuardian:
+    """Out-of-process hard wall: authorization1s + SQL2s, not an elapsed post-check.
+
+    Production caller passes only its verified nondelegated cgroup.kill FD. L1 tests
+    pass private ordinary files and make no physical kernel claims. No PID signalling.
+    Parent death/EOF also fires the exact held FD; cancellation follows proven reaping.
+    """
+
+    def __init__(self, kill_fd, timeout_ms):
+        require(type(timeout_ms) is int and 0 < timeout_ms <= 3000, "GUARDIAN_BUDGET")
+        read_fd, write_fd = os.pipe()
+        pid = os.fork()
+        if pid == 0:
+            os.close(write_fd)
+            try:
+                ready, _, _ = select.select([read_fd], [], [], timeout_ms / 1000)
+                if ready and os.read(read_fd, 1) == b"D":
+                    os._exit(0)
+                os.write(kill_fd, b"1")
+                os._exit(2)
+            except BaseException:
+                os._exit(3)
+        os.close(read_fd)
+        self.pid, self.write_fd, self.status = pid, write_fd, None
+
+    def finish(self):
+        require(self.status is None, "GUARDIAN_ALREADY_REAPED")
+        try:
+            os.write(self.write_fd, b"D")
+        except BrokenPipeError:
+            pass  # The independent deadline may already have fired.
+        finally:
+            os.close(self.write_fd)
+        deadline = time.monotonic_ns() + 2_000_000_000
+        while True:
+            observed, status = os.waitpid(self.pid, os.WNOHANG)
+            if observed:
+                break
+            require(time.monotonic_ns() < deadline, "GUARDIAN_REAP_NOT_PROVEN")
+            time.sleep(0.005)
+        self.status = status
+        require(os.WIFEXITED(status) and os.WEXITSTATUS(status) in (0, 2), "GUARDIAN_INCOMPLETE")
+        return "CANCELLED_AFTER_REAP" if os.WEXITSTATUS(status) == 0 else "DEADLINE_FIRED"
+
+
+class RootManagerClient:
+    """Held connected private Unix channel, pinned kernel-root peer, no path lookup."""
+
+    def __init__(self, channel):
+        import socket
+        import struct
+
+        require(channel.family == socket.AF_UNIX and hasattr(socket, "SO_PEERCRED"), "ROOT_CHANNEL")
+        _, uid, _ = struct.unpack(
+            "3i", channel.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        )
+        require(uid == 0, "ROOT_CHANNEL_PEER")
+        self.channel = channel
+
+    def call(self, method, scope):
+        import struct
+
+        require(method in ("run", "terminate", "receipt"), "ROOT_METHOD")
+        raw = canonical(dict(method=method, body=dict(scope=scope.model_dump())))
+        self.channel.settimeout(2)
+        deadline = time.monotonic_ns() + 2_000_000_000
+        self.channel.sendall(struct.pack("!I", len(raw)) + raw)
+
+        def read_exact(n):
+            result = bytearray()
+            while len(result) < n:
+                remaining = (deadline - time.monotonic_ns()) / 1e9
+                require(remaining > 0, "ROOT_ACK_UNKNOWN")
+                self.channel.settimeout(remaining)
+                chunk = self.channel.recv(n - len(result))
+                require(chunk, "ROOT_ACK_UNKNOWN")
+                result.extend(chunk)
+            return bytes(result)
+
+        size = struct.unpack("!I", read_exact(4))[0]
+        require(0 < size <= 65536, "ROOT_ACK_UNKNOWN")
+        result = decode(read_exact(size))
+        require(result.get("scope_sha256") == scope_hash(scope), "ROOT_RECEIPT_BINDING")
+        return result
+
+
+class DelegatedExecution:
+    """D never setuids a child itself: root-manager RPC owns creation and reaping."""
+
+    def __init__(self, client, scope):
+        self.client, self.scope = client, scope
+        self.scope_sha256, self.epoch = scope_hash(scope), scope.epoch
+
+    def launch(self, cgroup, credential_source):
+        require(cgroup is self, "ROOT_SCOPE_BINDING")
+        result = self.client.call("run", self.scope)
+        require(result["status"] == "RUNNING", "ROOT_LAUNCH_UNKNOWN")
+        return result
+
+    def terminate(self, child):
+        result = self.client.call("terminate", self.scope)
+        require(
+            result.get("manager_uid") == 0
+            and result.get("execution_scope_terminated") is True
+            and result.get("scope_sha256") == self.scope_sha256
+            and result.get("epoch") == self.epoch,
+            "ROOT_TERMINATION_UNPROVEN",
+        )
+        return result
+
+
+def serve_root_channel(manager, channel):
+    """Installed manager's per-request receiver; caller must externally supervise it."""
+    import socket
+    import struct
+
+    require(os.getuid() == 0 and hasattr(socket, "SO_PEERCRED"), "ROOT_MANAGER_REQUIRED")
+    _, uid, _ = struct.unpack("3i", channel.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+    channel.settimeout(1)
+    deadline = time.monotonic_ns() + 1_000_000_000
+
+    def read_exact(n):
+        result = bytearray()
+        while len(result) < n:
+            remaining = (deadline - time.monotonic_ns()) / 1e9
+            require(remaining > 0, "ROOT_REQUEST_DEADLINE")
+            channel.settimeout(remaining)
+            chunk = channel.recv(n - len(result))
+            require(chunk, "ROOT_REQUEST_INCOMPLETE")
+            result.extend(chunk)
+        return bytes(result)
+
+    size = struct.unpack("!I", read_exact(4))[0]
+    require(0 < size <= 65536, "ROOT_REQUEST_SCHEMA")
+    request = decode(read_exact(size))
+    require(type(request) is dict and set(request) == {"method", "body"}, "ROOT_REQUEST_SCHEMA")
+    result = canonical(manager.dispatch(uid, request["method"], request["body"]))
+    channel.sendall(struct.pack("!I", len(result)) + result)

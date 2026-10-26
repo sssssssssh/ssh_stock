@@ -1,5 +1,8 @@
 """Dedicated PostgreSQL domain journals. Never application DSNs or auto-provisioning."""
 
+import sys
+from contextlib import contextmanager
+
 from scripts.a42361_contract import canonical, checked
 from scripts.a42362_contract import close_receipt
 from scripts.a42363_contract import DOMAINS, Fault, Receipt, receipt, require, scope_hash
@@ -24,7 +27,10 @@ class DomainStore:
             sent = True
             writer.commit()
             fresh = self.read(scope, event, previous=writer)
-            require(fresh.sequence == row[0] and fresh.record == record, "JOURNAL_ACK_UNKNOWN")
+            require(
+                fresh.sequence == row[0] and canonical(fresh.record) == canonical(record),
+                "JOURNAL_ACK_UNKNOWN",
+            )
             return fresh
         except BaseException as error:
             try:
@@ -62,6 +68,26 @@ class DomainStore:
             if error.code == "A42363_COMMITTED_RECEIPT_MISSING":
                 return None
             raise
+
+    @contextmanager
+    def lock(self, scope):
+        require(self.domain == "controller", "SCOPE_LOCK_DOMAIN")
+        connection = self.repository.connect(self.domain)
+        try:
+            self.repository.verify(connection, self.domain)
+            row = connection.execute(
+                "SELECT pg_try_advisory_lock(hashtextextended(%s,42363))", (scope_hash(scope),)
+            ).fetchone()
+            require(row == (True,), "SCOPE_ALREADY_ACTIVE")
+            yield
+        finally:
+            first = sys.exception()
+            try:
+                # Close releases this session's advisory lock; never retry an operation.
+                close_receipt(connection)
+            except BaseException:
+                if first is None:
+                    raise
 
 
 class ReceiptSet:

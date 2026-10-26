@@ -1,9 +1,10 @@
 """Raw PG17 Owner adapter and deliberately unapproved target-session method."""
 
 import os
+import stat
 import time
 
-from scripts.a42361_contract import canonical, checked, sha
+from scripts.a42361_contract import canonical, checked, decode, sha
 from scripts.a42362_contract import Scope
 from scripts.a42362_pg_owner_service import verify_raw_owner_identity
 from scripts.a42363_contract import require, session_method
@@ -37,12 +38,71 @@ INIT_SQL = (
 class OwnerRuntime:
     """Raw runtime inspector and dedicated control-plane isolation receiver backend."""
 
-    def __init__(self, driver, control_connection, control_database, control_instance_sha256):
+    def __init__(
+        self,
+        driver,
+        control_connection,
+        control_database,
+        control_instance_sha256,
+        probe_secret_fd=None,
+    ):
         self.driver, self.control_connection = driver, control_connection
         self.control_database, self.control_instance_sha256 = (
             control_database,
             control_instance_sha256,
         )
+        self.probe_secret_fd = probe_secret_fd
+
+    def lease_fd(self, scope, worker_pid, owner_digest):
+        # This is reachable only after an independently approved session method.
+        session_method()
+        require(
+            type(worker_pid) is int and worker_pid > 1 and self.probe_secret_fd is not None,
+            "WORKER_LEASE_IDENTITY",
+        )
+        meta = os.fstat(self.probe_secret_fd)
+        require(
+            stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and meta.st_mode & 0o277 == 0,
+            "CREDENTIAL_INSTALLATION",
+        )
+        credentials = decode(os.pread(self.probe_secret_fd, 65536, 0))
+        require(
+            type(credentials) is dict
+            and set(credentials) == {"host", "database", "user", "password"}
+            and credentials["database"] == "a42363_fixture"
+            and credentials["user"] == "a42363_probe"
+            and type(credentials["host"]) is str
+            and credentials["host"].startswith("/run/a42361-")
+            and type(credentials["password"]) is str,
+            "CREDENTIAL_INSTALLATION",
+        )
+        require(os.fstat(self.probe_secret_fd) == meta, "CREDENTIAL_CHANGED")
+        import fcntl
+
+        fd = os.memfd_create("a42363-lease", os.MFD_ALLOW_SEALING | os.MFD_CLOEXEC)
+        try:
+            raw = canonical(
+                dict(
+                    scope=scope.model_dump(),
+                    worker_pid=worker_pid,
+                    expires_at=int(time.time()) + 1,
+                    owner_digest=owner_digest,
+                    credentials=credentials,
+                    schema_version="a42363.credential.v2",
+                )
+            )
+            require(os.write(fd, raw) == len(raw), "CREDENTIAL_WRITE")
+            os.fchmod(fd, 0o400)
+            fcntl.fcntl(
+                fd,
+                fcntl.F_ADD_SEALS,
+                fcntl.F_SEAL_SEAL | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_WRITE,
+            )
+            os.lseek(fd, 0, 0)
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
 
     def inspect_control(self):
         connection = self.control_connection()
@@ -75,10 +135,14 @@ class OwnerRuntime:
             connection.close()
 
     def verify_owner_connection(self, connection, scope):
+        from scripts.a42362_contract import resources
+
+        parent = os.readlink("/proc/self/fd/" + str(self.driver.socket_directory.parent_fd))
+        expected_host = parent + "/" + resources(scope)[0].name
         require(
             connection.info.dbname == "a42363_fixture"
             and connection.info.user == "postgres"
-            and connection.info.host.startswith("/")
+            and connection.info.host == expected_host
             and connection.info.port == 5432,
             "OWNER_CONNECTION_IDENTITY",
         )
@@ -195,6 +259,105 @@ class RawOwnerBackend:
     def lease(self, scope, worker_identity):
         # Before calling the credential factory, socket access or worker launch.
         session_method()
+        raw = self.store.read(scope, "OWNER_RAW")
+        return self.runtime.lease_fd(scope, worker_identity, raw.digest)
+
+
+class WorkerProgram:
+    """Installed worker bootstrap API; no CLI or environment-supplied connection.
+
+    A root manager supplies inherited sealed credential FD, fixed expected Scope/UID,
+    and its installed Owner session client. There is no public execution switch.
+    """
+
+    def __init__(self, expected_scope, worker_uid, session_source):
+        self.scope, self.uid, self.session_source = expected_scope, worker_uid, session_source
+
+    def run(self, credential_fd):
+        # This gate is unconditional until a separate frozen protocol decision is approved.
+        session_method()
+        require(
+            os.getuid() == self.uid and self.uid > 0 and self.uid != self.scope.controller_uid,
+            "WORKER_PRINCIPAL",
+        )
+        import fcntl
+
+        meta = os.fstat(credential_fd)
+        seals = fcntl.fcntl(credential_fd, fcntl.F_GET_SEALS)
+        require(
+            stat.S_ISREG(meta.st_mode)
+            and meta.st_uid == 0
+            and seals & (fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK)
+            == (fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK),
+            "WORKER_CREDENTIAL_FD",
+        )
+        raw = decode(os.pread(credential_fd, 65536, 0))
+        require(
+            type(raw) is dict
+            and set(raw)
+            == {
+                "scope",
+                "worker_pid",
+                "expires_at",
+                "owner_digest",
+                "credentials",
+                "schema_version",
+            },
+            "WORKER_LEASE_SCHEMA",
+        )
+        require(
+            raw["scope"] == self.scope.model_dump()
+            and raw["worker_pid"] == os.getpid()
+            and raw["schema_version"] == "a42363.credential.v2"
+            and int(time.time()) < raw["expires_at"] <= int(time.time()) + 1,
+            "WORKER_LEASE_EXPIRED",
+        )
+        require(
+            not any(
+                k.startswith("PG") or k in ("DATABASE_URL", "TEST_DATABASE_URL") for k in os.environ
+            ),
+            "WORKER_AMBIENT_DATABASE",
+        )
+        credentials = raw["credentials"]
+        require(
+            set(credentials) == {"host", "database", "user", "password"}
+            and credentials["user"] == "a42363_probe"
+            and credentials["database"] == "a42363_fixture"
+            and credentials["host"].startswith("/run/a42361-"),
+            "WORKER_CONNECTION_TARGET",
+        )
+        import psycopg
+
+        require(psycopg.__version__ == "3.3.4", "DRIVER_VERSION")
+        connection = psycopg.connect(
+            host=credentials["host"],
+            dbname=credentials["database"],
+            user=credentials["user"],
+            password=credentials["password"],
+            passfile="",
+            sslmode="disable",
+            port=5432,
+            connect_timeout=1,
+            autocommit=True,
+            prepare_threshold=5,
+            options="-c statement_timeout=100 -c default_transaction_read_only=on "
+            "-c search_path=pg_catalog",
+        )
+        try:
+            session = self.session_source.observe(
+                self.scope, os.getpid(), connection.info.backend_pid
+            )
+            validate_session_v2(
+                session,
+                self.scope,
+                dict(scope_sha256=sha(canonical(self.scope.model_dump())), worker_pid=os.getpid()),
+            )
+            from scripts.a42361_live_probe_worker import ProbeWorker
+
+            # Reuse the original byte-frozen SQL schedule/driver-OID/GC/budget collector.
+            return ProbeWorker()._execute_fixed(connection, session)
+        finally:
+            connection.close()
 
 
 def validate_lease_v2(lease, scope, worker_pid, now):

@@ -3,8 +3,11 @@
 import ast
 import copy
 import json
+import os
+import runpy
 import time
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -56,6 +59,9 @@ class ModelStore:
 
     def maybe_read(self, s, event):
         return self.read(s, event) if event in self.rows else None
+
+    def lock(self, scope):
+        return nullcontext()
 
 
 class ModelRepository:
@@ -305,7 +311,7 @@ def test_AT23_AT24_ddl_enforces_transitions_fixed_owner_public_revocation():
 
 def test_AT39_AT81_controller_receiver_rejects_arbitrary_argv_and_default_create():
     s = scope()
-    c = ControllerService(None, None, None, lambda _: None)
+    c = ControllerService(None, None, ModelStore("controller"), lambda _: None)
     with pytest.raises(Fault, match="METHOD_BLOCKED"):
         c.dispatch("create", dict(scope=s.model_dump()))
     with pytest.raises(ContractFault):
@@ -409,3 +415,170 @@ def test_AT53_remove_ack_loss_uses_independent_absence_without_second_remove(kin
     assert driver.removed == before
     assert second["status"] == "DESTROYED_PENDING_INDEPENDENT_E"
     assert second["qualifies"] is False
+
+
+@pytest.mark.parametrize("domain", ["controller", "absence_auditor", "supervisor"])
+@pytest.mark.parametrize("permitted", [True, False])
+def test_AT39_AT64_AT67_real_host_composes_c_e_d_and_enforces_peer_acl(
+    monkeypatch, domain, permitted
+):
+    from scripts import a42363_services as host
+
+    calls = []
+    policy = NS(deployment=object())
+    p = NS(uid=os.getuid(), domain=domain, read_uids=(2001,), operator_uid=2002)
+    monkeypatch.setattr(host, "installation", lambda _: p)
+    monkeypatch.setattr(host, "installed", lambda _: NS(schema_version="a42363.deployment.v2"))
+    backend = NS(
+        dispatch=lambda method, body: calls.append((method, body)) or dict(qualifies=False)
+    )
+    service = host.ServiceHost(policy, {domain: backend})
+    if permitted:
+        assert service.dispatch(2001, "receipt", dict(scope=scope().model_dump())) == dict(
+            qualifies=False
+        )
+        assert len(calls) == 1
+    else:
+        with pytest.raises(Fault, match="PEER_ACL"):
+            service.dispatch(2003, "receipt", dict(scope=scope().model_dump()))
+        assert calls == []
+
+
+@pytest.mark.parametrize("domain", DOMAINS)
+def test_AT25_domain_repository_pins_writer_and_separate_reader_without_connect(
+    monkeypatch, domain
+):
+    from scripts import a42363_services as host
+
+    monkeypatch.setattr(host, "installation", lambda _: NS(domain=domain))
+    repository = host.Repository(object())
+    assert repository.database_role("receipt_reader") == "g1_receipt_reader"
+    assert repository.database_role(domain) == (
+        "g1_consumer" if domain == "consumer" else "g1_" + domain + "_writer"
+    )
+    with pytest.raises(Fault, match="ROLE_ACL"):
+        repository.connect("superuser")
+
+
+@pytest.mark.parametrize("reuse", [True, False])
+def test_AT67_v2_uid_partition_preserves_v1_and_does_not_mint_test_authority(reuse):
+    from scripts.a42361_deployment import validate_deployment
+
+    data = runpy.run_path("tests/unit/test_a42361_trust.py")["deployment_data"]()
+    data["schema_version"] = "a42363.deployment.v2"
+    data["worker_uid"] = data["supervisor"]["peer_uid"] if reuse else 1010
+    expected = "TRUST_DOMAINS_NOT_INDEPENDENT" if reuse else "TEST_KEY_FORBIDDEN"
+    with pytest.raises(ContractFault, match=expected):
+        validate_deployment(data, 150)
+
+
+def test_AT33_AT68_worker_gate_precedes_fd_credentials_connection_and_sql(monkeypatch):
+    from scripts import a42363_owner as owner
+
+    def forbidden(*args):
+        raise AssertionError("credential access must not occur")
+
+    monkeypatch.setattr(owner.os, "fstat", forbidden)
+    with pytest.raises(Fault, match="METHOD_BLOCKED"):
+        owner.WorkerProgram(scope(), 1010, None).run(-1)
+
+
+def test_AT68_AT71_root_manager_never_accepts_a_network_pid(monkeypatch):
+    from scripts import a42363_supervisor as module
+
+    monkeypatch.setattr(module.os, "getuid", lambda: 0)
+    s = scope()
+    manager = module.RootManager(1007, s, NS(scope_sha256=scope_hash(s), epoch=s.epoch), None, None)
+    with pytest.raises(ContractFault, match="SCHEMA_INVALID"):
+        manager.dispatch(1007, "terminate", dict(scope=s.model_dump(), pid=1234))
+    with pytest.raises(Fault, match="METHOD_BLOCKED"):
+        manager.dispatch(1007, "run", dict(scope=s.model_dump()))
+    assert manager.child is None and manager.result is None
+
+
+def test_AT80_durable_run_attempt_survives_ack_loss_and_new_receiver(monkeypatch):
+    from scripts import a42363_supervisor as module
+
+    monkeypatch.setattr(module, "session_method", lambda: None)
+    store, calls = ModelStore("supervisor"), []
+
+    def lost_ack(*args):
+        calls.append("launch")
+        raise OSError("ACK_LOST")
+
+    for index in range(2):
+        service = module.SupervisorService(NS(launch=lost_ack), None, None, store, None)
+        expected = OSError if index == 0 else Fault
+        with pytest.raises(expected, match="ACK_LOST" if index == 0 else "NO_SECOND_WORKER"):
+            service.dispatch("run", dict(scope=scope().model_dump()))
+    assert calls == ["launch"] and set(store.rows) == {"RUN_ATTEMPTED"}
+
+
+def test_AT43_volume_name_or_mountpoint_cannot_authorize_removal():
+    item = resources(scope())[1]
+    commands = NS(run=lambda *_: pytest.fail("name-based removal must never be sent"))
+    driver = ResourceDriver(commands, None, None, None)
+    raw = dict(Name=item.name, Labels=driver.labels(item.scope), CreatedAt="epoch", Mountpoint="x")
+    assert driver.verify(item, raw)
+    with pytest.raises(Fault, match="REMOVE_ID_REQUIRED"):
+        driver.remove(item, raw)
+
+
+@pytest.mark.parametrize("obtained", [True, False])
+def test_AT22_controller_scope_lock_uses_distinct_session_and_closes(obtained):
+    closed = []
+    connection = NS(
+        execute=lambda query, args: NS(fetchone=lambda: (obtained,)),
+        close=lambda: closed.append(True),
+    )
+    repository = NS(connect=lambda role: connection, verify=lambda c, role: None)
+    store = DomainStore("controller", repository)
+    if obtained:
+        with store.lock(scope()):
+            assert closed == []
+    else:
+        with pytest.raises(Fault, match="SCOPE_ALREADY_ACTIVE"), store.lock(scope()):
+            pytest.fail("a competing scope mutation must not run")
+    assert closed == [True]
+
+
+def test_AT56_readonly_and_cleanup_accounting_cannot_refund_initialization():
+    from scripts.a42363_services import FixedCommandRunner
+
+    runner = object.__new__(FixedCommandRunner)
+    runner.count, runner.cleanup_count, runner.read_count, runner.cleaning = 12, 0, 0, False
+    runner._run = lambda args, pass_fds=(): (0, b"")
+    with pytest.raises(Fault, match="INITIALIZATION_COMMAND_BUDGET"):
+        runner.run(("volume", "create", "unused"))
+    with pytest.raises(Fault, match="AUDITOR_READ_ONLY"):
+        runner.read(("volume", "rm", "foreign"))
+    runner.read(("info", "--format", "json"))
+    runner.begin_cleanup()
+    runner.run(("volume", "rm", "exact-id"))
+    assert (runner.count, runner.cleanup_count, runner.read_count) == (12, 1, 1)
+
+
+@pytest.mark.parametrize("domain,kind", [("registry", "KEY_STATUS"), ("approval", "APPROVAL")])
+def test_AT14_reader_cannot_import_before_repository_or_crypto(monkeypatch, domain, kind):
+    from scripts import a42363_services as host
+
+    p = NS(uid=os.getuid(), domain=domain, read_uids=(2001,), operator_uid=2002)
+    policy = NS(deployment=object())
+    monkeypatch.setattr(host, "installation", lambda _: p)
+    monkeypatch.setattr(host, "installed", lambda _: NS(schema_version="a42363.deployment.v2"))
+    service = host.ServiceHost(policy, {})  # No repository: rejection must precede access.
+    with pytest.raises(Fault, match="PEER_ACL"):
+        service.dispatch(2001, "import", dict(kind=kind))
+
+
+def test_AT36_owner_reader_cannot_initialize_fixture(monkeypatch):
+    from scripts import a42363_services as host
+
+    p = NS(uid=os.getuid(), domain="pg_owner", read_uids=(2001,), operator_uid=2002)
+    policy = NS(deployment=NS(controller=NS(peer_uid=2005)))
+    monkeypatch.setattr(host, "installation", lambda _: p)
+    monkeypatch.setattr(host, "installed", lambda _: NS(schema_version="a42363.deployment.v2"))
+    owner = NS(initialize=lambda *_: pytest.fail("reader cannot initialize"))
+    service = host.ServiceHost(policy, {"owner": owner})
+    with pytest.raises(Fault, match="OWNER_CREATE_ACL"):
+        service.dispatch(2001, "create", dict(scope=scope().model_dump()))

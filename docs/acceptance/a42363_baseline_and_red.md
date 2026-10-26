@@ -14,8 +14,9 @@ services,review,source_guard}.py; new tests/unit/test_a42363_{red,contracts,sour
 new tests/integration_offline/test_a42363_process.py; dedicated reviewed SQL003;
 new acceptance documents named in the taskbook and exact overlay manifest;
 append-only updates to the four Markdown authorities. Precise compatibility extensions
-are limited to a42361_source_guard.py, a4235_capability_guard.py and the two old exact-path
-tests. Their historical contents remain independently pinned, not exempt directories.
+are limited to a42361_source_guard.py, a4235_capability_guard.py, a42361_deployment.py
+(strict v2 UID/method compatibility) and the two old exact-path tests. Their historical
+contents remain independently pinned, not exempt directories.
 
 No production modules, dependencies, workflows, old manifests or SQL/probe templates
 may change. Local commits are staged; one final push after validation. No G1/PG17/

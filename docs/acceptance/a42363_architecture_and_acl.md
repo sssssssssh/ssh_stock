@@ -10,7 +10,7 @@ the exact capabilities of its own domain; no network/CLI/env activation exists.
 | registry | key-status/import/receipt | operator imports only KEY_STATUS | external Ed25519 record |
 | approval | approval/import/revoke/receipt | operator imports APPROVAL/REVOCATION | two approvers, current epoch |
 | B | consume/receipt/journal/resource-append/resource-scan/committed-receipt | supervisor consumes; C mutates resource ledger | transaction + fresh reader |
-| O | create/receipt/run | installed read UIDs, method gate before lease | PG raw row + runtime inspector |
+| O | create/receipt/run | only C initializes; installed readers inspect; gate before lease | PG raw row + runtime inspector |
 | C | create/destroy/reconcile/receipt | installed read UIDs | exact B ledger + raw identity |
 | D | run/terminate/receipt | installed read UIDs | installed launcher + held cgroup FDs |
 | E | journal/absent/receipt | installed read UIDs | readonly delegated store + independent journal |
@@ -34,3 +34,8 @@ PG durability, cgroup installation or complete real execution. Physical claims s
 Request data never provide executable/argv/env/SQL/DSN/path/PID. Scope binds token,
 payload, full source/CI binding, fixture, nonce, image, namespace and epoch. Sensitive
 credentials are FD-only and cannot be included in artifacts. Missing dependencies fail closed.
+
+C mutations hold a dedicated controller session advisory lock for the complete operation;
+contenders fail before resource mutation. Closing that session releases the lock. D commits
+RUN_ATTEMPTED before asking the root manager to launch; a new receiver after an unknown ACK
+cannot restart the worker. A root manager's own attempt flag is also irreversible.

@@ -5,7 +5,7 @@ from typing import Literal
 
 from scripts.a4235_calibration_adapter_contract import Hash, Strict
 from scripts.a42361_contract import Fault as PreviousFault
-from scripts.a42361_contract import Positive, canonical, checked, sha
+from scripts.a42361_contract import Positive, canonical, checked, decode, sha
 from scripts.a42362_contract import Lookup, Scope
 
 DOMAINS = (
@@ -59,6 +59,7 @@ class Receipt(Strict):
 
 def receipt(domain, scope, event, sequence, record):
     scope = checked(Scope, scope)
+    record = decode(canonical(record))  # Same JSON types before/after a real JSONB/IPC round trip.
     body = dict(
         domain=domain,
         scope_sha256=scope_hash(scope),

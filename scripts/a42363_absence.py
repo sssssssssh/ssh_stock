@@ -85,7 +85,14 @@ class DelegatedReadOnlyCollector:
         ):
             actual = os.fstat(fd)
             require((actual.st_dev, actual.st_ino) == expected, "DELEGATION_FD_CHANGED")
-        code, raw = self.runner.run(("info", "--format", "json"))
+        current = os.stat("/proc/self/ns/user")
+        require(
+            (current.st_dev, current.st_ino) == self.namespace_identity
+            and sha(os.readlink("/proc/self/ns/user").encode())
+            == self.expected["namespace_sha256"],
+            "AUDIT_WRONG_NAMESPACE",
+        )
+        code, raw = self.runner.read(("info", "--format", "json"))
         require(code == 0, "AUDIT_NAMESPACE_UNAVAILABLE")
         try:
             info = json.loads(raw)
@@ -96,6 +103,8 @@ class DelegatedReadOnlyCollector:
             and sha(info["store"]["graphRoot"].encode()) == self.expected["store_sha256"],
             "AUDIT_WRONG_ROOTLESS_STORE",
         )
+        graph = os.stat(info["store"]["graphRoot"], follow_symlinks=False)
+        require((graph.st_dev, graph.st_ino) == self.store_identity, "AUDIT_WRONG_STORE_FD")
         # Installation data are checked against held kernel objects, not C's JSON.
         return {
             k: self.expected[k]
@@ -119,7 +128,7 @@ class DelegatedReadOnlyCollector:
                 return dict(status="PRESENT", code=0, identity=str(meta.st_ino))
             except FileNotFoundError:
                 return dict(status="ABSENT", code=1, identity=None)
-        code, raw = self.runner.run((item.kind.lower(), "exists", item.name))
+        code, raw = self.runner.read((item.kind.lower(), "exists", item.name))
         # Status 125, stderr, malformed output or permission errors never mean absence.
         require(raw == b"" and code in (0, 1), "AUDIT_RAW_UNKNOWN")
         return dict(
