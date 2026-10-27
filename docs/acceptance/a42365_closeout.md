@@ -17,3 +17,5 @@ D1/D2/D3：UNSELECTED / NOT_SIGNED；G1_L2_EXECUTION 独立 NOT_SIGNED。
 实际 G1 SQL=0；Podman=0；G1 initdb=0；cgroup/mount/namespace 创建=0；服务安装=0。物理 L2=NOT_RUN_NOT_AUTHORIZED；G2 effective total warmup=8 pending；G3=NOT_AUTHORIZED；BIZ-PERF-01=PERFORMANCE_OPEN。
 
 首次本地完整 unit 回归：4048 passed / 14 failed / 0 skipped（JUnit SHA256 `72cf8a85243dd62a52a0d50f2ce5199349d9c9dad1ed007fbdda99410b4e4220`）。其中9项为新 guard 错误码前置导致旧拒绝合同失败，已修复检查顺序且未改旧测试；另5项为 macOS 的 Linux 回收/系统 OpenSSL 运行环境失败，仍须同 SHA Linux CI 验证，不能记为本地全绿。原始失败工件保留，不通过 skip/xfail 规避。
+
+修复后第二轮本地完整 unit：4057 passed / 5 failed / 0 skipped / 0 xfail，249.70s（JUnit SHA256 `2266b29375a8ed458faab144d5967e172423a5c215fff808f022286f87a093af`）。9项新增回归已消除；剩余5项未被修改或跳过。4个既有 image shell 的 bash -n 与 validate_image_source 静态合同通过；shellcheck/hadolint 本机未安装，未执行专用工具检查。没有 Shell/Containerfile 改动。最终 Linux 全量/PG17 集成/coverage/浏览器/构建状态仍须普通 Actions 同 SHA 工件确认。
