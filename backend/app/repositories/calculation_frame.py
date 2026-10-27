@@ -13,41 +13,53 @@ from app.services.job_execution import JobCancelled, checkpoint
 FETCH_ROWS = 5000
 
 
-def read_calculation_frame(db: Session, statement, *, name: str) -> pd.DataFrame:
+def read_calculation_frame(
+    db: Session, statement, *, name: str, records_only=False, check_batch=None, consume_batch=None,
+) -> pd.DataFrame | list:
     """Keep the original SELECT and transaction, but bound each network FETCH."""
     if len(name) > 80 or not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?", name):
         raise ValueError("CALCULATION_READ_NAME_INVALID")
     checkpoint()
+    if consume_batch is not None and not records_only:
+        raise ValueError("CALCULATION_READ_CONSUMER_REQUIRES_RECORD_MODE")
     started = last_log = monotonic()
     result = None
     rows = []
+    row_count = 0
     progress = ProgressStep(name, "read")
     progress.report("query", log=True)
     logger.info("calculation read started query={}", name)
     try:
-        result = db.execute(statement.execution_options(yield_per=FETCH_ROWS))
+        result = db.execute(statement.execution_options(
+            yield_per=FETCH_ROWS, calculation_query_name=name))
         for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
             checkpoint()
-            rows.extend(batch)
-            progress.report("fetch", completed_rows=len(rows), batch_index=index, advanced=True)
+            if check_batch is not None:
+                check_batch(batch)
+            if consume_batch is not None:
+                consume_batch(batch)
+            else:
+                rows.extend(batch)
+            row_count += len(batch)
+            progress.report("fetch", completed_rows=row_count, batch_index=index, advanced=True)
             now = monotonic()
             if now - last_log >= 30:
                 logger.info("calculation read progress query={} rows={} elapsed_seconds={:.1f}",
-                            name, len(rows), now - started)
+                            name, row_count, now - started)
                 last_log = now
         # Construct once, not one frame per FETCH, to retain whole-result dtype
         # inference (including all-NULL batches), ordering and empty-frame behavior.
-        progress.report("frame", completed_rows=len(rows), log=True)
-        frame = pd.DataFrame(rows)
-        progress.report("complete", completed_rows=len(rows), advanced=True, log=True)
+        progress.report("frame", completed_rows=row_count, log=True)
+        frame = rows if records_only else pd.DataFrame(rows)
+        progress.report("complete", completed_rows=row_count, advanced=True, log=True)
         logger.info("calculation read complete query={} rows={} elapsed_seconds={:.1f}",
-                    name, len(rows), monotonic() - started)
+                    name, row_count, monotonic() - started)
         return frame
     except SQLAlchemyError as exc:
-        progress.report("failed", completed_rows=len(rows), log=True)
+        progress.report("failed", completed_rows=row_count, log=True)
         exc.calculation_query_name = name
         logger.error("calculation read failed query={} rows={} elapsed_seconds={:.1f} error={}",
-                     name, len(rows), monotonic() - started, database_error_summary(exc))
+                     name, row_count, monotonic() - started, database_error_summary(exc))
         raise
     finally:
         if result is not None:

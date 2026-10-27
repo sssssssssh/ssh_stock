@@ -1,0 +1,63 @@
+{
+  "schema": "biz-perf-01.matrix.v1",
+  "status": "PERFORMANCE_OPEN",
+  "cloud_status": "REAL_CLOUD_RECALC_NOT_AUTHORIZED",
+  "baseline_commit": "1e510532bd140110e29b10b6e4eed30fbd573159",
+  "pairs": [
+    {
+      "months": 1,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 1,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 1,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 3,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 3,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 3,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 12,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 12,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    },
+    {
+      "months": 12,
+      "dataset_equal": true,
+      "tables_equal": true,
+      "identity_equal": true
+    }
+  ],
+  "scope": "root UUID mapped to ROOT; audit timestamps omitted; NULL/other IDs retained"
+}

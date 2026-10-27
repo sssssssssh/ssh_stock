@@ -206,16 +206,25 @@ def check_raw_completeness(
     strategy: dict[str, Any] | None = None,
     job_id: uuid.UUID | None = None,
     persist: bool = False,
+    _facts=None,
 ) -> RawCompletenessResult:
     strategy = strategy or {}
-    stock_daily_codes = _codes_for_date(db, StockDaily, StockDaily.trade_date, trade_date)
-    expected_daily_codes = expected_stock_daily_codes(db, trade_date)
+    facts_kwargs = {"facts": _facts} if _facts is not None else {}
+    stock_daily_codes = (
+        _facts.daily.get(trade_date, set()) if _facts is not None else
+        _codes_for_date(db, StockDaily, StockDaily.trade_date, trade_date)
+    )
+    expected_daily_codes = (
+        _facts.expected(trade_date) if _facts is not None else
+        expected_stock_daily_codes(db, trade_date)
+    )
     adj_factor_codes, invalid_adj_factor_codes = _valid_codes_for_date(
         db,
         StockAdjFactor,
         StockAdjFactor.trade_date,
         trade_date,
         positive_columns=[StockAdjFactor.adj_factor],
+        **facts_kwargs,
     )
     daily_basic_codes, invalid_daily_basic_codes = _valid_codes_for_date(
         db,
@@ -227,6 +236,7 @@ def check_raw_completeness(
             StockDailyBasic.total_mv,
             StockDailyBasic.circ_mv,
         ],
+        **facts_kwargs,
     )
     index_daily_codes, invalid_index_daily_codes = _valid_codes_for_date(
         db,
@@ -234,6 +244,7 @@ def check_raw_completeness(
         IndexDaily.trade_date,
         trade_date,
         positive_columns=[IndexDaily.close, IndexDaily.pre_close],
+        **facts_kwargs,
     )
 
     stock_daily = _coverage_dataset(
@@ -289,6 +300,7 @@ def check_raw_completeness(
         StockStDaily,
         job_id=job_id,
         persist=persist,
+        **facts_kwargs,
     )
     suspend_d = _event_quality_dataset(
         db,
@@ -297,6 +309,7 @@ def check_raw_completeness(
         StockSuspendDaily,
         job_id=job_id,
         persist=persist,
+        **facts_kwargs,
     )
     valid_limit_codes, invalid_limit_codes = _valid_codes_for_date(
         db,
@@ -304,10 +317,11 @@ def check_raw_completeness(
         StockLimitDaily.trade_date,
         trade_date,
         positive_columns=[StockLimitDaily.up_limit, StockLimitDaily.down_limit],
+        **facts_kwargs,
     )
     limit_issue_codes: dict[str, object] = {}
     if invalid_limit_codes:
-        invalid_limit_rows = [
+        invalid_limit_rows = _facts.invalid_limits.get(trade_date, []) if _facts is not None else [
             {
                 "ts_code": row.ts_code,
                 "up_limit": row.up_limit,
@@ -346,7 +360,7 @@ def check_raw_completeness(
         force_error_on_invalid=True,
         preserve_existing_detail_counts=True,
         preserve_existing_issue_details=True,
-        source_warnings=_quality_source_warnings(db, trade_date, "stk_limit"),
+        source_warnings=_quality_source_warnings(db, trade_date, "stk_limit", **facts_kwargs),
         extra_issue_codes=limit_issue_codes,
     )
     return RawCompletenessResult(
@@ -369,14 +383,15 @@ def _event_quality_dataset(
     *,
     job_id: uuid.UUID | None,
     persist: bool,
+    facts=None,
 ) -> RawDatasetCompleteness:
-    quality = db.execute(
+    quality = facts.qualities.get((trade_date, dataset)) if facts is not None else db.execute(
         select(DataQualityDaily).where(
             DataQualityDaily.trade_date == trade_date,
             DataQualityDaily.dataset == dataset,
         )
     ).scalar_one_or_none()
-    actual_rows = int(
+    actual_rows = facts.event_counts.get((trade_date, dataset), 0) if facts is not None else int(
         db.execute(
             select(func.count()).select_from(model).where(model.trade_date == trade_date)
         ).scalar_one()
@@ -470,8 +485,12 @@ def _coverage_dataset(
     )
 
 
-def _quality_source_warnings(db: Session, trade_date: date, dataset: str) -> list[str]:
-    issue_codes = db.execute(
+def _quality_source_warnings(
+    db: Session, trade_date: date, dataset: str, *, facts=None,
+) -> list[str]:
+    quality = facts.qualities.get((trade_date, dataset)) if facts is not None else None
+    issue_codes = (quality.issue_codes if quality is not None else None) if facts is not None \
+        else db.execute(
         select(DataQualityDaily.issue_codes).where(
             DataQualityDaily.trade_date == trade_date,
             DataQualityDaily.dataset == dataset,
@@ -550,7 +569,11 @@ def _valid_codes_for_date(
     *,
     required_columns: list[Any] | None = None,
     positive_columns: list[Any] | None = None,
+    facts=None,
 ) -> tuple[set[str], set[str]]:
+    if facts is not None:
+        valid, invalid = facts.validity.get((model.__tablename__, trade_date), (set(), set()))
+        return set(valid), set(invalid)
     required_columns = required_columns or []
     positive_columns = positive_columns or []
     validity_checks = [field.is_not(None) for field in required_columns]

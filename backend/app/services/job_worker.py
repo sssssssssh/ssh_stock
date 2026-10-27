@@ -400,6 +400,18 @@ def execute_claimed_job(
         if isinstance(exc, SQLAlchemyError):
             logger.error("worker job database failure job_id={} error={}",
                          job_id, database_error_summary(exc))
+        elif isinstance(exc, MemoryError) or str(exc) in {
+            "FACTOR_INPUT_SOURCE_CHANGED", "FACTOR_INPUT_IDENTITY_CHANGED",
+            "FACTOR_INPUT_WINDOW_NOT_PREPARED", "FACTOR_INPUT_WINDOW_CLOSED",
+            "FACTOR_INPUT_WINDOW_UNBOUNDED", "FACTOR_INPUT_MEMORY_BUDGET_INVALID",
+            "FACTOR_INPUT_REUSE_AB_EXPERIMENT_CONFLICT",
+            "CALCULATION_MEMORY_OBSERVATION_FAILED", "RAW_PREFLIGHT_WINDOW_UNBOUNDED",
+        }:
+            # New read guards can fail with full source batches in local frames.
+            # Do not let traceback diagnostics serialize those business records.
+            logger.error("worker calculation guard failed job_id={} error_class={} code={}",
+                         job_id, type(exc).__name__, "CALCULATION_MEMORY_ERROR"
+                         if isinstance(exc, MemoryError) else str(exc))
         else:
             logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
     finally:

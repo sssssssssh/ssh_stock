@@ -173,6 +173,9 @@ class PublicationWorkspace:
                 self.connection.invalidate()
             raise
         finally:
+            for input_window in getattr(self, "factor_input_windows", []):
+                input_window.close()
+            self.factor_input_windows = []
             if self.connection is not None:
                 self.connection.close()
             db.bind = self.original_bind
@@ -801,6 +804,9 @@ def finish_publication(db, job, status):
         db.execute(
             text("SELECT set_config('statement_timeout', :value, true)"), {"value": str(remaining)}
         )
+
+    for input_window in getattr(current, "factor_input_windows", []):
+        input_window.verify(publish_budget=budget)
 
     parameters = {"root": current.job_id}
     counts = {}

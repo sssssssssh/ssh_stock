@@ -1,0 +1,113 @@
+{
+  "schema": "biz-perf-01.validation.v1",
+  "status": "PERFORMANCE_OPEN",
+  "canonical_backend_source_sha256": "756eebf78773a8579f77f9e69f96900b10542810066c85472fec2f1dd32c3441",
+  "serializer_regressions": {"passed": 3, "failed": 0},
+  "ruff": "PASSED",
+  "isolated_alembic_current": "0058_data_publication",
+  "isolated_alembic_heads": "0058_data_publication",
+  "cloud_status": "REAL_CLOUD_RECALC_NOT_AUTHORIZED",
+  "final_backend_regressions": {
+    "tests": 79,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "full_default_windows": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 10,
+    "skipped": 0
+  },
+  "earlier_continued_windows": {
+    "tests": 4329,
+    "failures": 317,
+    "errors": 300,
+    "skipped": 0
+  },
+  "legacy_signature_regressions_repaired": 7,
+  "old_tests_modified": false,
+  "g1_contract_adaptation": "DEFERRED_BY_USER",
+  "early_fixture_failures": {
+    "failures": 2,
+    "passed": 49,
+    "reason": "Synthetic fixture lacked eligible sector history; added genuine master/history inputs, did not waive quality"
+  },
+  "exploratory_cohort": {
+    "status": "INTERRUPTED_FOR_SOURCE_REPAIR",
+    "reason": "Default Raw helper signature regression and input retention repair; retained all completed and in-flight-finished samples, excluded from final-source comparison",
+    "receipts": [
+      {
+        "path": "exploratory/1m-0-after.json.gz",
+        "sha256": "d3cc2addf62ee238bc3d0513b0b0a28d8d42c206dff7a13cfcf2de984edd4d5e",
+        "uncompressed_sha256": "7dd007dd15191724e563ca91c8324fc5e4aea57f7b0dbc06761e68a4441db7cb"
+      },
+      {
+        "path": "exploratory/1m-0-old.json.gz",
+        "sha256": "7c197dfcce227b1ddeff43f6522c1161e7b36d161b1fc67fbb72423a051b4aea",
+        "uncompressed_sha256": "9f79b3ffe0aa34534ba9829e2fba58897975f062d146e50dbd542206775e91df"
+      },
+      {
+        "path": "exploratory/1m-1-after.json.gz",
+        "sha256": "9637553023e3db484a2d3a16faeb5f238783cb9194627b54dda91153ab8bcf9c",
+        "uncompressed_sha256": "c257416e7484c5cd6230f530a6c1fc15324f95395063ab0f110df9ff669aac7e"
+      },
+      {
+        "path": "exploratory/1m-1-old.json.gz",
+        "sha256": "df0c32fd442d67f44077b76214da0577d686a488b7634374943415b3ace46825",
+        "uncompressed_sha256": "92806e91bd3789f01f00b35e3f398df640cd0f473fcf64689d3e87f06b133ba4"
+      },
+      {
+        "path": "exploratory/1m-2-after.json.gz",
+        "sha256": "942d5b22a52a8793a594d5b29a915bc11e4c7451387d671853a4bf5f41f2de9f",
+        "uncompressed_sha256": "bc12fc63f05c80ea6e5460ecac4d89d9745653d854c6ab64bac994fd929407d2"
+      },
+      {
+        "path": "exploratory/1m-2-old.json.gz",
+        "sha256": "a5f10c158fd250b5cc243c0f4be39b784a84c42b2ada3e8809c73755615157e8",
+        "uncompressed_sha256": "c45291811f9557c3358310f89a8b7a779d3ac86c56d7eb85b4cc2b232d87d554"
+      },
+      {
+        "path": "exploratory/3m-0-after.json.gz",
+        "sha256": "9cf4bd84cbb30574c58543c54d0e1ed55582d5d4347f460d8d57d5ab6b43a159",
+        "uncompressed_sha256": "16f73c5a6c316b03c47684b7101efd507d073408b7737c01badec723e0665ebb"
+      },
+      {
+        "path": "exploratory/3m-0-old.json.gz",
+        "sha256": "f94049ebec5bba13d9158461ee764a4c4748feab202f011e47f4ab31640d7d0b",
+        "uncompressed_sha256": "ba33af91e581da43b0435eb44e80813422eb113410987cd2bb18705ec53b1d9c"
+      },
+      {
+        "path": "exploratory/3m-1-after.json.gz",
+        "sha256": "729f012894f43344a2af2a60c63a9de75907ce41b562c1532213bf33035ed054",
+        "uncompressed_sha256": "56a32c96b3adb5a82c1f1a749dd2a6bc9c69a6580a1894ce9fafc5faef8eda93"
+      },
+      {
+        "path": "exploratory/3m-1-old.json.gz",
+        "sha256": "6101879883aa6586cdfa4cbcce272457f82018435fc4afe8463c6a3a671c081b",
+        "uncompressed_sha256": "c56c9e3b754a11ae31c9ea551f7d678c56ff717a4b4d90a7830f9bbc5b7818f1"
+      },
+      {
+        "path": "exploratory/baseline_smoke.json.gz",
+        "sha256": "c043e052e73e78c69a1de60ef41dca08db9f84f6f1f1359aa371fe67ca2c26f6",
+        "uncompressed_sha256": "96ef0cf7f8a6ec1e3efddbe6cb9e1195bbbd6efc48accd83f56a85687f72b81f"
+      },
+      {
+        "path": "exploratory/baseline_profile.json.gz",
+        "sha256": "be061b604aea94b05f5bbc53af7cddef2795033c8f1ba5673c71a9d9d2653d23",
+        "uncompressed_sha256": "d9fadd85bb994491125db1c1589b6b9c7afd2aa2ac7b1a56e23439fab6cf37fc"
+      },
+      {
+        "path": "exploratory/after_smoke.json.gz",
+        "sha256": "e5547965afe1750ed3bc99fe6a06d4fdd26609cc07da25e17a87cff8f0ecbbfd",
+        "uncompressed_sha256": "594158050deb2d39e9245bdd70df44f3ae28cf313d04f391042569bc690acd86"
+      }
+    ]
+  },
+  "remaining": [
+    "million-row full-chain matrix",
+    "12-month overall median >=30%",
+    "full accepted Linux CI/exact-SHA",
+    "multi-child catchup and capacity fault matrix"
+  ]
+}

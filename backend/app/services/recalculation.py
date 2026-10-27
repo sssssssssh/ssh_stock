@@ -80,6 +80,7 @@ def run_recalculation(
         "progress_pct": 0,
     }
     total_rows = 0
+    input_window = None
     try:
         checkpoint()
         metadata["stage"] = "trading_calendar"
@@ -116,6 +117,16 @@ def run_recalculation(
         )
         factor_chunks = _month_chunks(analysis_start, end)
         factor_service = FactorService(db)
+        if settings.factor_input_reuse_enabled:
+            from app.services.factors.input_window import FactorInputWindow
+
+            if settings.ab_merge_read_enabled:
+                raise ValueError("FACTOR_INPUT_REUSE_AB_EXPERIMENT_CONFLICT")
+            input_window = FactorInputWindow(db, job.id, settings)
+            factor_service.input_window = input_window
+            input_window.root.factor_input_windows = [
+                *getattr(input_window.root, "factor_input_windows", []), input_window,
+            ]
         for index, (chunk_start, chunk_end) in enumerate(factor_chunks, start=1):
             if _stop_if_cancelled(db, job, metadata, dirty_ranges):
                 return
@@ -155,6 +166,8 @@ def run_recalculation(
                 metadata=metadata,
             )
 
+        if input_window is not None:
+            input_window.close()
         metadata = {**metadata, "stage": "market", "progress_pct": 65}
         update_job(
             db,
@@ -329,6 +342,9 @@ def run_recalculation(
                 logger.error("recalculation rollback unavailable type={}",
                              type(rollback_error).__name__)
         raise
+    finally:
+        if input_window is not None:
+            input_window.close()
 
 
 def validate_recalculation_raw_prerequisites(
@@ -352,13 +368,14 @@ def validate_recalculation_raw_prerequisites(
         .all()
     )
     failures: list[str] = []
-    for trade_date in open_dates:
-        result = check_raw_completeness(
-            db,
-            trade_date,
-            strategy=strategy,
-            persist=False,
-        )
+    if get_settings().raw_preflight_batch_enabled:
+        from app.services.quality.raw_range import check_raw_range
+
+        results = check_raw_range(db, open_dates, strategy=strategy)
+    else:
+        results = (check_raw_completeness(db, day, strategy=strategy, persist=False)
+                   for day in open_dates)
+    for trade_date, result in zip(open_dates, results, strict=True):
         if not result.is_complete:
             statuses = result.as_metadata()["current_day_datasets"]
             failed = {

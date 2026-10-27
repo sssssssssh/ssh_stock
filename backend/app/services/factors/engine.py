@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -51,6 +52,16 @@ def _max_drawdown(values: pd.Series) -> float:
     return float(drawdown.min())
 
 
+def _max_drawdown_array(values: np.ndarray) -> float:
+    if values.size == 0 or np.isnan(values).any():
+        return np.nan
+    with np.errstate(divide="ignore", invalid="ignore"):
+        drawdown = values / np.maximum.accumulate(values) - 1
+    # Series.min skips NaN (e.g. 0/0), but not +/- infinity.
+    valid = drawdown[~np.isnan(drawdown)]
+    return float(valid.min()) if valid.size else np.nan
+
+
 def _reason_join(reasons: list[str]) -> str | None:
     return ",".join(reasons) if reasons else None
 
@@ -65,7 +76,9 @@ def _status_boolean(values: pd.Series, name: str) -> pd.Series:
     return values.astype("boolean")
 
 
-def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
+def _assign_eligibility(
+    df: pd.DataFrame, config: FactorConfig, *, optimize_cpu=False,
+) -> pd.DataFrame:
     for name in ("trade_status_present", "is_st", "is_suspended", "st_status_unknown"):
         if name in df:
             df[name] = _status_boolean(df[name], name).fillna(False).astype(bool)
@@ -92,14 +105,16 @@ def _assign_eligibility(df: pd.DataFrame, config: FactorConfig) -> pd.DataFrame:
         for idx in np.flatnonzero(missing_status_mask.to_numpy()):
             reasons[idx].append("TRADE_STATUS_MISSING")
 
-    active_mask = df.apply(
-        lambda row: is_stock_active_on(
-            row.get("list_date"),
-            row.get("delist_date"),
-            row["trade_date"],
-        ),
-        axis=1,
-    )
+    if optimize_cpu:
+        listed, delisted, day = df["list_date"], df["delist_date"], df["trade_date"]
+        active_mask = (listed.notna() & listed.where(listed.notna(), day).le(day)) & (
+            delisted.where(delisted.notna(), day).ge(day))
+    else:
+        active_mask = df.apply(
+            lambda row: is_stock_active_on(
+                row.get("list_date"), row.get("delist_date"), row["trade_date"],
+            ), axis=1,
+        )
     if "is_active" in df.columns:
         active = _status_boolean(df["is_active"], "is_active")
         present = df.get("trade_status_present", pd.Series(False, index=df.index))
@@ -138,7 +153,14 @@ def calculate_stock_factors(
     end: date,
     config: FactorConfig,
     trade_status: pd.DataFrame | None = None,
+    optimize_cpu: bool = False,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> pd.DataFrame:
+    def checkpoint():
+        if check_cancelled is not None:
+            check_cancelled()
+
+    checkpoint()
     if daily.empty:
         return pd.DataFrame()
 
@@ -186,6 +208,7 @@ def calculate_stock_factors(
         df["st_status_unknown"] = None
         df["trade_status_present"] = False
     df = df.sort_values(["ts_code", "trade_date"]).reset_index(drop=True)
+    checkpoint()
 
     for col in ["open", "high", "low", "close"]:
         df[f"adj_{col}"] = df[col] * df["adj_factor"]
@@ -251,14 +274,17 @@ def calculate_stock_factors(
         lambda s: s.rolling(120, min_periods=120).max()
     ) - 1
     df["max_drawdown60"] = group["adj_close"].transform(
-        lambda s: s.rolling(60, min_periods=60).apply(_max_drawdown, raw=False)
+        lambda s: s.rolling(60, min_periods=60).apply(
+            _max_drawdown_array if optimize_cpu else _max_drawdown, raw=optimize_cpu)
     )
+    checkpoint()
 
     daily_abs_path = group["adj_close"].pct_change().abs()
     path20 = daily_abs_path.groupby(df["ts_code"]).transform(lambda s: s.rolling(20).sum())
     df["trend_efficiency20"] = _safe_divide(df["return20"].abs(), path20).clip(0, 1)
 
-    df = _assign_eligibility(df, config)
+    df = _assign_eligibility(df, config, optimize_cpu=optimize_cpu)
+    checkpoint()
 
     for window in config.rps_windows:
         ret_col = f"return{window}"
@@ -289,6 +315,7 @@ def calculate_stock_factors(
         df["relative_return60"] = np.nan
 
     output = df[(df["trade_date"] >= start) & (df["trade_date"] <= end)].copy()
+    checkpoint()
     columns = [
         "trade_date",
         "ts_code",

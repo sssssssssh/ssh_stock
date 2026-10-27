@@ -1,5 +1,19 @@
 # A 股机会发现与趋势研究系统
 
+## BIZ-PERF-01 业务性能整改（验收未收口）
+
+本轮实际修改补算后端：根任务内滚动输入复用、按月只读 Raw 预检、实测 CPU 热点的等价实现。
+三个独立开关见 `.env.example`，默认均为 `false`；`AB_MERGE_READ_ENABLED=false` 不变。
+不改变 250 交易日预热、430 自然日回看、金融版本、500 行候选批次及 300 秒原子发布预算。
+输入复用跨候选提交时核验来源，发布前再次锁定核验；漂移/内存超限失败保留旧 A。
+本轮不连接云端库、不部署、不重启现有服务，不自动重跑用户任务。
+
+测量只使用显式标记和物理 ID 双校验的独立 PG17，不读取 `.env`。
+小规模 SUCCESS/PUBLISHED 不代表百万行容量或云端超时已解决；当前状态 `PERFORMANCE_OPEN`。
+按用户最新决定，旧 G1 冻结合同暂不适配，相关失败单列，不能用删测或跳测消除。
+详情见 [设计](docs/acceptance/BIZ_PERF_01_design.md)、
+[验收](docs/acceptance/BIZ_PERF_01_closeout.md)、[运维](docs/acceptance/BIZ_PERF_01_runbook.md)。
+
 ## A42351 Reviewer 整改与 G1 前置审查
 
 本轮新增失败证据终态独立校验及精确字节冻结叠层，原先已记录的 joined/STOP_TIMEOUT 漏检
