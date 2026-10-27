@@ -1825,7 +1825,7 @@ Worker 开始时保存三开关、实际源码摘要和可用的本地 Git HEAD�
 源码摘要以实际字节为准，Git HEAD 不能代替源码字节；无 Git 镜像明确记录 UNAVAILABLE。
 Job 元数据中的 reads 为交付分片，driver_reads 另外记录 psycopg 命名游标 fetchmany 的真实调用与返回行数，
 包含 priming 和 EOF；失败 FETCH 的未知返回行数不会伪装为已完整读取。阶段耗时相互嵌套，子任务计数为根累计。
-修复紧凑输入中 pd.NA/NaT/Decimal NaN 的丢失及 macOS 可用内存观测；free+inactive
+修复紧凑输入中 pd.NA/NaT/Decimal 标量（含小数位和零符号）的丢失及 macOS 可用内存观测；free+inactive
 仅为估算，1GiB retained / 3GiB RSS 为失败阈值，不是物理硬限制。
 
 当前 PERFORMANCE_OPEN；百万行 1/3/12 月旧/新各三次完整矩阵尚未验收。

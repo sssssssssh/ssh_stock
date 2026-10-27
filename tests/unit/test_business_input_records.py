@@ -59,3 +59,16 @@ def test_decimal_records_keep_scale_null_and_nan_objects():
     rows = [dict(value=v) for v in [Decimal("1.100"), None, Decimal("NaN"), Decimal("2.250")]]
     blocks = [InputBlock.from_records([row], set()) for row in rows]
     assert_frame_equal(blocks_to_frame(blocks), pd.DataFrame(rows), check_exact=True)
+
+
+@pytest.mark.parametrize("float_columns", [set(), {"value"}])
+def test_equal_decimals_keep_distinct_exponents_and_signed_zero_after_eviction(float_columns):
+    from decimal import Decimal
+
+    values = [Decimal(v) for v in ["1.100", "1.10", "-0.0", "0.00"]]
+    rows = [dict(trade_date=date(2025, 1, i + 1), value=v) for i, v in enumerate(values)]
+    block = InputBlock.from_records(rows, float_columns)
+    for offset in (0, 1):
+        actual = blocks_to_frame([block.since(rows[offset]["trade_date"])])
+        assert_frame_equal(actual, pd.DataFrame(rows[offset:]), check_exact=True)
+        assert [v.as_tuple() for v in actual.value] == [v.as_tuple() for v in values[offset:]]

@@ -350,6 +350,25 @@
       "failures": [],
       "errors": 0,
       "skipped": 0
+    },
+    {
+      "name": "decimal-red",
+      "sha256": "62efd4ca2c7ba050b1a85d19493728fae55460000043da452bb53e99ef489d4e",
+      "cases": 16,
+      "failures": [
+        "tests.unit.test_business_input_records::test_equal_decimals_keep_distinct_exponents_and_signed_zero_after_eviction[float_columns0]",
+        "tests.unit.test_business_input_records::test_equal_decimals_keep_distinct_exponents_and_signed_zero_after_eviction[float_columns1]"
+      ],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "decimal-green",
+      "sha256": "1e7f8d8c2a4909433cc8cb0114b4a1f203a1996ee60f0d367aceba16f9421cca",
+      "cases": 22,
+      "failures": [],
+      "errors": 0,
+      "skipped": 0
     }
   ],
   "capacity_preflight": {

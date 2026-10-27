@@ -14,7 +14,7 @@
 - 同时记录 SQLAlchemy execute 的操作计数/耗时、交付分片、实际 psycopg 命名游标
   fetchmany（包括 priming、EOF、失败且返回行数未知的调用）及阶段耗时；不保存 SQL 绑定参数、
   DSN 或输入行内容。FETCH 与 execute 分开，阶段相互嵌套，不能相加。
-- InputBlock 恢复 `pd.NA`、`NaT` 和 Decimal NaN 的原始标量，再做全窗口 dtype 推断；
+- InputBlock 恢复 `pd.NA`、`NaT` 和所有 Decimal 的原始标量（含 NaN、小数位和零符号），再做全窗口 dtype 推断；
   日期裁剪保留其位置。修复 macOS 可用内存观测及异常去敏。free+inactive 只是估计；
   1GiB retained / 3GiB RSS 失败阈值不是物理硬限制，观测失败不静默降级。
 - Job 元数据保持 owner/token CAS、发布状态与心跳的合并边界；不改变金融身份、公式、
@@ -114,3 +114,8 @@ GitHub 原始工件由 Actions 保存。最终交付消息给出最新 SHA、四
 确认 CANCELLED/ABORTED 或完成未知提交审计后再更换版本/开关。未知提交不得强制释放为成功。
 回滚使用已审核源码和关闭开关；旧 Job 身份漂移会被拒绝，不自动重提或混用新旧计算。
 交付结束停止本轮自建测试 PG，不改变任何已有用户服务。
+
+补充 Decimal 表示回归：同值的 `1.100`/`1.10` 与 `-0.0`/`0.00` 不能被 Categorical
+等值合并；Float 声明路径也不得把实际 Decimal 对象隐式转成 float。新增两参数 RED
+均真实失败，修复后与输入/资源单元共22项通过，裁剪后仍逐一核对 Decimal.as_tuple()。
+所有保留的 Decimal 对象继续计入缓存字节与原内存失败阈值；不放宽比较或资源标准。

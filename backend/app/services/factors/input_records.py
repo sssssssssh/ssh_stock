@@ -39,15 +39,16 @@ class InputBlock:
         for name in records[0].keys():
             values = [row[name] for row in records]
             nulls[name] = np.fromiter((value is None for value in values), dtype=bool)
-            # Categoricals collapse every missing sentinel to NaN. Preserve the
-            # actual scalar separately; SQL NULL keeps its original dedicated mask.
+            # Categoricals collapse missing sentinels, and Decimal equality also
+            # merges distinct exponents/signed zero. Retain original scalars;
+            # SQL NULL keeps its original dedicated mask. These retained objects
+            # participate in nbytes and the unchanged cache memory guard.
             marked = {
                 i: value
                 for i, value in enumerate(values)
                 if value is pd.NA
                 or value is pd.NaT
                 or isinstance(value, Decimal)
-                and value.is_nan()
             }
             if marked:
                 specials[name] = marked
