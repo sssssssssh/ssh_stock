@@ -27,6 +27,11 @@ remaining SOURCE gaps are material, not solely missing external signatures.
 "Pending" records actual evidence not yet generated at source-commit time. Final
 delivery must identify any failing job honestly; this document does not predict CI.
 
+Follow-up review requires fresh signer revocation checks at every proof use, not
+just initial signature verification, and B-owned consumption journals. Two new
+negative regressions passed with the19-case protocol module. Prior-SHA CI is
+retained as history and cannot certify the follow-up commit.
+
 ## Changes and Nonchanges
 
 Exact paths: baseline_and_red.md and overlay_manifest.json.

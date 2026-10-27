@@ -91,13 +91,22 @@ class VerifiedDecision:
     payload: CandidateDecision
     digest: str
     installation: object
+    signers: tuple[tuple[str, str], ...]
     _seal: object
 
     def require(self, kind):
         require(self._seal is _VERIFIED and self.payload.kind == kind, "EXTERNAL_DECISION_REQUIRED")
         self.installation.revalidate()
         require(self.installation.now() < self.payload.expires_at, "DECISION_EXPIRED")
+        recheck_signers(self.installation, self.signers)
         return self.payload
+
+
+def recheck_signers(installation, signers):
+    """Revocation is checked at use, not only when the short-lived proof was parsed."""
+    require(len(signers) == 2 and {role for role, _ in signers} == ROLES, "DECISION_SIGNERS")
+    keys = [installation.signing_key(role, kid) for role, kid in signers]
+    require(len(set(keys)) == 2, "DECISION_INDEPENDENT_SIGNERS")
 
 
 class DecisionVerifier:
@@ -125,7 +134,13 @@ class DecisionVerifier:
             require(len(raw) == 64, "DECISION_SIGNATURE")
             install.verifier.verify_signature(key, canonical(d.model_dump()), raw)
         install.revalidate()  # Recheck custody/revocation/expiry after crypto before ACK.
-        return VerifiedDecision(d, sha(canonical(d.model_dump())), install, _VERIFIED)
+        return VerifiedDecision(
+            d,
+            sha(canonical(d.model_dump())),
+            install,
+            tuple((s.role, s.kid) for s in q.signatures),
+            _VERIFIED,
+        )
 
 
 class ExecutionAuthority:
@@ -145,6 +160,7 @@ class ExecutionAuthority:
             )
             value.require(kind)
         require(execution.payload.scope == scope, "EXECUTION_SCOPE")
+        require(journal.domain == "consumer", "EXECUTION_CONSUMER_JOURNAL_REQUIRED")
         self.decisions, self.execution, self.scope, self.journal = (
             decisions,
             execution,
@@ -158,6 +174,8 @@ class ExecutionAuthority:
         return self.decisions[kind]
 
     def claim(self):
+        for kind in KINDS:
+            self.require(kind)
         key = "LIVE_" + self.execution.payload.decision_nonce.replace("-", "")
         require(self.journal.maybe_read(self.scope, key) is None, "EXECUTION_REPLAY")
         return self.journal.append(

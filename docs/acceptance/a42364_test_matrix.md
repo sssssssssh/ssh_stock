@@ -3,6 +3,9 @@
 Portable tests: 121 passed,0failed,0skipped in7.18s (before final overlay tests).
 Repository Ruff: PASS. Final committed overlay / Linux L1 / full-suite CI: PENDING.
 Rows are mapped scenarios, NOT40 independent physical PASS certificates.
+Follow-up signer-use review adds two regressions: fresh revocation and independent
+signer enforcement; the targeted protocol module passed19cases,0failures. Full
+committed portable count and exact-SHA CI are reported after the final commit.
 Unit nodes live under tests/unit; Linux nodes under tests/integration_offline.
 Parametrized nodes retain every parameter; inherited tests retain original bytes
 except the explicit AT59 infra-contract adaptation.

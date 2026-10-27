@@ -123,3 +123,38 @@ def test_AT14_shared_named_budget_cannot_reset_by_restarting_owner():
         two.reserve_named("REVOKE_SCHEMA", 31_000_000_001, 103)
     with pytest.raises(Fault, match="UNACCOUNTED"):
         two.reserve_named("HIDDEN_SQL", 4, 104)
+
+
+def test_AT15_revocation_is_rechecked_at_each_use_without_minting_authority():
+    from types import SimpleNamespace
+
+    from scripts.a42364_protocol_decision import recheck_signers
+
+    calls, revoked = [], set()
+
+    def key(role, kid):
+        calls.append((role, kid))
+        if kid in revoked:
+            raise Fault("A42363_INSTALL_KEY_REVOKED")
+        return role.encode()
+
+    installation = SimpleNamespace(signing_key=key)
+    signers = (("OWNER", "owner"), ("SAFETY_PLATFORM", "safety"))
+    recheck_signers(installation, signers)
+    assert calls == list(signers)
+    revoked.add("owner")
+    with pytest.raises(Fault, match="KEY_REVOKED"):
+        recheck_signers(installation, signers)
+    assert calls[-1] == signers[0]
+
+
+def test_AT15_signer_recheck_rejects_reused_keys_or_incomplete_roles():
+    from types import SimpleNamespace
+
+    from scripts.a42364_protocol_decision import recheck_signers
+
+    install = SimpleNamespace(signing_key=lambda *a: b"OFFLINE_MODEL_PUBLIC_KEY")
+    with pytest.raises(Fault, match="INDEPENDENT_SIGNERS"):
+        recheck_signers(install, (("OWNER", "one"), ("SAFETY_PLATFORM", "two")))
+    with pytest.raises(Fault, match="DECISION_SIGNERS"):
+        recheck_signers(install, (("OWNER", "one"),))
