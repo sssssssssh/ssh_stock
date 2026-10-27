@@ -69,8 +69,8 @@ def verify(g, root, head):
         "A4235_LIVE_OVERLAY_INVALID",
     )
     changed = set(g.git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0")) - {""}
-    validate_paths(changed)
     g.require(changed == set(data["stage_paths"]), "A4235_FROZEN_FILE_CHANGED")
+    validate_paths(changed)
     g.require(
         set(data["patch_sha256"]) == changed - {MANIFEST, GUARD}, "A4235_LIVE_OVERLAY_INVALID"
     )

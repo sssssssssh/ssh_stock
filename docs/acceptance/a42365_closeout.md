@@ -15,3 +15,5 @@ RED：8 个实际 ModuleNotFoundError，完整原始 XML 与 hash 在 a42365_bas
 D1/D2/D3：UNSELECTED / NOT_SIGNED；G1_L2_EXECUTION 独立 NOT_SIGNED。
 
 实际 G1 SQL=0；Podman=0；G1 initdb=0；cgroup/mount/namespace 创建=0；服务安装=0。物理 L2=NOT_RUN_NOT_AUTHORIZED；G2 effective total warmup=8 pending；G3=NOT_AUTHORIZED；BIZ-PERF-01=PERFORMANCE_OPEN。
+
+首次本地完整 unit 回归：4048 passed / 14 failed / 0 skipped（JUnit SHA256 `72cf8a85243dd62a52a0d50f2ce5199349d9c9dad1ed007fbdda99410b4e4220`）。其中9项为新 guard 错误码前置导致旧拒绝合同失败，已修复检查顺序且未改旧测试；另5项为 macOS 的 Linux 回收/系统 OpenSSL 运行环境失败，仍须同 SHA Linux CI 验证，不能记为本地全绿。原始失败工件保留，不通过 skip/xfail 规避。
