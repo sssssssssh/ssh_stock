@@ -20,6 +20,12 @@ APPEND_ONLY_TESTS = {
     "tests/unit/test_business_calculation_memory.py",
 }
 TEST_ADAPTATIONS = {
+    "tests/integration/test_a42_ci_scope_pg17.py": ["exercise"],
+    "tests/integration/test_ab_read_experiment_v14_a4_2.py": [
+        "database",
+        "test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt",
+        "test_full_fixture_census_matches_independent_aggregate_counts",
+    ],
     "tests/unit/test_ab_read_experiment_contract_v14_a4_2.py": [
         "test_frozen_backend_migrations_and_a41_evidence_are_unchanged"
     ],
@@ -80,25 +86,66 @@ def a42_static_contract(root=ROOT):
     """
     baseline = "f8df915febe24bce3f3bcdb8a52ae2f3a5b78e62"
     verify(root)
-    paths = ["backend", "migrations", "config", "scripts/ab_read_profile_v14_a4.py",
-             "scripts/ab_read_profile_summary_v14_a4.py", "docs/acceptance/v14_a4_baseline.md",
-             "docs/acceptance/evidence", "scripts/ab_read_benchmark_v14.py",
-             "scripts/v14_test_database.py", "scripts/publication_candidate_benchmark_v13.py",
-             "tests/integration/test_data_publication.py",
-             "tests/integration/test_ab_merge_read_v14.py", "tests/integration/m16_6_support.py"]
+    paths = [
+        "backend",
+        "migrations",
+        "config",
+        "scripts/ab_read_profile_v14_a4.py",
+        "scripts/ab_read_profile_summary_v14_a4.py",
+        "docs/acceptance/v14_a4_baseline.md",
+        "docs/acceptance/evidence",
+        "scripts/ab_read_benchmark_v14.py",
+        "scripts/v14_test_database.py",
+        "scripts/publication_candidate_benchmark_v13.py",
+        "tests/integration/test_data_publication.py",
+        "tests/integration/test_ab_merge_read_v14.py",
+        "tests/integration/m16_6_support.py",
+    ]
     result = {}
-    for entry in git(root, "ls-tree", "-r", "-z", baseline, "--", *paths).split(b"\0"):
-        if not entry:
-            continue
+    entries = [
+        e for e in git(root, "ls-tree", "-r", "-z", baseline, "--", *paths).split(b"\0") if e
+    ]
+    blobs = git_blobs(
+        root,
+        [
+            rev + ":" + e.split(b"\t", 1)[1].decode()
+            for e in entries
+            for rev in (baseline, HISTORICAL_SOURCE)
+        ],
+    )
+    for entry in entries:
         metadata, raw_path = entry.split(b"\t", 1)
         path = raw_path.decode()
-        old = git(root, "show", baseline + ":" + path)
-        if old != historical_bytes(path, root=root):
+        old = blobs[baseline + ":" + path]
+        if old != blobs[HISTORICAL_SOURCE + ":" + path]:
             raise ValueError("A42_FROZEN_SOURCE_CHANGED")
-        result[path] = dict(git_blob=metadata.split()[2].decode(),
-                            historical_sha256=hashlib.sha256(old).hexdigest(),
-                            evidence_kind="HISTORICAL_NOT_CURRENT_PERFORMANCE")
+        result[path] = dict(
+            git_blob=metadata.split()[2].decode(),
+            historical_sha256=hashlib.sha256(old).hexdigest(),
+            evidence_kind="HISTORICAL_NOT_CURRENT_PERFORMANCE",
+        )
     return result
+
+
+def bind_current_diagnostic_contract(patch):
+    """Explicit ordinary-test route, not a relaxation of real CLI admission.
+
+    Existing small PG tests exercise current read/timeout/cancel behavior. Their
+    static contract validates BOTH immutable history and exact current bytes;
+    it cannot certify the current source against old performance measurements.
+    Only a test's restoring monkeypatch can install this local diagnostic route.
+    """
+    from scripts import ab_read_experiment_v14_a4_2 as experiment
+
+    def receipt():
+        return dict(
+            purpose="CURRENT_STATIC_TEST_DIAGNOSTIC_ONLY",
+            historical_files=a42_static_contract(),
+            **source_versions(["backend/app/services/data_publication.py"]),
+        )
+
+    receipt()  # Refuse before any fixture or diagnostic read is created.
+    patch.setattr(experiment, "source_contract", receipt)
 
 
 def git(root, *args):
@@ -112,8 +159,9 @@ def git_blobs(root, objects):
     names = list(dict.fromkeys(objects))
     if any(not re.fullmatch(r"[0-9a-f]{40}:[^\r\n]+", name) for name in names):
         raise ValueError("BUSINESS_INVALID_SOURCE_OBJECT")
-    raw = subprocess.check_output(["git", "cat-file", "--batch"], cwd=root,
-                                  input=("\n".join(names) + "\n").encode())
+    raw = subprocess.check_output(
+        ["git", "cat-file", "--batch"], cwd=root, input=("\n".join(names) + "\n").encode()
+    )
     result, offset = {}, 0
     for name in names:
         end = raw.index(b"\n", offset)
@@ -121,7 +169,7 @@ def git_blobs(root, objects):
         if len(fields) != 3 or fields[1] != b"blob":
             raise ValueError("BUSINESS_SOURCE_OBJECT_MISSING")
         count = int(fields[2])
-        result[name] = raw[end + 1:end + 1 + count]
+        result[name] = raw[end + 1 : end + 1 + count]
         offset = end + count + 2
     if offset != len(raw):
         raise ValueError("BUSINESS_SOURCE_OBJECT_INVALID")
@@ -212,12 +260,38 @@ def verify(root=ROOT):
     raw = (root / MANIFEST).read_bytes()
     data = json.loads(raw)
     g.require(
-        data["version"] == VERSION
+        set(data)
+        == {
+            "version",
+            "baseline_sha",
+            "historical_source",
+            "stage_paths",
+            "patch_sha256",
+            "normalized_guard_sha256",
+            "historical_manifest_sha256",
+        }
+        and data["version"] == VERSION
         and data["baseline_sha"] == BASELINE
         and data["historical_source"] == HISTORICAL_SOURCE,
         "A4235_LIVE_OVERLAY_INVALID",
     )
     changed = set(git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0")) - {""}
+    g.require(
+        not any(
+            p.startswith(
+                (
+                    ".github/",
+                    "infra/",
+                    "config/",
+                    "migrations/",
+                    "docs/acceptance/a4",
+                    "docs/acceptance/biz_perf_01/",
+                )
+            )
+            for p in changed
+        ),
+        "A4235_FROZEN_FILE_CHANGED",
+    )
     g.require(changed == set(data["stage_paths"]), "A4235_FROZEN_FILE_CHANGED")
     g.require(
         set(data["patch_sha256"]) == changed - {MANIFEST, GUARD}, "A4235_LIVE_OVERLAY_INVALID"
@@ -243,9 +317,14 @@ def verify(root=ROOT):
         set(data["historical_manifest_sha256"]) == set(histories), "A4235_LIVE_OVERLAY_INVALID"
     )
     previous_blobs = git_blobs(root, [HISTORICAL_SOURCE + ":" + p for p in histories])
-    pin_blobs = git_blobs(root, [closing + ":" + p for path, closing in histories.items()
-                                for p in json.loads(previous_blobs[
-                                    HISTORICAL_SOURCE + ":" + path])["patch_sha256"]])
+    pin_blobs = git_blobs(
+        root,
+        [
+            closing + ":" + p
+            for path, closing in histories.items()
+            for p in json.loads(previous_blobs[HISTORICAL_SOURCE + ":" + path])["patch_sha256"]
+        ],
+    )
     for path, closing in histories.items():
         previous = previous_blobs[HISTORICAL_SOURCE + ":" + path]
         g.require(
@@ -275,10 +354,12 @@ def verify(root=ROOT):
             old_nodes, new_nodes = ast.parse(old).body, ast.parse(current).body
             g.require(
                 len(new_nodes) > len(old_nodes)
-                and all(isinstance(n, ast.FunctionDef) and n.name.startswith("test_")
-                        for n in new_nodes[len(old_nodes):])
+                and all(
+                    isinstance(n, ast.FunctionDef) and n.name.startswith("test_")
+                    for n in new_nodes[len(old_nodes) :]
+                )
                 and len({n.name for n in new_nodes if isinstance(n, ast.FunctionDef)})
-                    == sum(isinstance(n, ast.FunctionDef) for n in new_nodes),
+                == sum(isinstance(n, ast.FunctionDef) for n in new_nodes),
                 "A4235_FROZEN_FILE_CHANGED",
             )
         else:

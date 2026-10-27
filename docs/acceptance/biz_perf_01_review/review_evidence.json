@@ -1,0 +1,167 @@
+{
+  "schema": "biz-perf-01.review.evidence.v1",
+  "performance_status": "PERFORMANCE_OPEN",
+  "source": {
+    "source_sha256": "8dbe753c5c230ddd44868b802075dd3f9cc7fa773e2aed960f3c5e000a117fe9",
+    "commit_sha": "fbda8774d4a4f04b27a02a76058f90b84d907b89",
+    "worktree": "CLEAN"
+  },
+  "raw_daily_rows": 1043000,
+  "database_bytes": 582063795,
+  "stages": [
+    {
+      "name": "initial",
+      "wall_seconds": 3.0938814999972237,
+      "verified_start": "2022-11-27",
+      "verified_end": "2024-01-31",
+      "fingerprint_queries": 6
+    },
+    {
+      "name": "expansion",
+      "wall_seconds": 3.4251165419991594,
+      "verified_start": "2022-11-27",
+      "verified_end": "2024-03-31",
+      "fingerprint_queries": 6
+    },
+    {
+      "name": "final_span",
+      "wall_seconds": 7.92120741699182,
+      "verified_start": "2022-11-27",
+      "verified_end": "2025-12-31",
+      "fingerprint_queries": 6
+    },
+    {
+      "name": "independent_final_verify",
+      "wall_seconds": 7.922271125004045,
+      "original_budget_charges": 7,
+      "fingerprint_queries": 6
+    }
+  ],
+  "raw_receipt": {
+    "path": "million-diagnosis-01.json.gz",
+    "sha256": "6657c57e0c8efbf2eb32d09ffe9ff31c12b3116cb1f5fa5ac93b1c8a3443eaf4",
+    "uncompressed_sha256": "104008ac49d86a9b9d061197afb5590d617655d9bb540e091d3475f71dda7aa8"
+  },
+  "local_tests": [
+    {
+      "name": "p0-red",
+      "sha256": "046ee68aab673a6fa40bfb73fef1de20991d184918ea9245c823ef0b4166eee9",
+      "cases": 9,
+      "failures": [
+        "tests.unit.test_business_execution_policy::test_job_switch_drift_fails_before_next_stage[factor_input_reuse_enabled]",
+        "tests.unit.test_business_execution_policy::test_job_switch_drift_fails_before_next_stage[raw_preflight_batch_enabled]",
+        "tests.unit.test_business_execution_policy::test_job_switch_drift_fails_before_next_stage[factor_cpu_optimization_enabled]",
+        "tests.unit.test_business_execution_policy::test_restart_rejects_switch_or_code_drift_instead_of_re_freezing",
+        "tests.unit.test_business_execution_policy::test_child_inherits_root_policy_and_fixed_safe_fetch_counters",
+        "tests.unit.test_business_execution_policy::test_closed_policy_does_not_silently_enable_new_path",
+        "tests.unit.test_ab_read_profile_v14_a4::test_a4_diagnostic_freezes_production_sources",
+        "tests.unit.test_lookup_tail_review_a423::test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+        "tests.unit.test_a4233_background_observer::test_frozen_baseline_bytes_and_old_workflows_unchanged"
+      ],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "pg-preliminary",
+      "sha256": "502391913ee081867e7ceee530cb5b3c9ea6807986b0794c24c89b5e5535d518",
+      "cases": 13,
+      "failures": [
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[0]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[1]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[2]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[3]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[4]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[5]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[6]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[7]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[8]",
+        "tests.integration.test_business_recalc_performance::test_batched_raw_preflight_matches_every_field_and_reduces_queries[9]",
+        "tests.integration.test_business_recalc_performance::test_input_window_preserves_full_frame_dtypes_and_detects_source_change",
+        "tests.integration.test_business_recalc_performance::test_cached_inputs_require_reverification_after_checkpoint_commit"
+      ],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "pg-business-green",
+      "sha256": "825a3bd7251cf459e35d61e7cfc9defb4761a605476c2804fd062fe6e4a6ec5e",
+      "cases": 21,
+      "failures": [],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "pg-policy",
+      "sha256": "6323ac7dfccc0e85a9debb123ad9951bd5ee4949467f0252531ef7f8e06df6a4",
+      "cases": 6,
+      "failures": [],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "precommit-unit",
+      "sha256": "2be99849da473fc17e293229540b653161f8c53057067848b7b309150e3af571",
+      "cases": 37,
+      "failures": [],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "full-local",
+      "sha256": "f51a03ad3a39ec99885df428c1526785984375b5176ab716af03f4c0374a7710",
+      "cases": 1,
+      "failures": [],
+      "errors": 1,
+      "skipped": 0
+    },
+    {
+      "name": "full-local-02",
+      "sha256": "4765171d4c1539218fbcc6b7ee64ebe4a587a339393ca11c85774f9dc21663ca",
+      "cases": 932,
+      "failures": [
+        "tests.integration.test_a42_ci_scope_pg17::test_real_scoped_fetch_windows_month_root_and_actual_plan",
+        "tests.integration.test_a42_ci_scope_pg17::test_cancel_after_real_complete_read_keeps_only_that_evidence",
+        "tests.integration.test_a42_ci_scope_pg17::test_actual_plan_sql_timeout_keeps_partial_native_profile_and_completed_read",
+        "tests.integration.test_ab_profile_cursor_v14_a4::test_profile_real_cursor_complete_golden_and_driver_restoration",
+        "tests.integration.test_ab_profile_cursor_v14_a4::test_profile_cancel_has_no_partial_frame_and_restores_observers",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_full_fixture_census_matches_independent_aggregate_counts",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_monthly_reads_carry_evidence_but_apply_final_verification_only_at_tail",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_omitting_intermediate_final_check_does_not_skip_next_e0_source_check",
+        "tests.integration.test_m14_4_1_closeout::test_period_midflight_recovery_fences_old_worker_and_replacement_succeeds",
+        "tests.integration.test_m14_4_productization::test_period_e2e_persists_month_year_reuses_and_context_is_bounded",
+        "tests.integration.test_m14_4_productization::test_period_date_mismatch_fails_without_partial_artifact",
+        "tests.integration.test_m14_4_productization::test_bundle_latest_and_compare_preserve_request_order_then_fail_closed",
+        "tests.integration.test_m14_4_productization::test_database_rejects_cross_owner_period_row",
+        "tests.integration.test_m14_4_productization::test_period_active_job_recovery_and_old_worker_fencing",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[True]",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[False]",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[ipc]",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[fsync]",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[stdout]",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT49_normal_controlled_child_is_reaped",
+        "tests.integration_offline.test_a42362_ipc_process::test_AT50_parent_exit_with_live_grandchild_is_not_scope_success"
+      ],
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "name": "diagnose-regressions",
+      "sha256": "1a9f0f61d12fa7e31c2d5418d3fb5789126696b5ed7f30418ca8fa6e1512a8ca",
+      "cases": 111,
+      "failures": [
+        "tests.integration.test_a42_ci_scope_pg17::test_real_scoped_fetch_windows_month_root_and_actual_plan",
+        "tests.integration.test_a42_ci_scope_pg17::test_cancel_after_real_complete_read_keeps_only_that_evidence",
+        "tests.integration.test_a42_ci_scope_pg17::test_actual_plan_sql_timeout_keeps_partial_native_profile_and_completed_read",
+        "tests.integration.test_ab_profile_cursor_v14_a4::test_profile_real_cursor_complete_golden_and_driver_restoration",
+        "tests.integration.test_ab_profile_cursor_v14_a4::test_profile_cancel_has_no_partial_frame_and_restores_observers",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_full_fixture_census_matches_independent_aggregate_counts",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_monthly_reads_carry_evidence_but_apply_final_verification_only_at_tail",
+        "tests.integration.test_ab_read_experiment_v14_a4_2::test_omitting_intermediate_final_check_does_not_skip_next_e0_source_check"
+      ],
+      "errors": 0,
+      "skipped": 0
+    }
+  ]
+}

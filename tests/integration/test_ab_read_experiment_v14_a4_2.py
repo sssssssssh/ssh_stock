@@ -20,6 +20,9 @@ from tests.integration import test_data_publication as support
 
 @pytest.fixture
 def database(monkeypatch):
+    from scripts.business_source_contract import bind_current_diagnostic_contract
+
+    bind_current_diagnostic_contract(monkeypatch)
     with isolated_v14_database(monkeypatch) as value:
         yield value
 
@@ -31,6 +34,9 @@ def prepare(db):
 def test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt(
     tmp_path, monkeypatch
 ):
+    from scripts.business_source_contract import bind_current_diagnostic_contract
+
+    bind_current_diagnostic_contract(monkeypatch)
     import json
     import os
     import sys
@@ -74,6 +80,9 @@ def test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt(
 
 
 def test_full_fixture_census_matches_independent_aggregate_counts(tmp_path,monkeypatch):
+    from scripts.business_source_contract import bind_current_diagnostic_contract
+
+    bind_current_diagnostic_contract(monkeypatch)
     import json
     import os
     import sys

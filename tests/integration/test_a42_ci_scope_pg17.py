@@ -15,6 +15,9 @@ from scripts.a42_receipt_contract import validate_set
 def exercise(tmp_path, monkeypatch, groups):
     # Tests may select a subset to exercise the adapter. The production scope CLI
     # has no override for counts, repeats or required keys; complete CI uses all.
+    from scripts.business_source_contract import bind_current_diagnostic_contract
+
+    bind_current_diagnostic_contract(monkeypatch)
     for name in ("DATABASE_URL", "TUSHARE_TOKEN", "LLM_ENABLED", "AB_MERGE_READ_ENABLED"):
         monkeypatch.setenv(name, os.environ.get(name, ""))
     from loguru import logger
