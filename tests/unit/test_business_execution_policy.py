@@ -86,3 +86,30 @@ def test_daily_policy_keeps_its_single_day_and_child_counter_scope():
     assert policy.record["request"] == {"start": "2025-01-02", "end": "2025-01-02"}
     assert policy.snapshot(metadata={}, target=day)["request"] == policy.record["request"]
     assert policy.snapshot()["counter_scope"] == "ROOT_CUMULATIVE_INCLUDING_CHILDREN"
+
+
+def test_resident_worker_cannot_adopt_changed_source_for_a_new_job(monkeypatch):
+    from app.services import calculation_policy as cp
+
+    token = cp.worker_source.set({"source_sha256": "a" * 64, "commit_sha": None})
+    monkeypatch.setattr(cp, "runtime_source", lambda: {
+        "source_sha256": "b" * 64, "commit_sha": None,
+    })
+    try:
+        with pytest.raises(ValueError, match="CALCULATION_POLICY_CHANGED"):
+            cp.ExecutionPolicy.freeze(NS(id=uuid4(), job_metadata={}), settings())
+    finally:
+        cp.worker_source.reset(token)
+
+
+def test_runtime_source_rejects_symlinked_module_directories(tmp_path, monkeypatch):
+    from app.services import calculation_policy as cp
+
+    (tmp_path / "backend" / "app").mkdir(parents=True)
+    (tmp_path / "outside").mkdir()
+    (tmp_path / "outside" / "module.py").write_text("changed = True\n")
+    (tmp_path / "backend" / "app" / "services").symlink_to(tmp_path / "outside",
+                                                           target_is_directory=True)
+    monkeypatch.setattr(cp, "ROOT_DIR", tmp_path)
+    with pytest.raises(ValueError, match="CALCULATION_SOURCE_UNTRUSTED"):
+        cp.runtime_source()

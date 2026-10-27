@@ -529,6 +529,16 @@ def _run_heartbeat_loop(
 
 
 def run_worker() -> None:
+    from app.services.calculation_policy import runtime_source, worker_source
+
+    token = worker_source.set(runtime_source())
+    try:
+        _run_worker_with_source()
+    finally:
+        worker_source.reset(token)
+
+
+def _run_worker_with_source() -> None:
     service_stop, service_thread = start_service_heartbeat("worker")
     try:
         while True:

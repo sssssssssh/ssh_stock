@@ -19,15 +19,18 @@ FLAGS = (
     "factor_cpu_optimization_enabled",
 )
 active_policy = ContextVar("calculation_execution_policy", default=None)
+worker_source = ContextVar("calculation_worker_source", default=None)
 
 
 def runtime_source():
     files = {}
     for directory, suffixes in (("backend", {".py"}), ("config", {".yaml"})):
+        if (ROOT_DIR / directory).is_symlink():
+            raise ValueError("CALCULATION_SOURCE_UNTRUSTED")
         for path in sorted((ROOT_DIR / directory).rglob("*")):
+            if path.is_symlink():
+                raise ValueError("CALCULATION_SOURCE_UNTRUSTED")
             if path.is_file() and path.suffix in suffixes:
-                if path.is_symlink():
-                    raise ValueError("CALCULATION_SOURCE_UNTRUSTED")
                 files[path.relative_to(ROOT_DIR).as_posix()] = hashlib.sha256(
                     path.read_bytes()
                 ).hexdigest()
@@ -82,6 +85,10 @@ class ExecutionPolicy:
     @classmethod
     def freeze(cls, job, settings, *, source=None, parent=None):
         source = runtime_source() if source is None else deepcopy(source)
+        if worker_source.get() is not None and source != worker_source.get():
+            # A resident Worker cannot relabel already imported Python modules
+            # with a later on-disk release while accepting the next Job.
+            raise ValueError("CALCULATION_POLICY_CHANGED")
         flags = flag_values(settings)
         if parent is not None:
             parent.guard(settings)
