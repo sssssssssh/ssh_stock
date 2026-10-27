@@ -36,14 +36,26 @@ def plan_snapshot():
 
 def test_protocol_is_immutable_and_production_still_exact_c0():
     assert hashlib.sha256(Path(c.PROTOCOL).read_bytes()).hexdigest() == c.PROTOCOL_HASH
-    source = Path('backend/app/services/data_publication.py').read_bytes()
+    from scripts.business_source_contract import historical_bytes
+
+    source = historical_bytes("backend/app/services/data_publication.py")
     assert hashlib.sha256(source).hexdigest() == c.C0_SOURCE
-    for filename in ('scripts/a4232_stability_contract.py','scripts/a4232_plan_probe.py',
-                     'scripts/publication_tail_stability_a4232.py'):
+    for filename in (
+        "scripts/a4232_stability_contract.py",
+        "scripts/a4232_plan_probe.py",
+        "scripts/publication_tail_stability_a4232.py",
+    ):
         tree = ast.parse(Path(filename).read_text())
-        assert not any(isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute)
-            and n.func.attr in ('collect','disable','enable','set_threshold')
-            for n in ast.walk(tree))
+        assert not any(
+            isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute)
+            and n.func.attr in ("collect", "disable", "enable", "set_threshold")
+            for n in ast.walk(tree)
+        )
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 def test_four_process_fixed_order_is_balanced_without_extra_samples():

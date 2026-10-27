@@ -2098,3 +2098,27 @@ G2 总预热 8 待决，G3 未授权；普通 CI 和模型回执不得授予物�
 详见 [集中交付](docs/acceptance/a42364_closeout.md)、
 [能力矩阵](docs/acceptance/a42364_capability_matrix.md)、
 [运行恢复手册](docs/acceptance/a42364_runbook.md)；本轮不改变业务应用部署方式。
+
+
+### BIZ-PERF-01 集中整改（2026-10-27，开发验收中）
+
+本轮以 master@06b4cd6ee1783c399bdb89264c8da6190f282273 为基线，按最新业务性能任务书
+推进；历史 A4/G1 的八份 manifest、协议、样本和授权记录继续保留原字节。
+当前业务源码使用独立 BIZ 静态指纹，历史复核明确固定 1e510532bd140110e29b10b6e4eed30fbd573159。
+仅普通合同使用版本分支；历史真实测量入口继续拒绝当前业务源码，BIZ 指纹不能签发 G1 授权。
+20 个原测试函数仅适配其历史/当前版本边界，其他原测试保持原字节，新增缺陷回归另行追加。
+
+三项性能开关仍默认 false，不修改业务 .env 或启用生产。真实 daily/recalculate/catchup
+Worker 开始时保存三开关、实际源码摘要和可用的本地 Git HEAD，并贯穿子任务；漂移失败关闭。
+源码摘要以实际字节为准，Git HEAD 不能代替源码字节；无 Git 镜像明确记录 UNAVAILABLE。
+Job 元数据中的 reads 为实际交付分片的行数/次数，不能冒充驱动 wire FETCH；阶段耗时相互嵌套。
+修复紧凑输入中 pd.NA/NaT/Decimal NaN 的丢失及 macOS 可用内存观测；free+inactive
+仅为估算，1GiB retained / 3GiB RSS 为失败阈值，不是物理硬限制。
+
+当前 PERFORMANCE_OPEN；百万行 1/3/12 月旧/新各三次完整矩阵尚未验收。
+8 股票历史数据不是本轮容量证明；不得宣称 12 月已经改善 30%。允许的真实测量仅限独立标记
+PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行，不访问业务云库。
+资源不足记录 RESOURCE_DEFERRED，不缩减规模、样本或发布 300s/1000万行预算。
+本轮不进入 G1 实机平台、A4-3、历史复用阶段 B 或生产灰度。
+详见 docs/acceptance/BIZ_PERF_01_review_baseline.md 和 BIZ_PERF_01_review_protocol.md
+（位于同一 acceptance 目录）。最终测试和容量结果以本轮交付记录为准。

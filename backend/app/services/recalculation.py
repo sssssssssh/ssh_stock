@@ -22,6 +22,7 @@ from app.services.analysis_identity import (
     analysis_strategy_hash,
 )
 from app.services.calc_metadata import config_hash
+from app.services.calculation_policy import effective_flag
 from app.services.calculation_progress import ProgressStep
 from app.services.dirty import (
     mark_dirty_ranges_failed,
@@ -117,7 +118,7 @@ def run_recalculation(
         )
         factor_chunks = _month_chunks(analysis_start, end)
         factor_service = FactorService(db)
-        if settings.factor_input_reuse_enabled:
+        if effective_flag(settings, "factor_input_reuse_enabled"):
             from app.services.factors.input_window import FactorInputWindow
 
             if settings.ab_merge_read_enabled:
@@ -368,7 +369,7 @@ def validate_recalculation_raw_prerequisites(
         .all()
     )
     failures: list[str] = []
-    if get_settings().raw_preflight_batch_enabled:
+    if effective_flag(get_settings(), "raw_preflight_batch_enabled"):
         from app.services.quality.raw_range import check_raw_range
 
         results = check_raw_range(db, open_dates, strategy=strategy)

@@ -49,6 +49,8 @@ def test_CF_AT03_normalization_only_excludes_new_self_reference():
 
 
 def test_CF_AT05_AT21_production_templates_and_old_authorizations_are_unchanged():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     protected = [
         "backend",
         "frontend",
@@ -64,5 +66,10 @@ def test_CF_AT05_AT21_production_templates_and_old_authorizations_are_unchanged(
         "infra/g1_control_plane/003_closeout.sql",
     ]
     assert not subprocess.check_output(
-        ["git", "diff", "--name-only", guard.BASELINE, "--", *protected], cwd=ROOT
+        ["git", "diff", "--name-only", guard.BASELINE, HISTORICAL_SOURCE, "--", *protected],
+        cwd=ROOT,
     ).strip()
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

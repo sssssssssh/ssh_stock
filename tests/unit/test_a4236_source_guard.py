@@ -17,6 +17,8 @@ from scripts.a4236_g1_harness_contract import Fault
 
 
 def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     identity = g.expected_identity()
     assert identity.head_sha == g.git(ROOT, "rev-parse", "HEAD").decode().strip()
     assert (
@@ -34,6 +36,7 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
         "diff",
         "--name-only",
         g.NEXT_BASE,
+        HISTORICAL_SOURCE,
         "--",
         "backend",
         "config",
@@ -54,11 +57,20 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
     assert {p["block"] for p in old.schedule()} == {0, 1, 2, 3}
     assert len({(p["block"], p["variant"], p["pair"]) for p in old.schedule()}) == 64
 
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
+
 
 def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
     from scripts import a42361_source_guard as live
+    from scripts.business_source_contract import HISTORICAL_SOURCE
 
-    changed = set(g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE).decode().split("\0")) - {""}
+    changed = set(
+        g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE, HISTORICAL_SOURCE)
+        .decode()
+        .split("\0")
+    ) - {""}
     authority = {
         "README.md",
         "PROJECT_RULES.md",
@@ -66,28 +78,52 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         "docs/股票机会发现系统_系统设计_V1.0.md",
     }
     historical = set(
-        g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE, live.BASELINE)
-        .decode().split("\0")
+        g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE, live.BASELINE).decode().split("\0")
     ) - {""}
     assert historical == g.NEXT_STAGE_PATHS | authority and len(historical) == 26
     from scripts import a42362_source_guard as services
     from scripts import a42363_complete_guard as complete
     from scripts import a42363_source_guard as closeout
 
-    assert changed == (historical | live.STAGE_PATHS | services.STAGE_PATHS
-                       | closeout.STAGE_PATHS | complete.STAGE_PATHS)
-    live.validate_paths(
-        set(g.git(ROOT, "diff", "--name-only", "-z", live.BASELINE, services.BASELINE)
-            .decode().split("\0")) - {""}
+    assert changed == (
+        historical
+        | live.STAGE_PATHS
+        | services.STAGE_PATHS
+        | closeout.STAGE_PATHS
+        | complete.STAGE_PATHS
     )
-    services.validate_paths(set(g.git(ROOT, "diff", "--name-only", "-z",
-                                     services.BASELINE, closeout.BASELINE)
-                                .decode().split("\0")) - {""})
-    closeout.validate_paths(set(g.git(ROOT, "diff", "--name-only", "-z",
-                                     closeout.BASELINE, complete.BASELINE)
-                                .decode().split("\0")) - {""})
-    complete.validate_paths(set(g.git(ROOT, "diff", "--name-only", "-z", complete.BASELINE)
-                                 .decode().split("\0")) - {""})
+    live.validate_paths(
+        set(
+            g.git(ROOT, "diff", "--name-only", "-z", live.BASELINE, services.BASELINE)
+            .decode()
+            .split("\0")
+        )
+        - {""}
+    )
+    services.validate_paths(
+        set(
+            g.git(ROOT, "diff", "--name-only", "-z", services.BASELINE, closeout.BASELINE)
+            .decode()
+            .split("\0")
+        )
+        - {""}
+    )
+    closeout.validate_paths(
+        set(
+            g.git(ROOT, "diff", "--name-only", "-z", closeout.BASELINE, complete.BASELINE)
+            .decode()
+            .split("\0")
+        )
+        - {""}
+    )
+    complete.validate_paths(
+        set(
+            g.git(ROOT, "diff", "--name-only", "-z", complete.BASELINE, HISTORICAL_SOURCE)
+            .decode()
+            .split("\0")
+        )
+        - {""}
+    )
     manifest = json.loads((ROOT / g.NEXT_MANIFEST).read_bytes())
     assert len(manifest["patch_sha256"]) == 14
     assert len(g.NEXT_STAGE_PATHS) == 22
@@ -99,17 +135,27 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         else:
             overlay = json.loads((ROOT / live.MANIFEST).read_bytes())
             assert original == overlay["old_sha256"][name]
-            assert hashlib.sha256(g.git(ROOT, "show", f"{services.BASELINE}:{name}")).hexdigest() \
+            assert (
+                hashlib.sha256(g.git(ROOT, "show", f"{services.BASELINE}:{name}")).hexdigest()
                 == overlay["patch_sha256"][name]
+            )
             latest = json.loads((ROOT / services.MANIFEST).read_bytes())
-            assert hashlib.sha256(g.git(ROOT, "show", f"{closeout.BASELINE}:{name}")).hexdigest() \
+            assert (
+                hashlib.sha256(g.git(ROOT, "show", f"{closeout.BASELINE}:{name}")).hexdigest()
                 == latest["patch_sha256"][name]
+            )
             newest = json.loads((ROOT / closeout.MANIFEST).read_bytes())
-            assert hashlib.sha256(g.git(ROOT, "show", f"{complete.BASELINE}:{name}")).hexdigest() \
+            assert (
+                hashlib.sha256(g.git(ROOT, "show", f"{complete.BASELINE}:{name}")).hexdigest()
                 == newest["patch_sha256"][name]
+            )
             final = json.loads((ROOT / complete.MANIFEST).read_bytes())
             assert g.path_sha(ROOT / name) == final["patch_sha256"][name]
     assert hashlib.sha256((ROOT / g.NEXT_MANIFEST).read_bytes()).hexdigest() == g.NEXT_MANIFEST_SHA
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 @pytest.mark.parametrize(

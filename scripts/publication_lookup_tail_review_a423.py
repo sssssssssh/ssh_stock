@@ -218,7 +218,14 @@ def blocked_readiness(baseline):
             "A423_BASELINE_NOT_VERIFIED")
     current = hashlib.sha256(
         (ROOT/"backend/app/services/data_publication.py").read_bytes()).hexdigest()
-    return dict(**header("a423-capacity-admission"),
+    from scripts.business_source_contract import source_versions
+
+    versions = source_versions(["backend/app/services/data_publication.py"])
+    versions["source_contract_version"] = versions.pop("schema_version")
+    for field in ("capacity_ready", "performance_eligible",
+                  "production_read_authorized"):
+        versions.pop(field)
+    return dict(**header("a423-capacity-admission"), **versions,
         admission_schema_version="v14-a423-capacity-admission-v1",
         status="CAPACITY_NOT_AUTHORIZED",
         evidence_kind="DIAGNOSTIC_ONLY", capacity_ready=False,

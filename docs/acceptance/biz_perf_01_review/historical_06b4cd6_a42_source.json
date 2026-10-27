@@ -1,0 +1,33 @@
+{
+  "schema": "a42-contract-v1",
+  "baseline": "f8df915febe24bce3f3bcdb8a52ae2f3a5b78e62",
+  "measurement_version": "a42-v3-full-census-tail-final",
+  "laboratory_sources": {
+    "ab_read_experiment_v14_a4_2.py": "82d0a06af9a327e804ab85d594b971b9bfd76d81478e9b01106d59eb35028d19",
+    "ab_read_resources_v14_a4_2.py": "cc7580665e9ab71286de60307bcda121f17db64fed8a900b1b0f0d57d8ccdc28",
+    "ab_read_evidence_v14_a4_2.py": "ea786dfb13923e0638bcb9baf792220a7798407e8a20a40672ea28a99d020a6f",
+    "ab_read_experiment_summary_v14_a4_2.py": "0a1ba04a1f07ee633bfc09becfe0e63448acf2e3f76aee66b0591c47005b56dc",
+    "a42_scope.py": "5a57f696bfb1e1351f5a5dab1766d1ef42af5227cb557fc96e4578f1f092b6c4",
+    "a42_artifacts.py": "730090b48e1590002d8c0e247a8a7cfc6d71600b36702a57cfe178e2df81d4dd",
+    "a42_ci_contract.py": "65a68dc7fdd135293a032ce13cc25ef730b028610f9ab55015e03da3bd3a4186",
+    "a42_receipt_contract.py": "67e6c18584ddc343e39360d817ddc28deedf925bbf36a077d4ff094ba3d13888",
+    "a42_gate_io.py": "e904ed98f9b87362fab3c0f1b2e176f09bc97b2c06d2a5ed057cd0f0ca1fc293"
+  },
+  "script_sha256": "82d0a06af9a327e804ab85d594b971b9bfd76d81478e9b01106d59eb35028d19",
+  "production_path_changes": "NONE",
+  "read_performance_pass": "NOT_CLAIMED",
+  "failure_type": "ValueError",
+  "failure_sqlstate": null,
+  "failure_trace": [
+    {
+      "file": "ab_read_experiment_v14_a4_2.py",
+      "line": 615,
+      "function": "main"
+    },
+    {
+      "file": "ab_read_experiment_v14_a4_2.py",
+      "line": 31,
+      "function": "source_contract"
+    }
+  ]
+}

@@ -184,13 +184,31 @@ def test_a42351_AT28_run_attempt_and_source_bind_to_independent_expected(design,
 
 def test_a42351_AT01_baseline_and_boundaries_are_not_historical_rewrites():
     from scripts import a4235_capability_guard as guard
+    from scripts.business_source_contract import HISTORICAL_SOURCE
 
-    baseline = (ROOT / 'docs/acceptance/a42351_baseline_and_red.md').read_text()
-    assert guard.PATCH_BASE in baseline and '40150203524' in baseline and '40150203544' in baseline
-    old_receipt = 'docs/acceptance/a4235_baseline_freeze.md'
+    baseline = (ROOT / "docs/acceptance/a42351_baseline_and_red.md").read_text()
+    assert guard.PATCH_BASE in baseline and "40150203524" in baseline and "40150203544" in baseline
+    old_receipt = "docs/acceptance/a4235_baseline_freeze.md"
     assert (ROOT / old_receipt).read_bytes() == guard.git(
-        ROOT, 'show', f'{guard.PATCH_BASE}:{old_receipt}')
-    assert not guard.git(ROOT, 'diff', '--name-only', guard.PATCH_BASE, '--',
-        'backend', 'config', 'migrations', 'frontend', '.github',
-        'scripts/a42341_calibration_runner.py', 'scripts/a42341_contract.py',
-        'scripts/a42341_calibration_guard.py')
+        ROOT, "show", f"{guard.PATCH_BASE}:{old_receipt}"
+    )
+    assert not guard.git(
+        ROOT,
+        "diff",
+        "--name-only",
+        guard.PATCH_BASE,
+        HISTORICAL_SOURCE,
+        "--",
+        "backend",
+        "config",
+        "migrations",
+        "frontend",
+        ".github",
+        "scripts/a42341_calibration_runner.py",
+        "scripts/a42341_contract.py",
+        "scripts/a42341_calibration_guard.py",
+    )
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

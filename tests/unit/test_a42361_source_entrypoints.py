@@ -24,6 +24,7 @@ def test_AT01_AT02_AT04_actual_source_freeze_and_history():
 
     from scripts import a4235_capability_guard as g
     from scripts import a42361_source_guard as live
+    from scripts.business_source_contract import HISTORICAL_SOURCE
 
     identity = g.expected_identity()
     assert identity.head_sha == g.git(g.ROOT, "rev-parse", "HEAD").decode().strip()
@@ -41,6 +42,7 @@ def test_AT01_AT02_AT04_actual_source_freeze_and_history():
         "diff",
         "--name-only",
         live.BASELINE,
+        HISTORICAL_SOURCE,
         "--",
         "backend",
         "config",
@@ -56,7 +58,7 @@ def test_AT01_AT02_AT04_actual_source_freeze_and_history():
     import ast
 
     old = ast.parse(g.git(g.ROOT, "show", f"{live.BASELINE}:{live.OLD_TEST}"))
-    new = ast.parse((g.ROOT / live.OLD_TEST).read_bytes())
+    new = ast.parse(g.git(g.ROOT, "show", f"{HISTORICAL_SOURCE}:{live.OLD_TEST}"))
 
     def functions(tree):
         return {n.name: ast.dump(n) for n in tree.body if isinstance(n, ast.FunctionDef)}
@@ -69,6 +71,10 @@ def test_AT01_AT02_AT04_actual_source_freeze_and_history():
         assert hashlib.sha256(
             g.git(g.ROOT, "show", f"{live.BASELINE}:{path}")
         ).hexdigest() == g.path_sha(g.ROOT / path)
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 @pytest.mark.parametrize(

@@ -34,3 +34,28 @@ def test_compaction_does_not_retain_source_record_dictionaries():
     block = InputBlock.from_records(rows, {"value"})
     assert block.nbytes < 200000
     assert_frame_equal(blocks_to_frame([block]), pd.DataFrame(rows), check_exact=True)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        [pd.NA, True, None],
+        [pd.NaT, date(2025, 1, 1), None],
+        [pd.NA, pd.NA, None],
+    ],
+)
+def test_extension_missing_scalars_are_not_coerced_to_float_nan(values):
+    rows = [dict(trade_date=date(2025, 1, i + 1), value=v) for i, v in enumerate(values)]
+    block = InputBlock.from_records(rows, set())
+    assert_frame_equal(blocks_to_frame([block]), pd.DataFrame(rows), check_exact=True)
+    assert_frame_equal(
+        blocks_to_frame([block.since(date(2025, 1, 2))]), pd.DataFrame(rows[1:]), check_exact=True
+    )
+
+
+def test_decimal_records_keep_scale_null_and_nan_objects():
+    from decimal import Decimal
+
+    rows = [dict(value=v) for v in [Decimal("1.100"), None, Decimal("NaN"), Decimal("2.250")]]
+    blocks = [InputBlock.from_records([row], set()) for row in rows]
+    assert_frame_equal(blocks_to_frame(blocks), pd.DataFrame(rows), check_exact=True)

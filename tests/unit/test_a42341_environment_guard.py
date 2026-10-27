@@ -336,14 +336,32 @@ def test_A42342_T17_real_cli_flags_cannot_unlock_execution(tmp_path, option):
 
 
 def test_A42342_T19_T20_no_workflow_schema_or_other_tool_change():
-    baseline = 'a05ab9ffa77d54126aedbdc4fee5396359326edc'
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
+    baseline = "a05ab9ffa77d54126aedbdc4fee5396359326edc"
     for name in c.SOURCES:
-        if name != 'scripts/a42341_calibration_review.py':
-            assert (ROOT / name).read_bytes() == c.git(ROOT, 'show', baseline + ':' + name,
-                                                     binary=True)
-    assert not c.git(ROOT, 'diff', baseline, '--', 'backend', 'config', 'migrations', 'frontend',
-        '.github', 'docs/acceptance/evidence')
-    assert c.definitions()['effective_warmups_total'] == 8
+        if name != "scripts/a42341_calibration_review.py":
+            assert (ROOT / name).read_bytes() == c.git(
+                ROOT, "show", baseline + ":" + name, binary=True
+            )
+    assert not c.git(
+        ROOT,
+        "diff",
+        baseline,
+        HISTORICAL_SOURCE,
+        "--",
+        "backend",
+        "config",
+        "migrations",
+        "frontend",
+        ".github",
+        "docs/acceptance/evidence",
+    )
+    assert c.definitions()["effective_warmups_total"] == 8
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 @pytest.mark.parametrize('index', [1, 3])

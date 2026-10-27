@@ -805,6 +805,12 @@ def finish_publication(db, job, status):
             text("SELECT set_config('statement_timeout', :value, true)"), {"value": str(remaining)}
         )
 
+    from app.services.calculation_policy import active_policy
+
+    policy = active_policy.get()
+    if policy is not None:
+        budget()
+        policy.verify_source()
     for input_window in getattr(current, "factor_input_windows", []):
         input_window.verify(publish_budget=budget)
 

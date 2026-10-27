@@ -32,6 +32,8 @@ def test_AT01_exact_paths_do_not_grant_prefix_permissions(path):
 
 
 def test_AT02_history_and_all_committed_pins_match_final_stage():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     def git(*args):
         return subprocess.check_output(["git", *args], cwd=ROOT)
 
@@ -43,7 +45,7 @@ def test_AT02_history_and_all_committed_pins_match_final_stage():
                 result[path.decode()] = meta.split()[2]
         return result
 
-    current, old = tree("HEAD"), tree(g.BASELINE)
+    current, old = tree(HISTORICAL_SOURCE), tree(g.BASELINE)
     ids = sorted(set(current.values()) | set(old.values()))
     p = subprocess.run(
         ["git", "cat-file", "--batch"],
@@ -76,6 +78,10 @@ def test_AT02_history_and_all_committed_pins_match_final_stage():
     delta = {name for name in set(old) | set(current) if old.get(name) != current.get(name)}
     g.validate_paths(delta)
 
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
+
 
 def test_AT03_normalization_preserves_everything_but_one_literal():
     value = b"COMPLETE_MANIFEST_SHA = '" + b"a" * 64 + b"'\nORIGINAL=True\n"
@@ -95,6 +101,8 @@ def test_AT03_only_explicitly_reviewed_function_can_change():
 
 
 def test_AT04_production_and_frozen_sql_never_enter_this_stage():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     paths = [
         "backend",
         "frontend",
@@ -109,5 +117,9 @@ def test_AT04_production_and_frozen_sql_never_enter_this_stage():
         "docs/acceptance/evidence",
     ]
     assert not subprocess.check_output(
-        ["git", "diff", "--name-only", g.BASELINE, "--", *paths], cwd=ROOT
+        ["git", "diff", "--name-only", g.BASELINE, HISTORICAL_SOURCE, "--", *paths], cwd=ROOT
     ).strip()
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

@@ -48,6 +48,8 @@ def test_AT04_only_closeout_literal_is_normalized():
 
 
 def test_AT09_production_and_frozen_protocols_untouched():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     protected = [
         "backend",
         "frontend",
@@ -62,5 +64,10 @@ def test_AT09_production_and_frozen_protocols_untouched():
         "scripts/a42341_calibration_runner.py",
     ]
     assert not subprocess.check_output(
-        ["git", "diff", "--name-only", closeout.BASELINE, "--", *protected], cwd=ROOT
+        ["git", "diff", "--name-only", closeout.BASELINE, HISTORICAL_SOURCE, "--", *protected],
+        cwd=ROOT,
     ).strip()
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

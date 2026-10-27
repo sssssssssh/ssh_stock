@@ -5,7 +5,19 @@ from scripts.ab_read_profile_v14_a4 import alternating_orders, source_receipt, s
 
 
 def test_a4_diagnostic_freezes_production_sources():
-    assert len(source_receipt()) == 7
+    from scripts.ab_read_profile_v14_a4 import FROZEN_FILES, REVIEW_SHA
+    from scripts.business_source_contract import source_versions
+
+    versions = source_versions(FROZEN_FILES, historical_revision=REVIEW_SHA)
+    assert len(versions["historical_source"]["files"]) == 7
+    assert versions["historical_source"]["evidence_kind"] == "HISTORICAL_NOT_CURRENT_PERFORMANCE"
+    assert versions["current_source"]["files"] != versions["historical_source"]["files"]
+    # The real old measurement entrance is STILL forbidden on changed business code.
+    with pytest.raises(ValueError, match="A4_DIAGNOSTIC_REQUIRES_UNCHANGED_PRODUCTION_SOURCE"):
+        source_receipt()
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 def test_a4_orders_are_serial_balanced_not_variant_grouped():

@@ -60,6 +60,8 @@ SERVICE_MANIFEST_SHA = '692b2ca9f3f1f95404a6ec953b557d6a6b510123a522b9f357163d3b
 CLOSEOUT_MANIFEST_SHA = '92f67e70c19eee81ef2ce19283aa9969748480cbc36921df01ebba902bc64662'
 COMPLETE_MANIFEST_SHA = 'e1a594a7579ce7d79b62f828126c35f56c38df1de7f84b0b589d645e6e2c9cd7'
 
+BUSINESS_MANIFEST_SHA = 'bb76c15484c22e7d8f01a329ad55f786fdc4c2585bd32e93dfc80237e91edc8b'
+
 
 def live_paths():
     from scripts.a42361_source_guard import STAGE_PATHS as paths
@@ -137,6 +139,10 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
     independently from Git (not embedded in a self-referential manifest). check_static
     additionally binds it to a caller-supplied full target and origin/master.
     """
+    from scripts.business_source_contract import MANIFEST, verify
+
+    if (root / MANIFEST).is_file():
+        return verify(root)
     head = git(root, 'rev-parse', 'HEAD').decode().strip()
     require(re.fullmatch(r'[0-9a-f]{40}', head) is not None, 'A4235_FULL_SHA_REQUIRED')
     require(not git(root, 'status', '--porcelain').strip(), 'A4235_DIRTY_TREE')
@@ -187,6 +193,11 @@ def overlay_fingerprint(root: Path = ROOT) -> str:
 
 
 def frozen_files(root: Path = ROOT) -> str:
+    from scripts.business_source_contract import MANIFEST, verify
+
+    if (root / MANIFEST).is_file():
+        verify(root)
+        return hashlib.sha256(git(root, 'ls-tree', '-r', BASELINE, '--', *PROTECTED)).hexdigest()
     entries = git(root, 'ls-tree', '-r', BASELINE, '--', *PROTECTED)
     originals = {row.split(b'\t', 1)[1].decode() for row in entries.splitlines()}
     changed = set(git(root, 'diff', '--no-ext-diff', '--name-only', BASELINE,

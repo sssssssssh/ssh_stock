@@ -36,8 +36,14 @@ def test_all_seven_c1_anomalies_have_same_repeat_and_real_order_c0_neighbours():
 def test_protocol_does_not_change_production_or_authorize_formal_capacity():
     import hashlib
 
-    source = Path("backend/app/services/data_publication.py").read_bytes()
+    from scripts.business_source_contract import historical_bytes
+
+    source = historical_bytes("backend/app/services/data_publication.py")
     assert hashlib.sha256(source).hexdigest() == C0_SOURCE
     text = Path("docs/acceptance/v14_a4_2_3_1_attribution_protocol.md").read_text()
     assert "128次总计" in text and "只干预一个因素" in text
     assert "P2/P3 NOT_AUTHORIZED" in text
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

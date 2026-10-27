@@ -37,6 +37,12 @@ class FactorService:
         self.input_window = None
 
     def recalc(self, start: date, end: date, calc_run_id: uuid.UUID | None = None) -> int:
+        from app.services.calculation_policy import active_policy, effective_flag
+
+        policy = active_policy.get()
+        if policy is not None:
+            policy.verify_source()
+        optimize_cpu = effective_flag(self.settings, "factor_cpu_optimization_enabled")
         lookback_start = start - timedelta(days=430)
         if self.input_window is not None:
             self.input_window.prepare(lookback_start, end)
@@ -62,9 +68,9 @@ class FactorService:
             end=end,
             config=config,
             trade_status=trade_status,
-            optimize_cpu=self.settings.factor_cpu_optimization_enabled,
+            optimize_cpu=optimize_cpu,
             check_cancelled=checkpoint if self.input_window is not None
-            or self.settings.factor_cpu_optimization_enabled else None,
+            or optimize_cpu else None,
         )
         if self.input_window is not None:
             check_calculation_memory()

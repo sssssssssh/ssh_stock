@@ -53,6 +53,11 @@ current_execution: ContextVar[Execution | None] = ContextVar("data_job_execution
 
 
 def checkpoint() -> None:
+    from app.services.calculation_policy import active_policy
+
+    policy = active_policy.get()
+    if policy is not None:
+        policy.guard()
     execution = current_execution.get()
     if execution is None:
         return

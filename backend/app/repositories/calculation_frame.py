@@ -32,7 +32,13 @@ def read_calculation_frame(
     try:
         result = db.execute(statement.execution_options(
             yield_per=FETCH_ROWS, calculation_query_name=name))
+        from app.services.calculation_policy import active_policy
+
+        policy = active_policy.get()
+        fetched_at = monotonic()
         for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
+            if policy is not None:
+                policy.observe_fetch(name, len(batch), monotonic()-fetched_at)
             checkpoint()
             if check_batch is not None:
                 check_batch(batch)
@@ -47,6 +53,7 @@ def read_calculation_frame(
                 logger.info("calculation read progress query={} rows={} elapsed_seconds={:.1f}",
                             name, row_count, now - started)
                 last_log = now
+            fetched_at = monotonic()
         # Construct once, not one frame per FETCH, to retain whole-result dtype
         # inference (including all-NULL batches), ordering and empty-frame behavior.
         progress.report("frame", completed_rows=row_count, log=True)

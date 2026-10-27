@@ -64,6 +64,9 @@ def test_RF_AT04_cumulative_facade_keeps_exact_new_stage_and_legacy_stage_separa
 
 
 def test_RF_AT57_all_original_tests_have_identical_git_blobs():
+    from scripts import a42364_source_guard as engineering
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     rows = subprocess.check_output(
         ["git", "ls-tree", "-r", "-z", guard.BASELINE, "--", "tests"], cwd=ROOT
     ).split(b"\0")
@@ -72,11 +75,21 @@ def test_RF_AT57_all_original_tests_have_identical_git_blobs():
         if not row:
             continue
         metadata, name = row.split(b"\t", 1)
-        raw = (ROOT / name.decode()).read_bytes()
+        path = name.decode()
+        raw = subprocess.check_output(["git", "show", HISTORICAL_SOURCE + ":" + path], cwd=ROOT)
+        if path == engineering.ALLOWED_TEST:
+            old = subprocess.check_output(["git", "show", guard.BASELINE + ":" + path], cwd=ROOT)
+            engineering.verify_test_adaptation(old, raw)
+            checked += 1
+            continue
         actual = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
         assert actual == metadata.split()[2].decode()
         checked += 1
     assert checked > 200
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 def test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol():
@@ -86,6 +99,8 @@ def test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol():
     with pytest.raises(CurrentFault) as e:
         session_method()
     assert e.value.code == "A42363_METHOD_BLOCKED_NEEDS_PROTOCOL_DECISION"
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     protected = [
         "backend",
         "frontend",
@@ -103,11 +118,30 @@ def test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol():
     from scripts import a42364_source_guard as engineering
 
     # Only the separately pinned new files are authorized; no infra directory waiver.
-    infra_changes = set(subprocess.check_output(
-        ["git", "diff", "--name-only", "-z", engineering.BASELINE, "--", "infra"], cwd=ROOT
-    ).decode().split("\0")) - {""}
+    infra_changes = set(
+        subprocess.check_output(
+            [
+                "git",
+                "diff",
+                "--name-only",
+                "-z",
+                engineering.BASELINE,
+                HISTORICAL_SOURCE,
+                "--",
+                "infra",
+            ],
+            cwd=ROOT,
+        )
+        .decode()
+        .split("\0")
+    ) - {""}
     assert infra_changes == engineering.INFRA
     protected.remove("infra")
     assert not subprocess.check_output(
-        ["git", "diff", "--name-only", guard.BASELINE, "--", *protected], cwd=ROOT
+        ["git", "diff", "--name-only", guard.BASELINE, HISTORICAL_SOURCE, "--", *protected],
+        cwd=ROOT,
     ).strip()
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

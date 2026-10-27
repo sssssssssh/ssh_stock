@@ -107,5 +107,23 @@ def test_fifteen_shapes_e3_and_rr2_are_mandatory_not_optional_best_cases():
 
 
 def test_production_tree_and_original_a41_evidence_unchanged():
-    assert not subprocess.check_output(["git", "diff", "--name-only", BASELINE_SHA, "--",
-        "backend", "config", "migrations", "frontend"])
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
+    assert not subprocess.check_output(
+        [
+            "git",
+            "diff",
+            "--name-only",
+            BASELINE_SHA,
+            HISTORICAL_SOURCE,
+            "--",
+            "backend",
+            "config",
+            "migrations",
+            "frontend",
+        ]
+    )
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

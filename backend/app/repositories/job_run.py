@@ -42,6 +42,15 @@ def start_job(
         job.execution_token = execution.token
         job.execution_started_at = datetime.now(UTC)
         job.last_progress_at = job.execution_started_at
+    from app.services.calculation_policy import active_policy
+
+    policy = active_policy.get()
+    if policy is not None and status == "RUNNING":
+        # UUID defaults materialize at flush; preserve one root policy for every child.
+        db.add(job)
+        db.flush()
+        job.job_metadata = {**dict(job.job_metadata or {}),
+                            "calculation_execution": policy.snapshot(job.id, job.job_metadata)}
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -101,6 +110,7 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
     values = {"last_progress_at": now}
     if status is not None:
         values["status"] = status
+    publication = None
     if status in {"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"}:
         values["finished_at"] = now
     for key, value in (("step", step), ("row_count", row_count), ("error_message", error_message)):
@@ -123,6 +133,19 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
     if progress is not None and (snapshot := progress.snapshot()) is not None:
         values["job_metadata"] = JobRun.job_metadata.op("||")({
             **values.get("job_metadata", {}), "calculation_progress": snapshot,
+        })
+    from app.services.calculation_policy import active_policy
+
+    policy = active_policy.get()
+    if policy is not None:
+        # Merge via SQL, so heartbeat diagnostics and cancellation are never overwritten.
+        values["job_metadata"] = JobRun.job_metadata.op("||")({
+            **(metadata or {}),
+            **({"publication": publication} if publication is not None else {}),
+            "calculation_execution": policy.snapshot(job.id, {
+                **dict(job.job_metadata or {}), **(metadata or {})}),
+            **({"calculation_progress": snapshot} if progress is not None
+               and (snapshot := progress.snapshot()) is not None else {}),
         })
     conditions = [JobRun.id == job.id, JobRun.status == "RUNNING",
                   JobRun.worker_id == execution.worker_id,

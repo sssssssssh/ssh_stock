@@ -300,7 +300,9 @@ def validate(g, root, head):
 def independent_binding(run_id, attempt, fixture_uuid, nonce, marker_sha256):
     from scripts import a4235_capability_guard as g
     from scripts.a42361_contract import Binding
+    from scripts.business_source_contract import MANIFEST
 
+    g.require(not (g.ROOT / MANIFEST).exists(), "A4235_BUSINESS_SOURCE_IS_NOT_G1_GRANT")
     identity = g.expected_identity(run_id=run_id, attempt=attempt)
     return Binding(
         identity=identity,

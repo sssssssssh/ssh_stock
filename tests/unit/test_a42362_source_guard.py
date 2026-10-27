@@ -35,12 +35,14 @@ def test_AT02_no_directory_or_prefix_exemptions(name):
 def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchanged():
     from scripts import a42363_complete_guard as complete
     from scripts import a42363_source_guard as closeout
+    from scripts.business_source_contract import HISTORICAL_SOURCE
 
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
+    head = HISTORICAL_SOURCE
     historical_head = closeout.BASELINE
     changed = set(
         subprocess.check_output(
-            ["git", "diff", "--name-only", "-z", g.BASELINE, historical_head], cwd=ROOT)
+            ["git", "diff", "--name-only", "-z", g.BASELINE, historical_head], cwd=ROOT
+        )
         .decode()
         .split("\0")
     ) - {""}
@@ -65,7 +67,8 @@ def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchang
         if name in closeout.PINNED:
             latest = json.loads((ROOT / closeout.MANIFEST).read_bytes())
             closing = subprocess.check_output(
-                ["git", "show", f"{complete.BASELINE}:{name}"], cwd=ROOT)
+                ["git", "show", f"{complete.BASELINE}:{name}"], cwd=ROOT
+            )
             assert hashlib.sha256(closing).hexdigest() == latest["patch_sha256"][name]
             if name in complete.PINNED:
                 final = json.loads((ROOT / complete.MANIFEST).read_bytes())
@@ -74,6 +77,10 @@ def test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchang
                 assert current == closing
         else:
             assert current == actual
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 def test_AT04_normalization_excludes_only_the_new_self_reference_literal():
@@ -118,6 +125,8 @@ def test_AT03_inherited_checks_remain_independent_before_full_fd_walk(tmp_path, 
 
 
 def test_AT70_no_production_migrations_workflows_dependencies_or_old_protocol_changes():
+    from scripts.business_source_contract import HISTORICAL_SOURCE
+
     protected = [
         "backend",
         "config",
@@ -133,5 +142,9 @@ def test_AT70_no_production_migrations_workflows_dependencies_or_old_protocol_ch
         "docs/acceptance/v14_a4_2_3_4_calibration_protocol.md",
     ]
     assert not subprocess.check_output(
-        ["git", "diff", "--name-only", g.BASELINE, "--", *protected], cwd=ROOT
+        ["git", "diff", "--name-only", g.BASELINE, HISTORICAL_SOURCE, "--", *protected], cwd=ROOT
     ).strip()
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64

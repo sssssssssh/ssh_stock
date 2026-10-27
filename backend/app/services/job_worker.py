@@ -231,8 +231,22 @@ def execute_claimed_job(
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
     publication_workspace = None
+    policy_token = query_observer = None
     worker_id = getattr(job, "worker_id", None)
     try:
+        if context_token is not None and isinstance(db, Session) and job.job_type in {
+                "daily", "recalculate", "catchup"}:
+            from app.services.calculation_policy import (
+                ExecutionPolicy,
+                QueryObserver,
+                active_policy,
+            )
+
+            policy = ExecutionPolicy.freeze(job, get_settings())
+            policy_token = active_policy.set(policy)
+            query_observer = QueryObserver(db.get_bind().engine, policy)
+            query_observer.install()
+            update_job(db, job, metadata={"calculation_execution": policy.snapshot()})
         if context_token is not None:
             db.commit()
         if job.status == "RUNNING" and worker_id:
@@ -406,6 +420,9 @@ def execute_claimed_job(
             "FACTOR_INPUT_WINDOW_UNBOUNDED", "FACTOR_INPUT_MEMORY_BUDGET_INVALID",
             "FACTOR_INPUT_REUSE_AB_EXPERIMENT_CONFLICT",
             "CALCULATION_MEMORY_OBSERVATION_FAILED", "RAW_PREFLIGHT_WINDOW_UNBOUNDED",
+            "CALCULATION_POLICY_CHANGED", "CALCULATION_POLICY_CLOSED",
+            "CALCULATION_SOURCE_UNTRUSTED", "CALCULATION_SOURCE_UNAVAILABLE",
+            "CALCULATION_POLICY_INVALID",
         }:
             # New read guards can fail with full source batches in local frames.
             # Do not let traceback diagnostics serialize those business records.
@@ -424,6 +441,13 @@ def execute_claimed_job(
             except SQLAlchemyError as error:
                 logger.error("candidate connection cleanup failed job_id={} error={}",
                              job_id, database_error_summary(error))
+        if query_observer is not None:
+            query_observer.close()
+        if policy_token is not None:
+            from app.services.calculation_policy import active_policy
+
+            active_policy.get().close()
+            active_policy.reset(policy_token)
         if context_token is not None:
             current_execution.reset(context_token)
             db.info.pop("data_task_timeouts", None)

@@ -612,7 +612,17 @@ def main():
               "production_path_changes": "NONE", "read_performance_pass": "NOT_CLAIMED"}
     try:
         verified_environment()
-        output["source_contract"] = source_contract()
+        from scripts.business_source_contract import MANIFEST, a42_static_contract, source_versions
+
+        if args.contract_only and (ROOT / MANIFEST).exists():
+            # Static compatibility only. run() and every real measurement still
+            # call the original strict source_contract(), which rejects BIZ SQL.
+            output["source_contract"] = a42_static_contract()
+            output["source_versions"] = source_versions([
+                "backend/app/services/data_publication.py"])
+            output["production_path_changes"] = "BIZ_VERSIONED_STATIC_ONLY"
+        else:
+            output["source_contract"] = source_contract()
         save(args.output, output)
         if not args.contract_only:
             if (not 1<=args.public_rows<=2570000 or not 1<=args.candidate_rows<=1350000

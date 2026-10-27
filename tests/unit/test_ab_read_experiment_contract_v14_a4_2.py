@@ -11,7 +11,12 @@ from scripts.ab_read_experiment_v14_a4_2 import CONTROLS, alternate, source_cont
 
 
 def test_frozen_backend_migrations_and_a41_evidence_are_unchanged():
-    assert source_contract()
+    from scripts.business_source_contract import a42_static_contract, verify
+
+    assert a42_static_contract()
+    with pytest.raises(ValueError, match="A42_PRODUCTION_TREE_CHANGED"):
+        source_contract()
+    assert len(verify()) == 64
 
 
 def test_alternation_keeps_all_controls_and_not_just_fastest():

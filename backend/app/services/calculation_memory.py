@@ -1,5 +1,7 @@
 """Process memory observation without a third-party dependency."""
 
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,9 +13,16 @@ def process_memory_bytes():
 
         class Counters(ctypes.Structure):
             _fields_ = [("cb", wintypes.DWORD), ("faults", wintypes.DWORD)] + [
-                (name, ctypes.c_size_t) for name in (
-                    "peak", "working", "peak_paged", "paged", "peak_nonpaged",
-                    "nonpaged", "pagefile", "peak_pagefile",
+                (name, ctypes.c_size_t)
+                for name in (
+                    "peak",
+                    "working",
+                    "peak_paged",
+                    "paged",
+                    "peak_nonpaged",
+                    "nonpaged",
+                    "pagefile",
+                    "peak_pagefile",
                 )
             ]
 
@@ -21,12 +30,15 @@ def process_memory_bytes():
         kernel.GetCurrentProcess.restype = wintypes.HANDLE
         psapi = ctypes.WinDLL("psapi", use_last_error=True)
         psapi.GetProcessMemoryInfo.argtypes = [
-            wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+            wintypes.HANDLE,
+            ctypes.c_void_p,
+            wintypes.DWORD,
         ]
         value = Counters()
         value.cb = ctypes.sizeof(value)
         observed = psapi.GetProcessMemoryInfo(
-            kernel.GetCurrentProcess(), ctypes.byref(value), value.cb)
+            kernel.GetCurrentProcess(), ctypes.byref(value), value.cb
+        )
         if not observed:
             raise RuntimeError("CALCULATION_MEMORY_OBSERVATION_FAILED")
         return value.working, value.peak
@@ -44,15 +56,28 @@ def process_memory_bytes():
 
 
 def available_memory_bytes():
+    if sys.platform == "darwin":
+        # Reclaimable estimate (free + inactive), not a physical allocation limit.
+        # A fixed local OS utility; never a caller command, path or environment DSN.
+        raw = subprocess.run(
+            ["/usr/bin/vm_stat"], check=True, capture_output=True, text=True, timeout=1
+        ).stdout
+        return parse_macos_available_memory(raw)
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
 
         class Status(ctypes.Structure):
             _fields_ = [("length", wintypes.DWORD), ("load", wintypes.DWORD)] + [
-                (name, ctypes.c_ulonglong) for name in (
-                    "total", "available", "total_page", "available_page", "total_virtual",
-                    "available_virtual", "extended",
+                (name, ctypes.c_ulonglong)
+                for name in (
+                    "total",
+                    "available",
+                    "total_page",
+                    "available_page",
+                    "total_virtual",
+                    "available_virtual",
+                    "extended",
                 )
             ]
 
@@ -87,11 +112,38 @@ def available_memory_bytes():
     raise RuntimeError("CALCULATION_MEMORY_OBSERVATION_FAILED")
 
 
+def parse_macos_available_memory(raw):
+    page = re.search(r"page size of (\d+) bytes", raw)
+    values = {}
+    for name in ("free", "inactive"):
+        matched = re.search(r"^Pages " + name + r":\s+(\d+)\.\s*$", raw, re.M)
+        if matched:
+            values[name] = int(matched[1])
+    size = int(page[1]) if page else 0
+    if (
+        len(raw) > 16384
+        or size < 4096
+        or size > 65536
+        or size & (size - 1)
+        or set(values) != {"free", "inactive"}
+    ):
+        raise RuntimeError("CALCULATION_MEMORY_OBSERVATION_FAILED")
+    return sum(values.values()) * size
+
+
 def check_calculation_memory(limit=3 * 1024**3, *, reserve=256 * 1024**2):
     try:
         current, peak = process_memory_bytes()
         available = available_memory_bytes()
-    except (OSError, ValueError, ImportError):
+    except (
+        OSError,
+        ValueError,
+        ImportError,
+        RuntimeError,
+        KeyError,
+        OverflowError,
+        subprocess.SubprocessError,
+    ):
         raise RuntimeError("CALCULATION_MEMORY_OBSERVATION_FAILED") from None
     if current >= limit:
         raise MemoryError("CALCULATION_PROCESS_MEMORY_BUDGET_EXCEEDED")

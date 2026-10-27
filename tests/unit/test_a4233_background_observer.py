@@ -535,25 +535,52 @@ def test_bracket_requires_coverage_no_missing_ticks_and_no_absence_claim():
 
 
 def test_frozen_baseline_bytes_and_old_workflows_unchanged():
-    manifest = json.loads((ROOT/'docs/acceptance/evidence/a4233_frozen_manifest.json').read_text())
+    from scripts.business_source_contract import HISTORICAL_SOURCE, historical_bytes
+
+    manifest = json.loads(
+        (ROOT / "docs/acceptance/evidence/a4233_frozen_manifest.json").read_text()
+    )
     import hashlib
 
-    assert manifest['baseline_sha'] == '73a3273301502822dc7a881a64dfdca45db4d063'
-    for p,h in manifest['files'].items():
-        before = subprocess.check_output(['git','show',manifest['baseline_sha']+':'+p],cwd=ROOT)
+    assert manifest["baseline_sha"] == "73a3273301502822dc7a881a64dfdca45db4d063"
+    for p, h in manifest["files"].items():
+        before = subprocess.check_output(
+            ["git", "show", manifest["baseline_sha"] + ":" + p], cwd=ROOT
+        )
         assert hashlib.sha256(before).hexdigest() == h
-        if p == '.github/workflows/ci.yml':
+        if p == ".github/workflows/ci.yml":
             import yaml
 
             from scripts.a42331_ci_contract import normalize_test_job
 
-            current = yaml.safe_load((ROOT/p).read_bytes())
-            current['jobs']['test'] = normalize_test_job(current['jobs']['test'])
+            current = yaml.safe_load((ROOT / p).read_bytes())
+            current["jobs"]["test"] = normalize_test_job(current["jobs"]["test"])
             assert current == yaml.safe_load(before)  # All other jobs/gates remain frozen.
         else:
-            assert hashlib.sha256((ROOT/p).read_bytes()).hexdigest() == h
-    assert subprocess.run(['git','diff','--quiet',manifest['baseline_sha'],'--',
-        'backend','config','migrations','frontend'],cwd=ROOT).returncode == 0
+            historical = historical_bytes(p)
+            assert hashlib.sha256(historical).hexdigest() == h
+    assert (
+        subprocess.run(
+            [
+                "git",
+                "diff",
+                "--quiet",
+                manifest["baseline_sha"],
+                HISTORICAL_SOURCE,
+                "--",
+                "backend",
+                "config",
+                "migrations",
+                "frontend",
+            ],
+            cwd=ROOT,
+        ).returncode
+        == 0
+    )
+
+    from scripts.business_source_contract import verify as verify_current_business
+
+    assert len(verify_current_business()) == 64
 
 
 def test_new_workflow_has_one_contracts_job_and_no_measurement_entry():

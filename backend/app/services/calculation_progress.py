@@ -99,6 +99,14 @@ class ProgressStep:
             updated_at=stamp, elapsed_seconds=round(now-self.started, 1),
             operation_elapsed_seconds=round(now-self.operation_started, 1),
         )
+        if phase in {"complete", "failed", "cancelled"} and not getattr(
+                self, "policy_recorded", False):
+            from app.services.calculation_policy import active_policy
+
+            policy = active_policy.get()
+            if policy is not None:
+                policy.observe_stage(self.name, self.kind, now-self.started, phase != "complete")
+            self.policy_recorded = True
         recorder = current_progress.get()
         if recorder is not None:
             recorder.record(value, advanced=advanced)
