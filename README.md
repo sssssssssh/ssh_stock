@@ -2131,3 +2131,10 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 常驻 Worker 额外保存进程起始源码身份，不能对已载入旧模块重新贴上新磁盘版本。
 交付与启用边界见 BIZ_PERF_01_review_closeout.md（同 acceptance 目录）；同 SHA CI
 结果以 Actions 原始工件及最终交付消息为准，正式容量/生产灰度不因普通 CI 通过而获准。
+
+
+## A42365 G1 Runtime 工程增量（2026-10-28）
+
+本轮未安装或启动 G1 服务。固定工厂、持久预算/恢复和 FD 组件有增量源码，mandatory broker/native/RO mount/服务端装配仍不完整，状态 PARTIAL_ENGINEERING_BLOCKED。不要使用签名或 ordinary CI 代替缺失源码/物理验收。
+
+集中材料：[A42365 closeout](docs/acceptance/a42365_closeout.md)。

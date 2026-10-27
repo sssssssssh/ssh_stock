@@ -357,13 +357,17 @@ class InstalledServiceHost:
             )
             method = request["method"]
             if method == "installation-status":
-                result = dict(
-                    source="INSTALLED_FD_BOUND_HOST",
-                    active_live_gate="DENY",
-                    runtime_backend="PRESENT"
-                    if self.backend is not None
-                    else "ENGINEERING_BLOCKED",
-                    qualifies=False,
+                result = (
+                    self.backend.status()
+                    if self.backend is not None and hasattr(self.backend, "status")
+                    else dict(
+                        source="INSTALLED_FD_BOUND_HOST",
+                        active_live_gate="DENY",
+                        runtime_backend="PRESENT"
+                        if self.backend is not None
+                        else "ENGINEERING_BLOCKED",
+                        qualifies=False,
+                    )
                 )
             else:
                 require(self.backend is not None, "INSTALLED_RUNTIME_CAPABILITIES_REQUIRED")
@@ -384,6 +388,7 @@ def serve_installed(document_fd=3, listener_fd=5):
 
     raw = os.pread(document_fd, 65537, 0)
     package = InstalledPackage.read(document_fd, sha(raw))
-    # No actual kernel writer broker can currently be constructed by this entrypoint.
-    # Status-only startup is real; runtime construction remains an explicit source gap.
-    InstalledServiceHost(package).serve_once(listener_fd)
+    from scripts.a42365_runtime_factory import build_installed_runtime
+
+    backend = build_installed_runtime(package)
+    InstalledServiceHost(package, backend).serve_once(listener_fd)

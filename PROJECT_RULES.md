@@ -1149,3 +1149,10 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 常驻 Worker 额外保存进程起始源码身份，不能对已载入旧模块重新贴上新磁盘版本。
 交付与启用边界见 BIZ_PERF_01_review_closeout.md（同 acceptance 目录）；同 SHA CI
 结果以 Actions 原始工件及最终交付消息为准，正式容量/生产灰度不因普通 CI 通过而获准。
+
+
+## A42365 G1 Runtime 工程增量（2026-10-28）
+
+A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历史九个 manifest 保持冻结；新第十层精确 overlay 独立。D1/D2/D3 和 G1_L2_EXECUTION 均未签，实际 G1 SQL/Podman/initdb/服务安装=0；G2总预热8 pending，G3未授权；BIZ性能验收仍开放。
+
+集中材料：[A42365 closeout](docs/acceptance/a42365_closeout.md)。

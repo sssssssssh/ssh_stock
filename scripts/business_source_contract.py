@@ -171,6 +171,14 @@ def versioned_frozen_files(root, frozen):
     # Never cache current manifest/files, raw inputs, row hashes or Job evidence.
     g.require(g.path_sha(root / MANIFEST) == g.BUSINESS_MANIFEST_SHA, "A4235_LIVE_OVERLAY_INVALID")
     patches = json.loads((root / MANIFEST).read_bytes())["patch_sha256"]
+    from scripts.a42365_source_guard import MANIFEST as runtime_manifest
+
+    if (root / runtime_manifest).is_file():
+        g.require(
+            g.path_sha(root / runtime_manifest) == g.A42365_MANIFEST_SHA,
+            "A4235_LIVE_OVERLAY_INVALID",
+        )
+        patches.update(json.loads((root / runtime_manifest).read_bytes())["patch_sha256"])
     baseline_hashes = immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
     return {path: patches.get(path, sha) for path, sha in baseline_hashes.items()}
 
@@ -295,6 +303,11 @@ def verify(root=ROOT):
     from scripts import a4235_capability_guard as g
     from scripts import a42361_source_guard as fd_guard
     from scripts import a42364_source_guard as legacy
+    from scripts.a42365_source_guard import MANIFEST as runtime_manifest
+    from scripts.a42365_source_guard import verify as runtime_verify
+
+    if (Path(root) / runtime_manifest).is_file():
+        return runtime_verify(g, root, g.git(root, "rev-parse", "HEAD").decode().strip())
 
     head = g.git(root, "rev-parse", "HEAD").decode().strip()
     import re

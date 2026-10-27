@@ -1843,3 +1843,10 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 常驻 Worker 额外保存进程起始源码身份，不能对已载入旧模块重新贴上新磁盘版本。
 交付与启用边界见 BIZ_PERF_01_review_closeout.md（同 acceptance 目录）；同 SHA CI
 结果以 Actions 原始工件及最终交付消息为准，正式容量/生产灰度不因普通 CI 通过而获准。
+
+
+## A42365 G1 Runtime 工程增量（2026-10-28）
+
+A42365 不增加用户业务功能，不改变选股、回测、研究、PAPER 或任何前端流程。G1 工程验收尚未通过，不能据 L1/ordinary CI 认定已具备可用或物理合格的运行服务。
+
+集中材料：[A42365 closeout](acceptance/a42365_closeout.md)。
