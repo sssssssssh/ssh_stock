@@ -16,7 +16,7 @@ def test_AT05_AT08_native_bootstrap_compiles_and_unprivileged_entry_cannot_initi
     target = tmp_path / "bootstrap-native"
     result = subprocess.run(
         [
-            "cc",
+            "/usr/bin/cc",
             "-std=c17",
             "-O2",
             "-Wall",
@@ -29,9 +29,16 @@ def test_AT05_AT08_native_bootstrap_compiles_and_unprivileged_entry_cannot_initi
         ],
         capture_output=True,
         timeout=20,
-        env={},
+        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
     )
-    assert result.returncode == 0, result.stderr.decode()
+    if result.returncode != 0:
+        # Fixed nonsecret diagnostic survives the existing CI redaction plugin.
+        code = (
+            "A42331_NATIVE_COMPILER_HELPER_LOOKUP_FAILED"
+            if b"cannot execute" in result.stderr or b"not found" in result.stderr
+            else "A42331_NATIVE_COMPILER_FAILED"
+        )
+        raise RuntimeError(code)
     assert os.getuid() != 999  # Never run initdb, even if a future runner uses that UID.
     rejected = subprocess.run([str(target)], env={}, capture_output=True, timeout=2)
     assert rejected.returncode == 78 and rejected.stdout == b""

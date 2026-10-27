@@ -73,3 +73,23 @@ def test_AT07_native_source_keeps_passwords_out_of_env_and_argv():
     assert "PGPASSWORD" not in raw and "CREATE DATABASE" not in raw
     assert 'mkdirat(parent, "pgdata", 0700)' in raw
     assert "O_EXCL" in raw and "listen_addresses=" in raw
+
+
+def test_AT05_l1_compiler_has_only_fixed_search_path_and_locale():
+    import ast
+
+    source = ast.parse((ROOT / "tests/integration_offline/test_a42364_process.py").read_text())
+    function = next(n for n in source.body if isinstance(n, ast.FunctionDef))
+    calls = [
+        n
+        for n in ast.walk(function)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "run"
+    ]
+    compile_call = calls[0]
+    args = compile_call.args[0]
+    assert args.elts[0].value == "/usr/bin/cc"
+    values = [ast.literal_eval(k.value) for k in compile_call.keywords if k.arg == "env"]
+    assert values == [{"PATH": "/usr/bin:/bin", "LC_ALL": "C"}]
+    assert "-Werror" in [n.value for n in args.elts if isinstance(n, ast.Constant)]

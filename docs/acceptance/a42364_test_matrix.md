@@ -2,6 +2,10 @@
 
 Portable tests: 121 passed,0failed,0skipped in7.18s (before final overlay tests).
 Repository Ruff: PASS. Final committed overlay / Linux L1 / full-suite CI: PENDING.
+Actual first full CI (7d9640b, run40443438006 attempt1):4875pass/1fail/0skip,
+coverage89.28%. All4725original case identities retained; only native compile
+check failed. Follow-up fixes its closed toolchain environment, retains -Werror
+and adds an AST regression. Its new-SHA full result is PENDING, not inherited PASS.
 Rows are mapped scenarios, NOT40 independent physical PASS certificates.
 Follow-up signer-use review adds two regressions: fresh revocation and independent
 signer enforcement; the targeted protocol module passed19cases,0failures. Full

@@ -11,7 +11,7 @@ remaining SOURCE gaps are material, not solely missing external signatures.
 | Package | Current status | Source / tests / next action |
 |---|---|---|
 | W00 | IMPLEMENTED_SOURCE_PASS (final freeze check pending CI) | Exact66-file eighth overlay,5actual RED,7historical manifests; source_guard tests |
-| W01 | IMPLEMENTED_SOURCE_PASS / NOT_RUN_PHYSICAL | Real image/native entry/HBA/fixed plan/supply verifier; bootstrap/install/process tests; actual image never built |
+| W01 | PARTIAL_ENGINEERING / NOT_RUN_PHYSICAL | Real image/native entry/HBA/fixed plan/supply verifier; native compiler check failed on first CI, fixed-toolchain follow-up pending; actual image never built |
 | W02 | PARTIAL_ENGINEERING | 12/32/30 candidate, B persistent named slots/cost DAG; complete native/exec broker wiring/census and prebuilt builder absent |
 | W03 | PARTIAL_ENGINEERING | Fixed12SQL/SCRAM/autocommit/raw audits/secret FD; owner tests; real Owner adapter unvalidated, HBA full-target audit and provisioner review needed |
 | W04 | PARTIAL_ENGINEERING | Exact-name manager and ABA negatives implemented; kernel all-writer broker absent, SAFE_DELETE_UNPROVEN mandatory |
@@ -21,7 +21,7 @@ remaining SOURCE gaps are material, not solely missing external signatures.
 | W08 | PARTIAL_ENGINEERING / PENDING_EXTERNAL_DECISION | Exact candidate16slots/406bytes/7OID driver+parser, old method DENY; separate audit-connection budget/factory incomplete |
 | W09 | IMPLEMENTED_SOURCE_PASS (Linux L1/full CI pending) | Six-domain nonqualifying reviewer, real Unix FD/SQLite model chain and tamper negatives; not physical independence |
 | W10 | PENDING_EXTERNAL_DECISION | Three complete unsigned ADRs; Need changes is recommended while source gaps persist |
-| W11 | PENDING | Local121 portable cases + Ruff pass; final committed freeze, shellcheck/native/Linux/full ordinary same-SHA CI/artifacts pending |
+| W11 | FAILED (follow-up pending) | Local portable tests + Ruff pass; previous full CI had one new native compiler-check failure; final follow-up must pass independently |
 | W12 | PARTIAL_ENGINEERING | Architecture, runbook, ledger, capability matrix, AT01-40 and L2 plan delivered; final CI audit reported with final SHA |
 
 "Pending" records actual evidence not yet generated at source-commit time. Final
@@ -31,6 +31,26 @@ Follow-up review requires fresh signer revocation checks at every proof use, not
 just initial signature verification, and B-owned consumption journals. Two new
 negative regressions passed with the19-case protocol module. Prior-SHA CI is
 retained as history and cannot certify the follow-up commit.
+
+## Actual CI Failure and Follow-up
+
+Run40443438006 / attempt1 / HEAD7d9640babc0489d91dc4fc2d4dc4353b0185485c:
+4875passed,1failed,0errors,0skipped,674warnings,coverage89.28%,2207.34s.
+The only failed node is test_a42364_process.py::
+test_AT05_AT08_native_bootstrap_compiles_and_unprivileged_entry_cannot_initialize.
+All4725baseline case identities are retained. No assertion, test, -Werror,
+compiler flag or native rejection criterion is removed.
+Compiler subprocess previously received an empty environment. Follow-up fixes
+the compiler executable to /usr/bin/cc with only PATH=/usr/bin:/bin and LC_ALL=C;
+compiler helpers need a usable search path. This is not inheritance of user env.
+New AST regression enforces that closed environment and retained -Werror.
+Actual compiler failure detail is redacted by the unchanged safety plugin, so
+the helper-lookup explanation must be confirmed by the next Linux run, not
+declared a measured fact. A future failure retains a fixed nonsecret phase code.
+
+Failed evidence ZIP SHA256:
+6a1043e5596a303b6569aaae81186f5760ad2383cb30c1c933c533845ce6d461.
+The failure remains archived, not reclassified or hidden. No G1 action ran.
 
 ## Changes and Nonchanges
 
