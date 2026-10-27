@@ -1,0 +1,52 @@
+{
+  "status": "RESOURCE_DEFERRED",
+  "refusal_reasons": [
+    "AVAILABLE_MEMORY_BELOW_REGISTERED_RESERVATION"
+  ],
+  "available_memory_estimate_bytes": 2235957248,
+  "memory_reservation_bytes": 4261412864,
+  "free_disk_bytes": 14767112192,
+  "disk_reservation_bytes": 8589934592,
+  "performance_status": "PERFORMANCE_OPEN",
+  "capacity_accepted": false,
+  "jobs_started": 0,
+  "schema": "biz-perf-01.capacity-preflight.v1",
+  "source": {
+    "source_sha256": "8ebbc69d8a6259109fd4cd7e38b4e697696fc9072ed2182b6809c051771ad641",
+    "commit_sha": "1c95c42ad3f1db22e99cce55891a5eb70fe48a5e",
+    "worktree": "CLEAN"
+  },
+  "harness_sha256": "f340227b30dd698a648d610053523046e68e8ade5316584c2b50446ce7a1a204",
+  "server_version": "17.11 (Homebrew)",
+  "postgres_settings": {
+    "shared_buffers": 134217728,
+    "work_mem": 8388608,
+    "maintenance_work_mem": 67108864
+  },
+  "max_connections": 100,
+  "worker_rss_failure_threshold_bytes": 3221225472,
+  "required_months": [
+    1,
+    3,
+    12
+  ],
+  "repeats_per_version": 3,
+  "versions": [
+    "old",
+    "new"
+  ],
+  "minimum_raw_rows": 1000000,
+  "warmup_trading_days": 250,
+  "monthly_lookback_calendar_days": 430,
+  "representative_nonempty_tables_required": 10,
+  "required_successful_jobs": 18,
+  "actual_successful_jobs": 0,
+  "matrix_status": "NOT_RUN",
+  "cloud_access": false,
+  "limitations": [
+    "Quiet-host resource reservation only; no Worker started",
+    "Memory estimate and failure thresholds are not hard limits",
+    "Resource headroom alone never establishes fixture correctness",
+    "All required scales, repetitions and financial gates unchanged"
+  ]
+}
