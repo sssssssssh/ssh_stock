@@ -322,3 +322,10 @@ class PgFixtureRuntime:
 
     def inspect(self):
         return self._inspect()
+
+
+def candidate_bootstrap_plan(identity, strategy="FRESH_DYNAMIC"):
+    """Explicit v3 proposal; historical InitializationPlan/preflight remain unchanged."""
+    from scripts.a42364_costs import cost_plan
+
+    return cost_plan(identity, strategy)

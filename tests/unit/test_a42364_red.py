@@ -44,5 +44,10 @@ def test_RED_AT17_candidate_four_slots_have_real_execution_specification():
 
     schedule = candidate_schedule()
     assert len(schedule) == 16
-    assert [i for i, item in enumerate(schedule, 1) if item["kind"] == "PROJECTION"] == [6, 8, 14, 16]
+    assert [i for i, item in enumerate(schedule, 1) if item["kind"] == "PROJECTION"] == [
+        6,
+        8,
+        14,
+        16,
+    ]
     assert all(item["budget_ms"] == 100 for item in schedule)

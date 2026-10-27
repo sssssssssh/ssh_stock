@@ -1,0 +1,355 @@
+{
+  "$defs": {
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/Identity"
+        },
+        "overlay_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Overlay Sha256",
+          "type": "string"
+        },
+        "allowlist_sha256": {
+          "default": "d0aa6b635b0eb35eb373e0b1fa003593535eac68dd07bc3445b6c80d9ef752f8",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Allowlist Sha256",
+          "type": "string"
+        },
+        "fixture_uuid": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Fixture Uuid",
+          "type": "string"
+        },
+        "nonce": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Nonce",
+          "type": "string"
+        },
+        "marker_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Marker Sha256",
+          "type": "string"
+        },
+        "profile": {
+          "const": "G1_SYNTHETIC_CAPABILITY_ONLY",
+          "default": "G1_SYNTHETIC_CAPABILITY_ONLY",
+          "title": "Profile",
+          "type": "string"
+        },
+        "scope": {
+          "const": "G1_SYNTHETIC_CAPABILITY_ONLY",
+          "default": "G1_SYNTHETIC_CAPABILITY_ONLY",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identity",
+        "overlay_sha256",
+        "fixture_uuid",
+        "nonce",
+        "marker_sha256"
+      ],
+      "title": "Binding",
+      "type": "object"
+    },
+    "Identity": {
+      "additionalProperties": false,
+      "properties": {
+        "head_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Head Sha",
+          "type": "string"
+        },
+        "run_id": {
+          "pattern": "^(local|[1-9][0-9]{0,23})$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 999999,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "protocol_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Protocol Sha256",
+          "type": "string"
+        },
+        "frozen_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Frozen Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "head_sha",
+        "run_id",
+        "attempt",
+        "source_sha256",
+        "protocol_sha256",
+        "frozen_sha256"
+      ],
+      "title": "Identity",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "properties": {
+        "max_sql": {
+          "const": 16,
+          "default": 16,
+          "title": "Max Sql",
+          "type": "integer"
+        },
+        "per_sql_ms": {
+          "const": 100,
+          "default": 100,
+          "title": "Per Sql Ms",
+          "type": "integer"
+        },
+        "sql_window_ms": {
+          "const": 2000,
+          "default": 2000,
+          "title": "Sql Window Ms",
+          "type": "integer"
+        },
+        "max_rows": {
+          "const": 8,
+          "default": 8,
+          "title": "Max Rows",
+          "type": "integer"
+        },
+        "authorization_ms": {
+          "const": 1000,
+          "default": 1000,
+          "title": "Authorization Ms",
+          "type": "integer"
+        },
+        "initialization_ms": {
+          "const": 2000,
+          "default": 2000,
+          "title": "Initialization Ms",
+          "type": "integer"
+        },
+        "initialization_max_sql": {
+          "const": 8,
+          "default": 8,
+          "title": "Initialization Max Sql",
+          "type": "integer"
+        },
+        "initialization_max_commands": {
+          "const": 12,
+          "default": 12,
+          "title": "Initialization Max Commands",
+          "type": "integer"
+        },
+        "termination_ms": {
+          "const": 2000,
+          "default": 2000,
+          "title": "Termination Ms",
+          "type": "integer"
+        },
+        "cleanup_ms": {
+          "const": 2000,
+          "default": 2000,
+          "title": "Cleanup Ms",
+          "type": "integer"
+        },
+        "artifact_ms": {
+          "const": 2000,
+          "default": 2000,
+          "title": "Artifact Ms",
+          "type": "integer"
+        },
+        "cpu_millicores": {
+          "const": 1000,
+          "default": 1000,
+          "title": "Cpu Millicores",
+          "type": "integer"
+        },
+        "rss_mib": {
+          "const": 512,
+          "default": 512,
+          "title": "Rss Mib",
+          "type": "integer"
+        },
+        "pids": {
+          "const": 32,
+          "default": 32,
+          "title": "Pids",
+          "type": "integer"
+        }
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "properties": {
+        "token_id": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Token Id",
+          "type": "string"
+        },
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "payload_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Sha256",
+          "type": "string"
+        },
+        "image_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Image Digest",
+          "type": "string"
+        },
+        "controller_uid": {
+          "exclusiveMinimum": 0,
+          "title": "Controller Uid",
+          "type": "integer"
+        },
+        "namespace_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Namespace Sha256",
+          "type": "string"
+        },
+        "epoch": {
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "title": "Epoch",
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits",
+          "default": {
+            "max_sql": 16,
+            "per_sql_ms": 100,
+            "sql_window_ms": 2000,
+            "max_rows": 8,
+            "authorization_ms": 1000,
+            "initialization_ms": 2000,
+            "initialization_max_sql": 8,
+            "initialization_max_commands": 12,
+            "termination_ms": 2000,
+            "cleanup_ms": 2000,
+            "artifact_ms": 2000,
+            "cpu_millicores": 1000,
+            "rss_mib": 512,
+            "pids": 32
+          }
+        }
+      },
+      "required": [
+        "token_id",
+        "binding",
+        "payload_sha256",
+        "image_digest",
+        "controller_uid",
+        "namespace_sha256",
+        "epoch"
+      ],
+      "title": "Scope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "service_domain": {
+      "enum": [
+        "root_manager",
+        "absence_auditor"
+      ],
+      "title": "Service Domain",
+      "type": "string"
+    },
+    "scope": {
+      "$ref": "#/$defs/Scope"
+    },
+    "principals": {
+      "additionalProperties": {
+        "exclusiveMinimum": 0,
+        "type": "integer"
+      },
+      "title": "Principals",
+      "type": "object"
+    },
+    "binary_sha256": {
+      "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Binary Sha256",
+      "type": "object"
+    },
+    "code_archive_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Code Archive Sha256",
+      "type": "string"
+    },
+    "image_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Image Manifest Sha256",
+      "type": "string"
+    },
+    "custody_review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Custody Review Sha256",
+      "type": "string"
+    },
+    "public_keys": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object"
+      },
+      "title": "Public Keys",
+      "type": "object"
+    },
+    "revoked_kids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Revoked Kids",
+      "type": "array"
+    },
+    "openssl_version": {
+      "title": "Openssl Version",
+      "type": "string"
+    },
+    "expires_at": {
+      "exclusiveMinimum": 0,
+      "title": "Expires At",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "version",
+    "service_domain",
+    "scope",
+    "principals",
+    "binary_sha256",
+    "code_archive_sha256",
+    "image_manifest_sha256",
+    "custody_review_sha256",
+    "public_keys",
+    "revoked_kids",
+    "openssl_version",
+    "expires_at"
+  ],
+  "title": "InstallDocument",
+  "type": "object"
+}

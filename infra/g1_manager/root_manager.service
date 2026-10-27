@@ -1,0 +1,27 @@
+[Unit]
+Description=Space G1 FD-bound root manager (external provisioning required)
+ConditionPathIsRegular=/opt/space-g1/installation.json
+
+[Service]
+Type=exec
+User=root
+Group=root
+ExecStart=/opt/space-g1/venv/bin/python -I /opt/space-g1/entry.py
+WorkingDirectory=/opt/space-g1
+Restart=no
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=CAP_SETUID CAP_SETGID CAP_KILL
+Delegate=no
+ReadWritePaths=/sys/fs/cgroup/space-g1 /run/space-g1
+TasksMax=64
+MemoryMax=512M
+CPUQuota=100%
+StandardOutput=null
+StandardError=journal
+# No [Install], EnvironmentFile or activation switch. A reviewed external provisioner
+# must hand off FD3 root document / FD5 listener before this source can serve status.

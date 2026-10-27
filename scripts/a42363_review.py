@@ -126,3 +126,10 @@ class Reviewer:
             metric_status="METRIC_UNAVAILABLE",
             bracket="BRACKET_UNCOVERED",
         )
+
+
+def review_engineering_models(sources, scope, references):
+    """Version-isolated offline receipts can never qualify physical G1."""
+    from scripts.a42364_evidence_gate import EvidenceGate
+
+    return EvidenceGate(sources).review(scope, references)

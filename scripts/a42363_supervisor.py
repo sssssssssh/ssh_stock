@@ -788,3 +788,10 @@ def serve_root_channel(manager, channel):
     require(type(request) is dict and set(request) == {"method", "body"}, "ROOT_REQUEST_SCHEMA")
     result = canonical(manager.dispatch(uid, request["method"], request["body"]))
     channel.sendall(struct.pack("!I", len(result)) + result)
+
+
+def candidate_root_manager(package, authority, cgroup, launcher, credentials, journal, store):
+    """The existing manager/gate stay unchanged; v3 is independently installed."""
+    from scripts.a42364_manager import CandidateRootManager
+
+    return CandidateRootManager(package, authority, cgroup, launcher, credentials, journal, store)

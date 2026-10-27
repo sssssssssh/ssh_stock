@@ -139,3 +139,14 @@ def capability_matrix():
         "artifact_publication": row("IMPLEMENTED"),
         "six_source_review": row("IMPLEMENTED_L0_L1_ONLY"),
     }
+
+
+def engineering_capability_matrix():
+    """Current engineering view; historical v1 capability_matrix is retained."""
+    from scripts.a42364_bootstrap_builder import ENTRYPOINT
+    from scripts.a42364_volume_exclusion import engineering_status
+
+    return dict(version="a42364.engineering.v3",
+                bootstrap_image="SOURCE_IMPLEMENTED_UNDEPLOYED", entrypoint=ENTRYPOINT,
+                volume=engineering_status(), installation="NOT_DEPLOYED",
+                physical="NOT_RUN_NOT_AUTHORIZED", active_live_gate="DENY", qualifies=False)

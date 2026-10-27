@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A42364 Offline Supply Chain Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "base_images",
+    "image_digest",
+    "source_sha256",
+    "artifacts"
+  ],
+  "properties": {
+    "version": {
+      "const": "a42364.supply-chain.v1"
+    },
+    "base_images": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9./:_-]{1,200}@sha256:[0-9a-f]{64}$"
+      }
+    },
+    "image_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image.oci",
+        "sbom.spdx.json",
+        "source.tar"
+      ],
+      "properties": {
+        "image.oci": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sbom.spdx.json": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source.tar": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

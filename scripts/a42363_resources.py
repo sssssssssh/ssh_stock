@@ -590,3 +590,12 @@ class RecoveryEngine(Reconciler):
             independent_absent=False,
             qualifies=False,
         )
+
+
+def candidate_resource_driver(
+    commands, directory, secret_fd, observer, identity, operations, manager
+):
+    """Keep legacy Volume denial; the new route needs an all-writer capability."""
+    from scripts.a42364_volume_exclusion import managed_driver
+
+    return managed_driver(commands, directory, secret_fd, observer, identity, operations, manager)

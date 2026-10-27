@@ -100,6 +100,14 @@ def test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol():
         "scripts/a4236_g1_probe.py",
         "docs/acceptance/evidence",
     ]
+    from scripts import a42364_source_guard as engineering
+
+    # Only the separately pinned new files are authorized; no infra directory waiver.
+    infra_changes = set(subprocess.check_output(
+        ["git", "diff", "--name-only", "-z", engineering.BASELINE, "--", "infra"], cwd=ROOT
+    ).decode().split("\0")) - {""}
+    assert infra_changes == engineering.INFRA
+    protected.remove("infra")
     assert not subprocess.check_output(
         ["git", "diff", "--name-only", guard.BASELINE, "--", *protected], cwd=ROOT
     ).strip()

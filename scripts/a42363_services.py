@@ -436,3 +436,10 @@ def main(argv=None):
 
 
 __all__ = ["LocalService", "METHODS", "ServiceHost", "compose"]
+
+
+def engineering_host(package, backend=None):
+    """Fixed installed host; missing runtime capabilities are not a ready backend."""
+    from scripts.a42364_manager import InstalledServiceHost
+
+    return InstalledServiceHost(package, backend)

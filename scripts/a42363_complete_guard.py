@@ -69,8 +69,8 @@ HISTORICAL = {
 }
 
 # The original six-stage declaration and manifest remain immutable historical data.
-# Existing consumers ask this facade for the current cumulative view. The seventh
-# guard separately checks the exact a8a675e delta and ALL original test/blob bytes.
+# Existing consumers ask this facade for the current cumulative view. The eighth
+# guard separately checks each historical delta, all old blobs and the one reviewed test edit.
 LEGACY_MANIFEST, LEGACY_STAGE_PATHS, LEGACY_PINNED = MANIFEST, STAGE_PATHS, PINNED
 
 MANIFEST = REVIEW_MANIFEST

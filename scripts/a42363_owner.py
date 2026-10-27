@@ -463,3 +463,12 @@ def validate_session_v2(session, scope, lease, identity=None):
     )
     # Neither role defaults, requested libpq options nor another backend's SHOW prove GUCs.
     session_method()
+
+
+def candidate_initializer(
+    identity, authority, connections, journal, credential_source, budget=None
+):
+    """Root-installed candidate adapter, never selected by a legacy Owner request."""
+    from scripts.a42364_owner import OwnerInitializer
+
+    return OwnerInitializer(identity, authority, connections, journal, credential_source, budget)

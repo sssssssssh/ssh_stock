@@ -1,0 +1,26 @@
+[Unit]
+Description=Space G1 independent read-only absence collector
+ConditionPathIsRegular=/opt/space-g1/installation.json
+
+[Service]
+Type=exec
+User=space-g1-auditor
+Group=space-g1-auditor
+ExecStart=/opt/space-g1/venv/bin/python -I /opt/space-g1/entry.py
+Restart=no
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectControlGroups=yes
+ReadOnlyPaths=/run/space-g1/audit-ro
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+Delegate=no
+TasksMax=32
+MemoryMax=256M
+CPUQuota=100%
+StandardOutput=null
+StandardError=journal
+# Mount/idmap/kernel visibility provisioning is NOT performed or claimed by this unit.

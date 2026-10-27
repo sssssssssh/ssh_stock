@@ -111,3 +111,15 @@ Each failed with ModuleNotFoundError for the not-yet-implemented engineering ada
 - test_RED_AT21_volume_target_is_name_only_under_separate_exclusion_contract
 - test_RED_AT33_trusted_install_package_has_separate_principals
 - test_RED_AT17_candidate_four_slots_have_real_execution_specification
+
+## Actual Adaptation and GREEN
+
+AT57 was authorized only if necessary. Inspection showed its original baseline
+predates the review-test file, so AT57 is unchanged. Only AT59 actually changes;
+the eighth guard compares AST plus raw text outside that exact function.
+All other old tests remain original bytes. No historical manifest is rewritten.
+
+The same five RED nodes passed after adding source. Expanded portable verification:
+121 passed,0failed,0skipped,7.18s; repository-wide Ruff passed. Linux-only native
+compile/refusal, shellcheck, Unix FD/SQLite child-process model chain and full
+regression remain PENDING ordinary same-SHA CI, never inferred from these121 cases.

@@ -244,3 +244,10 @@ class AbsenceService:
                 qualifies=False,
             ),
         ).model_dump()
+
+
+def candidate_readonly_collector(delegation, runner, socket_parent_fd):
+    """Use verified readonly mounts, not the observer's unrelated rootless store."""
+    from scripts.a42364_collector import FixedReadOnlyCollector
+
+    return FixedReadOnlyCollector(delegation, runner, socket_parent_fd)

@@ -1,0 +1,24 @@
+[Unit]
+Description=Space G1 isolated worker (root manager sealed-FD launch only)
+
+[Service]
+Type=exec
+User=space-g1-worker
+Group=space-g1-worker
+ExecStart=/opt/space-g1/venv/bin/python -I /opt/space-g1/entry.py
+Restart=no
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+Delegate=no
+TasksMax=32
+MemoryMax=256M
+CPUQuota=100%
+StandardOutput=null
+StandardError=null
+# Direct starts have no root-sealed FD3 and exit78; this unit cannot authorize a run.

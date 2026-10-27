@@ -1,7 +1,8 @@
 """Seventh exact overlay and cumulative compatibility view; historical manifests immutable."""
 
-import hashlib
-import json
+from scripts.a42364_source_guard import MANIFEST as ENGINEERING_MANIFEST
+from scripts.a42364_source_guard import PINNED as ENGINEERING_PINNED
+from scripts.a42364_source_guard import STAGE_PATHS as ENGINEERING_PATHS
 
 BASELINE = "a8a675ea8b93dadbba9e905a7a4af67eba163d99"
 MANIFEST = "docs/acceptance/a42363_review_overlay_manifest.json"
@@ -63,6 +64,13 @@ HISTORICAL = {
     "docs/acceptance/a42363_complete_overlay_manifest.json": BASELINE,
 }
 
+# Preserve the seventh-stage declarations as history. The current compatibility
+# facade includes only the independently validated eighth exact overlay.
+LEGACY_MANIFEST, LEGACY_STAGE_PATHS, LEGACY_PINNED = MANIFEST, STAGE_PATHS, PINNED
+MANIFEST = ENGINEERING_MANIFEST
+STAGE_PATHS = LEGACY_STAGE_PATHS | ENGINEERING_PATHS
+PINNED = LEGACY_PINNED | ENGINEERING_PINNED
+
 
 def validate_paths(paths):
     from scripts.a4235_calibration_adapter_contract import require
@@ -71,108 +79,6 @@ def validate_paths(paths):
 
 
 def validate(g, root, head):
-    from scripts import a42361_source_guard as fd_guard
-    from scripts import a42362_source_guard as inherited
-    from scripts import a42363_complete_guard as previous
+    from scripts.a42364_source_guard import validate as current_validate
 
-    require = g.require
-    require(g.path_sha(root / MANIFEST) == g.COMPLETE_MANIFEST_SHA, "A4235_LIVE_OVERLAY_INVALID")
-    data = json.loads((root / MANIFEST).read_bytes())
-    require(
-        set(data)
-        == {
-            "schema_version",
-            "baseline_sha",
-            "stage_paths",
-            "cumulative_paths",
-            "patch_sha256",
-            "old_sha256",
-            "historical_sha256",
-            "normalized_guard_sha256",
-        }
-        and data["schema_version"] == "a42363.review-overlay.v1"
-        and data["baseline_sha"] == BASELINE
-        and data["stage_paths"] == sorted(STAGE_PATHS)
-        and data["cumulative_paths"] == sorted(previous.STAGE_PATHS)
-        and set(data["patch_sha256"]) == previous.PINNED
-        and set(data["historical_sha256"]) == set(HISTORICAL),
-        "A4235_LIVE_OVERLAY_INVALID",
-    )
-    validate_paths(
-        set(
-            g.git(root, "diff", "--no-ext-diff", "--name-only", "-z", BASELINE).decode().split("\0")
-        )
-        - {""}
-    )
-    require(
-        set(
-            g.git(root, "diff", "--no-ext-diff", "--name-only", "-z", previous.BASELINE, BASELINE)
-            .decode()
-            .split("\0")
-        )
-        - {""}
-        == previous.LEGACY_STAGE_PATHS,
-        "A4235_FROZEN_FILE_CHANGED",
-    )
-    for path, closing in HISTORICAL.items():
-        raw = g.git(root, "show", f"{BASELINE}:{path}")
-        require(
-            raw == (root / path).read_bytes()
-            and hashlib.sha256(raw).hexdigest() == data["historical_sha256"][path],
-            "A4235_LIVE_OVERLAY_INVALID",
-        )
-        for name, expected in json.loads(raw)["patch_sha256"].items():
-            require(
-                hashlib.sha256(g.git(root, "show", f"{closing}:{name}")).hexdigest() == expected,
-                "A4235_OVERLAY_BYTES_MISMATCH",
-            )
-    for path in previous.STAGE_PATHS:
-        raw = (root / path).read_bytes()
-        require(raw == g.git(root, "show", f"{head}:{path}"), "A4235_HEAD_BYTES_MISMATCH")
-        if path in previous.PINNED:
-            require(
-                hashlib.sha256(raw).hexdigest() == data["patch_sha256"][path],
-                "A4235_LIVE_OVERLAY_INVALID",
-            )
-    old_paths = set()
-    for path in STAGE_PATHS:
-        if g.git(root, "ls-tree", "-z", BASELINE, "--", path):
-            old_paths.add(path)
-            before = g.git(root, "show", f"{BASELINE}:{path}")
-            require(
-                hashlib.sha256(before).hexdigest() == data["old_sha256"].get(path),
-                "A4235_LIVE_OVERLAY_INVALID",
-            )
-            if path in AUTHORITY:
-                require((root / path).read_bytes().startswith(before), "A4235_FROZEN_FILE_CHANGED")
-    require(set(data["old_sha256"]) == old_paths, "A4235_LIVE_OVERLAY_INVALID")
-    require(
-        hashlib.sha256(
-            previous.normalized((root / "scripts/a4235_capability_guard.py").read_bytes())
-        ).hexdigest()
-        == data["normalized_guard_sha256"],
-        "A4235_LIVE_OVERLAY_INVALID",
-    )
-    # No old test is edited to accommodate this view. Every historical test blob must
-    # still match the actual baseline, including the source-guard compatibility tests.
-    for row in g.git(root, "ls-tree", "-r", "-z", BASELINE, "--", "tests").split(b"\0"):
-        if not row:
-            continue
-        metadata, name = row.split(b"\t", 1)
-        path = name.decode()
-        mode, kind, oid = metadata.split()
-        require(mode in (b"100644", b"100755") and kind == b"blob", "A4235_FROZEN_FILE_CHANGED")
-        raw = (root / path).read_bytes()
-        require(
-            hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest().encode()
-            == oid,
-            "A4235_FROZEN_FILE_CHANGED",
-        )
-    inherited.verify_inherited_checks(g, root, head)
-    fd_guard.verify_full_worktree(g, root, head)
-    require(
-        head == g.git(root, "rev-parse", "HEAD").decode().strip()
-        and not g.git(root, "status", "--porcelain").strip(),
-        "A4235_DIRTY_TREE",
-    )
-    return g.COMPLETE_MANIFEST_SHA
+    return current_validate(g, root, head)

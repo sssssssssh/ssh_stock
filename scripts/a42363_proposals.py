@@ -265,3 +265,13 @@ class BootstrapProposal:
             measured=False,
             physical="NOT_RUN",
         )
+
+
+def engineering_candidate_specifications(identity):
+    """Independent cost/GUC proposals, never edits to the frozen contract."""
+    from scripts.a42364_costs import cost_plan
+    from scripts.a42364_session import candidate_specification
+
+    return dict(dynamic=cost_plan(identity),
+                prebuilt=cost_plan(identity, "SINGLE_USE_PREBUILT"),
+                guc=candidate_specification(), approved=False, qualifies=False)
