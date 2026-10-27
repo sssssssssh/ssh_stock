@@ -7,6 +7,7 @@ import ast
 import hashlib
 import json
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,15 +161,29 @@ def versioned_frozen_files(root, frozen):
     root = Path(root)
     if not (root / MANIFEST).exists():
         return frozen
-    verify(root)
-    blobs = git_blobs(root, [HISTORICAL_SOURCE + ":" + p for p in frozen])
+    from scripts import a4235_capability_guard as g
+
+    # definitions() historically checks only its frozen files. Keep that scope
+    # and its independent reader; full HEAD/FD validation remains in verify().
+    # Never cache current manifest/files, raw inputs, row hashes or Job evidence.
+    g.require(g.path_sha(root / MANIFEST) == g.BUSINESS_MANIFEST_SHA, "A4235_LIVE_OVERLAY_INVALID")
     patches = json.loads((root / MANIFEST).read_bytes())["patch_sha256"]
+    baseline_hashes = immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
+    return {path: patches.get(path, sha) for path, sha in baseline_hashes.items()}
+
+
+@lru_cache(maxsize=8)
+def immutable_frozen_hashes(root, frozen):
+    """Cache only literal immutable Git objects, never the current worktree."""
+    blobs = git_blobs(
+        root, [rev + ":" + p for p, _ in frozen for rev in (HISTORICAL_SOURCE, BASELINE)]
+    )
     result = {}
-    for path, expected in frozen.items():
+    for path, expected in frozen:
         old = hashlib.sha256(blobs[HISTORICAL_SOURCE + ":" + path]).hexdigest()
         if old != expected:
             raise ValueError("BUSINESS_HISTORICAL_SOURCE_CHANGED")
-        result[path] = patches.get(path, old)
+        result[path] = hashlib.sha256(blobs[BASELINE + ":" + path]).hexdigest()
     return result
 
 
