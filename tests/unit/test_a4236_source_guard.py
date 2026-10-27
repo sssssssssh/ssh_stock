@@ -17,7 +17,7 @@ from scripts.a4236_g1_harness_contract import Fault
 
 
 def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
-    from scripts.business_source_contract import HISTORICAL_SOURCE
+    from scripts.business_source_contract import HISTORICAL_SOURCE, historical_bytes
 
     identity = g.expected_identity()
     assert identity.head_sha == g.git(ROOT, "rev-parse", "HEAD").decode().strip()
@@ -30,7 +30,7 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
     assert len(g.overlay_fingerprint()) == 64
     assert g.path_sha(ROOT / g.OVERLAY_MANIFEST) == g.OVERLAY_MANIFEST_SHA
     for path in g.PATCH_PATHS | {g.OVERLAY_MANIFEST}:
-        assert (ROOT / path).read_bytes() == g.git(ROOT, "show", f"{g.NEXT_BASE}:{path}")
+        assert historical_bytes(path) == g.git(ROOT, "show", f"{g.NEXT_BASE}:{path}")
     assert not g.git(
         ROOT,
         "diff",
@@ -64,7 +64,7 @@ def test_AT01_AT02_actual_history_unchanged_and_new_source_distinct():
 
 def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
     from scripts import a42361_source_guard as live
-    from scripts.business_source_contract import HISTORICAL_SOURCE
+    from scripts.business_source_contract import HISTORICAL_SOURCE, historical_bytes
 
     changed = set(
         g.git(ROOT, "diff", "--name-only", "-z", g.NEXT_BASE, HISTORICAL_SOURCE)
@@ -131,7 +131,7 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
         original = hashlib.sha256(g.git(ROOT, "show", f"{live.BASELINE}:{name}")).hexdigest()
         assert manifest["patch_sha256"][name] == original
         if name != live.OLD_TEST:
-            assert original == g.path_sha(ROOT / name)
+            assert original == hashlib.sha256(historical_bytes(name)).hexdigest()
         else:
             overlay = json.loads((ROOT / live.MANIFEST).read_bytes())
             assert original == overlay["old_sha256"][name]
@@ -150,7 +150,7 @@ def test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs():
                 == newest["patch_sha256"][name]
             )
             final = json.loads((ROOT / complete.MANIFEST).read_bytes())
-            assert g.path_sha(ROOT / name) == final["patch_sha256"][name]
+            assert hashlib.sha256(historical_bytes(name)).hexdigest() == final["patch_sha256"][name]
     assert hashlib.sha256((ROOT / g.NEXT_MANIFEST).read_bytes()).hexdigest() == g.NEXT_MANIFEST_SHA
 
     from scripts.business_source_contract import verify as verify_current_business

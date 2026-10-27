@@ -114,7 +114,9 @@ def definitions(root=ROOT):
     require(file_sha(root / PROPOSAL) == PROPOSAL_SHA, 'A42341_PROTOCOL_OR_SOURCE_CHANGED')
     require(file_sha(root / MANIFEST) == MANIFEST_SHA, 'A42341_PROTOCOL_OR_SOURCE_CHANGED')
     value = load(root / MANIFEST)
-    for name, sha in value['frozen_files'].items():
+    from scripts.business_source_contract import versioned_frozen_files
+
+    for name, sha in versioned_frozen_files(root, value['frozen_files']).items():
         require(file_sha(root / name) == sha, 'A42341_FROZEN_FILE_CHANGED')
     return value
 

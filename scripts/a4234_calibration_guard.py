@@ -100,7 +100,9 @@ def definitions(root=ROOT):
     require(keys == expected and len(keys) == 2000 and
         hashlib.sha256(json.dumps(keys, sort_keys=True).encode()).hexdigest()
             == manifest['input_key_sha256'], 'A4234_INPUT_CHANGED')
-    for name, sha in manifest['source_files'].items():
+    from scripts.business_source_contract import versioned_frozen_files
+
+    for name, sha in versioned_frozen_files(root, manifest['source_files']).items():
         require(file_sha(root / name) == sha, 'A4234_FROZEN_SOURCE_CHANGED')
     return manifest
 

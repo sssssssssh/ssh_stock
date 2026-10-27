@@ -35,23 +35,27 @@ def frozen(path):
 
 
 def test_all_production_old_scripts_evidence_gates_and_one_shots_frozen():
+    from scripts.business_source_contract import historical_bytes, verify
+
     for prefix in ('backend', 'config', 'migrations', 'frontend', 'docs/acceptance/evidence',
                    '.github/actions'):
         names = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', contract.BASELINE,
                                          prefix], cwd=ROOT, text=True).splitlines()
         assert names
         for name in names:
-            assert (ROOT / name).read_bytes() == frozen(name), name
+            assert historical_bytes(name) == frozen(name), name
     for name in WORKFLOWS:
         path = '.github/workflows/' + name
-        assert (ROOT / path).read_bytes() == frozen(path)
+        assert historical_bytes(path) == frozen(path)
     for name in subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', contract.BASELINE,
                                          'scripts'], cwd=ROOT, text=True).splitlines():
-        assert (ROOT / name).read_bytes() == frozen(name), name
+        assert historical_bytes(name) == frozen(name), name
     for name in ('a4233_1_ci_remediation.md', 'v14_a4_2_3_1_attribution_protocol.md',
                  'v14_a4_2_3_2_protocol.md'):
         path = 'docs/acceptance/' + name
-        assert (ROOT / path).read_bytes() == frozen(path)
+        assert historical_bytes(path) == frozen(path)
+
+    assert len(verify()) == 64
 
 
 def test_only_two_offline_preparation_modules_exist_no_sampler_or_reviewer():

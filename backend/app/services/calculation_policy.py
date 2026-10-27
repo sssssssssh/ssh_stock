@@ -70,6 +70,14 @@ def flag_values(settings):
     return result
 
 
+def request_range(metadata, target=None):
+    result = {k: str(metadata[k]) for k in ("start", "end", "mode") if k in (metadata or {})}
+    if target is not None:
+        result.setdefault("start", str(target))
+        result.setdefault("end", str(target))
+    return result
+
+
 class ExecutionPolicy:
     @classmethod
     def freeze(cls, job, settings, *, source=None, parent=None):
@@ -87,11 +95,7 @@ class ExecutionPolicy:
             source=source,
             commit_status="LOCAL_HEAD_WITH_ACTUAL_SOURCE_DIGEST"
                 if source["commit_sha"] else "UNAVAILABLE",
-            request={
-                k: str(job.job_metadata[k])
-                for k in ("start", "end", "mode")
-                if k in (job.job_metadata or {})
-            },
+            request=request_range(job.job_metadata, getattr(job, "target_trade_date", None)),
         )
         old = (job.job_metadata or {}).get("calculation_execution")
         if old is not None and any(
@@ -137,14 +141,12 @@ class ExecutionPolicy:
         value["seconds"] += seconds
         value["failures"] += int(failed)
 
-    def snapshot(self, job_id=None, metadata=None):
+    def snapshot(self, job_id=None, metadata=None, target=None):
         result = self.record
         if job_id is not None:
             result["job_id"] = str(job_id)
         if metadata is not None:
-            result["request"] = {
-                k: str(metadata[k]) for k in ("start", "end", "mode") if k in metadata
-            }
+            result["request"] = request_range(metadata, target)
         result.update(
             reads=deepcopy(self.reads),
             sql=deepcopy(self.sql),
@@ -152,6 +154,7 @@ class ExecutionPolicy:
             elapsed_seconds=monotonic() - self.started,
             fetch_scope="DELIVERED_PARTITIONS_NOT_WIRE_FETCH",
             timings_nested=True,
+            counter_scope="ROOT_CUMULATIVE_INCLUDING_CHILDREN",
         )
         return result
 

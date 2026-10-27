@@ -50,7 +50,8 @@ def start_job(
         db.add(job)
         db.flush()
         job.job_metadata = {**dict(job.job_metadata or {}),
-                            "calculation_execution": policy.snapshot(job.id, job.job_metadata)}
+                            "calculation_execution": policy.snapshot(
+                                job.id, job.job_metadata, job.target_trade_date)}
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -143,7 +144,7 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
             **(metadata or {}),
             **({"publication": publication} if publication is not None else {}),
             "calculation_execution": policy.snapshot(job.id, {
-                **dict(job.job_metadata or {}), **(metadata or {})}),
+                **dict(job.job_metadata or {}), **(metadata or {})}, job.target_trade_date),
             **({"calculation_progress": snapshot} if progress is not None
                and (snapshot := progress.snapshot()) is not None else {}),
         })

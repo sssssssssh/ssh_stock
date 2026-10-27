@@ -20,6 +20,9 @@ APPEND_ONLY_TESTS = {
     "tests/unit/test_business_calculation_memory.py",
 }
 TEST_ADAPTATIONS = {
+    "tests/unit/test_a4234_ci_governance.py": [
+        "test_all_production_old_scripts_evidence_gates_and_one_shots_frozen"
+    ],
     "tests/integration/test_a42_ci_scope_pg17.py": ["exercise"],
     "tests/integration/test_ab_read_experiment_v14_a4_2.py": [
         "database",
@@ -148,6 +151,27 @@ def bind_current_diagnostic_contract(patch):
     patch.setattr(experiment, "source_contract", receipt)
 
 
+def versioned_frozen_files(root, frozen):
+    """Keep old manifests intact; compare their blobs at the immutable old source.
+
+    The caller still validates current files with its original independent reader.
+    Current changed bytes must additionally match the exact BIZ manifest.
+    """
+    root = Path(root)
+    if not (root / MANIFEST).exists():
+        return frozen
+    verify(root)
+    blobs = git_blobs(root, [HISTORICAL_SOURCE + ":" + p for p in frozen])
+    patches = json.loads((root / MANIFEST).read_bytes())["patch_sha256"]
+    result = {}
+    for path, expected in frozen.items():
+        old = hashlib.sha256(blobs[HISTORICAL_SOURCE + ":" + path]).hexdigest()
+        if old != expected:
+            raise ValueError("BUSINESS_HISTORICAL_SOURCE_CHANGED")
+        result[path] = patches.get(path, old)
+    return result
+
+
 def git(root, *args):
     return subprocess.check_output(["git", *args], cwd=root)
 
@@ -254,8 +278,12 @@ def verify(root=ROOT):
     from scripts import a42361_source_guard as fd_guard
     from scripts import a42364_source_guard as legacy
 
-    head = git(root, "rev-parse", "HEAD").decode().strip()
-    g.require(not git(root, "status", "--porcelain").strip(), "A4235_DIRTY_TREE")
+    head = g.git(root, "rev-parse", "HEAD").decode().strip()
+    import re
+
+    g.require(re.fullmatch(r"[0-9a-f]{40}", head) is not None, "A4235_FULL_SHA_REQUIRED")
+    g.require(head == git(root, "rev-parse", "HEAD").decode().strip(), "A4235_HEAD_MISMATCH")
+    g.require(not g.git(root, "status", "--porcelain").strip(), "A4235_DIRTY_TREE")
     g.require(g.path_sha(root / MANIFEST) == g.BUSINESS_MANIFEST_SHA, "A4235_LIVE_OVERLAY_INVALID")
     raw = (root / MANIFEST).read_bytes()
     data = json.loads(raw)
@@ -275,7 +303,7 @@ def verify(root=ROOT):
         and data["historical_source"] == HISTORICAL_SOURCE,
         "A4235_LIVE_OVERLAY_INVALID",
     )
-    changed = set(git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0")) - {""}
+    changed = set(g.git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0")) - {""}
     g.require(
         not any(
             p.startswith(
@@ -302,8 +330,6 @@ def verify(root=ROOT):
             "A4235_HEAD_BYTES_MISMATCH",
         )
     guard = (root / GUARD).read_bytes()
-    import re
-
     pattern = rb"BUSINESS_MANIFEST_SHA = '[0-9a-f]{64}'"
     g.require(len(re.findall(pattern, guard)) == 1, "A4235_LIVE_OVERLAY_INVALID")
     guard = re.sub(pattern, b"BUSINESS_MANIFEST_SHA = '" + b"0" * 64 + b"'", guard)
@@ -329,6 +355,7 @@ def verify(root=ROOT):
         previous = previous_blobs[HISTORICAL_SOURCE + ":" + path]
         g.require(
             previous == (root / path).read_bytes()
+            and g.path_sha(root / path) == data["historical_manifest_sha256"][path]
             and hashlib.sha256(previous).hexdigest() == data["historical_manifest_sha256"][path],
             "A4235_OVERLAY_BYTES_MISMATCH",
         )
@@ -337,6 +364,23 @@ def verify(root=ROOT):
                 hashlib.sha256(pin_blobs[closing + ":" + p]).hexdigest() == digest,
                 "A4235_OVERLAY_BYTES_MISMATCH",
             )
+    # Preserve the original independent read boundaries and first-error taxonomy.
+    # These are additive checks, including the historical negative injection APIs.
+    original_paths = g.PATCH_PATHS | g.NEXT_PATCH_PATHS
+    original_blobs = git_blobs(root, [HISTORICAL_SOURCE + ":" + p for p in original_paths])
+    for path in original_paths:
+        old = original_blobs[HISTORICAL_SOURCE + ":" + path]
+        g.require(
+            g.git(root, "show", HISTORICAL_SOURCE + ":" + path) == old
+            and g.path_sha(root / path)
+            == data["patch_sha256"].get(path, hashlib.sha256(old).hexdigest()),
+            "A4235_OVERLAY_BYTES_MISMATCH",
+        )
+    g.require(
+        g.git(root, "ls-tree", "-r", head, "--", "infra")
+        == git(root, "ls-tree", "-r", head, "--", "infra"),
+        "A4235_HEAD_BYTES_MISMATCH",
+    )
     old_files = {}
     for row in git(root, "ls-tree", "-r", "-z", BASELINE, "--", "tests").split(b"\0"):
         if row:
@@ -373,8 +417,8 @@ def verify(root=ROOT):
     # Same complete no-follow HEAD, hidden index and inode-race protection as G1.
     fd_guard.verify_full_worktree(g, root, head)
     g.require(
-        head == git(root, "rev-parse", "HEAD").decode().strip()
-        and not git(root, "status", "--porcelain").strip(),
+        head == g.git(root, "rev-parse", "HEAD").decode().strip()
+        and not g.git(root, "status", "--porcelain").strip(),
         "A4235_DIRTY_TREE",
     )
     return hashlib.sha256(

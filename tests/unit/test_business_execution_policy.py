@@ -71,3 +71,18 @@ def test_closed_policy_does_not_silently_enable_new_path():
     p.close()
     with pytest.raises(ValueError, match="CALCULATION_POLICY_CLOSED"):
         p.guard(value)
+
+
+def test_daily_policy_keeps_its_single_day_and_child_counter_scope():
+    from datetime import date
+
+    from app.services.calculation_policy import ExecutionPolicy
+
+    day = date(2025, 1, 2)
+    job = NS(id=uuid4(), job_metadata={}, target_trade_date=day)
+    policy = ExecutionPolicy.freeze(job, settings(), source={
+        "source_sha256": "a" * 64, "commit_sha": None,
+    })
+    assert policy.record["request"] == {"start": "2025-01-02", "end": "2025-01-02"}
+    assert policy.snapshot(metadata={}, target=day)["request"] == policy.record["request"]
+    assert policy.snapshot()["counter_scope"] == "ROOT_CUMULATIVE_INCLUDING_CHILDREN"
