@@ -106,3 +106,27 @@ def test_query_timeout_is_counted_and_listener_and_transaction_recover(monkeypat
             counts = policy.snapshot()["sql"]
             assert db.scalar(select(1)) == 1
             assert policy.snapshot()["sql"] == counts
+
+
+def test_actual_named_fetch_counts_include_prime_eof_and_restore_factory(monkeypatch):
+    from app.repositories.calculation_frame import read_calculation_frame
+
+    with isolated_v14_database(monkeypatch) as (factory, engine):
+        with candidate(factory, engine) as (db, job):
+            policy = cp.ExecutionPolicy.freeze(job, get_settings())
+            token = cp.active_policy.set(policy)
+            driver = db.connection().connection.driver_connection
+            original = driver.server_cursor_factory
+            try:
+                frame = read_calculation_frame(db, text("SELECT generate_series(1,42) AS i"),
+                                               name="test.fetch")
+                assert frame.i.tolist() == list(range(1, 43))
+                evidence = policy.snapshot()
+                assert evidence["reads"]["test.fetch"]["fetches"] == 1
+                assert evidence["driver_reads"]["test.fetch"]["rows"] == 42
+                assert evidence["driver_reads"]["test.fetch"]["calls"] >= 3
+                assert evidence["driver_reads"]["test.fetch"]["failures"] == 0
+                assert driver.server_cursor_factory is original
+            finally:
+                cp.active_policy.reset(token)
+                policy.close()

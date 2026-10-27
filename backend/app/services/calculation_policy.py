@@ -105,7 +105,7 @@ class ExecutionPolicy:
             raise ValueError("CALCULATION_POLICY_CHANGED")
         self = cls()
         self._record, self.source, self.closed = record, source, False
-        self.reads, self.sql, self.stages = {}, {}, {}
+        self.reads, self.driver_reads, self.sql, self.stages = {}, {}, {}, {}
         self.started = monotonic()
         job.job_metadata = {**dict(job.job_metadata or {}), "calculation_execution": self.record}
         return self
@@ -141,6 +141,17 @@ class ExecutionPolicy:
         value["seconds"] += seconds
         value["failures"] += int(failed)
 
+    def observe_driver_fetch(self, name, rows, seconds, failed=False):
+        value = self.driver_reads.setdefault(name, dict(
+            rows=0, calls=0, seconds=0.0, failures=0, incomplete_calls=0,
+        ))
+        value["calls"] += 1
+        value["seconds"] += seconds
+        value["failures"] += int(failed)
+        value["incomplete_calls"] += int(rows is None)
+        if rows is not None:
+            value["rows"] += rows
+
     def snapshot(self, job_id=None, metadata=None, target=None):
         result = self.record
         if job_id is not None:
@@ -149,10 +160,12 @@ class ExecutionPolicy:
             result["request"] = request_range(metadata, target)
         result.update(
             reads=deepcopy(self.reads),
+            driver_reads=deepcopy(self.driver_reads),
             sql=deepcopy(self.sql),
             stages=deepcopy(self.stages),
             elapsed_seconds=monotonic() - self.started,
             fetch_scope="DELIVERED_PARTITIONS_NOT_WIRE_FETCH",
+            driver_fetch_scope="SERVER_CURSOR_FETCHMANY_INCLUDING_PRIMING_AND_EOF",
             timings_nested=True,
             counter_scope="ROOT_CUMULATIVE_INCLUDING_CHILDREN",
         )
@@ -160,6 +173,37 @@ class ExecutionPolicy:
 
     def close(self):
         self.closed = True
+
+
+class DriverFetchObserver:
+    """Observe actual psycopg named FETCH calls without changing transport size.
+
+    The factory is restored before the pinned connection can return to a pool.
+    Retain counters only, never rows, SQL text, arguments or driver addresses.
+    """
+
+    def __init__(self, db, name, policy):
+        self.driver = db.connection().connection.driver_connection
+        self.previous = self.driver.server_cursor_factory
+        base = getattr(self.previous, "_calculation_base_factory", self.previous)
+
+        class TracedCursor(base):
+            _calculation_base_factory = base
+
+            def fetchmany(cursor, *args, **kwargs):
+                began = monotonic()
+                try:
+                    rows = super().fetchmany(*args, **kwargs)
+                except BaseException:
+                    policy.observe_driver_fetch(name, None, monotonic()-began, failed=True)
+                    raise
+                policy.observe_driver_fetch(name, len(rows), monotonic()-began)
+                return rows
+
+        self.driver.server_cursor_factory = TracedCursor
+
+    def close(self):
+        self.driver.server_cursor_factory = self.previous
 
 
 def effective_flag(settings, name):

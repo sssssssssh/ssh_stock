@@ -29,12 +29,15 @@ def read_calculation_frame(
     progress = ProgressStep(name, "read")
     progress.report("query", log=True)
     logger.info("calculation read started query={}", name)
+    fetch_observer = None
     try:
-        result = db.execute(statement.execution_options(
-            yield_per=FETCH_ROWS, calculation_query_name=name))
-        from app.services.calculation_policy import active_policy
+        from app.services.calculation_policy import DriverFetchObserver, active_policy
 
         policy = active_policy.get()
+        if policy is not None:
+            fetch_observer = DriverFetchObserver(db, name, policy)
+        result = db.execute(statement.execution_options(
+            yield_per=FETCH_ROWS, calculation_query_name=name))
         fetched_at = monotonic()
         for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
             if policy is not None:
@@ -69,8 +72,12 @@ def read_calculation_frame(
                      name, row_count, monotonic() - started, database_error_summary(exc))
         raise
     finally:
-        if result is not None:
-            result.close()
+        try:
+            if result is not None:
+                result.close()
+        finally:
+            if fetch_observer is not None:
+                fetch_observer.close()
 
 
 def read_calculation_windows(db: Session, statements, *, name: str, observer=None) -> pd.DataFrame:

@@ -17,13 +17,19 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_AT01_frozen_old_files_and_old_execute_and_eight_warmups():
+    import hashlib
+
+    from scripts.business_source_contract import historical_bytes, verify
+
     manifest = c.definitions()
     assert len(warmup_schedule()) == 8 and prepared_readiness()['warmups_total'] == 8
     assert prepared_readiness()['status'] == 'BLOCKED_NEEDS_SPEC_OR_CAPABILITY'
     for name, sha in manifest['frozen_files'].items():
-        assert c.file_sha(ROOT / name) == sha
+        assert hashlib.sha256(historical_bytes(name)).hexdigest() == sha
     with pytest.raises(RuntimeError, match='A4234_EXECUTION_NOT_AUTHORIZED'):
         execute(token='forged', approved=True)
+
+    assert len(verify()) == 64
 
 
 def test_AT02_AT03_fixed_order_warmup_lower_bound_and_real_not_proven():

@@ -21,6 +21,9 @@ APPEND_ONLY_TESTS = {
     "tests/unit/test_business_calculation_memory.py",
 }
 TEST_ADAPTATIONS = {
+    "tests/unit/test_a42341_prepared_capability.py": [
+        "test_AT01_frozen_old_files_and_old_execute_and_eight_warmups"
+    ],
     "tests/unit/test_a4234_ci_governance.py": [
         "test_all_production_old_scripts_evidence_gates_and_one_shots_frozen"
     ],

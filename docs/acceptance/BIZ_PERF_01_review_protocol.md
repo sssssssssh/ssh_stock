@@ -50,3 +50,16 @@ Keep all original 4,925 baseline pytest case identities and negative assertions.
 workflows must run on the final exact SHA. Original expensive dispatch admission stays closed.
 Preserve RED XML and original CI artifacts; report local platform failures separately from Linux CI.
 No skip/xfail, weakened hash guard, widened budget or rewritten historical evidence is permitted.
+
+## Full matrix resource reservation (registered before measurement)
+
+Use the read-only `scripts.business_capacity_preflight` once on a quiet local host, after tests finish.
+It verifies the explicit PG17 marker/physical ID first and observes memory and the owned PG data
+volume without creating a database or starting a Job. Minimum memory reservation is the existing
+Worker RSS failure threshold plus configured PG shared_buffers, maintenance_work_mem and
+max_connections × work_mem. The latter is a reservation floor, not a bound on multiple sort/hash
+nodes or a prediction of actual use. Disk reserve remains 8GiB. The CLI has no options to lower these
+reservations or the required 18 successful runs, million rows, ten tables, warmup or lookback.
+Memory is an estimate, not a hard cgroup guarantee. Insufficient observed headroom is RESOURCE_DEFERRED;
+sufficient floor is only RESOURCE_FLOOR_OBSERVED, never capacity/performance acceptance.
+No smaller dataset is started to replace a deferred matrix; all W03–W07 gaps stay explicit.

@@ -336,12 +336,12 @@ def test_A42342_T17_real_cli_flags_cannot_unlock_execution(tmp_path, option):
 
 
 def test_A42342_T19_T20_no_workflow_schema_or_other_tool_change():
-    from scripts.business_source_contract import HISTORICAL_SOURCE
+    from scripts.business_source_contract import HISTORICAL_SOURCE, historical_bytes
 
     baseline = "a05ab9ffa77d54126aedbdc4fee5396359326edc"
     for name in c.SOURCES:
         if name != "scripts/a42341_calibration_review.py":
-            assert (ROOT / name).read_bytes() == c.git(
+            assert historical_bytes(name) == c.git(
                 ROOT, "show", baseline + ":" + name, binary=True
             )
     assert not c.git(
