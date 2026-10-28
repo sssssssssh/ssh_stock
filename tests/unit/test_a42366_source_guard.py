@@ -45,3 +45,12 @@ def test_AT_W09_new_source_pin_does_not_normalize_executable_changes():
     )
     with pytest.raises(ValueError, match="A42366_DISPATCH_PIN"):
         guard.normalized_dispatch(raw + raw)
+
+
+def test_AT_W09_manifest_preserves_exact_unicode_path_names():
+    root = Path(__file__).resolve().parents[2]
+    data = json.loads((root / guard.MANIFEST).read_bytes())
+    guard.validate_paths(data["stage_paths"])
+    assert set(data["patch_sha256"]) == set(data["stage_paths"]) - {guard.MANIFEST, guard.DISPATCH}
+    assert guard.AUTHORITY <= set(data["stage_paths"])
+    assert all("\ufffd" not in p for p in data["stage_paths"])

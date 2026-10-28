@@ -38,10 +38,10 @@
     },
     {
       "path": ".codex_tmp/a42366-final-targeted.xml",
-      "sha256": "9f6c5e8744c9aaf4d09835b952369c1994b72a6dba876a7d2d89b33f7c03c74d",
+      "sha256": "a233cbc01571d831116a8c373685926b5f26ca886c7c1ef34335d9c8c2181315",
       "suites": [
         {
-          "tests": 72,
+          "tests": 73,
           "failures": 0,
           "errors": 0,
           "skipped": 0
@@ -71,6 +71,18 @@
           "skipped": 0
         }
       ]
+    },
+    {
+      "path": ".codex_tmp/a42366-encoding-red.xml",
+      "sha256": "10eae83c8308b49d427d4ac88445a5bbf1bb26e0e66466a27cdbd7bf5ad7e878",
+      "suites": [
+        {
+          "tests": 1,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
     }
   ],
   "targeted_linux_node_deselected_locally": 1,
@@ -84,5 +96,12 @@
     "publication": 40568482443
   },
   "qualifies": false,
-  "performance_eligible": false
+  "performance_eligible": false,
+  "retained_first_delivery_failure": {
+    "sha": "45cbd6860a7c3812e0893d989545fb5d960a9490",
+    "a42_run": 40617432307,
+    "conclusion": "failure",
+    "local_cause": "GBK_stdout_corrupted_two_manifest_paths",
+    "not_final_acceptance": true
+  }
 }

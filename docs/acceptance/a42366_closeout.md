@@ -50,7 +50,7 @@ PARTIAL, W03 EXTERNAL_BLOCKED plus missing kernel provider; W09 requires final C
 
 ## Validation and Review
 
-Local targeted: 72 passed / one Linux-only node deselected before final evidence
+Local targeted: 73 passed / one Linux-only node deselected before final evidence
 registration. Full local pytest: ten platform collection errors; no business
 dotenv or DB access. Ruff passed; final diff and exact manifest recorded in the
 final delivery. See a42366_test_matrix.md and a42366_evidence.json for actual
@@ -63,3 +63,13 @@ new-source evidence. No workflow_dispatch or high-cost experiment is triggered.
 next_review_request: review the publication safety changes and versioned domain
 contract, then independently design the all-writer/native-census/Reviewer/root
 installation implementations. Do not start L2 or deployment from this handoff.
+
+## Retained First Delivery Failure
+
+45cbd6860a7c3812e0893d989545fb5d960a9490 was pushed before an independent
+committed-object audit detected two Unicode manifest paths corrupted by Windows
+GBK stdout decoding. A4-2 run 40617432307 failed its frozen-source step; it is
+not a passing acceptance record. An actual RED encoding test was added, the
+generator now emits escaped ASCII JSON before UTF-8 publication, and the manifest
+is resealed. Historical manifests/source baselines are not rewritten. The final
+SHA must obtain its own four ordinary runs; do not transfer the initial results.
