@@ -57,3 +57,15 @@ Missing phase = NOT_INSTRUMENTED, not zero seconds. FETCH mixes cursor/transport
 materialization; nested phases must not be summed. Heartbeat confirms communication
 only. Unavailable diagnostic writes are logged as DIAGNOSTIC_PERSIST_UNCONFIRMED;
 neither their absence nor their presence authorizes task recovery.
+# WORKER-02-R2 现场交接补充（2026-10-29）
+
+任务书指定根任务为 `4a8c98cb-2c98-4a37-898d-c79c134da331`。785000行、11:32最后
+进度、11:34/11:36心跳57014是待复核历史线索，本轮没有连接现场或确认原因。
+须先取得单独的只读目标授权再按下列既有命令核对所有执行端；不要把本机合成sleep
+实验、进程轮询或空pg_stat_activity当现场结论。
+
+内部恢复原语现提交前再次调用独立authority；authority必须重核有效期、撤销和
+全端退出/未决提交，不能用LocalTestAuthority替代。生产服务仍未安装，普通CLI没有
+执行入口。未知COMMIT ACK后只允许新连接只读核对：内部recovery_commit_status使用
+可重复读快照核对原身份、ABORTED账本、审计和活跃子任务；UNCONFIRMED不准重放。
+它不是新授权或Web/CLI恢复入口。现场检查/authority/恢复执行/重新部署必须分别授权。

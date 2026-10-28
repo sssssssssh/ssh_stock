@@ -215,7 +215,8 @@ def touch_job_heartbeat(
 
     limits()
     result = measured("lease_update", lambda: db.execute(
-        update(JobRun).where(*ownership).values(heartbeat_at=now or datetime.now(UTC))))
+        update(JobRun).where(*ownership).values(heartbeat_at=func.greatest(
+            JobRun.heartbeat_at, now or datetime.now(UTC)))))
     diagnostics[-1]["rowcount"] = result.rowcount
     measured("lease_commit", db.commit)
     if result.rowcount != 1:

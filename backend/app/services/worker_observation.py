@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from time import monotonic
 from uuid import UUID
 
-from sqlalchemy import text, update
+from sqlalchemy import or_, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -80,11 +80,13 @@ class HeartbeatHealth:
         self.phase = "NOT_ATTEMPTED"
         self.sqlstate = None
         self.failed = False
+        self.observed_at = None
 
     def observe(self, metrics, error=None, *, phase="session_acquire"):
+        self.observed_at = datetime.now(UTC).isoformat(timespec="microseconds")
         if (any(x["phase"] == "lease_update" and x.get("rowcount") == 1 for x in metrics)
                 and any(x["phase"] == "lease_commit" and x["outcome"] == "OK" for x in metrics)):
-            self.last_confirmed = datetime.now(UTC).isoformat()
+            self.last_confirmed = max(self.last_confirmed or "", self.observed_at)
             self.last_confirmed_clock = monotonic()
         self.failed = error is not None
         self.failures = self.failures+1 if self.failed else 0
@@ -97,6 +99,7 @@ class HeartbeatHealth:
 
     def snapshot(self):
         return dict(schema="worker.heartbeat.v1",
+                    observed_at=self.observed_at,
                     state="HEARTBEAT_DEGRADED" if self.failed else
                     "COMMUNICATION_CONFIRMED" if self.last_confirmed else "NOT_YET_CONFIRMED",
                     last_confirmed_at=self.last_confirmed, consecutive_failures=self.failures,
@@ -117,8 +120,36 @@ def persist_observation(bind, registry, *, diagnostics=None, health=None):
     if diagnostics is not None:
         payload["execution_diagnostics"] = diagnostics
     if health is not None:
+        # Normalize ordering evidence; never derive a confirmed lease from this
+        # timestamp. Legacy direct callers get a capture stamp, not lease proof.
+        stamp = health.get("observed_at")
+        if stamp is None:
+            stamp = datetime.now(UTC).isoformat(timespec="microseconds")
+        try:
+            observed = datetime.fromisoformat(stamp)
+            if observed.tzinfo is None:
+                return "DIAGNOSTIC_PERSIST_UNCONFIRMED"
+            stamp = observed.astimezone(UTC).isoformat(timespec="microseconds")
+        except (TypeError, ValueError):
+            return "DIAGNOSTIC_PERSIST_UNCONFIRMED"
         payload["heartbeat_health"] = {**health,
-            "execution_fingerprint": fingerprint(execution.token)}
+            "observed_at": stamp, "execution_fingerprint": fingerprint(execution.token)}
+    outcome = diagnostics.get("outcome") if diagnostics is not None else None
+    live = health is not None or outcome == "RUNNING_OBSERVATION"
+    conditions = []
+    if live or outcome == "UNCONFIRMED":
+        conditions.extend((JobRun.status == "RUNNING",
+            JobRun.job_metadata["execution_diagnostics"]["outcome"].as_string()
+                .is_distinct_from("UNCONFIRMED")))
+    elif outcome in {"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"}:
+        conditions.append(JobRun.status == outcome)
+    if health is not None:
+        prior = JobRun.job_metadata["heartbeat_health"]
+        conditions.append(or_(
+            prior["execution_fingerprint"].as_string().is_distinct_from(
+                fingerprint(execution.token)),
+            prior["observed_at"].as_string().is_(None),
+            prior["observed_at"].as_string() < stamp))
     try:
         # A caller may itself be bound to a pinned Connection. Never join that
         # external transaction for telemetry or roll it back on observation failure.
@@ -131,11 +162,7 @@ def persist_observation(bind, registry, *, diagnostics=None, health=None):
                 JobRun.id == execution.job_id, JobRun.worker_id == execution.worker_id,
                 JobRun.execution_token == execution.token,
                 JobRun.status.in_(("RUNNING", "SUCCESS", "PARTIAL", "FAILED", "CANCELLED")),
-                *([JobRun.status == "RUNNING",
-                   JobRun.job_metadata["execution_diagnostics"]["outcome"].as_string()
-                       .is_distinct_from("UNCONFIRMED")]
-                  if diagnostics is not None and diagnostics.get("outcome") == "RUNNING_OBSERVATION"
-                  else []),
+                *conditions,
             ).values(job_metadata=JobRun.job_metadata.op("||")(payload))
               .execution_options(synchronize_session=False))
             db.commit()

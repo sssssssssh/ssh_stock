@@ -63,10 +63,12 @@ class ExecutionDiagnostics:
         with self._lock:
             phases = [dict(name=name, phase=phase, **value)
                       for (name, phase), value in self.totals.items()]
-            recent = list(self.recent)
+            recent = [dict(event) for event in self.recent]
+            dropped = self.dropped_metrics
         coverage = {}
         for label, predicate in {
-            "raw_preflight": lambda x: x["name"] == "recalculation.raw_prerequisites",
+            "raw_preflight": lambda x: x["name"] in {
+                "raw_prerequisites", "recalculation.raw_prerequisites"},
             "trade_status_read": lambda x: x["name"].startswith("trade_status.")
                 and x["phase"] in {"query", "fetch", "frame"},
             "trade_status_compute": lambda x: x["name"] == "trade_status.compute",
@@ -82,7 +84,7 @@ class ExecutionDiagnostics:
             coverage[label] = ("RECORDED" if any(predicate(x) for x in phases)
                                else "NOT_INSTRUMENTED")
         return dict(phases=phases, recent=recent, coverage=coverage,
-                    dropped_metrics=self.dropped_metrics,
+                    dropped_metrics=dropped,
                     aggregation="NESTED_PHASES_DO_NOT_SUM",
                     fetch_semantics="SERVER_CURSOR_TRANSPORT_AND_PYTHON_MATERIALIZATION",
                     rss_bytes=rss, peak_rss_bytes=peak,

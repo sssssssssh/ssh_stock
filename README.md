@@ -2187,3 +2187,13 @@ HEARTBEAT_DEGRADED 仅为通信诊断，不能替代执行状态、证明计算�
 历史合同审批缺失仍 BLOCKED、PR 保持 Draft；百万行三轮 RESOURCE_DEFERRED，现场 FIELD_NOT_RETESTED。
 无新 schema/金融算法/生产 A/B SQL/优化开关变化；不部署、不操作云端或物理 G1。
 运行边界、实证和剩余缺口见 [revision交付](docs/acceptance/WORKER_02_revision_closeout.md)。
+
+
+## WORKER-02-R2：迟到观察与恢复竞态（2026-10-29）
+
+lease时间不回退，健康快照按规范UTC观测顺序CAS写入；迟到线程不能覆盖终态或最终
+UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺失指标仍NOT_INSTRUMENTED。
+三个真实队列根任务OFF/ON合成小输入验证财务发布等价并记录成本，默认开关不变。
+内部恢复锁定root/账本并提交前再次核验authority；未知ACK仅新连接只读核对，不重放。
+生产authority未安装、合同未独立签署、Linux全量及百万行矩阵仍阻断，现场未授权未复测。
+不合并/部署，不改金融公式、生产A/B SQL、schema或历史合同。详见[R2交付](docs/acceptance/worker02_r2/closeout.md)。

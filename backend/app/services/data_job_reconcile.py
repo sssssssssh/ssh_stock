@@ -71,13 +71,16 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
         db.execute(text("SET LOCAL statement_timeout='3s'"))
         _acquire_ingestion_advisory_lock(db)
         root = db.scalar(select(JobRun).where(JobRun.id == approval.job_id)
-                         .with_for_update(key_share=True))
+                         .with_for_update())
         if (root is None or root.parent_job_id is not None
                 or root.job_type not in INGESTION_JOB_TYPES
                 or (root.worker_id, root.execution_token) != (
                     approval.worker_id, approval.token)):
             raise ValueError("RECOVERY_IDENTITY_CHANGED")
-        ledger = db.get(DataPublication, root.id)
+        # FOR UPDATE on the parent also conflicts with FK KEY SHARE from a
+        # newly arriving child; NO KEY UPDATE did not close that insertion race.
+        ledger = db.scalar(select(DataPublication).where(DataPublication.job_id == root.id)
+                           .with_for_update())
         if root.status == "FAILED" and ledger is not None and ledger.state == "ABORTED":
             prior = dict(root.job_metadata or {}).get("manual_reconciliations", [])
             if any(item.get("approval_id") == approval.approval_id
@@ -141,6 +144,11 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
             if changed.rowcount != 1:
                 raise ValueError("RECOVERY_IDENTITY_CHANGED")
         _validate_approval_time(approval)
+        # A frozen dataclass cannot reflect revocation by an independent authority.
+        # Recheck its live evidence immediately before committing any changes.
+        if authority.verify_exit_and_commits(approval) is not True:
+            raise ValueError("EXECUTION_UNCONFIRMED")
+        _validate_approval_time(approval)
         db.commit()  # Unknown ACK propagates. Never retry this call automatically.
         return "RECONCILED_ABORTED"
     except BaseException:
@@ -174,3 +182,35 @@ def reconcile_data_job(db, job_id):
                   process_evidence="NOT_COLLECTED_NO_EXECUTOR_AUTHORITY",
                   next_action="INDEPENDENT_EXIT_AND_COMMIT_REVIEW_REQUIRED")
     return report
+
+
+def recovery_commit_status(db, approval: RecoveryApproval):
+    """Fresh-connection read-only reconciliation of a lost maintenance COMMIT ACK.
+
+    Never calls the authority, finish_publication, audit append or COMMIT. A
+    matching immutable receipt confirms only this abort, not permission to retry.
+    A caller must close its old unknown connection and supply a new Session.
+    """
+    if db.in_transaction() or not isinstance(approval, RecoveryApproval):
+        raise ValueError("RECOVERY_READ_REQUIRES_FRESH_SESSION")
+    db.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
+    db.execute(text("SET LOCAL lock_timeout='1s'"))
+    db.execute(text("SET LOCAL statement_timeout='3s'"))
+    root = db.get(JobRun, approval.job_id)
+    ledger = db.get(DataPublication, approval.job_id)
+    if (root is None or ledger is None or root.status != "FAILED"
+            or root.parent_job_id is not None or root.job_type not in INGESTION_JOB_TYPES
+            or (root.worker_id, root.execution_token) != (approval.worker_id, approval.token)
+            or ledger.state != "ABORTED" or ledger.execution_token != approval.token):
+        return "RECOVERY_COMMIT_UNCONFIRMED"
+    audit = dict(root.job_metadata or {}).get("manual_reconciliations", [])
+    if not any(item.get("approval_id") == approval.approval_id
+               and item.get("operator_id") == approval.operator_id
+               and item.get("evidence_sha256") == approval.evidence_sha256
+               and item.get("execution_identity_fingerprint") == hashlib.sha256(
+                   str(approval.token).encode()).hexdigest()[:16] for item in audit):
+        return "RECOVERY_COMMIT_UNCONFIRMED"
+    if db.scalar(select(JobRun.id).where(JobRun.parent_job_id == root.id,
+                                         JobRun.status.in_(("RUNNING", "QUEUED"))).limit(1)):
+        return "RECOVERY_COMMIT_UNCONFIRMED"
+    return "RECONCILED_ABORTED"
