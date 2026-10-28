@@ -10,7 +10,7 @@ import re
 import stat
 
 from scripts.a42361_contract import canonical, sha
-from scripts.a42362_contract import resources
+from scripts.a42362_contract import file_identity, resources
 from scripts.a42363_contract import require, scope_hash, verify_receipt
 from scripts.a42365_contract import runtime_receipt
 
@@ -107,7 +107,7 @@ def _artifact(publisher, name, digest):
         m = os.fstat(fd)
         require(stat.S_ISREG(m.st_mode) and m.st_nlink == 1 and m.st_size <= 65536
                 and sha(os.pread(fd, 65537, 0)) == digest, "ARTIFACT_BYTES_CHANGED")
-        require(os.fstat(fd) == m, "ARTIFACT_BYTES_CHANGED")
+        require(file_identity(os.fstat(fd)) == file_identity(m), "ARTIFACT_BYTES_CHANGED")
     finally:
         os.close(fd)
 

@@ -5,6 +5,8 @@ service and proves neither distinct UIDs nor physical resource capabilities.
 """
 
 import os
+import select
+import socket
 import time
 
 from pydantic import Field
@@ -73,6 +75,18 @@ class RuntimeDomainServer:
         require(os.fstat(channel.fileno()) == held and peer_uid(channel) == b.peer_uid,
                 "RUNTIME_CHANNEL_CHANGED")
         send_frame(channel, result)
+
+    def serve(self, channel):
+        deadline = time.monotonic_ns() + 30_000_000_000
+        for _ in range(128):
+            self.binding.revalidate()
+            require(time.monotonic_ns() < deadline, "DOMAIN_SERVER_DEADLINE")
+            if not select.select([channel], [], [], 0.2)[0]:
+                continue
+            if channel.recv(1, socket.MSG_PEEK) == b"":
+                return
+            self.serve_once(channel)
+        require(False, "DOMAIN_SERVER_REQUEST_LIMIT")
 
 
 class ControllerEndpoint:
@@ -143,3 +157,69 @@ class CapabilityBlockedEndpoint:
 
     def dispatch(self, method, body):
         require(False, self.blocker)
+
+
+class AbsenceEndpoint:
+    """Same original store observer; no empty output or C ACK is called absence.
+
+    The installer must supply the independently delegated collector. The v5
+    default factory intentionally refuses without that kernel RO handoff.
+    """
+    methods = ("absent", "receipt")
+
+    def __init__(self, scope, journal, observer, consumer, controller):
+        require(journal.domain == "absence_auditor", "AUDIT_WRITER_DOMAIN")
+        self.scope, self.journal, self.observer = scope, journal, observer
+        self.consumer, self.controller = consumer, controller
+
+    def contract(self, method):
+        return EmptyRequest
+
+    def dispatch(self, method, body):
+        from scripts.a42362_contract import resources
+        from scripts.a42363_contract import scope_hash, verify_receipt
+
+        require(method == "absent", "RUNTIME_METHOD")
+        s = self.scope
+        b = self.consumer.read(s, "CONSUMED")
+        c = self.controller.read(s, "RECONCILED")
+        requested = self.controller.read(s, "DESTROY_REQUESTED")
+        verify_receipt(b, "consumer", s, "CONSUMED")
+        verify_receipt(c, "controller", s, "RECONCILED")
+        verify_receipt(requested, "controller", s, "DESTROY_REQUESTED")
+        require(c.record.get("status") == "DESTROYED_PENDING_INDEPENDENT_E"
+                and not c.record.get("first_error") and not c.record.get("cleanup_codes")
+                and requested.sequence < c.sequence, "AUDIT_DESTRUCTION_CHANGED")
+        originals = {item.kind: self.controller.read(s, item.kind + "_ORIGINAL")
+                     for item in resources(s)}
+        require(c.record.get("original_digests") == {k: v.digest for k, v in originals.items()},
+                "AUDIT_ORIGINAL_SET")
+        observations = []
+        last = c.record.get("destroyed_ns")
+        require(type(last) is int and last > 0, "AUDIT_DESTRUCTION_CHANGED")
+        for round_no in (1, 2):
+            self._fresh(b, c, requested)
+            for item in resources(s):
+                raw = self.observer.observe(item)
+                require(type(raw) is dict and raw.get("resource") == item.model_dump()
+                        and raw.get("result") == "ABSENT"
+                        and raw.get("raw") == dict(status="ABSENT", code=1, identity=None)
+                        and type(raw["raw"]["code"]) is int
+                        and type(raw.get("observed_ns")) is int and raw["observed_ns"] > last,
+                        "ABSENCE_UNKNOWN")
+                last = raw["observed_ns"]
+                observations.append(dict(raw, round=round_no,
+                                         original_digest=originals[item.kind].digest))
+            self._fresh(b, c, requested)
+        return self.journal.append(s, "ABSENT", dict(
+            scope_sha256=scope_hash(s), epoch=s.epoch, observations=observations,
+            consumption_digest=b.digest, requested_digest=requested.digest,
+            destruction_digest=c.digest, physical_proven=False, qualifies=False,
+        )).model_dump()
+
+    def _fresh(self, b, c, requested):
+        s = self.scope
+        require(self.consumer.read(s, "CONSUMED") == b
+                and self.controller.read(s, "RECONCILED") == c
+                and self.controller.read(s, "DESTROY_REQUESTED") == requested,
+                "AUDIT_DESTRUCTION_CHANGED")

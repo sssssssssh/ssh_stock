@@ -76,4 +76,3 @@ def test_AT11_AT15_unproven_all_writer_capability_has_zero_commands(tmp_path, ki
             broker.dispatch(item, verb, None if verb == "create" else {})
     assert not journal.values
 
-

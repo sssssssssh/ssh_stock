@@ -16,7 +16,7 @@ HISTORICAL_SOURCE = "1e510532bd140110e29b10b6e4eed30fbd573159"
 MANIFEST = "docs/acceptance/BIZ_PERF_01_review_source_manifest.json"
 VERSION = "biz-perf-01.review.20261027.v1"
 GUARD = "scripts/a4235_capability_guard.py"
-A42366_MANIFEST_SHA = '89069537956f1ec92b284d5a0e52d5e92726ddd54a87405d77f9209c85ed0081'
+A42366_MANIFEST_SHA = '43951d77ec926d70276b6f950f69179955bbb7c3a99173b06c7e86864d84852b'
 APPEND_ONLY_TESTS = {
     "tests/unit/test_business_input_records.py",
     "tests/unit/test_business_calculation_memory.py",

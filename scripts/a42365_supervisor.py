@@ -20,12 +20,18 @@ class InstalledSupervisor:
     def run(self):
         for kind in ("BOOTSTRAP_AND_BUDGET", "SAFE_VOLUME_DISPOSAL", "TARGET_SESSION_GUC"):
             self.authority.require(kind)
-        require(self.root_manager is not None, "INSTALLED_KERNEL_LAUNCHER_REQUIRED")
+        from scripts.a42364_manager import CandidateRootManager
+
+        require(type(self.root_manager) is CandidateRootManager,
+                "INSTALLED_KERNEL_LAUNCHER_REQUIRED")
         self.journal.append(self.scope, "D_RUN_ATTEMPTED", dict(qualifies=False))
         return self.root_manager.dispatch(os.getuid(), "run", dict(scope=self.scope.model_dump()))
 
     def terminate(self):
-        require(self.root_manager is not None, "INSTALLED_KERNEL_LAUNCHER_REQUIRED")
+        from scripts.a42364_manager import CandidateRootManager
+
+        require(type(self.root_manager) is CandidateRootManager,
+                "INSTALLED_KERNEL_LAUNCHER_REQUIRED")
         self.journal.append(self.scope, "D_TERMINATE_ATTEMPTED", dict(qualifies=False))
         return self.root_manager.dispatch(
             os.getuid(), "terminate", dict(scope=self.scope.model_dump())

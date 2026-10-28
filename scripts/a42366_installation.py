@@ -35,6 +35,8 @@ class DomainBinding:
         current = os.stat("/proc/self/ns/user")
         require((current.st_dev, current.st_ino) == (self.namespace.st_dev, self.namespace.st_ino),
                 "DOMAIN_NAMESPACE_CHANGED")
+        require(sha(os.readlink("/proc/self/ns/user").encode()) == self.scope.namespace_sha256,
+                "DOMAIN_NAMESPACE_CHANGED")
         self.archive.revalidate()
         for kind in GATES[:3]:
             self.authority.require(kind)
@@ -170,7 +172,7 @@ def serve_installed_domain(package, listener_fd=5):
             listener.settimeout(1)
             channel, _ = listener.accept()
         with channel:
-            server.serve_once(channel)
+            server.serve(channel)
     finally:
         for channel in server.installed_channels:
             channel.close()

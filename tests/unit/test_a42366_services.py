@@ -84,7 +84,7 @@ def test_AT07_AT10_actual_multi_process_unix_sqlite_receiver(tmp_path):
             parent.close()
             try:
                 own = DurableJournal(fd, "consumer")
-                server(scope, own, L1Binding(scope, fd)).serve_once(child)
+                server(scope, own, L1Binding(scope, fd)).serve(child)
                 os._exit(0)
             except BaseException:
                 os._exit(1)
@@ -92,8 +92,10 @@ def test_AT07_AT10_actual_multi_process_unix_sqlite_receiver(tmp_path):
         client = DomainClient(parent.fileno(), os.getuid(), "consumer", scope, "a" * 64, "b" * 64)
         try:
             assert client.call("consume")["event"] == "CONSUMED"
+            assert client.call("receipt", dict(event="BUDGET_STARTED"))["event"] == "BUDGET_STARTED"
         finally:
             client.close()
+            parent.close()
         assert os.waitpid(pid, 0)[1] == 0
         pid = None
         reopened = DurableJournal(fd, "consumer")
@@ -116,3 +118,19 @@ def test_AT09_peer_checked_before_frame_decode(monkeypatch):
     monkeypatch.setattr(module, "read_frame", lambda *args: pytest.fail("decoded wrong peer"))
     with pytest.raises(Fault, match="RUNTIME_PEER_UID"):
         s.serve_once(SimpleNamespace())
+
+
+@pytest.mark.parametrize("method", ["run", "terminate"])
+def test_AT34_AT37_a_root_manager_shaped_object_is_not_a_kernel_installation(method):
+    from scripts.a42365_supervisor import InstalledSupervisor
+
+    i, j = identity(), Journal("supervisor")
+
+    class FakeRoot:
+        def dispatch(self, *args):
+            pytest.fail("fake root launcher reached a side effect")
+
+    supervisor = InstalledSupervisor(i.scope, L1Authority(i.scope, j), FakeRoot(), j)
+    with pytest.raises(Fault, match="INSTALLED_KERNEL_LAUNCHER_REQUIRED"):
+        getattr(supervisor, method)()
+    assert not j.values
