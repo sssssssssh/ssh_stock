@@ -13,6 +13,8 @@ class RuntimeCoordinator:
         self.supervisor, self.auditor, self.broker = supervisor, auditor, broker
 
     def _stage(self, name, client, method):
+        require(self.journal.maybe_read(self.scope, name + "_ATTEMPTED") is None,
+                "RUNTIME_ACK_UNKNOWN_NO_REPLAY")
         self.journal.append(self.scope, name + "_ATTEMPTED", dict(qualifies=False))
         result = client.call(method)
         require(type(result) is dict and result.get("qualifies") is False, "RUNTIME_RECEIPT")
@@ -65,6 +67,16 @@ class RuntimeCoordinator:
             ("D_TERMINATE", self.supervisor, "terminate"),
             ("C_RECONCILE", self.controller, "reconcile"),
         ):
+            prepared = "D_RUN" if name == "D_TERMINATE" else "C_PREPARE"
+            attempted = self.journal.maybe_read(self.scope, prepared + "_ATTEMPTED")
+            committed = self.journal.maybe_read(self.scope, prepared + "_COMMITTED")
+            if attempted is None:
+                cleanup.append(prepared + "_NOT_ATTEMPTED")
+                continue
+            if committed is None:
+                # Ownership after unknown preparation is not inferred from a name.
+                cleanup.append(prepared + "_ACK_UNKNOWN")
+                continue
             try:
                 self._stage(name, client, method)
             except BaseException as error:

@@ -3,7 +3,7 @@
 import os
 
 from scripts.a42361_contract import canonical, sha
-from scripts.a42363_contract import require, scope_hash
+from scripts.a42363_contract import require
 from scripts.a42365_contract import nonqualifying
 
 
@@ -60,6 +60,7 @@ class StagedPublisher:
 
     def stage(self, record):
         self._write(".incomplete", b"a42365 pending independent termination and absence\n")
+        marker = os.stat(".incomplete", dir_fd=self.fd, follow_symlinks=False)
         raw = canonical(nonqualifying(self.scope, "STAGED", evidence=record))
         self._write("evidence.json", raw)
         manifest = canonical(dict(evidence_sha256=sha(raw), qualifies=False))
@@ -67,44 +68,13 @@ class StagedPublisher:
         return self.journal.append(
             self.scope,
             "ARTIFACT_STAGED",
-            dict(evidence_sha256=sha(raw), manifest_sha256=sha(manifest), qualifies=False),
+            dict(evidence_sha256=sha(raw), manifest_sha256=sha(manifest),
+                 marker_identity=[marker.st_dev, marker.st_ino], qualifies=False),
         )
 
-    def finalize(self, root_journal, absence_journal, reviewer_journal):
-        self.journal.read(self.scope, "ARTIFACT_STAGED")
-        terminated = root_journal.read(self.scope, "ROOT_V3_TERMINATED")
-        absence = absence_journal.read(self.scope, "ABSENT")
-        review = reviewer_journal.read(self.scope, "REVIEWED")
-        require(
-            root_journal.domain == "root_manager"
-            and absence_journal.domain == "absence_auditor"
-            and reviewer_journal.domain == "supervisor",
-            "PUBLICATION_INDEPENDENT_DOMAINS",
-        )
-        require(
-            terminated.record.get("execution_scope_terminated") is True
-            and terminated.record.get("scope_sha256") == scope_hash(self.scope)
-            and terminated.record.get("epoch") == self.scope.epoch
-            and len(absence.record.get("observations", [])) == 8
-            and review.record.get("terminated_digest") == terminated.digest
-            and review.record.get("absence_digest") == absence.digest
-            and review.record.get("qualifies") is False,
-            "PUBLICATION_AUDIT_CHAIN",
-        )
-        staged = self.journal.read(self.scope, "ARTIFACT_STAGED").record
-        for name, digest in (
-            ("evidence.json", staged["evidence_sha256"]),
-            ("manifest.json", staged["manifest_sha256"]),
-        ):
-            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=self.fd)
-            try:
-                require(
-                    os.fstat(fd).st_nlink == 1 and sha(os.pread(fd, 65537, 0)) == digest,
-                    "ARTIFACT_BYTES_CHANGED",
-                )
-            finally:
-                os.close(fd)
-        self.journal.append(self.scope, "PUBLICATION_ATTEMPTED", dict(qualifies=False))
-        os.unlink(".incomplete", dir_fd=self.fd)
-        os.fsync(self.fd)
-        return self.journal.append(self.scope, "PUBLISHED", dict(qualifies=False))
+    def finalize(self, root_journal, absence_journal, reviewer_journal, *,
+                 consumer_journal=None, controller_journal=None):
+        from scripts.a42366_publication import finalize
+
+        return finalize(self, root_journal, absence_journal, reviewer_journal,
+                        consumer_journal, controller_journal)

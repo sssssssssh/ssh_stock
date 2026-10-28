@@ -16,6 +16,7 @@ HISTORICAL_SOURCE = "1e510532bd140110e29b10b6e4eed30fbd573159"
 MANIFEST = "docs/acceptance/BIZ_PERF_01_review_source_manifest.json"
 VERSION = "biz-perf-01.review.20261027.v1"
 GUARD = "scripts/a4235_capability_guard.py"
+A42366_MANIFEST_SHA = '6d902cf6b056b57d7dd12f8f4319585bc58c8c9daf31da728c2da1f7c2b48454'
 APPEND_ONLY_TESTS = {
     "tests/unit/test_business_input_records.py",
     "tests/unit/test_business_calculation_memory.py",
@@ -179,6 +180,12 @@ def versioned_frozen_files(root, frozen):
             "A4235_LIVE_OVERLAY_INVALID",
         )
         patches.update(json.loads((root / runtime_manifest).read_bytes())["patch_sha256"])
+    from scripts.a42366_source_guard import MANIFEST as closure_manifest
+
+    if (root / closure_manifest).is_file():
+        g.require(g.path_sha(root / closure_manifest) == A42366_MANIFEST_SHA,
+                  "A4235_LIVE_OVERLAY_INVALID")
+        patches.update(json.loads((root / closure_manifest).read_bytes())["patch_sha256"])
     baseline_hashes = immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
     return {path: patches.get(path, sha) for path, sha in baseline_hashes.items()}
 
@@ -303,8 +310,12 @@ def verify(root=ROOT):
     from scripts import a4235_capability_guard as g
     from scripts import a42361_source_guard as fd_guard
     from scripts import a42364_source_guard as legacy
+    from scripts import a42366_source_guard as closure
     from scripts.a42365_source_guard import MANIFEST as runtime_manifest
     from scripts.a42365_source_guard import verify as runtime_verify
+
+    if (Path(root) / closure.MANIFEST).is_file():
+        return closure.verify(g, root, g.git(root, "rev-parse", "HEAD").decode().strip())
 
     if (Path(root) / runtime_manifest).is_file():
         return runtime_verify(g, root, g.git(root, "rev-parse", "HEAD").decode().strip())

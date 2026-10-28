@@ -1,0 +1,37 @@
+{
+  "version": "a42366.source.v1",
+  "baseline_sha": "f00be6aa149d5fde145ae4137c01368a332b022f",
+  "stage_paths": [
+    "docs/acceptance/a42366_baseline.md",
+    "docs/acceptance/a42366_overlay_manifest.json",
+    "scripts/a42365_runtime.py",
+    "scripts/a42365_supervisor.py",
+    "scripts/a42366_publication.py",
+    "scripts/a42366_reviewer.py",
+    "scripts/a42366_source_guard.py",
+    "scripts/business_source_contract.py",
+    "tests/unit/test_a42366_publication.py"
+  ],
+  "patch_sha256": {
+    "docs/acceptance/a42366_baseline.md": "ddd440703c2cc7c8465f396cf76a94a641662db6b685816733b6db93d67c0d42",
+    "scripts/a42365_runtime.py": "13e7c16a4f167e4c4e2e49d56f9561a5db1fc7d581fc1fcb3d3d341776b52fde",
+    "scripts/a42365_supervisor.py": "70904fd7e920fd2f8ef890f06872da7c5fdaf9eadbd13800dc0067e17be85f0d",
+    "scripts/a42366_publication.py": "c64747574ba56e241793e42d7533df53d8bc6e09aa2adfc2dc8d180548a89362",
+    "scripts/a42366_reviewer.py": "6849b059657ab25f5254fa4f0a8d306a627a8319a879b41d4b27bb87c7a3111a",
+    "scripts/a42366_source_guard.py": "c4d0d4d8c560aa4699bb90612a361d01a3c7e6e55634d760c49cd79aa191e7d1",
+    "tests/unit/test_a42366_publication.py": "abb7f1be9206ac38aad4ea75428154f54eb0a0af77f6f815842d0827f2230c49"
+  },
+  "normalized_dispatch_sha256": "fd12b43c23fb0ebc8485b6664990902cd1a4307b214dc813934558e452727bcd",
+  "historical_manifest_sha256": {
+    "docs/acceptance/a42351_reviewer_overlay_manifest.json": "ea795278e3fb84e4eebabeba737d23a92a4a0c42e6402cc828bf3801d3c9f648",
+    "docs/acceptance/a4236_overlay_manifest.json": "d93bf795a59cb0a168f0e96f4382d58efcbdc2833bc43e22ebde3254a09c1156",
+    "docs/acceptance/a42361_overlay_manifest.json": "a88d62d980751cfe182bcffc0a450c21d57195810bdce4e24c80f43c4ff1fb64",
+    "docs/acceptance/a42362_overlay_manifest.json": "692b2ca9f3f1f95404a6ec953b557d6a6b510123a522b9f357163d3b016b1817",
+    "docs/acceptance/a42363_overlay_manifest.json": "92f67e70c19eee81ef2ce19283aa9969748480cbc36921df01ebba902bc64662",
+    "docs/acceptance/a42363_complete_overlay_manifest.json": "d3f5bdce5c9a05b578eda1f599f9404f78f696170d233a3da1d105008ebbd9ff",
+    "docs/acceptance/a42363_review_overlay_manifest.json": "ec3d15819acf7c2303b1ac04771dbe9aadf78f121b0a9c00320d69d043905ba2",
+    "docs/acceptance/a42364_overlay_manifest.json": "e1a594a7579ce7d79b62f828126c35f56c38df1de7f84b0b589d645e6e2c9cd7",
+    "docs/acceptance/BIZ_PERF_01_review_source_manifest.json": "47e64a62424936f9a05645453f86cd7cfaa3d216518a2b2bc55eae7243161a62",
+    "docs/acceptance/a42365_overlay_manifest.json": "cc0ab53e5d1381e1d597bfcc00cd1f86b2eb4c76cf294bcd596596288adb550e"
+  }
+}
