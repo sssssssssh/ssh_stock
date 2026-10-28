@@ -54,6 +54,8 @@ def verify(g, root, head):
     g.require(re.fullmatch(r"[0-9a-f]{40}", head) is not None, "A4235_FULL_SHA_REQUIRED")
     g.require(head == business.git(root, "rev-parse", "HEAD").decode().strip(),
               "A4235_HEAD_MISMATCH")
+    g.require(head == g.git(root, "rev-parse", "HEAD").decode().strip(),
+              "A4235_HEAD_MISMATCH")
     g.require(not g.git(root, "status", "--porcelain").strip(), "A4235_DIRTY_TREE")
     raw = (root / MANIFEST).read_bytes()
     g.require(hashlib.sha256(raw).hexdigest() == business.A42366_MANIFEST_SHA,
@@ -63,7 +65,7 @@ def verify(g, root, head):
                            "normalized_dispatch_sha256", "historical_manifest_sha256"}
               and data["version"] == "a42366.source.v1" and data["baseline_sha"] == BASELINE,
               "A4235_LIVE_OVERLAY_INVALID")
-    changed = set(business.git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0"))
+    changed = set(g.git(root, "diff", "--name-only", "-z", BASELINE).decode().split("\0"))
     changed.discard("")
     g.require(changed == set(data["stage_paths"]), "A4235_FROZEN_FILE_CHANGED")
     validate_paths(changed)
@@ -82,6 +84,7 @@ def verify(g, root, head):
     for path, closing in histories.items():
         original = baseline_manifests[BASELINE + ":" + path]
         g.require((root / path).read_bytes() == original
+                  and g.path_sha(root / path) == data["historical_manifest_sha256"][path]
                   and hashlib.sha256(original).hexdigest()
                   == data["historical_manifest_sha256"][path], "A4235_OVERLAY_BYTES_MISMATCH")
         pins = json.loads(original)["patch_sha256"]
@@ -97,9 +100,23 @@ def verify(g, root, head):
         if p in AUTHORITY:
             g.require(current.startswith(old), "A4235_FROZEN_FILE_CHANGED")
         elif p not in changed:
-            g.require(current == old, "A4235_FROZEN_FILE_CHANGED")
+            g.require(current == old and g.path_sha(root / p) == hashlib.sha256(old).hexdigest(),
+                      "A4235_FROZEN_FILE_CHANGED")
+    # Preserve the old independent reader injection/replay contracts as well as
+    # the newer complete-tree check. Neither reader may vouch for itself.
+    original_paths = g.PATCH_PATHS | g.NEXT_PATCH_PATHS
+    old_objects = business.git_blobs(root, [business.HISTORICAL_SOURCE + ":" + p
+                                           for p in original_paths])
+    for p in original_paths:
+        g.require(g.git(root, "show", business.HISTORICAL_SOURCE + ":" + p)
+                  == old_objects[business.HISTORICAL_SOURCE + ":" + p],
+                  "A4235_OVERLAY_BYTES_MISMATCH")
+    g.require(g.git(root, "ls-tree", "-r", head, "--", "infra")
+              == business.git(root, "ls-tree", "-r", head, "--", "infra"),
+              "A4235_HEAD_BYTES_MISMATCH")
     fd_guard.verify_full_worktree(g, root, head)
     g.require(head == business.git(root, "rev-parse", "HEAD").decode().strip()
+              and head == g.git(root, "rev-parse", "HEAD").decode().strip()
               and not g.git(root, "status", "--porcelain").strip(), "A4235_DIRTY_TREE")
     raw_identity = ("SOURCE_ONLY:" + head + business.A42366_MANIFEST_SHA).encode()
     return hashlib.sha256(raw_identity).hexdigest()

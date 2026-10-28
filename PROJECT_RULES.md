@@ -1156,3 +1156,14 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历史九个 manifest 保持冻结；新第十层精确 overlay 独立。D1/D2/D3 和 G1_L2_EXECUTION 均未签，实际 G1 SQL/Podman/initdb/服务安装=0；G2总预热8 pending，G3未授权；BIZ性能验收仍开放。
 
 集中材料：[A42365 closeout](docs/acceptance/a42365_closeout.md)。
+
+## A42366 发布与运行安全边界（2026-10-28）
+
+新精确 overlay 保留十份历史 manifest、所有原测试、工作流、预算和探针原字节。
+最终发布必须核对原四资源×两轮、逐条 ABSENT、fresh B/C、root 终止及独立 Reviewer；
+永久批准/意图/PUBLISHED 必须先于 marker 删除，FINALIZED 在目录 fsync 后提交，
+不得声称 SQLite 与文件系统单事务。UNKNOWN 不重放、不退款、不按同名接管。
+新增 v5 FD 域接收器不是物理授权。独立 Reviewer/native census/内核排他/root 与只读挂载
+源码仍未闭环，SOURCE_PARTIAL_ENGINEERING_BLOCKED；G1 实际 SQL/Podman/initdb/cgroup/mount
+均为 0，旧预算 8/12/2s、预热总 8、G3 未授权与 BIZ PERFORMANCE_OPEN 不变。
+详见 [A42366 能力矩阵](docs/acceptance/a42366_capability_matrix.md)。

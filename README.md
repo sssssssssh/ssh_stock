@@ -2138,3 +2138,12 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 本轮未安装或启动 G1 服务。固定工厂、持久预算/恢复和 FD 组件有增量源码，mandatory broker/native/RO mount/服务端装配仍不完整，状态 PARTIAL_ENGINEERING_BLOCKED。不要使用签名或 ordinary CI 代替缺失源码/物理验收。
 
 集中材料：[A42365 closeout](docs/acceptance/a42365_closeout.md)。
+
+## A42366 真实运行安全整改（2026-10-28）
+
+本轮不改变“空间”的启动、部署和业务计算方式，不读取业务 .env、不访问业务数据库，
+不重启在途 Worker、不触发高成本实验。修复发布观察校验、持久发布顺序和未知 ACK 恢复，
+新增 v5 固定域接收器、预算 RPC 与目标会话身份登记。独立 Reviewer、内核全写者排他、
+native 完整计数和 root/RO 安装仍缺失，结论为 SOURCE_PARTIAL_ENGINEERING_BLOCKED。
+正式 G1 继续拒绝，不代表已经可部署或物理通过。详见
+[交付记录](docs/acceptance/a42366_closeout.md)、[运行边界](docs/acceptance/a42366_runbook.md)。

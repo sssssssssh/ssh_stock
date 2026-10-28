@@ -126,6 +126,30 @@ def test_AT25_AT28_no_cleanup_of_never_prepared_resources():
     assert result.record["status"] == "INCOMPLETE_QUARANTINED"
 
 
+def test_AT28_stop_ack_loss_does_not_prevent_owned_cleanup_or_replay_stop():
+    scope, journal, calls = identity().scope, Journal("root_manager"), []
+    for name in ("D_RUN", "C_PREPARE"):
+        journal.append(scope, name + "_ATTEMPTED", dict(qualifies=False))
+        journal.append(scope, name + "_COMMITTED", dict(qualifies=False))
+
+    class Client:
+        def call(self, method):
+            calls.append(method)
+            if method == "stop":
+                raise Fault("A42363_STOP_ACK_UNKNOWN")
+            return dict(qualifies=False)
+
+    client = Client()
+    runtime = RuntimeCoordinator(scope, None, journal, client, client, client, client, client, None)
+    with pytest.raises(Fault, match="STOP_ACK_UNKNOWN"):
+        runtime.stop()
+    assert calls == ["stop", "terminate", "reconcile"]
+    assert journal.read(scope, "RUN_FIRST_ERROR").record["code"] == "A42363_STOP_ACK_UNKNOWN"
+    with pytest.raises(Fault, match="RUNTIME_ACK_UNKNOWN_NO_REPLAY"):
+        runtime.stop()
+    assert calls == ["stop", "terminate", "reconcile"]
+
+
 @pytest.mark.parametrize("event", ["AUDIT_VERIFIED", "PUBLISH_INTENT", "PUBLISHED", "FINALIZED"])
 @pytest.mark.parametrize("after_commit", [False, True])
 def test_AT05_AT06_crash_model_never_removes_marker_without_permanent_receipt(

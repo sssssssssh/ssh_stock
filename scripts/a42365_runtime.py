@@ -100,6 +100,28 @@ class RuntimeCoordinator:
         return nonqualifying(self.scope, "PENDING_INDEPENDENT_REVIEW")
 
     def stop(self):
-        self.journal.append(self.scope, "CONSUMPTION_FROZEN", dict(qualifies=False))
-        self.consumer.call("stop")
-        return self.reconcile_scope()
+        if self.journal.maybe_read(self.scope, "CONSUMPTION_FROZEN") is None:
+            self.journal.append(self.scope, "CONSUMPTION_FROZEN", dict(qualifies=False))
+        first = None
+        try:
+            self._stage("B_STOP", self.consumer, "stop")
+        except BaseException as error:
+            first = error
+            if self.journal.maybe_read(self.scope, "RUN_FIRST_ERROR") is None:
+                try:
+                    self.journal.append(self.scope, "RUN_FIRST_ERROR", dict(code=safe_code(error)))
+                except Exception:
+                    error.cleanup_codes = [*getattr(error, "cleanup_codes", []),
+                                           "A42363_FIRST_ERROR_JOURNAL_UNKNOWN"]
+        try:
+            result = self.reconcile_scope()
+        except BaseException as cleanup:
+            if first is None:
+                raise
+            first.cleanup_codes = [*getattr(first, "cleanup_codes", []), safe_code(cleanup)]
+            raise first from None
+        if first is not None:
+            first.cleanup_codes = [*getattr(first, "cleanup_codes", []),
+                                   *result.record.get("cleanup_codes", [])]
+            raise first
+        return result

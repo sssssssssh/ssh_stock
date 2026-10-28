@@ -1850,3 +1850,11 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 A42365 不增加用户业务功能，不改变选股、回测、研究、PAPER 或任何前端流程。G1 工程验收尚未通过，不能据 L1/ordinary CI 认定已具备可用或物理合格的运行服务。
 
 集中材料：[A42365 closeout](acceptance/a42365_closeout.md)。
+
+## A42366 工程安全验收范围
+
+本轮不新增“空间”用户功能，不改变选股、研究、PAPER、Raw 或业务补算口径。
+整改工件发布、严格域接收、持久恢复和身份绑定；单元/Unix L1、独立平台审批与物理
+验收分开记录。当前源码仍 SOURCE_PARTIAL_ENGINEERING_BLOCKED，缺少 Reviewer、
+内核排他、native 完整计数及完整 root/RO 安装；不得因普通 CI 或模型成功标记物理通过。
+逐项验收与遗漏见 [A42366 测试矩阵](acceptance/a42366_test_matrix.md)。

@@ -1,0 +1,88 @@
+{
+  "schema_version": "a42366.evidence.v1",
+  "baseline_sha": "f00be6aa149d5fde145ae4137c01368a332b022f",
+  "source_status": "SOURCE_PARTIAL_ENGINEERING_BLOCKED",
+  "physical_status": "NOT_RUN_NOT_AUTHORIZED",
+  "actions_by_this_task": {
+    "g1_sql": 0,
+    "podman": 0,
+    "initdb": 0,
+    "cgroup": 0,
+    "mount": 0,
+    "workflow_dispatch": 0
+  },
+  "local_junit": [
+    {
+      "path": ".codex_tmp/a42366-red.xml",
+      "sha256": "b5c021308799cc1df672c754d4af400d6f4c2cdd5600a6f92f1980d6513cedac",
+      "suites": [
+        {
+          "tests": 7,
+          "failures": 7,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/a42366-a-green.xml",
+      "sha256": "86e0facf14901684fee07549eea63ebf3dda063a459fae1b7dc09acca547ffbc",
+      "suites": [
+        {
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/a42366-final-targeted.xml",
+      "sha256": "9f6c5e8744c9aaf4d09835b952369c1994b72a6dba876a7d2d89b33f7c03c74d",
+      "suites": [
+        {
+          "tests": 72,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/a42366-existing-targeted.xml",
+      "sha256": "f0044a1a8976ed099833c3f85b1bd0df7801e9486b256bb0d142bc6cac0cd2e1",
+      "suites": [
+        {
+          "tests": 49,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/a42366-full-windows.xml",
+      "sha256": "ce19b4250956db497203e6d594bc389f2c4c5dd151b1ee7ccce57effd14bf20f",
+      "suites": [
+        {
+          "tests": 10,
+          "failures": 0,
+          "errors": 10,
+          "skipped": 0
+        }
+      ]
+    }
+  ],
+  "targeted_linux_node_deselected_locally": 1,
+  "ruff": "PASS",
+  "full_windows": "COLLECTION_BLOCKED_FCNTL_RESOURCE",
+  "final_exact_sha_ci": "PENDING_PUSH",
+  "baseline_ci": {
+    "main": 40568482863,
+    "a41": 40568482489,
+    "a42": 40568482703,
+    "publication": 40568482443
+  },
+  "qualifies": false,
+  "performance_eligible": false
+}

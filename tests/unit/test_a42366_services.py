@@ -22,11 +22,17 @@ class L1Binding:
         self.source, self.budget = "a" * 64, "b" * 64
         self.peer_uid = os.getuid() if hasattr(os, "getuid") else 0
         self.fd = fd
-        self.held = os.fstat(fd) if fd is not None else None
+        self.held = self._identity(fd) if fd is not None else None
+
+    @staticmethod
+    def _identity(fd):
+        meta = os.fstat(fd)
+        fields = ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid")
+        return tuple(getattr(meta, key) for key in fields)
 
     def revalidate(self):
         if self.fd is not None:
-            assert os.fstat(self.fd) == self.held
+            assert self._identity(self.fd) == self.held
 
 
 class L1Authority:
