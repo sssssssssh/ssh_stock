@@ -92,7 +92,8 @@ class ProgressStep:
 
         # These are phase intervals, not SQL-only timings. In particular the
         # existing lookup_candidate interval contains the combined A/B query.
-        if (self.kind != "read" and self.phase in DIAGNOSTIC_PHASES
+        if ((self.kind != "read" or self.name == "factors.input_frame")
+                and self.phase in DIAGNOSTIC_PHASES
                 and hasattr(self, "diagnostic_phase_started")):
             record_duration(self.name, self.phase, now-self.diagnostic_phase_started)
         self.diagnostic_phase_started = now

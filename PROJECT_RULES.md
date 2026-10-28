@@ -1189,3 +1189,16 @@ A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历
 百万级三轮容量因资源预检不足尚未执行，PERFORMANCE_OPEN / FIELD_NOT_RETESTED；
 不得部署长补算或把隔离心跳回归表示为现场 57014 根因已关闭。
 详见 [BIZ-WORKER-02 整改记录](docs/acceptance/BIZ_WORKER_02_review.md)。
+
+
+## WORKER-02 revision：运行观测闭环（2026-10-28）
+
+独立 WORKER_DIAGNOSTICS_ENABLED 默认 false；普通 Worker 安装根任务诊断上下文，心跳期间及
+成功/失败/取消后以独立短事务 owner/token CAS 合并快照，不能提交或回滚主计算的 pinned Connection。
+有限标签/数值、128组/32事件；缺失为 NOT_INSTRUMENTED，FETCH 为混合耗时，嵌套阶段不可相加。
+PG 会话登记真实 PID/backend_start/实例事实与固定角色/根UUID/token摘要；名字或空列表均非退出证明。
+HEARTBEAT_DEGRADED 仅为通信诊断，不能替代执行状态、证明计算成功或自动释放 Writer。
+新恢复审批时间/子身份拒绝保护不等于生产 authority 已安装；仍无普通维护 apply/force/unlock 入口。
+历史合同审批缺失仍 BLOCKED、PR 保持 Draft；百万行三轮 RESOURCE_DEFERRED，现场 FIELD_NOT_RETESTED。
+无新 schema/金融算法/生产 A/B SQL/优化开关变化；不部署、不操作云端或物理 G1。
+规则、实证和剩余缺口见 [revision交付](docs/acceptance/WORKER_02_revision_closeout.md)。

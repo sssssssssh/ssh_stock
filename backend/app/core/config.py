@@ -35,6 +35,8 @@ def load_yaml_config(path: Path) -> dict[str, Any]:
 
 
 class Settings(BaseSettings):
+    # Independent observability opt-in, not a calculation/optimization switch.
+    worker_diagnostics_enabled: bool = False
     # Stage A read path is opt-in until same-scale acceptance is reviewed.
     ab_merge_read_enabled: bool = False
     factor_input_reuse_enabled: bool = False

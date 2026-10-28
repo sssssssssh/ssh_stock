@@ -419,6 +419,8 @@ def _job_payloads(db, rows):
 
 
 def _job_payload(row: JobRun) -> dict[str, Any]:
+    from app.services.worker_observation import heartbeat_health_payload
+
     unconfirmed = _execution_unconfirmed(row)
     reference = row.heartbeat_at or row.started_at
     if reference is not None and reference.tzinfo is None:
@@ -441,6 +443,7 @@ def _job_payload(row: JobRun) -> dict[str, Any]:
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         "heartbeat_at": row.heartbeat_at.isoformat() if row.heartbeat_at else None,
         "heartbeat_stale": heartbeat_stale,
+        "heartbeat_health": heartbeat_health_payload(row, heartbeat_stale),
         "execution_unconfirmed": unconfirmed,
         "worker_id": row.worker_id,
         "status": row.status,

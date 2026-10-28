@@ -29,6 +29,24 @@ class RecoveryApproval:
     approval_id: str
     operator_id: str
     evidence_sha256: str
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+    revoked_at: datetime | None = None
+
+
+def _validate_approval_time(approval):
+    # The original internal v1 authority contract is retained for compatibility;
+    # it remains uninstalled. Any supplied v2 time bounds must be complete, fresh
+    # and nonrevoked. Neither version installs an authority or proves exit.
+    if any(x is not None for x in (approval.valid_from, approval.valid_until, approval.revoked_at)):
+        start, end = approval.valid_from, approval.valid_until
+        if (not isinstance(start, datetime) or not isinstance(end, datetime)
+                or start.tzinfo is None or end.tzinfo is None
+                or not start <= datetime.now(UTC) < end
+                or not 0 < (end-start).total_seconds() <= 300
+                or approval.revoked_at is not None):
+            raise ValueError("RECOVERY_APPROVAL_EXPIRED_OR_REVOKED")
+
 
 
 def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
@@ -47,6 +65,7 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
             or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", approval.operator_id)
             or not re.fullmatch(r"[0-9a-f]{64}", approval.evidence_sha256)):
         raise ValueError("RECOVERY_APPROVAL_INVALID")
+    _validate_approval_time(approval)
     try:
         db.execute(text("SET LOCAL lock_timeout='1s'"))
         db.execute(text("SET LOCAL statement_timeout='3s'"))
@@ -62,7 +81,8 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
         if root.status == "FAILED" and ledger is not None and ledger.state == "ABORTED":
             prior = dict(root.job_metadata or {}).get("manual_reconciliations", [])
             if any(item.get("approval_id") == approval.approval_id
-                   and item.get("evidence_sha256") == approval.evidence_sha256 for item in prior):
+                   and item.get("evidence_sha256") == approval.evidence_sha256
+                   and item.get("operator_id") == approval.operator_id for item in prior):
                 db.rollback()
                 return "ALREADY_RECONCILED"
         if (root.status != "RUNNING" or ledger is None or ledger.state != "PREPARING"
@@ -71,19 +91,22 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
             raise ValueError("RECOVERY_PUBLICATION_UNCONFIRMED")
         children = list(db.scalars(select(JobRun).where(JobRun.parent_job_id == root.id)
                                   .order_by(JobRun.id).with_for_update(key_share=True)))
-        if any(child.status == "RUNNING" and
-               (child.worker_id, child.execution_token) != (approval.worker_id, approval.token)
+        if any(child.status == "QUEUED" or (child.status == "RUNNING" and
+               (child.worker_id, child.execution_token) != (approval.worker_id, approval.token))
                for child in children):
             raise ValueError("RECOVERY_CHILD_IDENTITY_CHANGED")
         if authority.verify_exit_and_commits(approval) is not True:
             raise ValueError("EXECUTION_UNCONFIRMED")
+        _validate_approval_time(approval)
         # These checks are necessary, not proof of remote executor death. The
         # trusted authority is additionally responsible for legacy/unlabelled SQL.
         if (db.scalar(text("SELECT count(*) FROM pg_prepared_xacts "
                            "WHERE database=current_database()"))
                 or db.scalar(text("SELECT count(*) FROM pg_stat_activity WHERE "
                                   "datname=current_database() AND pid<>pg_backend_pid() "
-                                  "AND application_name=:app"), {"app": f"space-data/{root.id}"})):
+                                  "AND (application_name=:app OR application_name ~ :pattern)"),
+                             {"app": f"space-data/{root.id}",
+                              "pattern": f"^space2/[mhd]/{root.id.hex}/[0-9a-f]{{16}}$"})):
             raise ValueError("RECOVERY_DATABASE_UNCONFIRMED")
         from app.services.data_publication import finish_publication
 
@@ -117,6 +140,7 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
             })).execution_options(synchronize_session=False))
             if changed.rowcount != 1:
                 raise ValueError("RECOVERY_IDENTITY_CHANGED")
+        _validate_approval_time(approval)
         db.commit()  # Unknown ACK propagates. Never retry this call automatically.
         return "RECONCILED_ABORTED"
     except BaseException:
@@ -137,17 +161,15 @@ def reconcile_data_job(db, job_id):
     ).order_by(JobRun.id).limit(101)))
     prepared = db.scalar(text(
         "SELECT count(*) FROM pg_prepared_xacts WHERE database=current_database()"))
-    waits = db.execute(text("SELECT pid, wait_event_type, wait_event, "
-        "pg_blocking_pids(pid) AS blocking_pids FROM pg_stat_activity "
-        "WHERE datname=current_database() AND pid<>pg_backend_pid() "
-        "AND application_name=:app ORDER BY pid LIMIT 101"),
-        {"app": f"space-data/{report['root']['id']}"}).mappings().all()
+    waits = report["matching_database_backends"]
     report.update(dry_run=True, decision="EXECUTION_UNCONFIRMED", release_allowed=False,
                   other_running_writers=[str(value) for value in others[:100]],
                   other_running_writers_truncated=len(others) > 100,
                   prepared_transactions=prepared,
-                  database_waits=[dict(row) for row in waits[:100]],
-                  database_waits_truncated=len(waits) > 100,
+                  database_waits=[{key: row[key] for key in (
+                      "pid", "wait_event_type", "wait_event", "blocking_pids",
+                      "identity_evidence")} for row in waits],
+                  database_waits_truncated=report["matching_database_backends_truncated"],
                   database_commit_certainty="UNKNOWN",
                   process_evidence="NOT_COLLECTED_NO_EXECUTOR_AUTHORITY",
                   next_action="INDEPENDENT_EXIT_AND_COMMIT_REVIEW_REQUIRED")
