@@ -50,7 +50,7 @@ PARTIAL, W03 EXTERNAL_BLOCKED plus missing kernel provider; W09 requires final C
 
 ## Validation and Review
 
-Local targeted: 73 passed / one Linux-only node deselected before final evidence
+Local targeted: 74 passed / one Linux-only node deselected before final evidence
 registration. Full local pytest: ten platform collection errors; no business
 dotenv or DB access. Ruff passed; final diff and exact manifest recorded in the
 final delivery. See a42366_test_matrix.md and a42366_evidence.json for actual
@@ -73,3 +73,14 @@ not a passing acceptance record. An actual RED encoding test was added, the
 generator now emits escaped ASCII JSON before UTF-8 publication, and the manifest
 is resealed. Historical manifests/source baselines are not rewritten. The final
 SHA must obtain its own four ordinary runs; do not transfer the initial results.
+
+618cacd5bac4875dd28a5a8c1075b8a558bbb56f passed A4-1/A4-2/Publication.
+Main run 40617934049 completed full pytest with 5086 passed / 1 failed / 0 skipped,
+coverage 89.37%. All 74 new Linux nodes passed. The one failure was original
+test_a42351_AT19_committed_patch_hash_not_just_git_clean: the new independent
+hash check refused correctly but used FROZEN_FILE_CHANGED before the expected
+OVERLAY_BYTES_MISMATCH. Only the new guard's error taxonomy is corrected; the
+original test, rejection and thresholds are unchanged. Core archive
+12787191408 SHA256 99dcd701af665cf86cb530a1297bb637f31d9a173c15fe5bbf20592ca8b38d15
+and A4-2 archive 12786545791 SHA256
+13e5780fdaed7ddae5723ef58cccfd9b6b4c7eac2b90851f9837adcf04db9802 are retained.

@@ -44,6 +44,14 @@ def validate_paths(paths):
     require(set(paths) <= ALLOWED, "A42366_UNREGISTERED_PATH")
 
 
+def verify_unchanged(g, path, original):
+    g.require(path.read_bytes() == original, "A4235_FROZEN_FILE_CHANGED")
+    # The independent manifest/hash reader has its historical error taxonomy.
+    # Do not relabel a reported committed-patch mismatch as a physical tree edit.
+    g.require(g.path_sha(path) == hashlib.sha256(original).hexdigest(),
+              "A4235_OVERLAY_BYTES_MISMATCH")
+
+
 def verify(g, root, head):
     from scripts import a42361_source_guard as fd_guard
     from scripts import a42364_source_guard as historical
@@ -100,8 +108,7 @@ def verify(g, root, head):
         if p in AUTHORITY:
             g.require(current.startswith(old), "A4235_FROZEN_FILE_CHANGED")
         elif p not in changed:
-            g.require(current == old and g.path_sha(root / p) == hashlib.sha256(old).hexdigest(),
-                      "A4235_FROZEN_FILE_CHANGED")
+            verify_unchanged(g, root / p, old)
     # Preserve the old independent reader injection/replay contracts as well as
     # the newer complete-tree check. Neither reader may vouch for itself.
     original_paths = g.PATCH_PATHS | g.NEXT_PATCH_PATHS

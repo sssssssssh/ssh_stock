@@ -38,10 +38,10 @@
     },
     {
       "path": ".codex_tmp/a42366-final-targeted.xml",
-      "sha256": "a233cbc01571d831116a8c373685926b5f26ca886c7c1ef34335d9c8c2181315",
+      "sha256": "8bce1fb86099c57159c8cccc7db97977331f462904cb9e3078308510e8256f64",
       "suites": [
         {
-          "tests": 73,
+          "tests": 74,
           "failures": 0,
           "errors": 0,
           "skipped": 0
@@ -103,5 +103,23 @@
     "conclusion": "failure",
     "local_cause": "GBK_stdout_corrupted_two_manifest_paths",
     "not_final_acceptance": true
+  },
+  "retained_second_delivery_failure": {
+    "sha": "618cacd5bac4875dd28a5a8c1075b8a558bbb56f",
+    "main_run": 40617934049,
+    "tests": 5087,
+    "passed": 5086,
+    "failed": 1,
+    "skipped": 0,
+    "coverage_percent": 89.37,
+    "failure_node": "tests/unit/test_a4235_pg_identity.py::test_a42351_AT19_committed_patch_hash_not_just_git_clean",
+    "cause": "new_guard_hash_failure_used_wrong_historical_error_taxonomy",
+    "new_runtime_nodes_passed": 74,
+    "core_artifact": 12787191408,
+    "core_archive_sha256": "99dcd701af665cf86cb530a1297bb637f31d9a173c15fe5bbf20592ca8b38d15",
+    "a42_run": 40617933869,
+    "a42_tests": 342,
+    "a42_failed": 0,
+    "a42_skipped": 0
   }
 }

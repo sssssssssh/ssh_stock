@@ -41,8 +41,8 @@
     "README.md": "709c863ef752c766a7cc730b7092400552a3d6394dbbf306c881b3fee4adebfd",
     "docs/acceptance/a42366_baseline.md": "ddd440703c2cc7c8465f396cf76a94a641662db6b685816733b6db93d67c0d42",
     "docs/acceptance/a42366_capability_matrix.md": "d672718719dd2810293c2ea4e6b71ba20c6355b504150875973c61d376caaa09",
-    "docs/acceptance/a42366_closeout.md": "8372fc88b76919dc682a4a9afa24f2057cc08c74ef759e2066610bd9a50201ed",
-    "docs/acceptance/a42366_evidence.json": "bfd24b31089308555d23e4e1f6a9d0b3ffd5126f8f510f5ce70c3b135c410906",
+    "docs/acceptance/a42366_closeout.md": "8d615b65805c0a3337d45e6c73cf7d77d4cba49722c132ef9874d8fd23f71589",
+    "docs/acceptance/a42366_evidence.json": "f7723abb79c6868a3f4629fac2c1521d05e704f294fbab1ece1dbadad24bcd8f",
     "docs/acceptance/a42366_platform_handoff.md": "75353f75c9cf9b507c136f56257d3d1af52bea253016b410540f454cf74241df",
     "docs/acceptance/a42366_runbook.md": "01d165b5f9c326cc4ac9870bc447ef53215041cf81e6865c695c168d7ba09832",
     "docs/acceptance/a42366_test_matrix.md": "33357534ce363b97f6a870a07057e11bbf61d436abb592f1bbbba243b71df49e",
@@ -63,11 +63,11 @@
     "scripts/a42366_publication.py": "b7b4a1cadca811373013e5c191196f25ae8b69577471c0c4eb33e22049567377",
     "scripts/a42366_reviewer.py": "6849b059657ab25f5254fa4f0a8d306a627a8319a879b41d4b27bb87c7a3111a",
     "scripts/a42366_services.py": "14da91cc881faa85fcb1ec705c0a0dfb26f87b26d46ca03d0ee40ab80469dc50",
-    "scripts/a42366_source_guard.py": "c03f9e15f3e39adc8c9ad17bd5b3e0cad3ae5223fa9b1a1355b8c338c76e3a78",
+    "scripts/a42366_source_guard.py": "eeed69e0aca68568b5655bf0767e163a146e68453e211c7dedd4d3a6d057aeaa",
     "tests/unit/test_a42366_publication.py": "f5276af09dfe164aab58c6106f3d14279ed14786aadef4d05ddca779271799b0",
     "tests/unit/test_a42366_reliability.py": "48ca7c5a09d9b6100655f14af7001cf99a74b9a6a6f2487848808d6d060d4297",
     "tests/unit/test_a42366_services.py": "13655e6ff75062e29dda232e3e9b11be5543c225b7658d648d1fc789a668c2cd",
-    "tests/unit/test_a42366_source_guard.py": "6fe344234de08591729a7e9ee967332decee82484721d518eabaf8599fad8271"
+    "tests/unit/test_a42366_source_guard.py": "4ba4fd46a5b090d60ba3bf99384c9351c0cbdafbc32a06b439617d63730549d3"
   },
   "normalized_dispatch_sha256": "fd12b43c23fb0ebc8485b6664990902cd1a4307b214dc813934558e452727bcd",
   "historical_manifest_sha256": {

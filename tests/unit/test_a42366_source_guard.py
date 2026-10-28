@@ -3,6 +3,7 @@
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -54,3 +55,16 @@ def test_AT_W09_manifest_preserves_exact_unicode_path_names():
     assert set(data["patch_sha256"]) == set(data["stage_paths"]) - {guard.MANIFEST, guard.DISPATCH}
     assert guard.AUTHORITY <= set(data["stage_paths"])
     assert all("\ufffd" not in p for p in data["stage_paths"])
+
+
+def test_AT_W09_independent_hash_mismatch_keeps_original_error_taxonomy(tmp_path):
+    from scripts.a4235_calibration_adapter_contract import Fault as SourceFault
+    from scripts.a4235_calibration_adapter_contract import require
+
+    p = tmp_path / "original.py"
+    p.write_bytes(b"immutable original\n")
+    g = SimpleNamespace(require=require, path_sha=lambda path: "f" * 64)
+    with pytest.raises(SourceFault, match="OVERLAY_BYTES_MISMATCH"):
+        guard.verify_unchanged(g, p, b"immutable original\n")
+    with pytest.raises(SourceFault, match="FROZEN_FILE_CHANGED"):
+        guard.verify_unchanged(g, p, b"different original\n")
