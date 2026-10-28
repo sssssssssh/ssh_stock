@@ -104,10 +104,10 @@ class BudgetService:
         )
 
     def native_exec(self, ordinal):
-        # Reservation endpoint. Mandatory mediation of the actual native tracer
-        # is NOT wired; this function alone is not an exec census capability.
+        # A reservation-only endpoint must not be mistaken for exec admission.
+        self.authority.require("BOOTSTRAP_AND_BUDGET")
         require(type(ordinal) is int and 1 <= ordinal <= 5, "UNACCOUNTED_INITDB_EXEC")
-        return self.reserve_named("IMAGE_INITDB_CHILD_" + str(ordinal))
+        require(False, "NATIVE_TRANSITIVE_CENSUS_UNPROVEN")
 
     def require_active_plan(self):
         require(

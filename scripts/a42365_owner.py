@@ -11,6 +11,14 @@ class AuditConnectionFactory:
         self.identity, self.authority = identity, authority
         self.credentials, self.budget, self.index = credentials, budget, 0
 
+    def registered_session_source(self, journal, generation):
+        from scripts.a42364_session import PinnedSessionSource
+        from scripts.a42366_owner import RegisteredSessionSource, TargetSessionRegistry
+
+        registry = TargetSessionRegistry(self.identity, self.authority, journal, generation)
+        observer = PinnedSessionSource(self.identity, self, self.authority, generation)
+        return RegisteredSessionSource(registry, observer)
+
     def open(self):
         self.authority.require("TARGET_SESSION_GUC")
         self.authority.require("BOOTSTRAP_AND_BUDGET")
