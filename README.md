@@ -2158,3 +2158,8 @@ Git HEAD、CLEAN/DIRTY 仅用于审计，不再因无关文档、测试或日志
 升级与新建任务必须先确认旧 Writer 安全停止；详见
 [安全重新验证](docs/acceptance/BIZ_POLICY_01_runbook.md)、
 [验收与限制](docs/acceptance/BIZ_POLICY_01_closeout.md)。G1 仍未闭环、未获物理授权。
+
+失败原因：`BUSINESS_SOURCE_CHANGED` 为业务代码/配置内容变化，
+`OPTIMIZATION_FLAGS_CHANGED` 为优化开关变化，`JOB_FROZEN_IDENTITY_MISMATCH` 为旧任务
+冻结身份不匹配，`SOURCE_UNAVAILABLE` 为源码无法可靠读取。不能凭旧截图确定具体原因。
+用户选择暂不适配冻结合同，因此业务回归与旧冻结合同 CI 的拒绝结果须分别查看，不视为整体验收通过。

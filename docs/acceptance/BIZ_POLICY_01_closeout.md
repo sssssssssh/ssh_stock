@@ -2,7 +2,8 @@
 
 baseline_sha: 2779a2a7a7120c86f67b4991bce196c652b5ebb0
 field_cause: NOT_CONFIRMED_NO_BUSINESS_DB_ACCESS
-status_at_registration: SOURCE_FIXED_PENDING_EXACT_SHA_PG17_CI
+business_source_status: BUSINESS_POLICY_SOURCE_FIXED_PENDING_REAL_JOB
+overall_acceptance: CHANGES_REQUIRED_AT14_FROZEN_CONTRACT_DEFERRED
 business_code_changed: YES, three policy/Worker/Job repository modules only
 business_database_changes / new_migrations / TuShare_network_calls / app_service_restarts: 0 / 0 / 0 / 0
 optimization_defaults: unchanged, all three false; AB_MERGE_READ_ENABLED unchanged
@@ -78,7 +79,7 @@ test evidence directory; final results must be reported separately.
 | 01 | Baseline above; scan stays backend/**/*.py + config/**/*.yaml; old CI 40621359684 had 5088/0/0, 89.37%; not final evidence |
 | 02 | test_business_policy_identity Git-only nodes; five baseline RED, then GREEN |
 | 03 | test_business_policy_worker_pg17 resident Worker HEAD case; actual isolated PG17, pending final CI |
-| 04 | Same Worker dirty case and actual Git temp-repo unit; pending PG17 final CI |
+| 04 | Same Worker dirty case and actual Git temp-repo unit; isolated PG17 GREEN, final ordinary CI remains separate |
 | 05 | Actual backend file change: FAILED/ABORTED/all published tables unchanged |
 | 06 | Actual config file change: same negative assertions |
 | 07 | Each of three flags: real Worker rejection plus original policy PG17 tests retained |
@@ -93,10 +94,35 @@ test evidence directory; final results must be reported separately.
 | 16 | BIZ_POLICY_01_runbook.md explicit operator gates; field rerun NOT_RUN, needs user confirmation |
 | 17 | A42366 capability matrix and physical denials retained; no G1 qualification |
 
-W00-W03 source/negative checks are implemented. W04 is not accepted until real
-Linux/PG17 results are reviewed. W05 is an operator handoff, NOT a field retry.
+W00-W03 source/negative checks are implemented. The targeted W04 Linux/PG17
+regression is GREEN; the full final-SHA run and frozen-source ordinary CI are
+separate checks and cannot be inferred from it. W05 is an operator handoff, NOT a field retry.
 W06 is evidence planning below, not a performance result. W07 remains separate.
 Do not label BUSINESS_POLICY_CONFIRMED without the authorized new business Job.
+
+## Targeted PG17 GREEN
+
+At 6d4563ca526dcc2623da7e2382a03cef0e979976, both policy PG17 modules completed
+21 passed / 0 failed / 0 skipped in 302.25 seconds. All fourteen NEW real Worker
+cases and all seven ORIGINAL PG17 cases ran. The old Job tests also exercise
+independently committed metadata after the calculator loaded its Job; both
+early and late heartbeat keys remain after the failure CAS.
+Daily/catchup use a synthetic Provider replay of only this fixture's Raw data;
+no financial calculator, quality validator, queue, CAS or publisher is mocked.
+The catchup case executes multiple real children with root-cumulative evidence.
+
+Raw JUnit biz-policy-pg17-second.xml SHA256:
+fc49efe87834ea77a30cb0657a3d7bf6f072b339cb40a06b53505b0728f8d2a1.
+Retained first XML SHA256:
+9b1e67f8f8148b433ab17751f9e7396ef2d007c905c689eaed09e14a048a19a3.
+Existing test-only Alembic upgrade/current/heads were checked on the separately
+marked instance; current and head both 0058_data_publication. No migration file
+or business database changed. Tests run as non-root UID 1001, source mounted
+read-only, with no business dotenv and no new performance authorization.
+
+This record does not certify the later final SHA's full suite or ordinary CI.
+Those results, raw evidence hashes and exact Actions links are returned with
+the final delivery; the known frozen-contract failures must remain visible.
 
 ## W06 Follow-up Performance Evidence
 
