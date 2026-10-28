@@ -112,3 +112,33 @@ SOURCE_FIXED_PENDING_FIELD_VALIDATION。当前所有现场状态 FIELD_NOT_RETES
 维护审计/终态是事实记录，不通过代码回滚撤销，不重签旧任务、不自动重算。
 本轮无业务库、生产任务、容器或 G1 资源操作；测试 PG17 为新建独立标记/物理ID实例，
 只对自有合成库通过既有 Alembic 升级，测试结束停止自有实例。
+
+## 本轮实际全量结果（未通过）
+
+源码提交 `7cb3f9c5f9c377be2bf7965da212713a9bdbca4d`：未筛选完整 pytest，
+5143 项，4953 passed / 53 failed / 137 errors / 0 skipped，1613.874 秒。
+后端行覆盖率 88.17%，既有 70% 门槛未改变；测试失败仍使整轮失败。
+本轮新增 21 项全部通过；提交前相关回归 86/0，另一次 Worker/Publication 回归 116/0。
+完整节点清单和原始证据摘要见 [validation](BIZ_WORKER_02_validation.json)。
+没有修改任何旧测试、冻结清单、workflow 或 coverage 门槛。
+
+137 个 setup error 全部报 A4235_FROZEN_FILE_CHANGED；其余失败包括冻结路径/字节合同、
+macOS 不具备 Linux /proc 与 peer-UID 机制、Unix socket 路径上限、编译/crypto/shellcheck
+工具条件，以及旧进程测试。分类是实际异常分类，不声称已证明这些都在旧基线必现。
+完整日志/XML保留每个原断言和 traceback，未用平台 skip 隐藏。
+
+旧 `test_AT36_AT38_six_process_fd_handoff_and_independent_persistent_receipts` 挂起超过
+8 分钟；系统采样显示父进程停在 waitpid，唯一剩余子进程停在 recvmsg。再次核对 PID、
+PPID、UID、启动身份后，仅 SIGTERM 自有离线测试子进程，使原 status==0 断言失败并继续
+剩余测试。采样和 owned-test-watchdog.json 原样保留；因此本轮不能称为无干预正常完成。
+这不是物理 G1 操作，不修改旧 G1 源码取得通过。运行中曾短暂产生未跟踪提案文件后移回
+ignored 目录；不宣称整段运行工作树始终 clean，冻结拒绝须结合原调用栈审阅。
+
+基线 lease RED 初次私有启动器缺少测试实例 marker，得到 1 error，属于测试启动错误，
+不作因果证据；修正私有启动器后同一测试在原源码真实失败，最终源码真实通过。
+两次原始 XML 均保留。没有重新运行全量以取得 PASS。
+
+未签署的精确新路径/摘要提案见 [proposed contract](BIZ_WORKER_02_proposed_source_contract.json)，
+activation_allowed=false，不是活动冻结清单。独立审阅者身份和签署结论仍缺失。
+最终文档提交与上述源码提交区分记录；原生 Actions URL 和最终 SHA 随推送交付，
+不得用 PR 合并引用的 checkout SHA 冒充已经通过最终 HEAD 全量。

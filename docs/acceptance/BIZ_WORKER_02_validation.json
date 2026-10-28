@@ -1,0 +1,1061 @@
+{
+  "source_commit": "7cb3f9c5f9c377be2bf7965da212713a9bdbca4d",
+  "baseline_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+  "full_suite": {
+    "collected": 5143,
+    "passed": 4953,
+    "failed": 53,
+    "errors": 137,
+    "skipped": 0,
+    "seconds": 1613.874,
+    "coverage_line_rate": 0.8817,
+    "new_task_nodes_passed": 21,
+    "unassisted_completion": false,
+    "original_test_changed": false
+  },
+  "failure_classification": {
+    "FROZEN_CONTRACT": 173,
+    "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT": 15,
+    "OWNED_HUNG_CHILD_TERMINATED": 1,
+    "HISTORICAL_TEST_BLOB_CONTRACT": 1
+  },
+  "failures": [
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_real_scoped_fetch_windows_month_root_and_actual_plan",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_cancel_after_real_complete_read_keeps_only_that_evidence",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_actual_plan_sql_timeout_keeps_partial_native_profile_and_completed_read",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_full_fixture_census_matches_independent_aggregate_counts",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_monthly_reads_carry_evidence_but_apply_final_verification_only_at_tail",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_omitting_intermediate_final_check_does_not_skip_next_e0_source_check",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e1_cached_sha_accepts_changed_intermediate_a_and_restored_final_a",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e2_caller_generation_does_not_invalidate_for_direct_candidate_sql",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[update]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[delete]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[insert]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[aba]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_rollback_does_not_create_false_generation_and_same_tx_reuse_is_real",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_direct_b_update_invalidates_certificate_and_rechecks_all_b",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_privileged_trigger_bypass_is_explicit_counterexample_not_safe_equivalence",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3_INLINE]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3_KEYS]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[1]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[10]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[20]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[date]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[entity]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[payload_date]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[missing_identity]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[tombstone_date]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-cancel-CANCELLED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-timeout-FAILED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-disconnect-RUNNING]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-cancel-CANCELLED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-timeout-FAILED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-disconnect-RUNNING]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-cancel-CANCELLED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-timeout-FAILED]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-disconnect-RUNNING]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S3]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S4]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_self_mutation_rebuild_and_savepoint_preserve_first_preimage",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_savepoint_generation_reuse_is_an_explicit_unsafe_certificate_counterexample",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_native_all_field_read_preserves_decimal_projection_and_other_types",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[1]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[5]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[20]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_event_cost_probe_records_wal_without_changing_public_or_candidate_values",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_physical_mismatch_fails_before_child_database_ddl[marker]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_physical_mismatch_fails_before_child_database_ddl[system_id]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[True]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[False]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[ipc]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[fsync]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[stdout]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT49_normal_controlled_child_is_reaped",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT50_parent_exit_with_live_grandchild_is_not_scope_success",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_chain::test_AT36_AT38_six_process_fd_handoff_and_independent_persistent_receipts",
+      "type": "failure",
+      "classification": "OWNED_HUNG_CHILD_TERMINATED"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_process::test_AT05_AT08_native_bootstrap_compiles_and_unprivileged_entry_cannot_initialize",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_process::test_AT05_shellcheck_all_fixed_entry_scripts_without_execution",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4233_background_observer::test_frozen_baseline_bytes_and_old_workflows_unchanged",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42341_environment_guard::test_A42342_T19_T20_no_workflow_schema_or_other_tool_change",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42341_prepared_capability::test_AT01_frozen_old_files_and_old_execute_and_eight_warmups",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4234_ci_governance::test_all_production_old_scripts_evidence_gates_and_one_shots_frozen",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42351_g1_preflight::test_a42351_AT01_baseline_and_boundaries_are_not_historical_rewrites",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_AT26_mock_valid_cli_is_nonzero_and_no_physical_claim",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[sha]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[run]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[attempt]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[source]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[protocol]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[ready]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[live-kind]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[flag]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[extra-field]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[limits]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[cleanup]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[missing]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[extra]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[symlink-file]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[symlink-dir]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[traversal]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[fifo]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[oversized]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[hash]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[duplicate]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[nan]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[inf]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[bad-json]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[manifest-extra]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[head_sha-ffffffffffffffffffffffffffffffffffffffff]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[source_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[protocol_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[frozen_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--execute]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--approve]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--force]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--token]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--repeat]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--budget]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--probe-synthetic]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--run]",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_atomic_new_bundle_and_sticky_cleanup",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_timeout_preserves_failure_and_cannot_be_reviewed",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_late_timeout_cannot_leave_acceptable_bundle",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_cleanup_only_still_records_first_failure",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_manifest_fsync_failure_is_unacceptable",
+      "type": "error",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_AT01_AT02_AT10_actual_frozen_trees_and_baseline_receipt",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT16_actual_overlay_binds_new_source_without_redefining_history",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_committed_patch_hash_not_just_git_clean",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_hidden_protected_byte_change_not_waived_by_clean_index",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_head_must_not_change_during_identity_binding",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_controller_watchdog::test_AT26_model_TERM_KILL_reap_not_physical_proof",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_source_entrypoints::test_AT01_AT02_AT04_actual_source_freeze_and_history",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT05_real_RFC8032_test2_nonempty_vector",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[=@\\x17\\xc3\\xe8C\\x89Z\\x92\\xb7\\n\\xa7M\\x1b~\\xbc\\x9c\\x98,\\xcf.\\xc4\\x96\\x8c\\xc0\\xcdU\\xf1*\\xf4f\\x0c-s-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x00]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00-r-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x00]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[=@\\x17\\xc3\\xe8C\\x89Z\\x92\\xb7\\n\\xa7M\\x1b~\\xbc\\x9c\\x98,\\xcf.\\xc4\\x96\\x8c\\xc0\\xcdU\\xf1*\\xf4f\\x0c-r-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x01]",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42362_source_guard::test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchanged",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42362_source_guard::test_AT70_no_production_migrations_workflows_dependencies_or_old_protocol_changes",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_complete_guard::test_CF_AT01_AT02_all_five_manifests_and_full_current_identity",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_complete_guard::test_CF_AT05_AT21_production_templates_and_old_authorizations_are_unchanged",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT04_cumulative_facade_keeps_exact_new_stage_and_legacy_stage_separate",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT57_all_original_tests_have_identical_git_blobs",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_source_guard::test_AT01_AT03_committed_manifest_full_guard_and_four_history_layers",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42363_source_guard::test_AT09_production_and_frozen_protocols_untouched",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42364_source_guard::test_AT02_history_and_all_committed_pins_match_final_stage",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42364_source_guard::test_AT04_production_and_frozen_sql_never_enter_this_stage",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42366_services::test_AT07_AT10_actual_multi_process_unix_sqlite_receiver",
+      "type": "failure",
+      "classification": "PLATFORM_TOOL_OR_OLD_PROCESS_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42366_source_guard::test_AT_W09_historical_manifests_and_all_original_tests_keep_their_blobs",
+      "type": "failure",
+      "classification": "HISTORICAL_TEST_BLOB_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT01_AT02_actual_history_unchanged_and_new_source_distinct",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT05_AT36_real_git_independent_expected_and_owner_only_offline_bundle",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_a42_ci_partition_contract::test_production_tree_and_original_a41_evidence_unchanged",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_ab_read_experiment_contract_v14_a4_2::test_frozen_backend_migrations_and_a41_evidence_are_unchanged",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_ab_read_profile_v14_a4::test_a4_diagnostic_freezes_production_sources",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_lookup_tail_review_a423::test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_tail_historical_a4231::test_protocol_does_not_change_production_or_authorize_formal_capacity",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    },
+    {
+      "node": "tests.unit.test_tail_stability_a4232::test_protocol_is_immutable_and_production_still_exact_c0",
+      "type": "failure",
+      "classification": "FROZEN_CONTRACT"
+    }
+  ],
+  "evidence_sha256": {
+    "full.xml": "58a8f18298eb510b22206044393c5603a94709efcbc8e0ea61dfa28feb207783",
+    "full.log": "82aa9c2d20224a0a118695fe260d426172341f748fe89f5de3b811a7d134f593",
+    "coverage.xml": "14bbdcfe967b05b53f2f23d8ba47c6ba5a04c6e85ec90bd1547a4749510f8cc2",
+    "full-failure-traces.json": "b85b292f9b1d2bc5dc2ab33a548aa44b4054070eb668e2ea12eb4af9c05fc718",
+    "hung-child.sample": "6599dbd8d2bf1eac28c214aeaa36e9fcee127b3fcf4784199745cdabc2586ba7",
+    "hung-parent.sample": "9e566ddd4bc5d9778243aec1d4bda8c806c2fcc1969edd8b92c6ab49d1866163",
+    "owned-test-watchdog.json": "6fb88f9543573e4b9db6877cb6487ee3ff6fdf13a4b660fddba4cbc7a43eb737"
+  },
+  "prior_evidence": {
+    "red.xml": {
+      "sha256": "4e6ba3b652c38d57fe1bde4c27c25639485bd827d494d992f8397d1f3366260f",
+      "counts": {
+        "tests": 4,
+        "failures": 4,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "lease-baseline-red.xml": {
+      "sha256": "1bdb240f64e71b007c01b4b8919d595bab8ed715ab9d9bfbb7cbe27f1ef192f3",
+      "counts": {
+        "tests": 1,
+        "failures": 0,
+        "errors": 1,
+        "skipped": 0
+      }
+    },
+    "lease-baseline-red-02.xml": {
+      "sha256": "9383bc17ca5f8fae2c5418edd492f2f58a0a436c937408b7ddf2a791ee1e4d0f",
+      "counts": {
+        "tests": 1,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "precommit.xml": {
+      "sha256": "f071d7072c40f92a1d82f9c1fed2be118b09d22903cd968725c42bd81ff27bfd",
+      "counts": {
+        "tests": 86,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "regression.xml": {
+      "sha256": "da727dd409718ed143d6e481733b2ab3b331bb71179c7901fbb65c5f56c7112a",
+      "counts": {
+        "tests": 116,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "history-contract.xml": {
+      "sha256": "5db794a8a9c269f8a1862cad7b9cb83a171902222f521324169d340cc06e2026",
+      "counts": {
+        "tests": 11,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    },
+    "resource-preflight.json": {
+      "sha256": "6c74101839718f5fe4313d7812f334b56603ddc4215e72406ff9334e159f359a"
+    },
+    "history-source.log": {
+      "sha256": "d1a17253af589384e9aecd0bb7a81bdff1303e70f137b29caba59ddcd3f45037"
+    },
+    "baseline-source-red.log": {
+      "sha256": "48fc8a4eb0ef8e87e3f17608334f3972af68a9f08d978ef57fc14be60c61d8e8"
+    },
+    "ruff.log": {
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    "migration.log": {
+      "sha256": "e380ec8dc8db3841ecf908e01ff9ea52f870c5962923a624c50426b999e8e33f"
+    }
+  },
+  "status": [
+    "CONTRACT_MIGRATION_BLOCKED",
+    "PERFORMANCE_OPEN",
+    "RESOURCE_DEFERRED",
+    "FIELD_NOT_RETESTED"
+  ],
+  "raw_evidence_location": ".codex_tmp/biz-worker-02/ (local ignored; no database or credentials included in evidence archive)"
+}
