@@ -365,6 +365,9 @@ def execute_claimed_job(
             return
         db.rollback()
         failed = db.get(JobRun, job_id)
+        from app.services.calculation_policy import PolicyChanged
+
+        policy_failure = exc if isinstance(exc, PolicyChanged) else None
         if job.job_type in PAPER_JOB_TYPES:
             code = safe_error_code(exc)
             if failed is not None and failed.status == "RUNNING" and failed.worker_id == worker_id:
@@ -387,10 +390,14 @@ def execute_claimed_job(
                 status="FAILED",
                 step=failed.step or "worker execution failed",
                 error_message=(
-                    database_error_summary(exc)
-                    if isinstance(exc, SQLAlchemyError) else str(exc)
+                    policy_failure.display_message if policy_failure else (
+                        database_error_summary(exc)
+                        if isinstance(exc, SQLAlchemyError) else str(exc)
+                    )
                 ),
                 metadata=(
+                    {"policy_change": policy_failure.diagnostics}
+                    if policy_failure else
                     {
                         **dict(failed.job_metadata or {}),
                         "stage": "failed",
@@ -429,6 +436,9 @@ def execute_claimed_job(
             logger.error("worker calculation guard failed job_id={} error_class={} code={}",
                          job_id, type(exc).__name__, "CALCULATION_MEMORY_ERROR"
                          if isinstance(exc, MemoryError) else str(exc))
+            if policy_failure is not None:
+                logger.error("calculation policy rejected job_id={} policy_change_reason={}",
+                             job_id, policy_failure.reason)
         else:
             logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
     finally:

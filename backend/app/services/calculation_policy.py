@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from contextvars import ContextVar
 from copy import deepcopy
+from enum import StrEnum
 from time import monotonic
 
 from sqlalchemy import event
@@ -22,11 +23,74 @@ active_policy = ContextVar("calculation_execution_policy", default=None)
 worker_source = ContextVar("calculation_worker_source", default=None)
 
 
+class PolicyChangeReason(StrEnum):
+    BUSINESS_SOURCE_CHANGED = "BUSINESS_SOURCE_CHANGED"
+    OPTIMIZATION_FLAGS_CHANGED = "OPTIMIZATION_FLAGS_CHANGED"
+    JOB_FROZEN_IDENTITY_MISMATCH = "JOB_FROZEN_IDENTITY_MISMATCH"
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+
+
+class PolicyChanged(ValueError):
+    """Keep the public code stable; diagnostics contain only hashes/enums."""
+
+    def __init__(self, reason, frozen=None, observed=None):
+        super().__init__("CALCULATION_POLICY_CHANGED")
+        self.reason = PolicyChangeReason(reason).value
+        self.diagnostics = dict(
+            policy_change_reason=self.reason,
+            frozen_source=source_audit(frozen),
+            observed_source=source_audit(observed),
+        )
+
+    @property
+    def display_message(self):
+        return f"CALCULATION_POLICY_CHANGED [reason={self.reason}]"
+
+
+def source_audit(source):
+    source = source if isinstance(source, dict) else {}
+    digest, commit = source.get("source_sha256"), source.get("commit_sha")
+    return dict(
+        source_sha256=digest if isinstance(digest, str) and
+            re.fullmatch(r"[0-9a-f]{64}", digest) else None,
+        commit_sha=commit if isinstance(commit, str) and
+            re.fullmatch(r"[0-9a-f]{40}", commit) else None,
+        worktree=source.get("worktree") if source.get("worktree") in
+            ("CLEAN", "DIRTY", "UNAVAILABLE") else "UNAVAILABLE",
+    )
+
+
+def calculation_source_identity(source):
+    if (not isinstance(source, dict)
+            or not set(source) <= {"source_sha256", "commit_sha", "worktree"}
+            or not isinstance(source.get("source_sha256"), str)
+            or re.fullmatch(r"[0-9a-f]{64}", source["source_sha256"]) is None
+            or (source.get("commit_sha") is not None and (
+                not isinstance(source["commit_sha"], str)
+                or re.fullmatch(r"[0-9a-f]{40}", source["commit_sha"]) is None))
+            or ("worktree" in source and source["worktree"] not in
+                ("CLEAN", "DIRTY", "UNAVAILABLE"))):
+        raise ValueError("CALCULATION_SOURCE_UNAVAILABLE")
+    return source["source_sha256"]
+
+
+def _source(source=None):
+    try:
+        result = runtime_source() if source is None else deepcopy(source)
+        calculation_source_identity(result)
+        return result
+    except (OSError, ValueError):
+        raise PolicyChanged("SOURCE_UNAVAILABLE") from None
+
+
 def runtime_source():
     files = {}
     for directory, suffixes in (("backend", {".py"}), ("config", {".yaml"})):
         if (ROOT_DIR / directory).is_symlink():
             raise ValueError("CALCULATION_SOURCE_UNTRUSTED")
+        if not (ROOT_DIR / directory).is_dir():
+            raise ValueError("CALCULATION_SOURCE_UNAVAILABLE")
+        before = len(files)
         for path in sorted((ROOT_DIR / directory).rglob("*")):
             if path.is_symlink():
                 raise ValueError("CALCULATION_SOURCE_UNTRUSTED")
@@ -34,6 +98,8 @@ def runtime_source():
                 files[path.relative_to(ROOT_DIR).as_posix()] = hashlib.sha256(
                     path.read_bytes()
                 ).hexdigest()
+        if len(files) == before:
+            raise ValueError("CALCULATION_SOURCE_UNAVAILABLE")
     if not files:
         raise ValueError("CALCULATION_SOURCE_UNAVAILABLE")
     commit, worktree = None, "UNAVAILABLE"
@@ -84,16 +150,23 @@ def request_range(metadata, target=None):
 class ExecutionPolicy:
     @classmethod
     def freeze(cls, job, settings, *, source=None, parent=None):
-        source = runtime_source() if source is None else deepcopy(source)
-        if worker_source.get() is not None and source != worker_source.get():
+        observed = _source(source)
+        source = observed
+        resident = worker_source.get()
+        if (resident is not None
+                and calculation_source_identity(observed) !=
+                calculation_source_identity(_source(resident))):
             # A resident Worker cannot relabel already imported Python modules
             # with a later on-disk release while accepting the next Job.
-            raise ValueError("CALCULATION_POLICY_CHANGED")
+            raise PolicyChanged("BUSINESS_SOURCE_CHANGED", resident, observed)
+        if resident is not None:
+            source = deepcopy(resident)
         flags = flag_values(settings)
         if parent is not None:
             parent.guard(settings)
-            if parent.source != source:
-                raise ValueError("CALCULATION_POLICY_CHANGED")
+            if calculation_source_identity(parent.source) != calculation_source_identity(observed):
+                raise PolicyChanged("JOB_FROZEN_IDENTITY_MISMATCH", parent.source, observed)
+            source = deepcopy(parent.source)
         record = dict(
             schema_version="biz-perf-01.execution.v1",
             job_id=str(job.id),
@@ -101,17 +174,33 @@ class ExecutionPolicy:
             flags=flags,
             source=source,
             commit_status="LOCAL_HEAD_WITH_ACTUAL_SOURCE_DIGEST"
-                if source["commit_sha"] else "UNAVAILABLE",
+                if source.get("commit_sha") else "UNAVAILABLE",
             request=request_range(job.job_metadata, getattr(job, "target_trade_date", None)),
         )
         old = (job.job_metadata or {}).get("calculation_execution")
-        if old is not None and any(
-            old.get(k) != record[k]
-            for k in ("schema_version", "job_id", "root_job_id", "flags", "source", "request")
-        ):
-            raise ValueError("CALCULATION_POLICY_CHANGED")
+        if "calculation_execution" in (job.job_metadata or {}):
+            try:
+                valid = (isinstance(old, dict)
+                    and all(old.get(k) == record[k] for k in (
+                        "schema_version", "job_id", "root_job_id", "flags", "request"))
+                    and isinstance(old.get("flags"), dict)
+                    and all(type(v) is bool for v in old["flags"].values())
+                    and calculation_source_identity(old.get("source")) ==
+                        calculation_source_identity(observed))
+            except ValueError:
+                valid = False
+            if not valid:
+                raise PolicyChanged("JOB_FROZEN_IDENTITY_MISMATCH",
+                                    old.get("source") if isinstance(old, dict) else None, observed)
+            # A revalidation is not permission to rewrite the original evidence.
+            record, source = deepcopy(old), deepcopy(old["source"])
         self = cls()
         self._record, self.source, self.closed = record, source, False
+        self.failure = None
+        self.source_diagnostics = dict(
+            worker_source=source_audit(resident), observed_source=source_audit(observed),
+            git_metadata_changed=source_audit(source) != source_audit(observed),
+        )
         self.reads, self.driver_reads, self.sql, self.stages = {}, {}, {}, {}
         self.started = monotonic()
         job.job_metadata = {**dict(job.job_metadata or {}), "calculation_execution": self.record}
@@ -124,13 +213,33 @@ class ExecutionPolicy:
     def guard(self, settings=None):
         if self.closed:
             raise ValueError("CALCULATION_POLICY_CLOSED")
-        if flag_values(settings or get_settings()) != self._record["flags"]:
-            raise ValueError("CALCULATION_POLICY_CHANGED")
+        if self.failure is not None:
+            raise self.failure
+        try:
+            flags = flag_values(settings or get_settings())
+        except ValueError:
+            self._reject("OPTIMIZATION_FLAGS_CHANGED", self.source)
+        if flags != self._record["flags"]:
+            self._reject("OPTIMIZATION_FLAGS_CHANGED", self.source)
+
+    def _reject(self, reason, observed):
+        error = PolicyChanged(reason, self.source, observed)
+        if self.failure is None:
+            self.failure = error
+        raise error
 
     def verify_source(self):
         self.guard()
-        if runtime_source() != self.source:
-            raise ValueError("CALCULATION_POLICY_CHANGED")
+        try:
+            observed = _source()
+        except PolicyChanged:
+            self._reject("SOURCE_UNAVAILABLE", None)
+        if calculation_source_identity(observed) != calculation_source_identity(self.source):
+            self._reject("BUSINESS_SOURCE_CHANGED", observed)
+        self.source_diagnostics.update(
+            observed_source=source_audit(observed),
+            git_metadata_changed=source_audit(self.source) != source_audit(observed),
+        )
 
     def observe_fetch(self, name, rows, seconds):
         if not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?", name):
@@ -166,6 +275,8 @@ class ExecutionPolicy:
         if metadata is not None:
             result["request"] = request_range(metadata, target)
         result.update(
+            source_diagnostics=deepcopy(self.source_diagnostics),
+            **({"policy_change": deepcopy(self.failure.diagnostics)} if self.failure else {}),
             reads=deepcopy(self.reads),
             driver_reads=deepcopy(self.driver_reads),
             sql=deepcopy(self.sql),

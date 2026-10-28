@@ -147,7 +147,14 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
                 **dict(job.job_metadata or {}), **(metadata or {})}, job.target_trade_date),
             **({"calculation_progress": snapshot} if progress is not None
                and (snapshot := progress.snapshot()) is not None else {}),
+            **({"policy_change": policy.failure.diagnostics} if policy.failure else {}),
         })
+        if status == "FAILED" and policy.failure is not None:
+            values["error_message"] = policy.failure.display_message
+    elif metadata is not None and "policy_change" in metadata:
+        # Freeze may fail before active_policy is installed. Keep concurrent
+        # heartbeat/publication keys; CAS ownership conditions below still apply.
+        values["job_metadata"] = JobRun.job_metadata.op("||")(metadata)
     conditions = [JobRun.id == job.id, JobRun.status == "RUNNING",
                   JobRun.worker_id == execution.worker_id,
                   JobRun.execution_token == execution.token]

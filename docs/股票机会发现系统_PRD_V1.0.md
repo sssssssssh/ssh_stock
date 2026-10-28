@@ -1858,3 +1858,12 @@ A42365 不增加用户业务功能，不改变选股、回测、研究、PAPER �
 验收分开记录。当前源码仍 SOURCE_PARTIAL_ENGINEERING_BLOCKED，缺少 Reviewer、
 内核排他、native 完整计数及完整 root/RO 安装；不得因普通 CI 或模型成功标记物理通过。
 逐项验收与遗漏见 [A42366 测试矩阵](acceptance/a42366_test_matrix.md)。
+
+## BIZ-POLICY-01 补算身份可靠性
+
+无关文档、测试、脚本提交及日志导致的 Git 审计变化不得误报业务计算政策漂移。
+真实业务代码、配置、优化开关和冻结 Job 身份变化仍必须终止，失败候选不得替换已发布结果。
+错误仍使用 CALCULATION_POLICY_CHANGED，并显示安全枚举原因；原冻结溯源保持可审计。
+不新增界面或数据入口、不自动重试、不重拉行情，不将此正确性修复描述为补算提速。
+现场重新验证需用户确认安全停止及部署后创建新 Job；G1 状态独立、仍源码部分阻断。
+详见 [BIZ-POLICY-01 验收](acceptance/BIZ_POLICY_01_closeout.md)。

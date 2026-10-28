@@ -2147,3 +2147,14 @@ PG17 合成实例，数据库物理 ID 校验在任何建库/迁移之前执行�
 native 完整计数和 root/RO 安装仍缺失，结论为 SOURCE_PARTIAL_ENGINEERING_BLOCKED。
 正式 G1 继续拒绝，不代表已经可部署或物理通过。详见
 [交付记录](docs/acceptance/a42366_closeout.md)、[运行边界](docs/acceptance/a42366_runbook.md)。
+
+## BIZ-POLICY-01 补算身份误判修复（2026-10-28）
+
+计算安全身份比较 `backend/**/*.py` 和 `config/**/*.yaml` 的实际内容摘要及原冻结开关，
+Git HEAD、CLEAN/DIRTY 仅用于审计，不再因无关文档、测试或日志变动中断补算。
+任务与常驻 Worker 的原冻结 Git 快照保留，当前观测另存 `source_diagnostics`；真实源码、
+配置或开关变化仍拒绝。`CALCULATION_POLICY_CHANGED` 保留，并附安全枚举原因。
+本次不等于提速，不读取云端故障任务、不重拉 Raw、不自动重试失败任务、不热更新 Worker。
+升级与新建任务必须先确认旧 Writer 安全停止；详见
+[安全重新验证](docs/acceptance/BIZ_POLICY_01_runbook.md)、
+[验收与限制](docs/acceptance/BIZ_POLICY_01_closeout.md)。G1 仍未闭环、未获物理授权。

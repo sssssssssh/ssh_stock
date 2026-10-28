@@ -1167,3 +1167,14 @@ A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历
 源码仍未闭环，SOURCE_PARTIAL_ENGINEERING_BLOCKED；G1 实际 SQL/Podman/initdb/cgroup/mount
 均为 0，旧预算 8/12/2s、预热总 8、G3 未授权与 BIZ PERFORMANCE_OPEN 不变。
 详见 [A42366 能力矩阵](docs/acceptance/a42366_capability_matrix.md)。
+
+## BIZ-POLICY-01 计算身份与 Git 溯源分离（2026-10-28）
+
+本轮以 2779a2a7a7120c86f67b4991bce196c652b5ebb0 为基线，仅修业务补算身份误判。
+计算内容摘要、三项优化开关、schema、根/子 Job 和范围仍需严格匹配；Git HEAD/工作树
+仅作审计，不参与内容等价判断。旧任务及常驻 Worker 的冻结源码/Git 快照不得重新贴标，
+当前观测独立记录。缺失/错误身份、真实业务字节变化和开关漂移继续失败关闭。
+原因仅使用安全枚举与摘要，保留主错误码；失败元数据须受原 owner/token CAS 和 SQL 合并保护。
+不热更新 Worker、不连接云库、不重拉 TuShare、不修改金融、A/B、DDL、默认开关或 G1 门禁。
+现场具体 H1/H2 原因仍未证实；本轮源修复和隔离回归不能标 BUSINESS_POLICY_CONFIRMED，
+性能仍 PERFORMANCE_OPEN。验收见 docs/acceptance/BIZ_POLICY_01_closeout.md。
