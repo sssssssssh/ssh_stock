@@ -1,6 +1,7 @@
 """Publication safety regressions. Local journals below are NOT independent evidence."""
 
 import os
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -33,6 +34,9 @@ class Journal:
         if value is None:
             raise Fault("A42363_COMMITTED_RECEIPT_MISSING")
         return value
+
+    def events(self, scope):
+        return list(self.values.values())
 
 
 @pytest.fixture
@@ -127,7 +131,7 @@ def test_AT25_AT28_no_cleanup_of_never_prepared_resources():
 def test_AT05_AT06_crash_model_never_removes_marker_without_permanent_receipt(
     publication, monkeypatch, event, after_commit,
 ):
-    from scripts.a42366_publication import commit_finalization
+    from scripts.a42366_publication import _commit_finalization
 
     f = publication
     append = f.p.journal.append
@@ -148,10 +152,89 @@ def test_AT05_AT06_crash_model_never_removes_marker_without_permanent_receipt(
     monkeypatch.setattr(f.p.journal, "append", crash)
     approval = dict(test_model_only=True, qualifies=False)
     with pytest.raises(OSError, match="injected"):
-        commit_finalization(f.p, approval)
+        _commit_finalization(f.p, approval)
     assert (f.path / ".incomplete").exists() or f.p.journal.read(f.p.scope, "PUBLISHED")
     monkeypatch.setattr(f.p.journal, "append", append)
-    result = commit_finalization(f.p, approval)
+    result = _commit_finalization(f.p, approval)
     assert result.event == "FINALIZED"
     assert not (f.path / ".incomplete").exists()
-    assert commit_finalization(f.p, approval) == result
+    assert _commit_finalization(f.p, approval) == result
+
+
+def complete_facts(scope, root):
+    """Explicit semantic model, never an independently signed physical receipt."""
+    b, c, e = Journal("consumer"), Journal("controller"), Journal("absence_auditor")
+    consumed = b.append(scope, "CONSUMED", dict(qualifies=False))
+    originals = {}
+    for item in resources(scope):
+        raw = dict(kind=item.kind)
+        originals[item.kind] = c.append(scope, item.kind + "_ORIGINAL", dict(
+            raw=raw, raw_sha256=sha(canonical(raw)), identity_sha256="a" * 64,
+        )).digest
+    requested = c.append(scope, "DESTROY_REQUESTED", dict(qualifies=False))
+    for item in resources(scope):
+        c.append(scope, item.kind + "_REMOVE_DONE", dict(qualifies=False))
+    destroyed = c.append(scope, "RECONCILED", dict(
+        status="DESTROYED_PENDING_INDEPENDENT_E", destroyed_ns=50,
+        first_error=None, cleanup_codes=[], original_digests=originals,
+    ))
+    visibility = dict(readonly=True, epoch=scope.epoch, namespace_sha256=scope.namespace_sha256,
+                      controller_uid=scope.controller_uid, observer_uid=scope.controller_uid + 1)
+    rows = [dict(
+        resource=item.model_dump(), round=index // 4 + 1, result="ABSENT",
+        raw=dict(status="ABSENT", code=1, identity=None), original_digest=originals[item.kind],
+        observed_ns=100 + index, visibility=visibility, observer_uid=scope.controller_uid + 1,
+    ) for index, item in enumerate(resources(scope) * 2)]
+    absent = e.append(scope, "ABSENT", dict(
+        observations=rows, scope_sha256=scope_hash(scope), epoch=scope.epoch,
+        requested_digest=requested.digest, destruction_digest=destroyed.digest,
+        consumption_digest=consumed.digest,
+    ))
+    return root.read(scope, "ROOT_V3_TERMINATED"), absent, b, c
+
+
+@pytest.mark.parametrize("damage", ["present", "unknown", "copy", "order", "scope", "round",
+                                  "identity", "time", "epoch", "visibility", "raw", "bool"])
+def test_AT01_AT04_each_observation_and_fresh_original_is_checked(publication, damage):
+    from scripts.a42366_publication import validate_absence
+
+    f = publication
+    terminated, absent, b, c = complete_facts(f.p.scope, f.root)
+    assert validate_absence(f.p.scope, terminated, absent, b, c)
+    bad = deepcopy(absent.record)
+    rows = bad["observations"]
+    if damage in ("present", "unknown"):
+        rows[7]["result"] = damage.upper()
+    elif damage == "copy":
+        rows[4:] = deepcopy(rows[:4])
+    elif damage == "order":
+        rows.reverse()
+    elif damage == "scope":
+        rows[1]["resource"]["scope"]["payload_sha256"] = "f" * 64
+    elif damage == "round":
+        rows[4]["round"] = 1
+    elif damage == "identity":
+        rows[3]["original_digest"] = "f" * 64
+    elif damage == "time":
+        rows[0]["observed_ns"] = 49
+    elif damage == "epoch":
+        bad["epoch"] = "wrong"
+    elif damage == "visibility":
+        rows[7]["visibility"] = dict(rows[7]["visibility"], observer_uid=999999)
+    elif damage == "raw":
+        rows[0]["raw"]["code"] = 125
+    else:
+        rows[0]["raw"]["code"] = True
+    altered = receipt("absence_auditor", f.p.scope, "ABSENT", absent.sequence, bad)
+    with pytest.raises(Fault, match="PUBLICATION_"):
+        validate_absence(f.p.scope, terminated, altered, b, c)
+
+
+def test_AT04_valid_semantic_model_still_cannot_impersonate_independent_reviewer(publication):
+    f = publication
+    _, absent, b, c = complete_facts(f.p.scope, f.root)
+    e = Journal("absence_auditor")
+    e.values["ABSENT"] = absent
+    with pytest.raises(Fault, match="PUBLICATION_INDEPENDENT_REVIEWER_REQUIRED"):
+        f.p.finalize(f.root, e, f.reviewer, consumer_journal=b, controller_journal=c)
+    assert (f.path / ".incomplete").exists()

@@ -46,6 +46,10 @@ def build_installed_runtime(package):
     if type(package) is ControlledInstallation:
         return assemble(package)  # never constructed by the installed/RPC entrypoint
     p = installed_package(package)
+    if p.document.service_domain != "root_manager":
+        # The previous factory tried to construct RootManager dependencies for E.
+        # E must never receive O/C credentials or a writable runtime journal.
+        return BlockedRuntime(p.document.scope, "DOMAIN_V5_FD_CUSTODY_NOT_INSTALLED")
     try:
         raw = os.pread(6, 65537, 0)
     except OSError:

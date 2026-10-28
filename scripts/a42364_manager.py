@@ -388,6 +388,10 @@ def serve_installed(document_fd=3, listener_fd=5):
 
     raw = os.pread(document_fd, 65537, 0)
     package = InstalledPackage.read(document_fd, sha(raw))
+    if package.document.version == "a42366.installation.v5":
+        from scripts.a42366_installation import serve_installed_domain
+
+        return serve_installed_domain(package, listener_fd)
     from scripts.a42365_runtime_factory import build_installed_runtime
 
     backend = build_installed_runtime(package)

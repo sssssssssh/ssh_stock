@@ -39,18 +39,19 @@ class ResourceLifecycle:
                 self.journal.maybe_read(self.scope, key + "_ATTEMPTED") is None,
                 "RESOURCE_ACK_UNKNOWN_NO_REPLAY",
             )
-            original = None if verb == "CREATE" else self._inspect_original(item)
+            original_record = None if verb == "CREATE" else self.original(item)
             self.journal.append(
                 self.scope,
                 key + "_ATTEMPTED",
                 dict(
                     original_sha256=None
-                    if original is None
-                    else self.original(item)["identity_sha256"],
+                    if original_record is None
+                    else original_record["identity_sha256"],
                     attempted_ns=time.monotonic_ns(),
                     qualifies=False,
                 ),
             )
+            original = None if verb == "CREATE" else self._inspect_original(item)
             if verb == "CREATE":
                 raw = self.driver.create(item)
                 identity = self.driver.verify(item, raw)
@@ -94,7 +95,7 @@ class ResourceLifecycle:
                     self.journal.maybe_read(self.scope, "FIRST_ERROR") is not None,
                     "FIRST_ERROR_ACK_UNKNOWN",
                 )
-        event = "CLEANUP_" + sha(operation.encode())[:32]
+        event = "CLEANUP_" + sha((operation + ":" + code).encode())[:32]
         if self.journal.maybe_read(self.scope, event) is None:
             self.journal.append(self.scope, event, dict(code=code, operation=operation))
 
@@ -107,6 +108,9 @@ class ResourceLifecycle:
                 if attempted:
                     cleanup.append(item.kind + "_CREATE_ACK_UNKNOWN")
                 continue  # Unknown creation is never adopted or removed by name.
+            if self.journal.maybe_read(self.scope, item.kind + "_CREATE_DONE") is None:
+                cleanup.append(item.kind + "_CREATE_ACK_UNKNOWN")
+                continue
             removed = self.journal.maybe_read(self.scope, item.kind + "_REMOVE_DONE")
             if removed:
                 continue
@@ -115,6 +119,9 @@ class ResourceLifecycle:
                     started = self.journal.maybe_read(self.scope, "CONTAINER_START_ATTEMPTED")
                     stopped = self.journal.maybe_read(self.scope, "CONTAINER_STOP_DONE")
                     if started and not stopped:
+                        if self.journal.maybe_read(self.scope, "CONTAINER_START_DONE") is None:
+                            cleanup.append("CONTAINER_START_ACK_UNKNOWN")
+                            continue
                         self.perform(item, "STOP")
                 self.perform(item, "REMOVE")
             except Exception as error:

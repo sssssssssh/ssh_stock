@@ -6,6 +6,7 @@ Without the independently installed Reviewer channel, the public path is closed.
 """
 
 import os
+import re
 import stat
 
 from scripts.a42361_contract import canonical, sha
@@ -53,7 +54,7 @@ def validate_absence(scope, terminated, absence, consumer, controller):
         require(
             original.record.get("raw_sha256") == sha(canonical(original.record.get("raw")))
             and type(original.record.get("identity_sha256")) is str
-            and len(original.record["identity_sha256"]) == 64,
+            and re.fullmatch(r"[0-9a-f]{64}", original.record["identity_sha256"]) is not None,
             "PUBLICATION_ORIGINAL_IDENTITY",
         )
         originals[item.kind] = original.digest
@@ -63,14 +64,16 @@ def validate_absence(scope, terminated, absence, consumer, controller):
                 "PUBLICATION_REMOVAL_ORDER")
     require(record.get("original_digests") == originals, "PUBLICATION_ORIGINAL_SET")
     previous = record["destroyed_ns"]
+    visibility_binding = None
     for index, (item, row) in enumerate(zip(resources(scope) * 2, rows, strict=True)):
         require(type(row) is dict, "PUBLICATION_OBSERVATION")
         raw, visibility = row.get("raw"), row.get("visibility")
         require(
             row.get("resource") == item.model_dump()
-            and row.get("round") == index // 4 + 1
+            and type(row.get("round")) is int and row["round"] == index // 4 + 1
             and row.get("result") == "ABSENT"
             and raw == dict(status="ABSENT", code=1, identity=None)
+            and type(raw["code"]) is int
             and row.get("original_digest") == originals[item.kind]
             and type(row.get("observed_ns")) is int and row["observed_ns"] > previous
             and type(visibility) is dict
@@ -83,6 +86,9 @@ def validate_absence(scope, terminated, absence, consumer, controller):
             and row["observer_uid"] != scope.controller_uid,
             "PUBLICATION_OBSERVATION",
         )
+        if visibility_binding is None:
+            visibility_binding = visibility
+        require(visibility == visibility_binding, "PUBLICATION_VISIBILITY_DRIFT")
         previous = row["observed_ns"]
     require(
         consumer.read(scope, "CONSUMED") == consumed
@@ -114,7 +120,7 @@ def _committed(journal, scope, event, record):
     return journal.append(scope, event, record)
 
 
-def commit_finalization(publisher, approval):
+def _commit_finalization(publisher, approval):
     """Internal crash-recovery primitive; approval is obtained by finalize, not RPC.
 
     This function does not issue or validate a physical qualification. Callers must
@@ -170,4 +176,4 @@ def finalize(publisher, root, absence, reviewer, consumer=None, controller=None)
             "PUBLICATION_AUDIT_CHANGED")
     validate_absence(publisher.scope, terminated, absent, consumer, controller)
     reviewer.revalidate()
-    return commit_finalization(publisher, approval)
+    return _commit_finalization(publisher, approval)

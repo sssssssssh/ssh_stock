@@ -44,6 +44,10 @@ def installation_layout():
 
 
 def validate_document(document, now):
+    if type(document) is dict and document.get("version") == "a42366.installation.v5":
+        from scripts.a42366_installation import validate_domain_document
+
+        return validate_domain_document(document, now)
     d = checked(InstallDocument, document)
     require(
         d.version == "a42364.installation.v3" and d.expires_at > now, "INSTALL_VERSION_OR_EXPIRY"
@@ -135,7 +139,8 @@ class InstalledPackage:
     def revalidate(self):
         raw, metadata = read_root_document(self.fd, self.digest)
         require(
-            metadata == self.metadata and checked(InstallDocument, decode(raw)) == self.document,
+            metadata == self.metadata
+            and validate_document(decode(raw), self.now()) == self.document,
             "INSTALL_DOCUMENT_CHANGED",
         )
         validate_document(self.document, self.now())

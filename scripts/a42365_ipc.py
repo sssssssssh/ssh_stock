@@ -1,5 +1,6 @@
 """Fixed inherited Unix channels; peer credentials checked before framed decoding."""
 
+import os
 import socket
 import time
 
@@ -30,10 +31,17 @@ class DomainClient:
             budget,
         )
         require(peer_uid(self.channel) == uid, "RUNTIME_PEER_UID")
+        self.channel_identity = os.fstat(self.channel.fileno())
+        self.channel.settimeout(0.2)
+
+    def revalidate(self):
+        require(os.fstat(self.channel.fileno()) == self.channel_identity,
+                "RUNTIME_CHANNEL_CHANGED")
+        require(peer_uid(self.channel) == self.uid, "RUNTIME_PEER_UID")
 
     def call(self, method, body=None):
         require(method in METHODS[self.domain], "RUNTIME_METHOD")
-        require(peer_uid(self.channel) == self.uid, "RUNTIME_PEER_UID")
+        self.revalidate()
         send_frame(
             self.channel,
             message(
@@ -46,7 +54,7 @@ class DomainClient:
             ).model_dump(),
         )
         result = read_frame(self.channel, time.monotonic_ns() + 200000000)
-        require(peer_uid(self.channel) == self.uid, "RUNTIME_PEER_UID")
+        self.revalidate()
         return result
 
     def close(self):

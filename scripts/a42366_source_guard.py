@@ -18,6 +18,7 @@ ALLOWED = AUTHORITY | frozenset((
     "scripts/a42365_supervisor.py", "scripts/a42365_runtime.py",
     "scripts/a42365_lifecycle.py", "scripts/a42365_budget.py", "scripts/a42365_owner.py",
     "scripts/a42365_runtime_factory.py", "scripts/a42365_ipc.py",
+    "scripts/a42364_installation_verify.py", "scripts/a42364_manager.py",
     "scripts/a42366_publication.py", "scripts/a42366_reviewer.py",
     "scripts/a42366_services.py", "scripts/a42366_owner.py",
     "scripts/a42366_mediation.py", "scripts/a42366_installation.py",
