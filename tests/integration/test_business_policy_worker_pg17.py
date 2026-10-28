@@ -162,7 +162,7 @@ def test_bad_old_job_freeze_keeps_old_evidence_and_concurrent_metadata(
     repository, monkeypatch, damage,
 ):
     with isolated_v14_database(monkeypatch) as (factory, engine):
-        days = seed(factory, include_closed=False, history_days=25)
+        days = seed(factory, include_closed=False, history_days=30)
         with factory() as db:
             job = create_recalculation_job(db, start=days[-2], end=days[-1],
                                           evaluate_signals=False, mode="manual")
@@ -286,7 +286,7 @@ def test_daily_catchup_real_calculators_keep_root_identity_and_git_audit(
             monkeypatch.setattr(settings, flag, False)
         monkeypatch.setattr(worker, "_provider", lambda _: SyntheticReplayProvider(factory))
         with factory() as db:
-            key = create_queued_ingestion_job(db, kind, days[-1], metadata={
+            key = create_queued_ingestion_job(db, kind, days[-1], step="queued", metadata={
                 "trade_date": days[-1].isoformat(), "evaluate_signals": False,
             }).id
         frozen, original, changed = cp.runtime_source(), FactorService.recalc, []

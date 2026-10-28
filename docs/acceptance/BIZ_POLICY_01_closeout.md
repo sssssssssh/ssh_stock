@@ -4,7 +4,7 @@ baseline_sha: 2779a2a7a7120c86f67b4991bce196c652b5ebb0
 field_cause: NOT_CONFIRMED_NO_BUSINESS_DB_ACCESS
 status_at_registration: SOURCE_FIXED_PENDING_EXACT_SHA_PG17_CI
 business_code_changed: YES, three policy/Worker/Job repository modules only
-business_database_changes / DDL / TuShare_calls / service_restarts: 0 / 0 / 0 / 0
+business_database_changes / new_migrations / TuShare_network_calls / app_service_restarts: 0 / 0 / 0 / 0
 optimization_defaults: unchanged, all three false; AB_MERGE_READ_ENABLED unchanged
 G1: SOURCE_PARTIAL_ENGINEERING_BLOCKED / PHYSICAL_NOT_RUN_NOT_AUTHORIZED
 performance: PERFORMANCE_OPEN, no new capacity or G1/A4 measurement
@@ -54,6 +54,22 @@ not deleted or skipped. Linux exact-SHA CI must run that original node.
 Full Windows pytest also retains ten original Linux-only collection errors
 (fcntl/resource), report .codex_tmp/biz-policy-full-windows.xml. No test source
 skip/xfail was added; these failures are not a passing full-suite claim.
+
+The user's VM subsequently became reachable. A separately named/labelled PG17.6
+test instance is bound only to loopback; the existing fixture verifies its UUID
+marker and independently read system identifier before every CREATE/DROP. A
+temporary Python 3.12.15 container matches every requirements.lock package. The
+user's existing application/database containers, cloud database and .env are untouched.
+Only existing migrations are applied inside newly owned UUID test databases.
+
+First real PG17 run at c70c8ca7eff810fee4dccda16ab7ca54813a5567:
+14 passed / 7 failed / 0 skipped. The seven new-fixture failures were five calls
+to the existing seed helper with 25 days despite its required days[25], and two
+missing mandatory enqueue step arguments. No assertion or business guard is
+relaxed; fixtures now supply 30 days and the normal queued step. All seven
+Git-only/content/flag Worker cases and all seven ORIGINAL policy PG17 nodes
+passed in that first run. Raw first XML/log remain available under the isolated
+test evidence directory; final results must be reported separately.
 
 ## AT01 through AT17
 
