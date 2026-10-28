@@ -514,7 +514,12 @@ def _run_heartbeat_loop(
     progress: CalculationProgress | None = None,
 ) -> None:
     interval = interval_seconds or float(scheduler_setting("worker_heartbeat_interval_seconds", 45))
+    consecutive_failures = 0
+    last_success = time.monotonic()
     while not stop_event.wait(interval):
+        attempt_started = time.monotonic()
+        phase = "session_acquire"
+        metrics = []
         try:
             snapshot = progress.snapshot() if progress is not None else None
             if snapshot:
@@ -527,15 +532,33 @@ def _run_heartbeat_loop(
                             snapshot["batch_index"], snapshot["batch_count"],
                             snapshot["completed_rows"], snapshot["total_rows"], operation_age)
             with SessionLocal() as heartbeat_db:
+                phase = "heartbeat"
                 telemetry = {"calculation_progress": snapshot} if snapshot else {}
                 if not touch_job_heartbeat(heartbeat_db, job_id, worker_id,
                                            execution_token=execution_token, **telemetry):
                     return
+                metrics = getattr(heartbeat_db, "info", {}).get("heartbeat_diagnostics", [])
+            if consecutive_failures:
+                logger.info("worker heartbeat recovered job_id={} previous_failures={}",
+                            job_id, consecutive_failures)
+            consecutive_failures = 0
+            last_success = time.monotonic()
+            if metrics:
+                logger.debug("worker heartbeat timings job_id={} phases={}", job_id, metrics)
         except SQLAlchemyError as exc:
-            logger.error("worker heartbeat database unavailable job_id={} error={}",
-                         job_id, database_error_summary(exc))
+            consecutive_failures += 1
+            safe_phase = getattr(exc, "heartbeat_phase", phase)
+            logger.error("worker heartbeat database unavailable job_id={} phase={} "
+                         "consecutive_failures={} attempt_seconds={:.3f} "
+                         "unconfirmed_seconds={:.3f} error={}",
+                         job_id, safe_phase, consecutive_failures,
+                         time.monotonic()-attempt_started, time.monotonic()-last_success,
+                         database_error_summary(exc))
         except Exception:
-            logger.exception("worker heartbeat failed job_id={} worker_id={}", job_id, worker_id)
+            consecutive_failures += 1
+            # No original exception/traceback: it may contain a DSN or parameters.
+            logger.error("worker heartbeat failed job_id={} phase={} consecutive_failures={}",
+                         job_id, phase, consecutive_failures)
 
 
 def run_worker() -> None:

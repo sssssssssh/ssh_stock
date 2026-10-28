@@ -1178,3 +1178,14 @@ A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历
 不热更新 Worker、不连接云库、不重拉 TuShare、不修改金融、A/B、DDL、默认开关或 G1 门禁。
 现场具体 H1/H2 原因仍未证实；本轮源修复和隔离回归不能标 BUSINESS_POLICY_CONFIRMED，
 性能仍 PERFORMANCE_OPEN。验收见 docs/acceptance/BIZ_POLICY_01_closeout.md。
+
+
+## BIZ-WORKER-02：心跳与安全人工对账（2026-10-28）
+
+保留 BIZ-POLICY 的业务内容身份，Git-only 不作为计算漂移。心跳续租与进度 JSONB 使用
+独立短事务，owner/token CAS、1s 锁/3s SQL 时限、单调进度和取消保持生效；失败不解锁未知 Writer。
+新增只读 reconcile --dry-run；维护原语须独立核验所有执行者退出和提交确定，默认没有生产 authority。
+历史冻结迁移待独立签署，旧 manifest/测试/工作流不改；CONTRACT_MIGRATION_BLOCKED。
+百万级三轮容量因资源预检不足尚未执行，PERFORMANCE_OPEN / FIELD_NOT_RETESTED；
+不得部署长补算或把隔离心跳回归表示为现场 57014 根因已关闭。
+详见 [BIZ-WORKER-02 整改记录](docs/acceptance/BIZ_WORKER_02_review.md)。

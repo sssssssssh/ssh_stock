@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from time import monotonic
 from typing import Any
 
 from sqlalchemy import case, func, or_, select, text, update
@@ -184,31 +185,61 @@ def touch_job_heartbeat(
     ownership = [JobRun.id == job_id, JobRun.status == "RUNNING", JobRun.worker_id == worker_id]
     if execution_token is not None:
         ownership.append(JobRun.execution_token == execution_token)
-    values = {"heartbeat_at": now or datetime.now(UTC)}
+    diagnostics = []
+    if isinstance(db, Session):
+        db.info["heartbeat_diagnostics"] = diagnostics
+
+    def measured(phase, operation):
+        started = monotonic()
+        metric = {"phase": phase, "sqlstate": None, "outcome": "OK"}
+        try:
+            return operation()
+        except Exception as exc:
+            code = getattr(getattr(exc, "orig", None), "sqlstate", None)
+            metric.update(outcome="FAILED", sqlstate=code if isinstance(code, str)
+                          and len(code) == 5 and code.isalnum() else None)
+            exc.heartbeat_phase = phase
+            raise
+        finally:
+            metric["seconds"] = monotonic()-started
+            diagnostics.append(metric)
+
+    def limits():
+        # Each independent short transaction keeps the SAME local limits.
+        if execution_token is not None:
+            if isinstance(db, Session):
+                measured("connection_acquire", db.connection)
+            measured("transaction_setup", lambda: db.execute(text(
+                "SELECT set_config('lock_timeout','1s',true), "
+                "set_config('statement_timeout','3s',true)")))
+
+    limits()
+    result = measured("lease_update", lambda: db.execute(
+        update(JobRun).where(*ownership).values(heartbeat_at=now or datetime.now(UTC))))
+    measured("lease_commit", db.commit)
+    if result.rowcount != 1:
+        return False
     if calculation_progress is not None and execution_token is not None:
-        # Only the observer transaction commits here; never the calculator's Session.
-        db.execute(text("SET LOCAL lock_timeout='1s'"))
-        db.execute(text("SET LOCAL statement_timeout='3s'"))
+        # Lease is durable before optional JSONB work starts. Progress failure
+        # remains visible and is not a reason to release/kill an unknown Writer.
+        limits()
         merged = JobRun.job_metadata.op("||")({
             "calculation_progress": calculation_progress,
         })
         # A heartbeat can capture a snapshot just before the calculator advances.
         # Do not let that delayed observer overwrite a newer stage checkpoint.
-        values["job_metadata"] = case(
+        values = {"job_metadata": case(
             (JobRun.job_metadata["calculation_progress"]["updated_at"].as_string()
              > calculation_progress["updated_at"], JobRun.job_metadata),
             else_=merged,
-        )
+        )}
         if advanced := calculation_progress.get("advanced_at"):
             values["last_progress_at"] = func.greatest(
                 JobRun.last_progress_at, datetime.fromisoformat(advanced),
             )
-    result = db.execute(
-        update(JobRun)
-        .where(*ownership)
-        .values(**values)
-    )
-    db.commit()
+        result = measured("progress_update", lambda: db.execute(
+            update(JobRun).where(*ownership).values(**values)))
+        measured("progress_commit", db.commit)
     return result.rowcount == 1
 
 

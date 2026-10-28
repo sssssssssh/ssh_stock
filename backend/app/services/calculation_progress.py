@@ -87,6 +87,15 @@ class ProgressStep:
         if phase not in PHASES:
             raise ValueError("CALCULATION_PROGRESS_PHASE_INVALID")
         now, stamp = monotonic(), datetime.now(UTC).isoformat()
+        from app.services.execution_diagnostics import PHASES as DIAGNOSTIC_PHASES
+        from app.services.execution_diagnostics import record_duration
+
+        # These are phase intervals, not SQL-only timings. In particular the
+        # existing lookup_candidate interval contains the combined A/B query.
+        if (self.kind != "read" and self.phase in DIAGNOSTIC_PHASES
+                and hasattr(self, "diagnostic_phase_started")):
+            record_duration(self.name, self.phase, now-self.diagnostic_phase_started)
+        self.diagnostic_phase_started = now
         if (phase not in {"complete", "batch_complete", "failed", "cancelled"}
                 and (phase != self.phase or batch_index != self.batch_index)):
             self.phase, self.operation_started = phase, now
