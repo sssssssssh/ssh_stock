@@ -85,7 +85,7 @@ test evidence directory; final results must be reported separately.
 | 07 | Each of three flags: real Worker rejection plus original policy PG17 tests retained |
 | 08 | Legacy hash/schema/range/null damage: no re-freeze, old evidence retained, no auto retry |
 | 09 | Real run_worker entry/poll/claim/dispatch; daily/recalculate/catchup; real calculators and multiple children, root cumulative metrics |
-| 10 | Original test_data_queue, test_data_queue_reliability, test_data_publication disconnect/cancel/owner-token nodes retained; final full CI required |
+| 10 | Original test_data_queue, test_data_publication, test_publication_cancel_v13, test_publication_lookup_v13 disconnect/cancel/owner-token nodes retained; final full CI required |
 | 11 | New A snapshot negative tests plus original publication A/B, unknown-commit and rollback nodes retained |
 | 12 | Enum reason/hash-only diagnostics; source sentinel unit; PG17 pre-freeze concurrent JSONB heartbeat merge |
 | 13 | Original business input records, memory, financial Golden, cold-start and PG17 performance regressions unchanged |
@@ -123,6 +123,42 @@ read-only, with no business dotenv and no new performance authorization.
 This record does not certify the later final SHA's full suite or ordinary CI.
 Those results, raw evidence hashes and exact Actions links are returned with
 the final delivery; the known frozen-contract failures must remain visible.
+
+## Full Linux Regression Record
+
+Tested source commit: d8ba85163bb63664f54083316d8f3d5b8a828f56.
+This is the full-run identity, not an assertion that later documentation commits
+were tested by that run. The three business modules and both new test modules
+are unchanged by this evidence-only follow-up.
+
+The full unfiltered pytest run completed on the isolated PG17 instance:
+4939 passed / 46 failed / 137 errors / 0 skipped, 5340.62 seconds;
+coverage 88.22%, original required threshold 70% unchanged. All 34 new business
+policy nodes passed in this full run, including all fourteen real Worker cases.
+The result is FAILED, not a full-suite acceptance or a performance certificate.
+
+Failure classification, retaining every original assertion:
+
+| Count | Observed failure / remaining boundary |
+|---|---|
+| 37 failures + 137 setup errors | Deferred frozen-source contract: 33 direct A4235_FROZEN_FILE_CHANGED, three negative checks blocked by that earlier guard, one original changed-test-path assertion; no contract adaptation authorized |
+| 2 failures | Isolated PostgreSQL lacks shared_preload_libraries=pg_stat_statements for the original cursor profiling tests |
+| 1 failure | Original window capture time gate: 8.277821986 seconds against unchanged <5-second assertion under coverage on this VM |
+| 1 failure | VM kernel 3.10: pidfd_open returns ENOSYS |
+| 1 failure | Original process scope test times out waiting for ancillary data; no successful scope certificate claimed |
+| 4 failures | Temporary Python test image lacks cc, shellcheck and Node (two Node tests) |
+
+These nine non-contract failures are not silently attributed to the frozen
+contract or certified as passing. This task does not upgrade the user's VM
+kernel, change a time gate or qualify physical G1 execution. No source skip,
+xfail, old-test edit, flag/default change or business database write was used.
+
+Retained raw local evidence (ignored, not committed):
+biz-policy-full-linux.xml SHA256
+7b7c802495f9e3d896fa834ff824329f9f52c6ae4b221945831d0b6d860965ad;
+biz-policy-full-linux.log SHA256
+c8d180b873514173a9aead6a270c7c8ed54b9e2c86ad62031113cf091107e433.
+Ordinary final-SHA Actions results remain a separate post-push check.
 
 ## W06 Follow-up Performance Evidence
 
