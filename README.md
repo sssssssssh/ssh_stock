@@ -2207,3 +2207,12 @@ ABORTED 且无发布开始/完成时间、原审计身份指纹和 RUNNING 到 F
 旧冻结合同未取得独立签署，继续 CONTRACT_MIGRATION_BLOCKED；小型回归不等于容量或上线验收。
 本轮不合并、不删分支、不部署。证据及 AT01–AT12 见
 [R4 合并前结论](docs/acceptance/worker02_r4/merge_readiness.md)。
+
+## WORKER-02-R5：合并阻断诊断
+
+本轮不改变业务运行方式。新增 `scripts/worker02_r5_preflight.py` 检查实际内核和工具能力；
+`scripts/worker02_r5_diagnostics.py` 仅由测试命令显式加载，记录两项未归因失败的顺序及脱敏上下文。
+只读数据库快照仅允许独立标记、物理身份已验证的随机测试库，不读取业务 `.env` 或连接云端库。
+它不会自动启用、修改测试断言、释放 Worker、触发补算或安装恢复授权。
+诊断复用步骤、真实测试结果及不可合并原因见 [R5 验收](docs/acceptance/worker02_r5/validation.md)
+与 [R5 门槛](docs/acceptance/worker02_r5/merge_readiness.md)。局部通过不替代全量、容量或现场验收。

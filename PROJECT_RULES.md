@@ -1221,3 +1221,12 @@ UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺
 上述判定不是全主机退出或独立生产授权证明。旧合同、负例、金融/Raw/发布 SQL/默认开关保持原样。
 无独立签署不激活新合同，不将普通 CI 或小样本结果当容量准入。R4 仅推送现有特性分支，PR 保持 Draft；
 合并/部署仍未授权，详见 docs/acceptance/worker02_r4/merge_readiness.md。
+
+## WORKER-02-R5：证据与准入边界
+
+R5 仅增加显式启用的测试诊断与平台预检，不改业务后端、冻结合同、原测试、工作流或默认开关。
+诊断结果不得把未知值写成零、改写原失败，或用 standalone PASS 关闭 full-context 未归因项。
+合同迁移保持 activation_allowed=false，独立签署、最终树身份及审批缺失时必须 BLOCKED；不得扩大旧路径集合。
+不具备 pidfd 的平台不能证明独立进程安全验收；小型合成回归不能替代 1,443,097 行三轮容量。
+原合并/发布门槛不降级，现场仍 FIELD_NOT_RETESTED，无自动合并、删分支、部署或下一阶段授权。
+详见 [R5 合并结论](docs/acceptance/worker02_r5/merge_readiness.md)。
