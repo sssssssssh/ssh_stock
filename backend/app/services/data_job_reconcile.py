@@ -48,6 +48,31 @@ def _validate_approval_time(approval):
             raise ValueError("RECOVERY_APPROVAL_EXPIRED_OR_REVOKED")
 
 
+def _matching_recovery_receipt(root, ledger, approval):
+    if (root is None or ledger is None or root.status != "FAILED"
+            or root.parent_job_id is not None or root.job_type not in INGESTION_JOB_TYPES
+            or (root.worker_id, root.execution_token) != (approval.worker_id, approval.token)
+            or ledger.state != "ABORTED" or ledger.execution_token != approval.token
+            or ledger.publish_started_at is not None or ledger.published_at is not None):
+        return False
+    metadata = root.job_metadata
+    audit = metadata.get("manual_reconciliations", []) if isinstance(metadata, dict) else []
+    if not isinstance(audit, list):
+        return False
+    fingerprint = hashlib.sha256(str(approval.token).encode()).hexdigest()[:16]
+    return any(isinstance(item, dict)
+        and item.get("approval_id") == approval.approval_id
+        and item.get("operator_id") == approval.operator_id
+        and item.get("evidence_sha256") == approval.evidence_sha256
+        and item.get("execution_identity_fingerprint") == fingerprint
+        and item.get("previous_status") == "RUNNING"
+        and item.get("new_status") == "FAILED" for item in audit)
+
+
+def _active_recovery_child(db, root_id):
+    return db.scalar(select(JobRun.id).where(JobRun.parent_job_id == root_id,
+        JobRun.status.in_(("RUNNING", "QUEUED"))).limit(1)) is not None
+
 
 def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
     """Maintenance primitive; one transaction, no replay on unknown commit ACK.
@@ -82,12 +107,12 @@ def abort_confirmed_writer(db, approval: RecoveryApproval, *, authority=None):
         ledger = db.scalar(select(DataPublication).where(DataPublication.job_id == root.id)
                            .with_for_update())
         if root.status == "FAILED" and ledger is not None and ledger.state == "ABORTED":
-            prior = dict(root.job_metadata or {}).get("manual_reconciliations", [])
-            if any(item.get("approval_id") == approval.approval_id
-                   and item.get("evidence_sha256") == approval.evidence_sha256
-                   and item.get("operator_id") == approval.operator_id for item in prior):
-                db.rollback()
-                return "ALREADY_RECONCILED"
+            if not _matching_recovery_receipt(root, ledger, approval):
+                raise ValueError("RECOVERY_PUBLICATION_UNCONFIRMED")
+            if _active_recovery_child(db, root.id):
+                raise ValueError("RECOVERY_CHILD_IDENTITY_CHANGED")
+            db.rollback()
+            return "ALREADY_RECONCILED"
         if (root.status != "RUNNING" or ledger is None or ledger.state != "PREPARING"
                 or ledger.execution_token != approval.token
                 or ledger.publish_started_at is not None):
@@ -198,19 +223,8 @@ def recovery_commit_status(db, approval: RecoveryApproval):
     db.execute(text("SET LOCAL statement_timeout='3s'"))
     root = db.get(JobRun, approval.job_id)
     ledger = db.get(DataPublication, approval.job_id)
-    if (root is None or ledger is None or root.status != "FAILED"
-            or root.parent_job_id is not None or root.job_type not in INGESTION_JOB_TYPES
-            or (root.worker_id, root.execution_token) != (approval.worker_id, approval.token)
-            or ledger.state != "ABORTED" or ledger.execution_token != approval.token):
+    if not _matching_recovery_receipt(root, ledger, approval):
         return "RECOVERY_COMMIT_UNCONFIRMED"
-    audit = dict(root.job_metadata or {}).get("manual_reconciliations", [])
-    if not any(item.get("approval_id") == approval.approval_id
-               and item.get("operator_id") == approval.operator_id
-               and item.get("evidence_sha256") == approval.evidence_sha256
-               and item.get("execution_identity_fingerprint") == hashlib.sha256(
-                   str(approval.token).encode()).hexdigest()[:16] for item in audit):
-        return "RECOVERY_COMMIT_UNCONFIRMED"
-    if db.scalar(select(JobRun.id).where(JobRun.parent_job_id == root.id,
-                                         JobRun.status.in_(("RUNNING", "QUEUED"))).limit(1)):
+    if _active_recovery_child(db, root.id):
         return "RECOVERY_COMMIT_UNCONFIRMED"
     return "RECONCILED_ABORTED"

@@ -1,0 +1,562 @@
+{
+  "schema": "worker02.r4.baseline.evidence.v1",
+  "api": {
+    "PR": {
+      "number": 1,
+      "state": "open",
+      "draft": true,
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+      "base_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+      "merge_commit_sha": "95b47d7b3be891be08e342c4e2894c29d5952bf7"
+    },
+    "Runs": [
+      {
+        "id": 40740676293,
+        "name": "Publication V1.3",
+        "event": "pull_request",
+        "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+        "head_branch": "codex/biz-worker-02",
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676293",
+        "run_attempt": 1
+      },
+      {
+        "id": 40740676306,
+        "name": "A4-1 read baseline diagnosis",
+        "event": "pull_request",
+        "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+        "head_branch": "codex/biz-worker-02",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676306",
+        "run_attempt": 1
+      },
+      {
+        "id": 40740676287,
+        "name": "A4-2 isolated read experiments",
+        "event": "pull_request",
+        "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+        "head_branch": "codex/biz-worker-02",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676287",
+        "run_attempt": 1
+      },
+      {
+        "id": 40740676266,
+        "name": "CI",
+        "event": "pull_request",
+        "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+        "head_branch": "codex/biz-worker-02",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676266",
+        "run_attempt": 1
+      },
+      {
+        "id": 40740668279,
+        "name": "CI",
+        "event": "push",
+        "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+        "head_branch": "codex/biz-worker-02",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740668279",
+        "run_attempt": 1
+      },
+      {
+        "id": 40654653164,
+        "name": "CI",
+        "event": "push",
+        "head_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+        "head_branch": "master",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40654653164",
+        "run_attempt": 1
+      },
+      {
+        "id": 40654653213,
+        "name": "A4-2 isolated read experiments",
+        "event": "push",
+        "head_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+        "head_branch": "master",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40654653213",
+        "run_attempt": 1
+      },
+      {
+        "id": 40654653255,
+        "name": "Publication V1.3",
+        "event": "push",
+        "head_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+        "head_branch": "master",
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40654653255",
+        "run_attempt": 1
+      },
+      {
+        "id": 40654653235,
+        "name": "A4-1 read baseline diagnosis",
+        "event": "push",
+        "head_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+        "head_branch": "master",
+        "status": "completed",
+        "conclusion": "failure",
+        "html_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40654653235",
+        "run_attempt": 1
+      }
+    ]
+  },
+  "native_pr": [
+    {
+      "run_id": 40740676266,
+      "name": "CI",
+      "conclusion": "failure",
+      "failed_jobs": [
+        {
+          "job_id": 123001104871,
+          "step": 22,
+          "name": "Archive identity and observer failure-path regressions before full suite",
+          "junit": {
+            "tests": 143,
+            "passed": 142,
+            "failures": 1,
+            "errors": 0,
+            "skipped": 0,
+            "sha256": "534fa47bc703b929ba4e2e9665710ee7b4d2c5865691e7f7ac55dadb8a42b9dc"
+          },
+          "nodes": [
+            {
+              "node": "tests.unit.test_a4233_background_observer::test_frozen_baseline_bytes_and_old_workflows_unchanged",
+              "observed_message": "A42331_TEST_FAILURE",
+              "cause": "FROZEN_CONTRACT_STATIC_SCOPE_MISMATCH",
+              "evidence_limit": "Native trace is redacted; source calls historical_bytes and guard scope mismatch is independently calculated, not an unredacted native trace."
+            }
+          ]
+        },
+        {
+          "job_id": 123001105495,
+          "step": 6,
+          "name": "Lookup rewrite and safety regressions before measurements",
+          "junit": {
+            "tests": 107,
+            "passed": 106,
+            "failures": 1,
+            "errors": 0,
+            "skipped": 0,
+            "sha256": "ab7466929721b6fde55723af1a20f8d4f3326d0ddc42730be7f6736176eaed43"
+          },
+          "nodes": [
+            {
+              "node": "tests.unit.test_lookup_tail_review_a423::test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+              "observed_message": "A4235_FROZEN_FILE_CHANGED",
+              "cause": "FROZEN_CONTRACT_NATIVE_TRACE"
+            }
+          ]
+        }
+      ],
+      "full_pytest": "SKIPPED_AFTER_UPSTREAM_FAILURE",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676266",
+      "event": "pull_request",
+      "attempt": 1,
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+      "checkout_sha": "95b47d7b3be891be08e342c4e2894c29d5952bf7"
+    },
+    {
+      "run_id": 40740676306,
+      "name": "A4-1 read baseline diagnosis",
+      "conclusion": "failure",
+      "failed_jobs": [
+        {
+          "job_id": 123001103956,
+          "step": 6,
+          "name": "Observer regressions and frozen safety tests",
+          "junit": {
+            "tests": 49,
+            "passed": 48,
+            "failures": 1,
+            "errors": 0,
+            "skipped": 0,
+            "sha256": "a5195741abee5907eff52e65189488c4476edc769c12c6199652c9c8c6962bcf"
+          },
+          "nodes": [
+            {
+              "node": "tests.unit.test_ab_read_profile_v14_a4::test_a4_diagnostic_freezes_production_sources",
+              "observed_message": "A4235_FROZEN_FILE_CHANGED",
+              "cause": "FROZEN_CONTRACT_NATIVE_TRACE"
+            }
+          ]
+        }
+      ],
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676306",
+      "event": "pull_request",
+      "attempt": 1,
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+      "checkout_sha": "95b47d7b3be891be08e342c4e2894c29d5952bf7"
+    },
+    {
+      "run_id": 40740676287,
+      "name": "A4-2 isolated read experiments",
+      "conclusion": "failure",
+      "failed_jobs": [
+        {
+          "job_id": 123001104743,
+          "step": 7,
+          "name": "Frozen sources and formal parent migration",
+          "nodes": [],
+          "entrypoint_failure": {
+            "script": "scripts/ab_read_experiment_v14_a4_2.py --contract-only",
+            "failure_type": "Fault",
+            "source_receipt_sha256": "a3e46acecd71a8d1a056f312875ccde46146f88f8ee07c3af38920e1be51e2a6",
+            "guard": "a42366_source_guard.py:78",
+            "junit": "NOT_CREATED_CONTRACT_ENTRYPOINT_NOT_PYTEST"
+          }
+        }
+      ],
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676287",
+      "event": "pull_request",
+      "attempt": 1,
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+      "checkout_sha": "95b47d7b3be891be08e342c4e2894c29d5952bf7"
+    },
+    {
+      "run_id": 40740676293,
+      "name": "Publication V1.3",
+      "conclusion": "success",
+      "contracts": {
+        "job_id": 123001104621,
+        "tests": 85,
+        "passed": 85,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "junit_sha256": "97f9585722e3638d2bf082bdc57a62f9351b058f8d57281116695942be7d7cba"
+      },
+      "performance_job": "SKIPPED_NOT_AUTHORIZED",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40740676293",
+      "event": "pull_request",
+      "attempt": 1,
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4",
+      "checkout_sha": "95b47d7b3be891be08e342c4e2894c29d5952bf7"
+    }
+  ],
+  "artifacts": [
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12840430374,
+      "name": "a42331-safe-errors-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:be0f135a09e49ab21d3e2b56b264fe44c5c4d750050edbcd8d5658eed6b344c3",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840430374/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12840135921,
+      "name": "m17-1-2-suspend-evidence",
+      "digest": "sha256:fb00e8f6ef1c2689bea7f3e34cd6c191dfd129149c2851d6618519ff992ee55d",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840135921/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12840100130,
+      "name": "a4-ci-lookup-state-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:98646f5d381f2ebcdb4fb8cddf9b4c17ac2fb35020c6b232c9edd3e2ae225d9b",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840100130/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12839702024,
+      "name": "m17-1-1-retention-evidence",
+      "digest": "sha256:41df2681bfcc93466b6b9b49a2e118c9113eaeb31010e63b0cac7ef6021c47a5",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839702024/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12839650894,
+      "name": "a4-ci-contracts-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:01aabbefed36efc6c72e1432a4e2ec1973e1944192c27885ac0deacca3bdb636",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839650894/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12839396545,
+      "name": "a421-audit-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:f8b48e8dae5257649343edae00549318182865454bc4f4e3684c816fb7d4c5ee",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839396545/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12839102947,
+      "name": "data-publication-reliability",
+      "digest": "sha256:3ad7c5da7c9a0677285edc23fb8cdb39e0ebb663fc757937faa0a6ec2647be31",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839102947/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838862460,
+      "name": "a421-lookup-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:d6cb5c464dede2147909708ca1dc0e2005d500825f277de5b076c4b042f3941b",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838862460/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838843269,
+      "name": "a42331-migration-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:1d552510724821af634deb9b311412ac31e460d344b26151ea6ae6f6d3480a26",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838843269/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838788422,
+      "name": "a421-core-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:b0df2405cbfe593c8f3e5b9966c1022729930537c74b56b0006dcb71a65b8b64",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838788422/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838743454,
+      "name": "a4-ci-core-state-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:b71b406c8b235e99e5611759c240e0e5cda38a884e2a9806d88e78be9d2d01ff",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838743454/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838588594,
+      "name": "a42331-safe-ci-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676266-1",
+      "digest": "sha256:23489e9e38ef60e85bfcc77e877e5b8a47fb19dc16b98f2a9af9602a616ce929",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838588594/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676266,
+      "artifact_id": 12838164821,
+      "name": "v14-read-evidence",
+      "digest": "sha256:ccbf0a16ce9dd060698d8d44290db07e82046a7f16401ee3c891425cb417ebb2",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838164821/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676306,
+      "artifact_id": 12839158819,
+      "name": "v14-a4-contract-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:ffdc36f7c591976804d8d27ceaa77539ff1c1dfb8b652c585cebc83dfdc41753",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839158819/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676287,
+      "artifact_id": 12840165001,
+      "name": "a421-contract-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:91ea93cff4b8e45b922d1d0d12debcfa6fd5b550518acfb59498dbc92ec282a2",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840165001/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676287,
+      "artifact_id": 12839561450,
+      "name": "a4-ci-a42-contract-state-95b47d7b3be891be08e342c4e2894c29d5952bf7-40740676287-1",
+      "digest": "sha256:064ac854f492693563b8ff4cc97d7ac7f00f4150629c668138677c346776249e",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839561450/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    },
+    {
+      "run_id": 40740676293,
+      "artifact_id": 12838667825,
+      "name": "publication-v13-contract-95b47d7b3be891be08e342c4e2894c29d5952bf7-attempt1",
+      "digest": "sha256:af3ca3850db8edf4d4142217f58a948ff12a70496b32330de1a9fe9be46c7d5c",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838667825/zip",
+      "head_sha": "527f07593fc346f0448165e1f64dd6954eb798b4"
+    }
+  ],
+  "raw_job_logs": [
+    {
+      "job_id": 123001104871,
+      "sha256": "a8571e23caac604ec282fa36fcc4642a732d7dab27872ee852f315235fa5d381",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/jobs/123001104871/logs",
+      "local_ignored_path": ".codex_tmp/worker02-r3/baseline/job-123001104871.log"
+    },
+    {
+      "job_id": 123001105495,
+      "sha256": "c551b4fc5eec1fa2c1a9469995bfdd92a30e8987bdbc2abe859978ea948b2956",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/jobs/123001105495/logs",
+      "local_ignored_path": ".codex_tmp/worker02-r3/baseline/job-123001105495.log"
+    },
+    {
+      "job_id": 123001103956,
+      "sha256": "7d507ce5b3f566bdc416f6a85430321b385417d8241e71c7977e7cf6ae7c1c19",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/jobs/123001103956/logs",
+      "local_ignored_path": ".codex_tmp/worker02-r3/baseline/job-123001103956.log"
+    },
+    {
+      "job_id": 123001104743,
+      "sha256": "f69d5dc8edf6529b14ec045b6ac0bf0a3da462c44317b8529bacbb03334109ab",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/jobs/123001104743/logs",
+      "local_ignored_path": ".codex_tmp/worker02-r3/baseline/job-123001104743.log"
+    },
+    {
+      "job_id": 123001104621,
+      "sha256": "559660a55ff40a931218ab5342e90b39fa25dcc8b4b9beeb5d6187c6d513fbea",
+      "api_url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/jobs/123001104621/logs",
+      "local_ignored_path": ".codex_tmp/worker02-r3/baseline/job-123001104621.log"
+    }
+  ],
+  "downloaded_pr_artifact_ids": [
+    12838588594,
+    12838862460,
+    12839158819,
+    12840165001,
+    12838667825
+  ],
+  "push_artifacts": [
+    {
+      "id": 12840635491,
+      "name": "data-publication-reliability",
+      "digest": "sha256:f70269fa7db067c7a0750c71aac7e0b3b30b7ab431d91de485eab4e5dee56a53",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840635491/zip"
+    },
+    {
+      "id": 12840550654,
+      "name": "a42331-migration-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:7391a8c326dbd91866517fecec09102864a378dff405d1c3f35813ee2dbce3eb",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840550654/zip"
+    },
+    {
+      "id": 12840096546,
+      "name": "a4-ci-core-state-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:9b1f1c6a262715c83fe9352239d1e17d65c321c48e7c8b9bb1eadc97556a8a58",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12840096546/zip"
+    },
+    {
+      "id": 12839617755,
+      "name": "m17-1-1-retention-evidence",
+      "digest": "sha256:1e9df61055a9ab5bf035cadd81177686cf3e0c064d322cb7b125d015f1c12088",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839617755/zip"
+    },
+    {
+      "id": 12839541776,
+      "name": "a4-ci-lookup-state-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:6ce6dc8d926830903f88bd34665c3a86e3950956882526983f74997ccba5a05c",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839541776/zip"
+    },
+    {
+      "id": 12839437081,
+      "name": "v14-read-evidence",
+      "digest": "sha256:28788592146fb9405d7700422e8d7d62f4a64e3f303c3428d3297b1c26021bd7",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839437081/zip"
+    },
+    {
+      "id": 12839426345,
+      "name": "a421-audit-527f07593fc346f0448165e1f64dd6954eb798b4-attempt1",
+      "digest": "sha256:3a4e28ba46ca64c9f2c449a68dc1c78094d5d549f1da7c47f793e10745c74183",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839426345/zip"
+    },
+    {
+      "id": 12839084011,
+      "name": "a42331-safe-errors-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:656d08d20618f5f8b0280a7359c99d3a0f114d3215c086b3a4c433e4470507bd",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12839084011/zip"
+    },
+    {
+      "id": 12838758856,
+      "name": "a421-core-527f07593fc346f0448165e1f64dd6954eb798b4-attempt1",
+      "digest": "sha256:97d8b530a4ec48e477d9bba48cf1952ce0465aabd91ee2dd6f13b1a57a5ee191",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838758856/zip"
+    },
+    {
+      "id": 12838434297,
+      "name": "m17-1-2-suspend-evidence",
+      "digest": "sha256:dc9376644e41b0f657ee02933267f93ae48765fea07741eb552de32a1248966f",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838434297/zip"
+    },
+    {
+      "id": 12838354493,
+      "name": "a421-lookup-527f07593fc346f0448165e1f64dd6954eb798b4-attempt1",
+      "digest": "sha256:3d5096cfff67b770f52d01433ca5f88a90bcfee5a093fb241fbc23c660bd2b7b",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838354493/zip"
+    },
+    {
+      "id": 12838249758,
+      "name": "a42331-safe-ci-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:d8ae92eab594e20bbc39e7477b5b2fb60835a276b673dcda1483f467b5020948",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12838249758/zip"
+    },
+    {
+      "id": 12837869680,
+      "name": "a4-ci-contracts-527f07593fc346f0448165e1f64dd6954eb798b4-40740668279-1",
+      "digest": "sha256:bdd960bb275c5d0da5e4d8982b596b7aa52aff6fca343e055b4380093f715952",
+      "url": "https://api.github.com/repos/sssssssssh/ssh_stock/actions/artifacts/12837869680/zip"
+    }
+  ],
+  "source_scope": {
+    "guard": "scripts/a42366_source_guard.py:78",
+    "guard_baseline": "f00be6aa149d5fde145ae4137c01368a332b022f",
+    "reviewed_commit": "527f07593fc346f0448165e1f64dd6954eb798b4",
+    "native_checkout_commit": "95b47d7b3be891be08e342c4e2894c29d5952bf7",
+    "actual_changed_count": 78,
+    "expected_changed_count": 33,
+    "exact_path_set_matches": false,
+    "additional_paths": [
+      "backend/app/api/v1/jobs.py",
+      "backend/app/cli.py",
+      "backend/app/core/config.py",
+      "backend/app/core/db.py",
+      "backend/app/repositories/calculation_frame.py",
+      "backend/app/repositories/job_run.py",
+      "backend/app/services/calculation_policy.py",
+      "backend/app/services/calculation_progress.py",
+      "backend/app/services/data_job_diagnostics.py",
+      "backend/app/services/data_job_reconcile.py",
+      "backend/app/services/execution_diagnostics.py",
+      "backend/app/services/job_worker.py",
+      "backend/app/services/quality/raw_completeness.py",
+      "backend/app/services/trade_status/service.py",
+      "backend/app/services/worker_observation.py",
+      "docs/acceptance/BIZ_POLICY_01_closeout.md",
+      "docs/acceptance/BIZ_POLICY_01_runbook.md",
+      "docs/acceptance/BIZ_WORKER_02_contract_migration_ADR.md",
+      "docs/acceptance/BIZ_WORKER_02_proposed_source_contract.json",
+      "docs/acceptance/BIZ_WORKER_02_review.md",
+      "docs/acceptance/BIZ_WORKER_02_validation.json",
+      "docs/acceptance/WORKER_02_recovery_authority_proposal.md",
+      "docs/acceptance/WORKER_02_revision_baseline.md",
+      "docs/acceptance/WORKER_02_revision_closeout.md",
+      "docs/acceptance/WORKER_02_revision_contract_PROPOSED.json",
+      "docs/acceptance/WORKER_02_revision_failures.json",
+      "docs/acceptance/WORKER_02_revision_validation.json",
+      "docs/acceptance/worker02_r2/closeout.md",
+      "docs/acceptance/worker02_r2/failure_inventory.md",
+      "docs/acceptance/worker02_r2/pre_full_validation.json",
+      "docs/acceptance/worker02_r2/review_baseline.json",
+      "docs/acceptance/worker02_r2/small_input_cost_observations.json",
+      "docs/acceptance/worker02_r2/source_inventory_PROPOSED.json",
+      "docs/runbooks/WORKER_02_readonly_recovery.md",
+      "scripts/business_worker_resource_preflight.py",
+      "tests/integration/test_business_policy_worker_pg17.py",
+      "tests/integration/test_business_worker_02_diagnostics.py",
+      "tests/integration/test_business_worker_02_pg17.py",
+      "tests/integration/test_worker02_r2.py",
+      "tests/integration/test_worker02_r2_lifecycle.py",
+      "tests/integration/test_worker02_revision.py",
+      "tests/unit/test_business_policy_identity.py",
+      "tests/unit/test_business_worker_02.py",
+      "tests/unit/test_worker02_r2_contract.py",
+      "tests/unit/test_worker02_revision_contract.py"
+    ],
+    "missing_paths": []
+  },
+  "no_production_authorization": true
+}

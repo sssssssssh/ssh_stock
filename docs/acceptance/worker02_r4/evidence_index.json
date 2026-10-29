@@ -1,0 +1,549 @@
+{
+  "schema": "worker02.r4.raw-evidence-index.v1",
+  "raw_files": [
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/a42-baseline-contract.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/a42-baseline-source.json",
+      "bytes": 1855,
+      "sha256": "a3e46acecd71a8d1a056f312875ccde46146f88f8ee07c3af38920e1be51e2a6"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/dependency-lock.log",
+      "bytes": 1868,
+      "sha256": "0ca4d3095a16ac8e0267e3356df938364153382698f5cce1520ce59a7a47a0da"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/green-pg17-retry.log",
+      "bytes": 3864,
+      "sha256": "1db6e8658b22b97c796ad0656df171bb83c3085e68295099eafb5ed9fc7a5899"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/green-pg17-retry.xml",
+      "bytes": 199524,
+      "sha256": "67107e9aaaa63675f0f96ea5f4f95193a92d9054b89694984181e52ccbc6d56f",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "66",
+          "time": "487.277",
+          "timestamp": "2026-10-29T10:35:24.790937+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/green-pg17.log",
+      "bytes": 1070,
+      "sha256": "e371e4fa7dc700c218588106a11f416fd82950ff5f0c0bdbcfd443b4d01d30ff"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/green-pg17.xml",
+      "bytes": 781,
+      "sha256": "22c94fbf05b698b72b3aa0c2ef40e718d5bc5eff6aa522b241dc02c677a46b8b",
+      "suites": [
+        {
+          "errors": "1",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "1",
+          "time": "1.783",
+          "timestamp": "2026-10-29T10:29:50.189090+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "",
+          "name": "tests.integration.test_worker02_r4_recovery_receipt",
+          "first_error": "collection failure"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/historical-linux.log",
+      "bytes": 797,
+      "sha256": "b3c2eb5f0fbc89ee4e84a385de48e47320b506e5bdfeecb27f4c1860109f2da4"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/historical-linux.xml",
+      "bytes": 2367,
+      "sha256": "31af5b4740b153a977c04b23e91c278c0b1ba305e58ce3acc20e3937b7802ddc",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "14",
+          "time": "11.046",
+          "timestamp": "2026-10-29T10:38:36.025848+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/native-baseline-linux.log",
+      "bytes": 3162,
+      "sha256": "589f9aea789528289d42262ea2183006a1b86524fbaa12f3f52edb98ad54bc43"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/native-baseline-linux.xml",
+      "bytes": 3152,
+      "sha256": "43d58f75356c5abbb035d9820df23e3687085f7b1a820c95c9c48d6de8ca3a23",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "skipped": "0",
+          "tests": "3",
+          "time": "2.827",
+          "timestamp": "2026-10-29T10:42:23.904287+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_a4233_background_observer",
+          "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        },
+        {
+          "classname": "tests.unit.test_lookup_tail_review_a423",
+          "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        },
+        {
+          "classname": "tests.unit.test_ab_read_profile_v14_a4",
+          "name": "test_a4_diagnostic_freezes_production_sources",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/red-pg17-corrected-fixture.log",
+      "bytes": 3407,
+      "sha256": "1964ac63bf0e92057607e777e4a537d657888bffb92a09fc83d86aab60731240"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/red-pg17-corrected-fixture.xml",
+      "bytes": 3181,
+      "sha256": "b7e3102aca6cde311e6d0118b4f2c79f74a1c9053e05792e7d4425afc409419a",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "6",
+          "time": "16.727",
+          "timestamp": "2026-10-29T10:06:31.450129+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[ledger_token]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[active_child]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_fingerprint]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_transition]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[published_timestamp]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/red-pg17.log",
+      "bytes": 58757,
+      "sha256": "e1a40106861437203840f7dabea5b21e3727fb2c3e2d891795177624d7738d9c"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/red-pg17.xml",
+      "bytes": 11445,
+      "sha256": "779ab84da35e0bbbf90cec6d530eb2e7c19da06644fec555babd9bab99dcebe8",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "6",
+          "time": "17.992",
+          "timestamp": "2026-10-29T09:58:42.868917+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[ledger_token]",
+          "first_error": "sqlalchemy.exc.IntegrityError: (psycopg.errors.CheckViolation) PUBLICATION_IMMUTABLE\nCONTEXT:  PL/pgSQL function protect_data_publication_evidence() line 6 at RAISE\n[SQL: UPDATE data_publication SET execution_token=%(execution_token)s::UUID WHERE data_publication.job_id = %(data_publication_job_id)s::UUID]\n[SQL parameters hidden due to hide_parameters=True]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[active_child]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_fingerprint]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_transition]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[published_timestamp]",
+          "first_error": "sqlalchemy.exc.IntegrityError: (psycopg.errors.CheckViolation) PUBLICATION_IMMUTABLE\nCONTEXT:  PL/pgSQL function protect_data_publication_evidence() line 6 at RAISE\n[SQL: UPDATE data_publication SET published_at=%(published_at)s::TIMESTAMP WITH TIME ZONE WHERE data_publication.job_id = %(data_publication_job_id)s::UUID]\n[SQL parameters hidden due to hide_parameters=True]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/resource-preflight.json",
+      "bytes": 455,
+      "sha256": "448ebeccad64e4354387a2cca74455c908741e8a9193ec860df1b1ca5854580d"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-evidence/test-db-identity.log",
+      "bytes": 237,
+      "sha256": "6ec8fa4772d7fe19ac7a563953dfe3fef1555380789b7654c038cf247b43bf11"
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-green-unit-final.xml",
+      "bytes": 5594,
+      "sha256": "eb2bf3833dbbc252d8035ee8300f6d470b98e105323f63a5c2a3aaf0faf69b09",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "33",
+          "time": "7.954",
+          "timestamp": "2026-10-29T10:49:28.276381+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-green-unit.xml",
+      "bytes": 5595,
+      "sha256": "3fae8cd9c27304832832d76bbe559ba09af9a9d351094c9d82e8854961b41dc5",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "33",
+          "time": "11.613",
+          "timestamp": "2026-10-29T09:56:29.998296+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-historical-linux.xml",
+      "bytes": 2367,
+      "sha256": "31af5b4740b153a977c04b23e91c278c0b1ba305e58ce3acc20e3937b7802ddc",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "14",
+          "time": "11.046",
+          "timestamp": "2026-10-29T10:38:36.025848+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-historical-native-nodes.xml",
+      "bytes": 3184,
+      "sha256": "b6ddd4338e4a5767b77042638346f80a35b16b89dee43df8f35d00ce375a5947",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "skipped": "0",
+          "tests": "3",
+          "time": "80.636",
+          "timestamp": "2026-10-29T10:16:23.237972+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_a4233_background_observer",
+          "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_HEAD_BYTES_MISMATCH"
+        },
+        {
+          "classname": "tests.unit.test_lookup_tail_review_a423",
+          "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_HEAD_BYTES_MISMATCH"
+        },
+        {
+          "classname": "tests.unit.test_ab_read_profile_v14_a4",
+          "name": "test_a4_diagnostic_freezes_production_sources",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_HEAD_BYTES_MISMATCH"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-historical.xml",
+      "bytes": 1930,
+      "sha256": "fca2188f0c826d6ba52c5a87f587fdd22d1ae133c15a1d6a0a71114894f76a2f",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "11",
+          "time": "5.031",
+          "timestamp": "2026-10-29T10:01:23.752975+08:00"
+        }
+      ],
+      "failure_nodes": []
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-native-repro-windows-gbk.xml",
+      "bytes": 2944,
+      "sha256": "2055c9e4e57ded404bebaf1a8c521de0050e5f7a05c8f2e1784d79456d8100bc",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "skipped": "0",
+          "tests": "3",
+          "time": "24.319",
+          "timestamp": "2026-10-29T10:02:00.136044+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_a4233_background_observer",
+          "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        },
+        {
+          "classname": "tests.unit.test_lookup_tail_review_a423",
+          "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+          "first_error": "UnicodeDecodeError: 'gbk' codec can't decode byte 0xae in position 13034: illegal multibyte sequence"
+        },
+        {
+          "classname": "tests.unit.test_ab_read_profile_v14_a4",
+          "name": "test_a4_diagnostic_freezes_production_sources",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-native-repro.xml",
+      "bytes": 3176,
+      "sha256": "8f1e5e88d3437c3f486cd0118a10d4e5034ceaa84e4f43661b2e91e4299e86ac",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "skipped": "0",
+          "tests": "3",
+          "time": "26.609",
+          "timestamp": "2026-10-29T10:09:02.816579+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_a4233_background_observer",
+          "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        },
+        {
+          "classname": "tests.unit.test_lookup_tail_review_a423",
+          "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        },
+        {
+          "classname": "tests.unit.test_ab_read_profile_v14_a4",
+          "name": "test_a4_diagnostic_freezes_production_sources",
+          "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-red-pg17-initial.xml",
+      "bytes": 11445,
+      "sha256": "779ab84da35e0bbbf90cec6d530eb2e7c19da06644fec555babd9bab99dcebe8",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "6",
+          "time": "17.992",
+          "timestamp": "2026-10-29T09:58:42.868917+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[ledger_token]",
+          "first_error": "sqlalchemy.exc.IntegrityError: (psycopg.errors.CheckViolation) PUBLICATION_IMMUTABLE\nCONTEXT:  PL/pgSQL function protect_data_publication_evidence() line 6 at RAISE\n[SQL: UPDATE data_publication SET execution_token=%(execution_token)s::UUID WHERE data_publication.job_id = %(data_publication_job_id)s::UUID]\n[SQL parameters hidden due to hide_parameters=True]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[active_child]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_fingerprint]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[audit_transition]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.integration.test_worker02_r4_recovery_receipt",
+          "name": "test_real_duplicate_and_unknown_ack_refuse_inconsistent_receipt[published_timestamp]",
+          "first_error": "sqlalchemy.exc.IntegrityError: (psycopg.errors.CheckViolation) PUBLICATION_IMMUTABLE\nCONTEXT:  PL/pgSQL function protect_data_publication_evidence() line 6 at RAISE\n[SQL: UPDATE data_publication SET published_at=%(published_at)s::TIMESTAMP WITH TIME ZONE WHERE data_publication.job_id = %(data_publication_job_id)s::UUID]\n[SQL parameters hidden due to hide_parameters=True]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-red-unit-initial.xml",
+      "bytes": 9624,
+      "sha256": "d6c3e7377874031578732bcbe3af35d361ca6750bd0e123b7f02b43f21047c21",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "6",
+          "skipped": "0",
+          "tests": "12",
+          "time": "5.025",
+          "timestamp": "2026-10-29T09:44:56.991106+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[ledger_token]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[active_child]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[audit_fingerprint]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[audit_transition]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[published_timestamp]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[publishing_timestamp]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-red-unit.xml",
+      "bytes": 6513,
+      "sha256": "1f71004680eab74262850429bce19f8718444f51d457314c55bec2860cfc59cb",
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "9",
+          "skipped": "0",
+          "tests": "12",
+          "time": "6.096",
+          "timestamp": "2026-10-29T09:47:15.107896+08:00"
+        }
+      ],
+      "failure_nodes": [
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[ledger_token]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[active_child]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[audit_fingerprint]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[audit_transition]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[published_timestamp]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_duplicate_recovery_refuses_inconsistent_receipt_without_writes[publishing_timestamp]",
+          "first_error": "Failed: DID NOT RAISE ValueError"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_unknown_ack_reader_uses_the_same_receipt_boundary[audit_transition]",
+          "first_error": "AssertionError: assert 'RECONCILED_ABORTED' == 'RECOVERY_COMMIT_UNCONFIRMED'\n  \n  - RECOVERY_COMMIT_UNCONFIRMED\n  + RECONCILED_ABORTED"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_unknown_ack_reader_uses_the_same_receipt_boundary[published_timestamp]",
+          "first_error": "AssertionError: assert 'RECONCILED_ABORTED' == 'RECOVERY_COMMIT_UNCONFIRMED'\n  \n  - RECOVERY_COMMIT_UNCONFIRMED\n  + RECONCILED_ABORTED"
+        },
+        {
+          "classname": "tests.unit.test_worker02_r4_recovery_receipt",
+          "name": "test_unknown_ack_reader_uses_the_same_receipt_boundary[publishing_timestamp]",
+          "first_error": "AssertionError: assert 'RECONCILED_ABORTED' == 'RECOVERY_COMMIT_UNCONFIRMED'\n  \n  - RECOVERY_COMMIT_UNCONFIRMED\n  + RECONCILED_ABORTED"
+        }
+      ]
+    }
+  ],
+  "source_identities": {
+    "historical": "2779a2a7a7120c86f67b4991bce196c652b5ebb0",
+    "input": "527f07593fc346f0448165e1f64dd6954eb798b4",
+    "red": "input production plus new test overlay",
+    "green": "R4 patched source snapshot; final commit repeated by full unfiltered suite",
+    "final_receipt": "PR #1 post-commit closeout; exact source HEAD and PR merge checkout separately"
+  },
+  "raw_policy": "Logs/XML are ignored local evidence, not installed authority or performance qualification. Baseline GitHub evidence URLs/digests are in baseline_evidence.json. Final-SHA full pytest and CI receipt is appended to PR #1 without altering this tested SHA."
+}

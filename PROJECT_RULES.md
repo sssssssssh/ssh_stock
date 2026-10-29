@@ -1212,3 +1212,12 @@ UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺
 内部恢复锁定root/账本并提交前再次核验authority；未知ACK仅新连接只读核对，不重放。
 生产authority未安装、合同未独立签署、Linux全量及百万行矩阵仍阻断，现场未授权未复测。
 不合并/部署，不改金融公式、生产A/B SQL、schema或历史合同。详见[R2交付](docs/acceptance/worker02_r2/closeout.md)。
+
+## WORKER-02-R4：恢复收据一致性边界
+
+重复调用和丢失 ACK 的只读复核必须执行同一完整收据判定，不能仅凭旧审批 ID 或 FAILED/ABORTED 两个状态确认成功。
+根/账本 token、owner、审计执行指纹及原终态转换必须匹配；发布开始/完成证据或活跃子任务存在时保持未确认。
+合法重复调用只读回执，不重新执行中止、不追加审计、不重新消费 authority；未知提交不自动重放。
+上述判定不是全主机退出或独立生产授权证明。旧合同、负例、金融/Raw/发布 SQL/默认开关保持原样。
+无独立签署不激活新合同，不将普通 CI 或小样本结果当容量准入。R4 仅推送现有特性分支，PR 保持 Draft；
+合并/部署仍未授权，详见 docs/acceptance/worker02_r4/merge_readiness.md。

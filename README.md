@@ -2197,3 +2197,13 @@ UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺
 内部恢复锁定root/账本并提交前再次核验authority；未知ACK仅新连接只读核对，不重放。
 生产authority未安装、合同未独立签署、Linux全量及百万行矩阵仍阻断，现场未授权未复测。
 不合并/部署，不改金融公式、生产A/B SQL、schema或历史合同。详见[R2交付](docs/acceptance/worker02_r2/closeout.md)。
+
+## WORKER-02-R4：合并前收据核对
+
+内部重复恢复与未知提交的只读核对现在使用相同的完整收据边界：根/账本执行身份、
+ABORTED 且无发布开始/完成时间、原审计身份指纹和 RUNNING 到 FAILED 的转换一致，
+并且没有 RUNNING/QUEUED 子任务，才报告已核对；重复调用不会再次中止、消费审批或追加审计。
+这不安装生产 authority，不新增 apply/force/unlock，不自动恢复或重试，不授权现场操作。
+旧冻结合同未取得独立签署，继续 CONTRACT_MIGRATION_BLOCKED；小型回归不等于容量或上线验收。
+本轮不合并、不删分支、不部署。证据及 AT01–AT12 见
+[R4 合并前结论](docs/acceptance/worker02_r4/merge_readiness.md)。
