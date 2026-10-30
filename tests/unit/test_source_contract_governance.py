@@ -7,7 +7,7 @@ import pytest
 
 from scripts import business_source_contract as business
 from scripts import source_contract_governance as governance
-from scripts.source_contract_history import run, validate_result
+from scripts.source_contract_history import run, validate_result, verify_test_sources
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,6 +50,29 @@ def test_history_route_is_exact_and_not_a_directory_or_version_wildcard(tmp_path
     assert len(governance.HISTORICAL_MODULES) == 7
     with pytest.raises(ValueError, match="UNREGISTERED_HISTORICAL_NODE"):
         run(tmp_path, node="tests/unit/test_business_worker_02.py")
+
+
+@pytest.mark.parametrize("damage", ["none", "head", "live", "missing"])
+def test_history_execution_cannot_mask_a_changed_original_test(tmp_path, monkeypatch, damage):
+    path = governance.HISTORICAL_MODULES[-1]
+    current = tmp_path / path
+    current.parent.mkdir(parents=True)
+    if damage != "missing":
+        current.write_bytes(b"changed" if damage == "live" else b"original")
+    monkeypatch.setattr(business, "git", lambda root, *args:
+                        b"changed" if damage == "head" and args[-1].startswith("HEAD:")
+                        else b"original")
+    if damage == "none":
+        assert verify_test_sources(tmp_path, (path,)) is None
+    else:
+        with pytest.raises((ValueError, FileNotFoundError)):
+            verify_test_sources(tmp_path, (path,))
+
+
+def test_unregistered_historical_test_paths_are_rejected_before_git(tmp_path, monkeypatch):
+    monkeypatch.setattr(business, "git", lambda *a: pytest.fail("must reject before Git"))
+    with pytest.raises(ValueError, match="UNREGISTERED_HISTORICAL_TEST"):
+        verify_test_sources(tmp_path, ("tests/unit/test_business_worker_02.py",))
 
 
 @pytest.mark.parametrize("damage", ["exit", "count", "failure", "error", "skipped", "totals"])

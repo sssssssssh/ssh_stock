@@ -46,6 +46,11 @@ skipped, rewritten or converted to xfail. Child failure, missing XML, incorrect
 counts or any skip fail the parent. JUnit identifies the historical SHA and
 contract version; a terminal summary discloses the route. Other safety tests
 continue against current code. The registry is a single exact node, not a glob.
+Before delegation, the original test files' current committed and physical
+bytes must still equal the historical originals: routing cannot hide edits to
+an old test. Raw JUnit retains version properties; the existing CI redactor
+may omit properties, so the terminal version summary and final receipt remain
+explicit. The redaction policy is not weakened.
 
 A separate new offline regression executes all seven original historical
 source-contract modules: 73 original positive and negative cases. Its child

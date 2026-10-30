@@ -31,10 +31,24 @@ def validate_result(returncode, xml, expected):
                 source_sha=HISTORICAL_SHA, performance_eligible=False, g1_authorized=False)
 
 
+def verify_test_sources(root, paths):
+    from scripts.business_source_contract import git
+
+    for path in paths:
+        if path not in HISTORICAL_MODULES:
+            raise ValueError("SOURCE_CONTRACT_UNREGISTERED_HISTORICAL_TEST")
+        original = git(root, "show", HISTORICAL_SHA + ":" + path)
+        current = Path(root) / path
+        if (git(root, "show", "HEAD:" + path) != original or current.is_symlink()
+                or current.read_bytes() != original):
+            raise ValueError("SOURCE_CONTRACT_HISTORICAL_TEST_SOURCE_CHANGED")
+
+
 def run(root, *, node=None):
     root = Path(root).resolve()
     if node is not None and node not in HISTORICAL_NODES:
         raise ValueError("SOURCE_CONTRACT_UNREGISTERED_HISTORICAL_NODE")
+    verify_test_sources(root, HISTORICAL_MODULES if node is None else (node.split("::")[0],))
     parent = root / ".codex_tmp"
     parent.mkdir(exist_ok=True)
     if parent.is_symlink() or not parent.resolve().is_relative_to(root):
