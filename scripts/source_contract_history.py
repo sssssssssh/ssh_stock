@@ -9,6 +9,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 from scripts.source_contract_governance import (
+    HISTORICAL,
     HISTORICAL_MODULES,
     HISTORICAL_NODES,
     HISTORICAL_SHA,
@@ -66,6 +67,10 @@ def run(root, *, node=None):
                         "checkout", "--detach", HISTORICAL_SHA],
                        check=True, capture_output=True, timeout=60)
         require_historical_source(checkout, HISTORICAL_SHA)
+        from scripts.business_source_contract import verify
+
+        if len(verify(checkout, version=HISTORICAL, expected_sha=HISTORICAL_SHA)) != 64:
+            raise ValueError("SOURCE_CONTRACT_HISTORICAL_ROUTE_FAILED")
         if (checkout / ".env").exists():
             raise ValueError("SOURCE_CONTRACT_HISTORY_DOTENV_REJECTED")
         env = {k: v for k, v in os.environ.items()

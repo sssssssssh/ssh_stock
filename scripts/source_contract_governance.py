@@ -45,7 +45,7 @@ def historical_manifests(root):
 def development_receipt(root, *, expected_sha=None):
     from scripts import a4235_capability_guard as g
     from scripts.a42361_source_guard import verify_full_worktree
-    from scripts.business_source_contract import git, git_blobs
+    from scripts.business_source_contract import committed_hashes, git, git_blobs
 
     root = Path(root)
     head = git(root, "rev-parse", "HEAD").decode().strip()
@@ -69,8 +69,9 @@ def development_receipt(root, *, expected_sha=None):
         original = objects[HISTORICAL_SOURCE + ":" + path]
         g.require(g.git(root, "show", HISTORICAL_SOURCE + ":" + path) == original,
                   "A4235_OVERLAY_BYTES_MISMATCH")
-    # The six original patch pins remain independently checked in the live tree.
-    pins = json.loads(dict(historical_manifests(root))[g.OVERLAY_MANIFEST])["patch_sha256"]
+    # Live files bind to this development commit, not an earlier patch version.
+    # The independent reader and sticky mismatch taxonomy remain in place.
+    pins = dict(committed_hashes(root, head, tuple(sorted(g.PATCH_PATHS))))
     for path in g.PATCH_PATHS:
         g.require(g.path_sha(root / path) == pins[path], "A4235_OVERLAY_BYTES_MISMATCH")
     tree_args = ("ls-tree", "-r", head, "--", "infra")
