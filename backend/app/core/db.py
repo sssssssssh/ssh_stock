@@ -22,9 +22,12 @@ def _data_task_transaction_timeouts(session, transaction, connection):
             "lock": str(int(config.get("data_lock_timeout_ms", 5000))),
         })
         identity = session.info.get("data_execution_job_id")
-        if identity:
+        if identity and not session.info.get("worker_observation"):
             connection.execute(text("SELECT set_config('application_name', :name, true)"),
                                {"name": f"space-data/{identity}"})
+    from app.services.worker_observation import observe_session
+
+    observe_session(session, connection)
 
 
 def database_error_summary(error: SQLAlchemyError) -> str:

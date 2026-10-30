@@ -1,0 +1,1730 @@
+{
+  "pr": 1,
+  "branch": "codex/biz-worker-02",
+  "review_head": "4d183857cdf42e4f9e75bd2a78c792f0ef3847e3",
+  "master_baseline": "75076eac443d935d622bf59e12aad20ce5aba85e",
+  "prior_counts": {
+    "passed": 4953,
+    "failed": 53,
+    "errors": 137,
+    "skipped": 0
+  },
+  "raw_evidence_sha256": {
+    "full.xml": "58a8f18298eb510b22206044393c5603a94709efcbc8e0ea61dfa28feb207783",
+    "full.log": "82aa9c2d20224a0a118695fe260d426172341f748fe89f5de3b811a7d134f593",
+    "full-failure-traces.json": "b85b292f9b1d2bc5dc2ab33a548aa44b4054070eb668e2ea12eb4af9c05fc718",
+    "review-evidence.zip": "3e872290402307d70bf54745eca826721dd35dc9dd72efdd45291bc8b246b0f9"
+  },
+  "nodes": [
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_real_scoped_fetch_windows_month_root_and_actual_plan",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "86ebf8a21be3f39c9b8c5b990c33d2215ef1b08e390b20a4ca9846b4d891a491"
+    },
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_cancel_after_real_complete_read_keeps_only_that_evidence",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "62f22bb1ef5a2729e865c08430d6ccd4446d324311eddb521ca743c266850a84"
+    },
+    {
+      "node": "tests.integration.test_a42_ci_scope_pg17::test_actual_plan_sql_timeout_keeps_partial_native_profile_and_completed_read",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "81a882ebffde2b17d1f5225b03006dbc4edc572de78026b86d08238687092c3f"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_fixture_count_failure_keeps_acquired_catalog_and_fail_closed_receipt",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b3e2e6df908905a250a172b2da943369843bb9d111ee7f6cffb4c19200177798"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_full_fixture_census_matches_independent_aggregate_counts",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "043d65facb29ea4d5b9e19f746c9fa74fcacc111790d10c9c08be67eac5cfebe"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_monthly_reads_carry_evidence_but_apply_final_verification_only_at_tail",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "a6f55cafa7e93dc5fecad18429e06048ce5fd88f79274ebd1e7b6fc838b0e98c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_omitting_intermediate_final_check_does_not_skip_next_e0_source_check",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "154a112fd8946c202853c8dc88981ece36227a5c91c71c35d365d289a448082b"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e1_cached_sha_accepts_changed_intermediate_a_and_restored_final_a",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "534b524b707d397a35fcf2ba23136dc56a0ce909289e548d293e66c47e61eff5"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e2_caller_generation_does_not_invalidate_for_direct_candidate_sql",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "51268f0cef57308a853a7f3d8be5b4712a75631f95c380c66b818d5cc9fea702"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[update]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "a6e6d8f5d8097417298415d27e6b29cf6c91279157af97127be8252e1da80549"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[delete]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "ff654881627b3ce1ca2862f2383ff6513c2d401fc810bb3e09e0c8b46e4c0159"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[insert]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "409b0247c345a8af6ed94258fb1e5b843014f90df8905f2a1dfa4f0fff858831"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_observes_committed_a_dml_and_aba_across_commits[aba]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "882b1ab4b85521a3c4ee0e40d2e2a1768c9538b2cea1a5d5a3a3b39f20897935"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_rollback_does_not_create_false_generation_and_same_tx_reuse_is_real",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d5e9ad66ac1846d6ab934875a2214613e2d643dff3aba9b1fa57cb0057b75e03"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_direct_b_update_invalidates_certificate_and_rechecks_all_b",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "81faa7546b6cfa7e50537fd15bd67d4bc31a2f2841672771bc1b060a54186a20"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_privileged_trigger_bypass_is_explicit_counterexample_not_safe_equivalence",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e9ba6cea974ab801161a5e5850fd87ce4fb74c80f928646fd274345541257ab6"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "abd519f7a2e1367ad7376abc3640089a73c06855be4066c7f5b6b5431e78e1e3"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "4d93b91173967436c63e462d2a3332bd401b0266b6617440f3fd28ff7c7831bc"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "160c74542f87ae9ced3a1c07892d549dbda30767445a3d4d35e9afac38398b7d"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e035b5a844352cbd653d3c7c98fc1dd3f7e353a0c530fc802ef01a53cf8c133f"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[a_only-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b0914e7a4d3608903e3a703377f301d11cef8f167bbed56dadb723e0006f3288"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d2c9c151176db6e6e09e94f42f8a8d8bc42e631d198ced497792a76b13c377c2"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "9b50de3c2cde8376c7f21b492becd2838e7a06e9965cc67f37eb4633f04b7c50"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "13b87bfa976ee0057e82b9dfeb7b70adb106b3a803e097c4fb38d842df864068"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "bacfa5c6b890622b4aed6efab6fb6b6d163884a284679bf521cc253ca48a15aa"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[overwrite-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "257436822c16c40fc237dfb085b623c334c84e845adb51f89d9d10d9ce751c95"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1a015191f6c7979972fb9ce2de876167157c4efa8132047ef792a403a14b8d0c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1be4ccc5b4932e4b26106a55882f7f5ba6db8d587437d746bb0515db3b275397"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "cb8dc2595c7c3cb51aa871d9cb261ad2dc89c91c4aeb12c7ddb313a63b30618b"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e9447963cd7d84006fa29f5ea3f45b948dc58fe8d6116100f6b8b9170ef8225a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[delete-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "def9ffdd734235aaf07c1cd849ecc593593f133218d0214c2a1ccfa9d9f7a01b"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1358fca194f709302ab7e7d1eadddc3752dd520439275177d8869f4ae87de1b3"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "f5d798fb2d1e07aa9ebb41afebba93fb65347753388412edc7d30931776d6e32"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "90c2f8da4b451a77897aac8000d114d157f7ae0d199a1238e489079b211004cc"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "7e83cb508ba073647b1676052a0692fd970f231309c983ca97564afb2bca3fb5"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_version-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d940a657d36e9b9225fc35b99aad9a4ed165fa9b91d834146660d20ff3cbdd75"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fe1f8e61e08dd5d1a822460fc6014043688b1a735568b684d20cd1448a70c861"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "f8c4f7d941644194f97f98a19a6f20d7b040cd9488cc5564f98d0ea1a9a0a25a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "091659e06edc350092b0ac5cbd23666bfce11ff032dda838aac768376d165772"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "5e341b601940d191e49ba7ddb691ff668ec0a1beb1655acfa945770207412bcb"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[wrong_hash-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fe8619b219f54648b3df6966d83c1bca96a879b0cbac486b50160572b6f01469"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e2c46110039b03564ea1dfbe87ee853ea26abfc1e9c37358f7e7b7016202b645"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "435430cedb107c18b97b016780af699aa468d56b759cc3c764d6be517becea2e"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "9c1c5ca1af76a615b65ee3bb57a3154f9d52c856a4aa0c6edf6fc02f4ea3e728"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "c1443135f28800b5c40b856260b4ff230a4543cda269f9859f1fb427efec3096"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[rebuild-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "4ceb806e2d3821fa3a53d765bd2f0f9dd1f1206b44b61f2f69d10095c578fcef"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "752ada7859a479b62acba5bb608206f7713aab831acf5954149a1ccb6f10912a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "51eebf23f39092d4fada67d15a54a7f325d644c16a5c883c2ba4827138aea35f"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fd16cee239e56940c8f232ac6da12944fefc1da8c928f36ea430cbf3ed07bffa"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "7f5347846235b4cc7961ee0ccb5f2cdb7d60f864648d562489a17a6a691ff740"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[new-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "91320f6f4b842969e13ee6a2bcb3099ba1655b7e414656447cc83261101aa3ee"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3159c96f1739706ce73684225df26ff48e5431ef39edeb2e5abdedeb9dae3e88"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "a71fd7be7f5f8bcb97a2baecdf31ed4fb6011b1ee289261826f4d6f5d91c9b8e"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "09bcb62d776589b1d7f6e3e500510d89d70c0ee2b040842a032c801ed265f449"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "09fcf19bf9460d195a043307e1034962e9dc7f20121e01edae808208107cd6a8"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[empty-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d3d8b4a1d524b128d8d26affd2699629e7594d8feb8a63244b8a660612495d8e"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "37238900031648aef145492b723372f8e99764f5def027e4ec98c04415252559"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "c9e27246a9d8c2002b9fee9b1c528054045e91171cc14be867afdedde049cdf8"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "0c095b3d61145de1e04fb5e972fa50c1a70c5300429a68d857f78de68832b186"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "72b0d55f21b603208cc665b8304900b982ab86af39619fbbeaeb1fc3c2624ecd"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[null-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "270eba58b30e3c58f1a311705fd1994a240a35f683dc8a0a91df9393a1fd5fb8"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e6bb18fae7703e7a2f1d99656610f05d08fe27996f952aba336a8ac99d654bca"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3_INLINE]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "dd05a2672ff446933fe329972183754ceb84e11377ac366a6cc51cab7b135189"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S3_KEYS]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d875faee3875f9a4c356349ff0f94f5d0e3ce72fee192f6d9ee5a107ec3628af"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e4dd18ad25aec06fbfbaf7493863d9d936ebe5abc93d3978a4248da989372db1"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reuse_exact_frozen_all_field_golden[other_root-S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fa16290873a7d76055cfe2464c5ea3df303bb4137a2804d08709cdac5e865df0"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[1]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "cdfc8648f1e22804928e9834dfbb2667ba0a2998500e11cafc050d174536c4e2"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "cec7b8598238ed73f186a398289b7d6299ba78a284d28edaf515847c9cb53da8"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "baee0b9a0e16844aeae2f6e270837a882b4b6575c8a84697d06eb98d5a9a6455"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[10]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "4eab8a39f5ff872bf261124950f83990d8a3ee067890a366e814946a50979330"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_no_sql_sort_keeps_closed_days_month_year_null_dtype_and_global_order[20]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "df226d6ca1f79516ead48246aaf5dec424000c19bc8e745efa0c9f044843d667"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[date]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "c53115f1508664ddf2d5d6ae7c2482e8673299e47e95023cce3a08a20620eec0"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[entity]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b2e6997ae3a129668715c3581627a6f6bf646095af865fb167d588fd84224902"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[payload_date]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "690049d40af52dbd28753c8bc6d2bb03e7407853d32d6e5c12f69258268c7eee"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[missing_identity]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "0fa086b74d974ebe17d513a8f4fbf42d997eb549c5d05594dda0e76f440266f4"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_candidate_keys_must_be_validated_before_bounded_cte[tombstone_date]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3d65de0c71c1ca95e0afccffa6e0a2faab7a131c62c2e0722fd397e8a09ab28a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-cancel-CANCELLED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "2850ef149ded23dcf43194b77b414628a00e8fb2433b464bfe82aac0f80d1979"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-timeout-FAILED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1c71331c93a91917f82d0c89680d2110d518bf9626613e711e415152bbf3a543"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S3-disconnect-RUNNING]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "e8be14f424b339cc257cbf084838e8443c7aad30b3d6d1961fe078b28ad54c8a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-cancel-CANCELLED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "5653d2b867fc7f52c5a9ebf00f6eea0ea4ce5580ca75b6b568e7dc06eb2c104a"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-timeout-FAILED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "34727b3f9b0506ed1d23d12022123df0441e2df6199c696dbbb9276acab28269"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S4-disconnect-RUNNING]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "89c443d632c71333e6ae2e442e986776be6bfea74bd884bdc51afe70ff75a34c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-cancel-CANCELLED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "771e3bcac5f96e7d598aa6c0d4fbf531c6f606f630b78c717f5325c831c3a0fe"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-timeout-FAILED]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "42a9f61602a53aa146098591dc5b044ddc53b3e7f649aee81313f967a98b465e"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_keep_real_worker_abort_and_unknown_execution[S5-disconnect-RUNNING]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1463c3e95862b4487684897fb213cbf3fc94de182c340361dbdf4f2c31da3574"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "f37f39ee997c094d44cf01f5d671b42d97a67c26d2c5cfb686347113ae39ddc1"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "cff07db3fa761e58d543a4f696a96382dd63404ffefe820cefeed827321e71d9"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_wrong_execution_token[S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "0f4e2653b562dbad34e07ba6abac0b670676bb50936f638aaab3c43b6705b33f"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S3]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "a592ab8cf40ecc51f864ffd3ba1d9465f31694ff693a995f3fa87306effd66d6"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S4]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3746eacb4a7127f7d7c5c43eafd94590b44d9cc41cd36c3f3b8b65050d74dd5d"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_sql_candidates_reject_read_only_warmup_source_change_at_publication[S5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "c9604cf45f1fe21477565daaf49011848969f9a4c7c453580bb5cac581a3cc2c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_self_mutation_rebuild_and_savepoint_preserve_first_preimage",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "544157ef550f77827724a1ee28c54c76cd189e293b5e7c4bb7d3f0ef5facc5ad"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_e3_savepoint_generation_reuse_is_an_explicit_unsafe_certificate_counterexample",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "d96cd08b4577a252d887460dca8961cdbe416522c156ad81d9f3053ed0294d2e"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_native_all_field_read_preserves_decimal_projection_and_other_types",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "46cd57ac57dceb22aff5fd0c17418458dc914d021334967a7c2f18e153f777b9"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[1]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "18b727fc193dc46bbd93141dda6f5ca896e4ebc8c7bb5d3ad2cfd8666e3fa29c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[5]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fc54932ac6aafc1ad69dd7fba9a1ef12490f47c50626346ceebe2dfa6419d2bf"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_spring_closure_fixture_rows_survive_calendar_windows[20]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "5e4528da5aff37935cf88035812d4f652dd2c487e403d2a327510aa6c5f08940"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_event_cost_probe_records_wal_without_changing_public_or_candidate_values",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "073f7b08fb365992f5da1ecaae2ec2a64ea273d4050ae8126a2733b89b804ad8"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_physical_mismatch_fails_before_child_database_ddl[marker]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1b2104d96d6c7c562f1bb175a2eafef64fc505bf1922625220e8950fcbbf760c"
+    },
+    {
+      "node": "tests.integration.test_ab_read_experiment_v14_a4_2::test_physical_mismatch_fails_before_child_database_ddl[system_id]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "8d23cdc2d1b79df130984e96033fa0e5d1021c251a432df28de4e331416d51ac"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[True]",
+      "outcome": "failure",
+      "category": "UNIX_SOCKET_PATH_LIMIT",
+      "observed_reason": "OSError: AF_UNIX path too long",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "6b9084b52505536af12f951c28a0c27a79e2e4c03ca387f57ab0e5b20e16e20a"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT11_AT64_AT68_kernel_peer_uid_checked_before_dispatch[False]",
+      "outcome": "failure",
+      "category": "UNIX_SOCKET_PATH_LIMIT",
+      "observed_reason": "OSError: AF_UNIX path too long",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "5826178d7786d95951d80d9f80e66a721552476d1363b088d290b2f97fd653e5"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[ipc]",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: '/proc/17055/stat'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "df98bc2ca0d41eed5d934d692d4d7ff613c1458759ecd4f9d7635b4c49a833e9"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[fsync]",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: '/proc/17056/stat'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "f893c581c793115ba12e0dc2c1cbef9797d28c2ea3af0200ddb36b7b863c9536"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT52_AT55_blocking_child_is_killed_outside_handler[stdout]",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: '/proc/17057/stat'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "4cd6803a610ea5655c72d203fa42457297bde8c527dc4cb3a5bc140b98981743"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT49_normal_controlled_child_is_reaped",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: '/proc/17058/stat'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "b472c69701b8fb887397549ecec134496f1046fb151eca888913a19c6ce9c0bd"
+    },
+    {
+      "node": "tests.integration_offline.test_a42362_ipc_process::test_AT50_parent_exit_with_live_grandchild_is_not_scope_success",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: '/proc/17059/stat'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "c2f5fb7c63738cac87f984757a1fcaae919082dea4f3773e948b4cb6243d04ed"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_chain::test_AT36_AT38_six_process_fd_handoff_and_independent_persistent_receipts",
+      "outcome": "failure",
+      "category": "OWNED_PROCESS_HANG",
+      "observed_reason": "assert (18046 == 18046 and 15 == 0)",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "10bf799d5344cdab47ccb4b730cd0a31acf5c5bdf9dca4f59acc65c5cb67f03c"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_process::test_AT05_AT08_native_bootstrap_compiles_and_unprivileged_entry_cannot_initialize",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "RuntimeError: A42331_NATIVE_COMPILER_FAILED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "a20852edc7546e8ab247f99a4175a5d8709a26691d12b251cf952639e0f14d9e"
+    },
+    {
+      "node": "tests.integration_offline.test_a42364_process::test_AT05_shellcheck_all_fixed_entry_scripts_without_execution",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "FileNotFoundError: [Errno 2] No such file or directory: 'shellcheck'",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "9d9d69a5ca2adddb19e5a9e9f57fd227b72bc9ce91c81e786902f73be3548a70"
+    },
+    {
+      "node": "tests.unit.test_a4233_background_observer::test_frozen_baseline_bytes_and_old_workflows_unchanged",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "21abcdf5752d1f716a8dda0daf05bb6755d0349628d699952d9228ec30e2af4e"
+    },
+    {
+      "node": "tests.unit.test_a42341_environment_guard::test_A42342_T19_T20_no_workflow_schema_or_other_tool_change",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3f755fe81667728f6efd69b43b8e51213d1fdaf6f2ae4a909ea7fcd121022535"
+    },
+    {
+      "node": "tests.unit.test_a42341_prepared_capability::test_AT01_frozen_old_files_and_old_execute_and_eight_warmups",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "f3c3ecc6ce8e2f51b1a2ddb16288c48fe2c3d5ecdeae5c40f952caea545aa897"
+    },
+    {
+      "node": "tests.unit.test_a4234_ci_governance::test_all_production_old_scripts_evidence_gates_and_one_shots_frozen",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b1675725bb42abc7ceceb11011e4961815454801b3acdbc50517984e8868d4af"
+    },
+    {
+      "node": "tests.unit.test_a42351_g1_preflight::test_a42351_AT01_baseline_and_boundaries_are_not_historical_rewrites",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "59db490290b59d8b4796f25b3b2d58bfb677e38f9e20460f20c8813aa4751f1e"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_AT26_mock_valid_cli_is_nonzero_and_no_physical_claim",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[sha]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[run]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[attempt]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[source]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[protocol]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[ready]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[live-kind]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[flag]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[extra-field]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[limits]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_AT26_rehashed_forgery_rejected[cleanup]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[missing]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[extra]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[symlink-file]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[symlink-dir]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[traversal]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[fifo]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[oversized]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[hash]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[duplicate]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[nan]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[inf]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[bad-json]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_unsafe_files_and_json_fail_closed[manifest-extra]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[head_sha-ffffffffffffffffffffffffffffffffffffffff]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[source_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[protocol_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT25_expected_cannot_be_self_reported[frozen_sha256-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--execute]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--approve]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--force]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--token]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--repeat]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--budget]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--probe-synthetic]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT27_reviewer_unknown_flags_never_activate_live[--run]",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_atomic_new_bundle_and_sticky_cleanup",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_timeout_preserves_failure_and_cannot_be_reviewed",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_late_timeout_cannot_leave_acceptable_bundle",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_cleanup_only_still_records_first_failure",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_capability_review::test_AT24_manifest_fsync_failure_is_unacceptable",
+      "outcome": "error",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "failed on setup with \"scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED\"",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "adb2d7113f89b750f322e72626ec6fc0a61685d81db5550f600538dc280aabf0"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_AT01_AT02_AT10_actual_frozen_trees_and_baseline_receipt",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "5d7f6d2084c69ce6e7cd58ab3d25cb8e8003ab04a7c94ed10ceb130abbfc1e38"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT16_actual_overlay_binds_new_source_without_redefining_history",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "718a4aa45549502fb5b478c13bd67ab9858c26e8ba67fc05dd6cdc2541afece9"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_committed_patch_hash_not_just_git_clean",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fb4aeedc8edd69e6ce3c764f8dfaf83b09dc5787f6542a92330a4c02949b6b34"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_hidden_protected_byte_change_not_waived_by_clean_index",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "1ccdeb37c6e2230cbb2cc0697acc3c89f62b873d4675d8c7d125114daa463f35"
+    },
+    {
+      "node": "tests.unit.test_a4235_pg_identity::test_a42351_AT19_head_must_not_change_during_identity_binding",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "df6cecac42e697f687ff50c573194915da9085d831a2627bbc6db40f6f441e1f"
+    },
+    {
+      "node": "tests.unit.test_a42361_controller_watchdog::test_AT26_model_TERM_KILL_reap_not_physical_proof",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "scripts.a42361_contract.Fault: A42361_TERMINATION_NOT_PROVEN",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "9abd26f0be478cd69843ff450d788fb0033b4ee904ad1421cfa15dd667ac1f03"
+    },
+    {
+      "node": "tests.unit.test_a42361_source_entrypoints::test_AT01_AT02_AT04_actual_source_freeze_and_history",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "8705b3d294d62bdc59f61f3ea03285724d5ae067595f952628fd6611d95fdb3b"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT05_real_RFC8032_test2_nonempty_vector",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "scripts.a42361_contract.Fault: A42361_CRYPTO_RUNTIME_UNTRUSTED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "bc39a70e4e400d5312d7f26f04553b0c40db94ee7c53170fa1b7470f1bac9d7b"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[=@\\x17\\xc3\\xe8C\\x89Z\\x92\\xb7\\n\\xa7M\\x1b~\\xbc\\x9c\\x98,\\xcf.\\xc4\\x96\\x8c\\xc0\\xcdU\\xf1*\\xf4f\\x0c-s-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x00]",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "1ad60a7ad2aed86e1f032fe2c93b705431555bfe994652c8bddffc36ed41ea37"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00-r-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x00]",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "5989b57ce1c79c738e51d52627f175f278f16f3344de8c822cc45e08726ee33d"
+    },
+    {
+      "node": "tests.unit.test_a42361_trust::test_AT06_real_crypto_tamper_rejected[=@\\x17\\xc3\\xe8C\\x89Z\\x92\\xb7\\n\\xa7M\\x1b~\\xbc\\x9c\\x98,\\xcf.\\xc4\\x96\\x8c\\xc0\\xcdU\\xf1*\\xf4f\\x0c-r-\\x92\\xa0\\t\\xa9\\xf0\\xd4\\xca\\xb8r\\x0e\\x82\\x0b_d%@\\xa2\\xb2{T\\x16P?\\x8f\\xb3v\"#\\xeb\\xdbi\\xda\\x08Z\\xc1\\xe4>\\x15\\x99nE\\x8f6\\x13\\xd0\\xf1\\x1d\\x8c8{.\\xae\\xb40*\\xee\\xb0\\r)\\x16\\x12\\xbb\\x0c\\x01]",
+      "outcome": "failure",
+      "category": "EXTERNAL_TOOLCHAIN",
+      "observed_reason": "AssertionError: Regex pattern did not match.",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "df12a203a2b907bf6599024e69361f0671cca4740dcfc431f0502d7e337fd2a9"
+    },
+    {
+      "node": "tests.unit.test_a42362_source_guard::test_AT01_AT06_final_commit_has_exact_paths_and_historical_manifests_unchanged",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3d42cced3c426e20619d558fd215264bde4db55f7ad8cb28e9531966f0a0ba5a"
+    },
+    {
+      "node": "tests.unit.test_a42362_source_guard::test_AT70_no_production_migrations_workflows_dependencies_or_old_protocol_changes",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "ff1ed51ebfc8555a85531a8d3c35df7f2033d6a7ff128284903d00d6dfb3056e"
+    },
+    {
+      "node": "tests.unit.test_a42363_complete_guard::test_CF_AT01_AT02_all_five_manifests_and_full_current_identity",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "570a7acd486dd6885b7219bfa6c65f4196c6b16f17745145f6e6812a228fa97e"
+    },
+    {
+      "node": "tests.unit.test_a42363_complete_guard::test_CF_AT05_AT21_production_templates_and_old_authorizations_are_unchanged",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "cf0af66c29faa045646b7ef6fb53750727db6297049dbbb9756833cd2b67cb86"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT04_cumulative_facade_keeps_exact_new_stage_and_legacy_stage_separate",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "4d01e42a9dfdf89bd8acf7bf366e38e433ee77d086dc4099e7d1212182798137"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT57_all_original_tests_have_identical_git_blobs",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fe85433b370b279a33bad607b3a5264f9db918933223bac49f2f6508f0271f53"
+    },
+    {
+      "node": "tests.unit.test_a42363_review_guard::test_RF_AT59_candidate_cannot_change_sql_or_enable_protocol",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "baa4cdb38591104f87cf2164f71db068c6b12dd21915ac8c5edc1d216ac5cf0a"
+    },
+    {
+      "node": "tests.unit.test_a42363_source_guard::test_AT01_AT03_committed_manifest_full_guard_and_four_history_layers",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "3dd2c8357dfed9ab3e61d91098f70e7309a20c87250f2e7883695c7f4d13173b"
+    },
+    {
+      "node": "tests.unit.test_a42363_source_guard::test_AT09_production_and_frozen_protocols_untouched",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "6c38bb1b4bb2f9d01871774c810d842bd4b0c862ec4bfe84865b1f1b864637d9"
+    },
+    {
+      "node": "tests.unit.test_a42364_source_guard::test_AT02_history_and_all_committed_pins_match_final_stage",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b2b2b0e5a2741527b8c7fe87681f75ac6a29cb308b016362217d02ab1f897787"
+    },
+    {
+      "node": "tests.unit.test_a42364_source_guard::test_AT04_production_and_frozen_sql_never_enter_this_stage",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "624bbd846031d372f7173607bffcb236c378b522a9476cb1e74827aea0629c7e"
+    },
+    {
+      "node": "tests.unit.test_a42366_services::test_AT07_AT10_actual_multi_process_unix_sqlite_receiver",
+      "outcome": "failure",
+      "category": "LINUX_KERNEL_CAPABILITY",
+      "observed_reason": "scripts.a42363_contract.Fault: A42363_PRIVATE_UNIX_CHANNEL",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": false,
+      "trace_sha256": "9b354a35fa8f458fd553cea1edfacf0d7eed2e7d790413ca333245ec82508ab5"
+    },
+    {
+      "node": "tests.unit.test_a42366_source_guard::test_AT_W09_historical_manifests_and_all_original_tests_keep_their_blobs",
+      "outcome": "failure",
+      "category": "HISTORICAL_TEST_BLOB_CONTRACT",
+      "observed_reason": "AssertionError: assert (not b'tests/integration/test_business_policy_worker_pg17.py\\ntests/integration/test_business_worker_02_diagnostics.py\\ntes...s/unit/test_a42366_source_guard.py\\ntests/unit/test",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "ca8946f849c4d9b172d224029372a3aaa8181afcc685bed141c2e88bed860176"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT01_AT02_actual_history_unchanged_and_new_source_distinct",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "160e881603646f4fe31cd711ead7bfe4ff7c8190c6c26988ce49b07c52b4ad45"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT03_actual_exact_26_path_delta_and_pinned_14_patch_blobs",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "fd57f649a993249897e7b414ea0a839d1d9b02db65b302c5a30f5d58527b7272"
+    },
+    {
+      "node": "tests.unit.test_a4236_source_guard::test_AT05_AT36_real_git_independent_expected_and_owner_only_offline_bundle",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "c5bb01dadb16f246188cb780454c7d52747c8db4ab3d531ba462a1af11c66334"
+    },
+    {
+      "node": "tests.unit.test_a42_ci_partition_contract::test_production_tree_and_original_a41_evidence_unchanged",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "929cffb4174d3f677c8a4dcffcf767fd1287e214554fe61ef80bc0c338e3ba4b"
+    },
+    {
+      "node": "tests.unit.test_ab_read_experiment_contract_v14_a4_2::test_frozen_backend_migrations_and_a41_evidence_are_unchanged",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "b672baab9ac7e15b786753697e9149267ae5aa194d268212f5ced7189bff8682"
+    },
+    {
+      "node": "tests.unit.test_ab_read_profile_v14_a4::test_a4_diagnostic_freezes_production_sources",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "8f82fa471a469daeba609a69811d97caaf192f83a1ee72e1588c885ba80a0d7c"
+    },
+    {
+      "node": "tests.unit.test_lookup_tail_review_a423::test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "0efd1f906e8ce0340c7a139d66b3819843865b1f824ac61e253807619c234f79"
+    },
+    {
+      "node": "tests.unit.test_tail_historical_a4231::test_protocol_does_not_change_production_or_authorize_formal_capacity",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "6d18664026fb22fc4671eaa3e58941e5ae7fa07363709af097d369de09f8de86"
+    },
+    {
+      "node": "tests.unit.test_tail_stability_a4232::test_protocol_is_immutable_and_production_still_exact_c0",
+      "outcome": "failure",
+      "category": "FROZEN_CONTRACT",
+      "observed_reason": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED",
+      "supported_linux_reproduction": "NOT_VERIFIED",
+      "requires_independent_approval": true,
+      "trace_sha256": "44ce627bc3566a79a1ac2d2da1ba92c9e8ae595ce903bb10d3e3698cca618d0d"
+    }
+  ]
+}

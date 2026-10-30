@@ -1,0 +1,102 @@
+{
+  "red.xml": {
+    "sha256": "1570572d17dcf8180c136b6538a142b6a8333af14b61a7add9d22263cedcdcaa",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "10",
+        "skipped": "0",
+        "tests": "10",
+        "time": "5.426",
+        "timestamp": "2026-10-29T00:40:58.384491+08:00"
+      }
+    ]
+  },
+  "green.xml": {
+    "sha256": "90bd9cc407d7646f4f9cdf3288b1e16c008a540456a6c919ec1495726224e1c3",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "10",
+        "time": "5.348",
+        "timestamp": "2026-10-29T00:42:21.713846+08:00"
+      }
+    ]
+  },
+  "lifecycle.xml": {
+    "sha256": "211542375700f42c036ba20e8f98595cd060557e974cb56c1f77ff517fa98798",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "16",
+        "time": "31.330",
+        "timestamp": "2026-10-29T00:45:34.615531+08:00"
+      }
+    ]
+  },
+  "targeted.xml": {
+    "sha256": "66b23eacc0e9d4b8e7de34845df19d2f86848f51eabb972673bd89bcf2244c85",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "104",
+        "time": "151.182",
+        "timestamp": "2026-10-29T00:48:44.556814+08:00"
+      }
+    ]
+  },
+  "historical.xml": {
+    "sha256": "1270c3b42ef3dca4be3d0cc2d0e687f4eb400cd8c28622237d6038fcd9e3b794",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "19",
+        "time": "0.513",
+        "timestamp": "2026-10-29T00:50:15.085988+08:00"
+      }
+    ]
+  },
+  "resource_preflight": {
+    "schema_version": "biz-worker-02.resources.v1",
+    "target_rows": 1443097,
+    "planned_rounds": 3,
+    "available_memory_bytes": 2049900544,
+    "process_memory_bytes": 16547840,
+    "peak_rss_bytes": 16547840,
+    "planning_reserve_bytes": 4294967296,
+    "status": "RESOURCE_DEFERRED",
+    "measurement_kind": "ESTIMATE_NOT_ACTUAL_ALLOCATION_OR_OOM",
+    "database_contacted": false,
+    "rounds_completed": 0,
+    "rows_measured": 0,
+    "performance_qualified": false
+  },
+  "full_and_ci": "Final committed SHA results will be delivered separately; not a PASS claim.",
+  "final-narrow.xml": {
+    "sha256": "3bda20ff537ce252f5718d594e7e1019838f15565926a0fa97801c6d921dfe51",
+    "suites": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "15",
+        "time": "11.924",
+        "timestamp": "2026-10-29T00:51:54.298194+08:00"
+      }
+    ]
+  }
+}

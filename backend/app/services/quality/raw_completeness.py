@@ -18,6 +18,7 @@ from app.models.market_data import (
     StockSuspendDaily,
     TradeCalendar,
 )
+from app.services.execution_diagnostics import operation
 from app.services.price_limit import validate_price_limit_rows
 from app.services.quality.daily_quality import (
     CoverageResult,
@@ -199,6 +200,7 @@ def trade_calendar_open_status(db: Session, trade_date: date) -> bool | None:
     ).scalar_one_or_none()
 
 
+@operation("raw_prerequisites", "query")
 def check_raw_completeness(
     db: Session,
     trade_date: date,

@@ -22,6 +22,35 @@ from app.services.provider_smoke import run_provider_smoke_test
 cli = typer.Typer(no_args_is_help=True)
 
 
+@cli.command("reconcile")
+def reconcile(
+    job_id: str = typer.Option(..., "--job-id"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+) -> None:
+    """Read-only preflight; intentionally has no apply, force or unlock mode."""
+    import json
+    from uuid import UUID
+
+    from app.services.data_job_reconcile import reconcile_data_job
+
+    if not dry_run:
+        raise typer.BadParameter("--dry-run required; recovery is independently authorized")
+    try:
+        identity = UUID(job_id)
+    except ValueError:
+        raise typer.BadParameter("job-id must be UUID") from None
+    try:
+        with SessionLocal() as db:
+            report = reconcile_data_job(db, identity)
+            typer.echo(json.dumps(report, default=str, ensure_ascii=False))
+    except DBAPIError:
+        typer.echo("EXECUTION_UNCONFIRMED DATABASE_UNAVAILABLE", err=True)
+        raise typer.Exit(code=1) from None
+    except ValueError:
+        typer.echo("DATA_JOB_NOT_FOUND", err=True)
+        raise typer.Exit(code=1) from None
+
+
 @cli.command("data-job-diagnose")
 def data_job_diagnose(job_id: str = typer.Option(..., "--job-id")) -> None:
     """Read incident evidence; never changes a Job or releases its slot."""

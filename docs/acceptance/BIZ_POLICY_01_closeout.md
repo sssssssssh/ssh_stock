@@ -184,3 +184,12 @@ Final SHA, four ordinary run IDs, counts, coverage and artifact SHA256 are deliv
 in the final response and immutable Actions artifacts. Do not rewrite this exact
 commit merely to make its manifest self-reference its own final hash. All local
 platform failures remain recorded alongside independent Linux results.
+
+## BIZ-WORKER-02 follow-up (2026-10-28)
+
+The next scoped repair starts at 75076eac443d935d622bf59e12aad20ce5aba85e.
+Its [review](BIZ_WORKER_02_review.md) records isolated PG17 heartbeat/reconciliation
+evidence and the unfiltered 4953 passed / 53 failed / 137 errors result. Historical
+failures above remain unchanged. Contract migration is unsigned and blocked;
+full-scale capacity remains RESOURCE_DEFERRED and FIELD_NOT_RETESTED. This is
+not deployment approval or a claim of all-green CI.

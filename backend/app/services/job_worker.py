@@ -232,6 +232,16 @@ def execute_claimed_job(
     heartbeat_thread: threading.Thread | None = None
     publication_workspace = None
     policy_token = query_observer = None
+    diagnostics_token = registry = recorder = None
+    if context_token is not None and isinstance(db, Session):
+        from app.services.execution_diagnostics import ExecutionDiagnostics, active_diagnostics
+        from app.services.worker_observation import SessionRegistry, bind_session
+
+        registry = SessionRegistry(current_execution.get())
+        bind_session(db, registry, "main")
+        if getattr(get_settings(), "worker_diagnostics_enabled", False):
+            recorder = ExecutionDiagnostics()
+            diagnostics_token = active_diagnostics.set(recorder)
     worker_id = getattr(job, "worker_id", None)
     try:
         if context_token is not None and isinstance(db, Session) and job.job_type in {
@@ -254,7 +264,9 @@ def execute_claimed_job(
                 target=_run_heartbeat_loop,
                 args=(job.id, worker_id, stop_heartbeat),
                 kwargs={"execution_token": getattr(job, "execution_token", None),
-                        "progress": current_progress.get() if progress_token else None},
+                        "progress": current_progress.get() if progress_token else None,
+                        **({"registry": registry, "diagnostics": recorder}
+                           if registry is not None else {})},
                 daemon=True,
                 name=f"job-heartbeat-{job.id}",
             )
@@ -442,28 +454,50 @@ def execute_claimed_job(
         else:
             logger.exception("worker job failed job_id={} type={}", job_id, job.job_type)
     finally:
-        stop_heartbeat.set()
-        if heartbeat_thread is not None:
-            heartbeat_thread.join(timeout=5)
-        if publication_workspace is not None:
+        try:
+            stop_heartbeat.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=5)
             try:
-                publication_workspace.close()
-            except SQLAlchemyError as error:
-                logger.error("candidate connection cleanup failed job_id={} error={}",
-                             job_id, database_error_summary(error))
-        if query_observer is not None:
-            query_observer.close()
-        if policy_token is not None:
-            from app.services.calculation_policy import active_policy
+                if publication_workspace is not None:
+                    try:
+                        publication_workspace.close()
+                    except SQLAlchemyError as error:
+                        logger.error("candidate connection cleanup failed job_id={} error={}",
+                                     job_id, database_error_summary(error))
+            finally:
+                try:
+                    if query_observer is not None:
+                        query_observer.close()
+                finally:
+                    if policy_token is not None:
+                        from app.services.calculation_policy import active_policy
 
-            active_policy.get().close()
-            active_policy.reset(policy_token)
-        if context_token is not None:
-            current_execution.reset(context_token)
-            db.info.pop("data_task_timeouts", None)
-            db.info.pop("data_execution_job_id", None)
-        if progress_token is not None:
-            current_progress.reset(progress_token)
+                        try:
+                            active_policy.get().close()
+                        finally:
+                            active_policy.reset(policy_token)
+        finally:
+            try:
+                if registry is not None:
+                    from app.services.worker_observation import finish_worker_observation
+
+                    persisted = finish_worker_observation(registry, recorder)
+                    if persisted != "PERSISTED":
+                        logger.warning("worker observation job_id={} status={}", job_id, persisted)
+            finally:
+                if registry is not None:
+                    db.info.pop("worker_observation", None)
+                if diagnostics_token is not None:
+                    from app.services.execution_diagnostics import active_diagnostics
+
+                    active_diagnostics.reset(diagnostics_token)
+                if context_token is not None:
+                    current_execution.reset(context_token)
+                    db.info.pop("data_task_timeouts", None)
+                    db.info.pop("data_execution_job_id", None)
+                if progress_token is not None:
+                    current_progress.reset(progress_token)
 
 
 def _hold_unconfirmed_execution(db: Session, reason: str) -> None:
@@ -512,9 +546,20 @@ def _run_heartbeat_loop(
     interval_seconds: float | None = None,
     execution_token: object | None = None,
     progress: CalculationProgress | None = None,
+    registry=None,
+    diagnostics=None,
 ) -> None:
+    from app.services.worker_observation import HeartbeatHealth, bind_session, persist_observation
+
+    health = HeartbeatHealth()
     interval = interval_seconds or float(scheduler_setting("worker_heartbeat_interval_seconds", 45))
+    consecutive_failures = 0
+    last_success = time.monotonic()
     while not stop_event.wait(interval):
+        attempt_started = time.monotonic()
+        phase = "session_acquire"
+        metrics = []
+        heartbeat_db = error = None
         try:
             snapshot = progress.snapshot() if progress is not None else None
             if snapshot:
@@ -527,15 +572,57 @@ def _run_heartbeat_loop(
                             snapshot["batch_index"], snapshot["batch_count"],
                             snapshot["completed_rows"], snapshot["total_rows"], operation_age)
             with SessionLocal() as heartbeat_db:
+                if registry is not None:
+                    bind_session(heartbeat_db, registry, "heartbeat")
+                phase = "heartbeat"
                 telemetry = {"calculation_progress": snapshot} if snapshot else {}
                 if not touch_job_heartbeat(heartbeat_db, job_id, worker_id,
                                            execution_token=execution_token, **telemetry):
                     return
+                metrics = getattr(heartbeat_db, "info", {}).get("heartbeat_diagnostics", [])
+            if consecutive_failures:
+                logger.info("worker heartbeat recovered job_id={} previous_failures={}",
+                            job_id, consecutive_failures)
+            consecutive_failures = 0
+            last_success = time.monotonic()
+            if metrics:
+                logger.debug("worker heartbeat timings job_id={} phases={}", job_id, metrics)
         except SQLAlchemyError as exc:
-            logger.error("worker heartbeat database unavailable job_id={} error={}",
-                         job_id, database_error_summary(exc))
-        except Exception:
-            logger.exception("worker heartbeat failed job_id={} worker_id={}", job_id, worker_id)
+            error = exc
+            consecutive_failures += 1
+            safe_phase = getattr(exc, "heartbeat_phase", phase)
+            logger.error("worker heartbeat database unavailable job_id={} phase={} "
+                         "consecutive_failures={} attempt_seconds={:.3f} "
+                         "unconfirmed_seconds={:.3f} error={}",
+                         job_id, safe_phase, consecutive_failures,
+                         time.monotonic()-attempt_started, time.monotonic()-last_success,
+                         database_error_summary(exc))
+        except Exception as exc:
+            error = exc
+            consecutive_failures += 1
+            # No original exception/traceback: it may contain a DSN or parameters.
+            logger.error("worker heartbeat failed job_id={} phase={} consecutive_failures={}",
+                         job_id, phase, consecutive_failures)
+        finally:
+            metrics = getattr(heartbeat_db, "info", {}).get("heartbeat_diagnostics", metrics)
+            health.observe(metrics, error, phase=phase)
+            if registry is not None:
+                from app.services.worker_observation import fingerprint
+
+                diagnostic_snapshot = None
+                try:
+                    if diagnostics is not None:
+                        diagnostic_snapshot = diagnostics.snapshot()
+                        diagnostic_snapshot.update(root_job_id=str(job_id),
+                            execution_fingerprint=fingerprint(execution_token),
+                            outcome="RUNNING_OBSERVATION")
+                except Exception:
+                    logger.warning("heartbeat metric snapshot unavailable job_id={}", job_id)
+                saved = persist_observation(registry.execution.bind, registry,
+                    health=health.snapshot(), diagnostics=diagnostic_snapshot)
+                if saved != "PERSISTED":
+                    logger.warning("heartbeat observation unavailable job_id={} status={}",
+                                   job_id, saved)
 
 
 def run_worker() -> None:
