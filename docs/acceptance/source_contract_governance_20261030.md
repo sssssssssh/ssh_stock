@@ -58,6 +58,9 @@ count is reported separately from the parent test count and is not backend
 coverage or a current performance credential. The child uses historical
 PYTHONPATH/config, strips database connection environment and never copies
 `.env`; it does not obtain a business connection or fetch missing history.
+Unexpected CLI arguments (including execution/approval flags) are rejected
+before any Git/checkout work. Only immutable Git objects keyed by full commit
+are cached; live files, approvals and current observations are never cached.
 
 ## CI Before And After
 

@@ -85,5 +85,15 @@ def run(root, *, node=None):
         return validate_result(result.returncode, output.read_bytes(), 73 if node is None else 1)
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    if args:
+        print(json.dumps(dict(error="SOURCE_CONTRACT_ARGUMENTS_REJECTED",
+                              scope="HISTORICAL_TEST_ONLY", g1_authorized=False)))
+        return 1
     print(json.dumps(run(Path(__file__).resolve().parents[1]), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

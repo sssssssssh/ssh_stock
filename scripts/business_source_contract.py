@@ -189,10 +189,16 @@ def versioned_frozen_files(root, frozen):
         patches.update(json.loads((root / closure_manifest).read_bytes())["patch_sha256"])
     immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
     head = git(root, "rev-parse", "HEAD").decode().strip()
-    objects = git_blobs(root, [head + ":" + p for p in frozen])
-    result = {p: hashlib.sha256(objects[head + ":" + p]).hexdigest() for p in frozen}
+    result = dict(committed_hashes(root, head, tuple(sorted(frozen))))
     g.require(head == git(root, "rev-parse", "HEAD").decode().strip(), "A4235_HEAD_MISMATCH")
     return result
+
+
+@lru_cache(maxsize=32)
+def committed_hashes(root, head, paths):
+    """Immutable Git objects only; callers still read and validate live files."""
+    objects = git_blobs(root, [head + ":" + p for p in paths])
+    return tuple((p, hashlib.sha256(objects[head + ":" + p]).hexdigest()) for p in paths)
 
 
 @lru_cache(maxsize=8)

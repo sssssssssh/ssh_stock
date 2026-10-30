@@ -7,6 +7,7 @@ import pytest
 
 from scripts import business_source_contract as business
 from scripts import source_contract_governance as governance
+from scripts import source_contract_history as history
 from scripts.source_contract_history import run, validate_result, verify_test_sources
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +74,26 @@ def test_unregistered_historical_test_paths_are_rejected_before_git(tmp_path, mo
     monkeypatch.setattr(business, "git", lambda *a: pytest.fail("must reject before Git"))
     with pytest.raises(ValueError, match="UNREGISTERED_HISTORICAL_TEST"):
         verify_test_sources(tmp_path, ("tests/unit/test_business_worker_02.py",))
+
+
+@pytest.mark.parametrize("argument", ["--execute", "--approve", "--force", "--target-sha=latest"])
+def test_history_cli_rejects_unknown_execution_arguments_before_any_git(argument, monkeypatch):
+    monkeypatch.setattr(history, "run", lambda *a, **k: pytest.fail("must reject before Git"))
+    assert history.main([argument]) == 1
+
+
+def test_only_immutable_git_objects_are_cached_not_live_file_evidence(tmp_path, monkeypatch):
+    calls = []
+
+    def blobs(root, objects):
+        calls.append(tuple(objects))
+        return {p: p.encode() for p in objects}
+
+    monkeypatch.setattr(business, "git_blobs", blobs)
+    first = business.committed_hashes(tmp_path, "a" * 40, ("backend/example.py",))
+    assert business.committed_hashes(tmp_path, "a" * 40, ("backend/example.py",)) == first
+    assert business.committed_hashes(tmp_path, "b" * 40, ("backend/example.py",)) != first
+    assert len(calls) == 2
 
 
 @pytest.mark.parametrize("damage", ["exit", "count", "failure", "error", "skipped", "totals"])
