@@ -1,15 +1,16 @@
 # ssh_stock 当前状态与唯一执行指针
 
 状态版本：2026-11-02 治理基准 v1 收口草案，REVIEW_PENDING（已交付，待负责人最终验收）。
-核查日期使用 Asia/Shanghai；本轮 master 核查时间为 **2026-11-02 16:19 +08:00**。
-本轮未重新核查 CI；第 5 节保留原取样时间与 SHA，不作为当前 master 的实时结论。
-这是带时间的事实快照，CI 后续可能变化；新会话必须重新核验，不能当实时监控。
+核查日期使用 Asia/Shanghai；本次修改前的 master 基线核查时间为 **2026-11-02 16:29 +08:00**。
+本次未重新核查 CI；第 5 节保留原取样时间与 SHA，不作为实时结论。
+本文件记录带时间的修改前基线，不要求填写文档自身最终提交 SHA；新会话必须重新核验 Git，
+不能把该快照当实时监控，也不因后续提交而持续刷新同一轮记录。
 
 ## 1. 当前主线与下一步
 
 - 当前唯一业务主线：股票历史数据读取 → Python 转换与计算 → 候选查询与写入 → 质量核验 → 原子发布的性能问题；尚未收口。
 - 当前唯一执行任务：**GOV-20261102-001，长期项目治理基准建设**。
-- 当前状态：**已交付、等待负责人最终验收（REVIEW_PENDING）**，不得自行标记为 DONE。五份治理文件已在 31bf700 首次提交推送；AGENTS 新会话强制读取规则、PROJECT_STATUS 和 docs/tasks/README 的收口修改也已在 276cc262 提交推送。本轮仅修正 PROJECT_STATUS，补丁先交负责人审阅，再按确认后的交付指令提交推送。
+- 当前状态：**已交付、等待负责人最终验收（REVIEW_PENDING）**，不得自行标记为 DONE。五份治理文件已在 31bf700 首次提交推送；AGENTS 新会话强制读取规则与 PROJECT_STATUS、docs/tasks/README 的入口收口修改已在 276cc262 提交推送；后续状态文件修正已在 306971b3 提交推送。
 - 下一项仅为：诊断整改方案，待负责人安排/审阅；不得据此开始实施、实验或生产操作。
 - **BIZ-PERF-03-A = PARTIAL**；部分实现已在 e610a928，开销与完整回归未收口。诊断整改方案为 PENDING_APPROVAL，**本轮未授权开始 BIZ-PERF-03-A-R1**，不授权性能实验、生产数据库操作或业务代码修改。
 - 未获批准不得自行进入热点优化、扩大功能或重新规划另一条开发主线。
@@ -19,22 +20,22 @@
 | 项目 | 核查事实 | 来源 |
 | --- | --- | --- |
 | 本地分支 | master | git status --short --branch |
-| HEAD / origin/master / GitHub master | 276cc262d4b8be2008415683c9d5af42a913fbc2 | git rev-parse、git ls-remote --heads origin master |
-| 最新治理提交 | 276cc262d4b8be2008415683c9d5af42a913fbc2（276cc262） | git log、git show --stat；入口规则与状态收口已推送 |
+| 修改前基线：核查时 HEAD / origin/master / GitHub master | 306971b3cf7a08c50bc32e24de55a41c52258052（2026-11-02 16:29 +08:00） | git rev-parse、git ls-remote --heads origin master |
+| 核查时最新治理提交 / 状态文件修正提交 | 306971b3cf7a08c50bc32e24de55a41c52258052（306971b3） | git show --stat；单文件状态修正已提交推送 |
+| 上一轮治理入口收口提交 | 276cc262d4b8be2008415683c9d5af42a913fbc2（276cc262） | git show --stat；入口规则与接续状态收口已推送，不是本次核查的 HEAD |
 | 治理文件首次交付 | 31bf700c77b86fcb9be59787a0bde76d6f7d85bd（31bf700） | git show --stat；仅作历史交付 SHA，不是当前 HEAD |
 | 最近一次业务代码变更 | e610a92890d89f0b58f1de6335ae918da07d67d9（e610a928） | git log -1 -- backend frontend config scripts migrations |
-| 最近提交标题 | docs(governance): align agent startup reading and project handoff status | git show HEAD |
-| 本轮开始工作区 | 干净，含未跟踪文件检查 | git status |
-| 远端 master | refs/heads/master 指向 276cc262；远端仅 master 的完整分支清单为上一轮核查事实，本轮仅复核 master | git ls-remote --heads origin master |
+| 修改前基线提交标题 | docs(governance): correct delivered governance and business source baselines | git show 306971b3 |
+| 16:29 核查时工作区 | 干净，含未跟踪文件检查 | git status |
+| 16:29 核查时远端 master | refs/heads/master 指向 306971b3；远端仅 master 的完整分支清单为此前核查事实，本次仅复核 master | git ls-remote --heads origin master |
 | 历史集成 | PR #1 合并提交 3940d9b；其后 BIZ-PERF-02 候选、撤回和 R1 均在 master 历史 | git log |
 | 治理文件交付 | PROJECT_CHARTER、PROJECT_ROADMAP、PROJECT_STATUS、DECISION_LOG、docs/tasks/README 五份文件已在 31bf700 提交推送，441 行新增 | git show --stat 31bf700、此前推送成功及本轮提交链核对 |
 | 入口与接续收口交付 | AGENTS.md、PROJECT_STATUS.md、docs/tasks/README.md 已在 276cc262 提交推送 | git show --stat 276cc262、此前推送成功及本轮远端 master 复核 |
-| 本轮改动 | 仅 PROJECT_STATUS.md 的基线与交付状态修正；尚未提交，待负责人审阅 | 交付时再次核验 diff/status |
 
-最新 master / 最新治理提交为 **276cc262**；五份治理文件首次交付为 **31bf700**；
-最近一次业务代码变更为 **e610a928**。两次治理提交均未改动业务代码，当前诊断仍为 PARTIAL。
-本轮未提交的单文件修正不属于上述提交。以后分别记录代码基线、治理交付 SHA 和
-核查时间，避免通过自写“当前 SHA”冒充已提交或为自引用 SHA 无限追加提交。
+本次修改前核查的 master 基线为 **306971b3**（状态文件修正）；**276cc262** 为上一轮治理
+入口收口；**31bf700** 为五份治理文件首次交付；最近一次业务代码变更仍为 **e610a928**。
+三次治理提交均未改动业务代码，BIZ-PERF-03-A 仍为 PARTIAL。各 SHA 仅对应其提交角色和
+核查时间，不表示本文件后续提交的实时 HEAD，不要求为文档自身最终提交 SHA 追加修订。
 
 ## 3. 实际代码能力与证据层级
 
@@ -72,7 +73,7 @@
 
 ## 5. CI 证据与历史快照（仅工程证据）
 
-当前 master **276cc262d4b8be2008415683c9d5af42a913fbc2** 的 CI 本轮未重新查询，
+修改前基线 **306971b3cf7a08c50bc32e24de55a41c52258052** 的 CI 本次未重新查询，
 状态为 UNKNOWN，最终工程结论 PENDING；不得继承下列旧 SHA 的结果。
 
 ### 31bf700 历史 CI 快照（原样保留）
@@ -101,12 +102,12 @@ e610a92890d89f0b58f1de6335ae918da07d67d9，不能当作当前 master 的实时�
 
 skipped 不表示性能通过；成功的合同工作流未执行其高成本实验。本轮只读取 GitHub，
 不 rerun/dispatch/取消工作流。旧 8f4e607 的 5297 测试与 89.99% 覆盖率是 R1 归档的历史
-工程证据，不能贴为 e610a928、31bf700 或 276cc262 的测试数或覆盖率。当前 master 最终覆盖率 PENDING。
+工程证据，不能贴为 e610a928、31bf700、276cc262 或 306971b3 的测试数或覆盖率。修改前基线最终覆盖率 PENDING。
 即使工程 CI 后续通过，也不代表 BIZ-PERF-03-A 的开销、整链性能或百万行容量验收通过。
 
 ## 6. 不得丢失的问题台账
 
-下表 e610a92 的验收数字及 CI 表述保留原证据时间与版本；当前 master 的 CI 状态见第 5 节，
+下表 e610a92 的验收数字及 CI 表述保留原证据时间与版本；修改前基线的 CI 核查范围见第 5 节，
 不以治理文档提交或工程 CI 结果关闭历史性能问题。
 
 | 编号 | 事实与来源 | 状态 / 关闭条件 |
@@ -129,8 +130,8 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 
 ## 7. 阻塞、边界与接续
 
-1. 五份治理文件及新会话读取/接续规则均已提交推送；GOV-20261102-001 已交付、等待负责人最终验收，不自行标记为 DONE。本轮单文件修正待审阅。
-2. 当前 master 的 CI 本轮未核查，保持 UNKNOWN/PENDING；诊断开销、最终根任务回归和插桩覆盖未验收。
+1. 五份治理文件、新会话读取/接续规则及 306971b3 状态文件修正均已提交推送；GOV-20261102-001 继续 REVIEW_PENDING，等待负责人最终验收，不自行标记为 DONE。
+2. 修改前基线的 CI 本次未核查，保持 UNKNOWN/PENDING；诊断开销、最终根任务回归和插桩覆盖未验收。
 3. 正式规模代表性夹具、合格执行资源及授权尚未核实满足；不能临时缩规模或放宽门槛。
 4. 生产状态未知，现场读取/部署/数据库操作没有本轮授权。
 5. AGENTS 的强制读取规则与过时阶段表述修正已在 276cc262 交付；本轮仅修改 PROJECT_STATUS。
@@ -147,4 +148,5 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 的草案/待审及旧 SHA 描述保留原任务语境，不表示新的业务授权；docs/tasks/README 所记
 31bf700 是首次交付，其“本轮三文档收口”是 276cc262 的历史范围，不是本次修改许可。
 上述存在跨轮次措辞时效差异，本轮在本文件澄清，不越权修改其余四份治理文件。
-当前 SHA、交付状态与唯一下一步以本文件本次核查和负责人最新要求为准。
+交付状态与唯一下一步以本文件的带时间记录及负责人最新要求为准；实时 Git 基线需由
+后续会话独立核验，不把本文件中的修改前快照视为随文档提交自动更新的 SHA。
