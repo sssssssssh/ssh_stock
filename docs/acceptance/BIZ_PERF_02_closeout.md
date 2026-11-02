@@ -35,6 +35,11 @@ The local resource preflight observed a memory/disk lower floor, not a refusal
 or an exclusive/capability-qualified capacity reservation. Do not claim RAM was
 exhausted: formal capacity remains deferred for lack of an allocated qualified
 runner and representative million-row fixture, not because a small test passed.
+The first comparison cohort was stopped because the old archive lacked Git while
+the new runtime had Git. Only its verified controller was stopped; its active
+root child finished naturally. The incomplete controller and all child receipts
+remain separate. The corrected protocol uses two clean detached local Git clones
+with LF line endings; no timing conclusion is drawn from the asymmetric cohort.
 
 | Item | Current disposition |
 | --- | --- |

@@ -21,7 +21,9 @@ python -m scripts.business_quality_matrix --stocks 4 --repeats 3 --output .codex
 
 The matrix must start on master, with the candidate business bytes committed.
 It independently verifies actual backend/config/migration bytes against each
-implementation SHA. It archives the fixed old source without switching branches.
+implementation SHA. It obtains the fixed old source without switching the user's branch.
+Both source contexts now use clean detached local shared Git clones with LF bytes;
+the initial archive/live cohort was stopped and is not used for retention.
 Each sample owns a new DB; no inherited candidate or published result is reused.
 Observe process/DB inactivity before starting; never run tests concurrently with
 the matrix. Stop on unsupported resources rather than borrowing a business server.

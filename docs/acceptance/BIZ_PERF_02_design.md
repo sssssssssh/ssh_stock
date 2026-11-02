@@ -58,7 +58,12 @@ Preflight, compute, quality, source validation and atomic publication all run.
 
 Each implementation's backend/config/migration canonical bytes must exactly match
 its claimed full Git SHA. Driver checkout and actual implementation SHA are
-separate facts for the archived baseline. Dirty or docs-only identities must not
+separate facts. Both implementations run in fresh clean detached local shared
+Git clones with autocrlf=false, so Git identity checks and LF bytes are symmetric.
+The first archive-versus-live cohort was stopped for this identified protocol
+asymmetry before judging its timings; its completed samples and unfinished
+controller receipt remain retained, not filtered as performance outliers.
+Dirty or docs-only identities must not
 be relabeled as exact-SHA performance acceptance. Plans describe actual timed
 lookup calls, not untimed replay. Observer control SQL/time is counted separately
 and included in overall/lookup wall time on both versions; it is not free.

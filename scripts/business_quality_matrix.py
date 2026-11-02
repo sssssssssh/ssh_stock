@@ -11,7 +11,6 @@ import os
 import statistics
 import subprocess
 import sys
-import tarfile
 from pathlib import Path
 
 BASELINE = "3940d9b905e5234368f8a7474ae2ce6de73b0cb3"
@@ -66,12 +65,18 @@ def main():
         raise RuntimeError("BIZ02_MASTER_REQUIRED")
     args.output.mkdir(parents=True)
     root = Path.cwd()
-    archive = args.output / "baseline.tar"
     reference = args.output / "baseline-source"
-    reference.mkdir()
-    subprocess.run(["git", "archive", "--format=tar", f"--output={archive}", BASELINE], check=True)
-    with tarfile.open(archive) as source:
-        source.extractall(reference, filter="data")
+    candidate = args.output / "candidate-source"
+    candidate_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    # Both runtimes need identical Git presence and checkout line endings. A bare
+    # archive would omit baseline runtime identity checks and bias overall time.
+    for directory, sha in ((reference, BASELINE), (candidate, candidate_sha)):
+        subprocess.run(["git", "clone", "--quiet", "--shared", "--no-checkout",
+                        str(root), str(directory)], check=True)
+        subprocess.run(["git", "-C", str(directory), "config", "core.autocrlf", "false"],
+                       check=True)
+        subprocess.run(["git", "-C", str(directory), "checkout", "--quiet", "--detach", sha],
+                       check=True)
     report = dict(
         schema="biz-perf-02.matrix.v1",
         status="INCOMPLETE",
@@ -79,7 +84,8 @@ def main():
         capacity_status="RESOURCE_DEFERRED",
         cloud_status="REAL_CLOUD_RECALC_NOT_AUTHORIZED",
         baseline_sha=BASELINE,
-        candidate_sha=subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        candidate_sha=candidate_sha,
+        source_layout="two clean detached local shared Git clones; autocrlf false",
         harness_sha256=digest(root / "scripts/business_recalc_measure.py"),
         observer_sha256=digest(root / "scripts/business_candidate_observer.py"),
         strategy_sha256=digest(root / "config/strategy.yaml"),
@@ -109,7 +115,7 @@ def main():
                 name = f"{months}m-{repeat}-{variant}"
                 output = args.output / (name + ".json")
                 env = dict(os.environ)
-                backend = (reference if variant == "old" else root) / "backend"
+                backend = (reference if variant == "old" else candidate) / "backend"
                 env["PYTHONPATH"] = os.pathsep.join([str(backend.resolve()), str(root)])
                 for key in (
                     "FACTOR_INPUT_REUSE_ENABLED",
