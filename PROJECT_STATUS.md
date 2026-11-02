@@ -1,16 +1,17 @@
 # ssh_stock 当前状态与唯一执行指针
 
 状态版本：2026-11-02 治理基准 v1 收口草案，REVIEW_PENDING（已交付，待负责人最终验收）。
-核查日期使用 Asia/Shanghai；本轮 master/CI 核查时间为 **2026-11-02 16:04 +08:00**。
+核查日期使用 Asia/Shanghai；本轮 master 核查时间为 **2026-11-02 16:19 +08:00**。
+本轮未重新核查 CI；第 5 节保留原取样时间与 SHA，不作为当前 master 的实时结论。
 这是带时间的事实快照，CI 后续可能变化；新会话必须重新核验，不能当实时监控。
 
 ## 1. 当前主线与下一步
 
-- 当前唯一业务主线：股票历史读取 → Python 转换/计算 → 候选查询/写入 → 质量核验 → 原子发布的性能诊断及可靠性；问题尚未收口。
+- 当前唯一业务主线：股票历史数据读取 → Python 转换与计算 → 候选查询与写入 → 质量核验 → 原子发布的性能问题；尚未收口。
 - 当前唯一执行任务：**GOV-20261102-001，长期项目治理基准建设**。
-- 当前状态：**已交付、待负责人最终验收（REVIEW_PENDING）**，不得自行标 DONE；五份治理文件已按负责人指令提交推送，本轮入口与状态收口修改仍待审阅，禁止本轮提交、推送或业务开发。
+- 当前状态：**已交付、等待负责人最终验收（REVIEW_PENDING）**，不得自行标记为 DONE。五份治理文件已在 31bf700 首次提交推送；AGENTS 新会话强制读取规则、PROJECT_STATUS 和 docs/tasks/README 的收口修改也已在 276cc262 提交推送。本轮仅修正 PROJECT_STATUS，补丁先交负责人审阅，再按确认后的交付指令提交推送。
 - 下一项仅为：诊断整改方案，待负责人安排/审阅；不得据此开始实施、实验或生产操作。
-- **BIZ-PERF-03-A 保持 PARTIAL**；部分实现已在 e610a92，开销与完整回归未收口。诊断整改方案为 PENDING_APPROVAL，**本轮未授权开始 BIZ-PERF-03-A-R1**。
+- **BIZ-PERF-03-A = PARTIAL**；部分实现已在 e610a928，开销与完整回归未收口。诊断整改方案为 PENDING_APPROVAL，**本轮未授权开始 BIZ-PERF-03-A-R1**，不授权性能实验、生产数据库操作或业务代码修改。
 - 未获批准不得自行进入热点优化、扩大功能或重新规划另一条开发主线。
 
 ## 2. 仓库基线
@@ -18,21 +19,27 @@
 | 项目 | 核查事实 | 来源 |
 | --- | --- | --- |
 | 本地分支 | master | git status --short --branch |
-| HEAD / origin/master / GitHub master | 31bf700c77b86fcb9be59787a0bde76d6f7d85bd | git rev-parse、git ls-remote --heads origin、GitHub 同 SHA 工作流 |
-| 最近提交 | docs(governance): establish project charter roadmap status and task workflow | git show HEAD |
+| HEAD / origin/master / GitHub master | 276cc262d4b8be2008415683c9d5af42a913fbc2 | git rev-parse、git ls-remote --heads origin master |
+| 最新治理提交 | 276cc262d4b8be2008415683c9d5af42a913fbc2（276cc262） | git log、git show --stat；入口规则与状态收口已推送 |
+| 治理文件首次交付 | 31bf700c77b86fcb9be59787a0bde76d6f7d85bd（31bf700） | git show --stat；仅作历史交付 SHA，不是当前 HEAD |
+| 最近一次业务代码变更 | e610a92890d89f0b58f1de6335ae918da07d67d9（e610a928） | git log -1 -- backend frontend config scripts migrations |
+| 最近提交标题 | docs(governance): align agent startup reading and project handoff status | git show HEAD |
 | 本轮开始工作区 | 干净，含未跟踪文件检查 | git status |
-| 远端 master | refs/heads/master 指向上述 SHA；远端仅 master 的完整分支清单为上一轮核查事实，本轮仅复核 master | git ls-remote --heads origin master |
+| 远端 master | refs/heads/master 指向 276cc262；远端仅 master 的完整分支清单为上一轮核查事实，本轮仅复核 master | git ls-remote --heads origin master |
 | 历史集成 | PR #1 合并提交 3940d9b；其后 BIZ-PERF-02 候选、撤回和 R1 均在 master 历史 | git log |
-| 治理文件交付 | PROJECT_CHARTER、PROJECT_ROADMAP、PROJECT_STATUS、DECISION_LOG、docs/tasks/README 五份文件已在 31bf700 提交推送，441 行新增 | git show --stat HEAD、此前推送成功及本轮远端 master 复核 |
-| 本轮改动 | 仅 AGENTS.md、PROJECT_STATUS.md、docs/tasks/README.md 的治理收口；尚未提交 | 交付时再次核验 diff/status |
+| 治理文件交付 | PROJECT_CHARTER、PROJECT_ROADMAP、PROJECT_STATUS、DECISION_LOG、docs/tasks/README 五份文件已在 31bf700 提交推送，441 行新增 | git show --stat 31bf700、此前推送成功及本轮提交链核对 |
+| 入口与接续收口交付 | AGENTS.md、PROJECT_STATUS.md、docs/tasks/README.md 已在 276cc262 提交推送 | git show --stat 276cc262、此前推送成功及本轮远端 master 复核 |
+| 本轮改动 | 仅 PROJECT_STATUS.md 的基线与交付状态修正；尚未提交，待负责人审阅 | 交付时再次核验 diff/status |
 
-最新 master 为 **31bf700**，其中业务实现最近一次变更为 **e610a92**，31bf700 仅交付五份
-治理文档。本轮未提交的收口补丁不属于上述提交。以后分别记录代码基线、治理交付 SHA 和
+最新 master / 最新治理提交为 **276cc262**；五份治理文件首次交付为 **31bf700**；
+最近一次业务代码变更为 **e610a928**。两次治理提交均未改动业务代码，当前诊断仍为 PARTIAL。
+本轮未提交的单文件修正不属于上述提交。以后分别记录代码基线、治理交付 SHA 和
 核查时间，避免通过自写“当前 SHA”冒充已提交或为自引用 SHA 无限追加提交。
 
 ## 3. 实际代码能力与证据层级
 
-本轮静态审阅入口和调用，不运行应用、不连接数据库，也不重新执行功能验收。
+以下能力来自此前静态审阅的入口和调用；本轮仅更正文档，不运行应用、不连接数据库，
+也不重新执行功能验收。
 
 | 能力 | 已核查代码路径 | 本轮能确认 / 不能确认 |
 | --- | --- | --- |
@@ -63,9 +70,15 @@
 上一轮报告记录本机隔离 PG17 测试曾运行并停止，仅为历史测试环境事实；不能据此推断
 当前云端业务库状态。本轮无业务库连接、DDL/DML、迁移、清理、重算或生产部署操作。
 
-## 5. 当前 GitHub CI（仅工程证据）
+## 5. CI 证据与历史快照（仅工程证据）
 
-本轮取样均为 push、attempt 1、精确 SHA **31bf700c77b86fcb9be59787a0bde76d6f7d85bd**：
+当前 master **276cc262d4b8be2008415683c9d5af42a913fbc2** 的 CI 本轮未重新查询，
+状态为 UNKNOWN，最终工程结论 PENDING；不得继承下列旧 SHA 的结果。
+
+### 31bf700 历史 CI 快照（原样保留）
+
+下列为 **2026-11-02 16:04 +08:00** 的历史取样，均为 push、attempt 1、精确 SHA
+**31bf700c77b86fcb9be59787a0bde76d6f7d85bd**，不表示当前 HEAD 或实时 CI 状态：
 
 | 工作流 | 16:04 核查状态 |
 | --- | --- |
@@ -74,7 +87,7 @@
 | [A4-1 41409940667](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940667) | SUCCESS；工作流结果不等于性能实验验收 |
 | [Publication V1.3 41409940658](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940658) | SUCCESS；工作流结果不等于性能实验验收 |
 
-### 历史 CI 快照（原样保留）
+### e610a928 历史 CI 快照（原样保留）
 
 下列为 **2026-11-02 15:56 +08:00** 的历史取样，均为 push、attempt 1、精确 SHA
 e610a92890d89f0b58f1de6335ae918da07d67d9，不能当作当前 master 的实时状态。
@@ -88,7 +101,8 @@ e610a92890d89f0b58f1de6335ae918da07d67d9，不能当作当前 master 的实时�
 
 skipped 不表示性能通过；成功的合同工作流未执行其高成本实验。本轮只读取 GitHub，
 不 rerun/dispatch/取消工作流。旧 8f4e607 的 5297 测试与 89.99% 覆盖率是 R1 归档的历史
-工程证据，不能贴为 e610a92 或 31bf700 的测试数或覆盖率。当前 master 最终覆盖率 PENDING。
+工程证据，不能贴为 e610a928、31bf700 或 276cc262 的测试数或覆盖率。当前 master 最终覆盖率 PENDING。
+即使工程 CI 后续通过，也不代表 BIZ-PERF-03-A 的开销、整链性能或百万行容量验收通过。
 
 ## 6. 不得丢失的问题台账
 
@@ -115,13 +129,22 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 
 ## 7. 阻塞、边界与接续
 
-1. 五份治理文件已提交推送，GOV-20261102-001 已交付、待负责人最终验收；本轮三文档收口待审阅，不自行标 DONE。
-2. 当前源码主 CI 未终结；诊断开销、最终根任务回归和插桩覆盖未验收。
+1. 五份治理文件及新会话读取/接续规则均已提交推送；GOV-20261102-001 已交付、等待负责人最终验收，不自行标记为 DONE。本轮单文件修正待审阅。
+2. 当前 master 的 CI 本轮未核查，保持 UNKNOWN/PENDING；诊断开销、最终根任务回归和插桩覆盖未验收。
 3. 正式规模代表性夹具、合格执行资源及授权尚未核实满足；不能临时缩规模或放宽门槛。
 4. 生产状态未知，现场读取/部署/数据库操作没有本轮授权。
-5. 本轮仅更新治理入口、状态与任务接续规范；AGENTS 保留原业务权威关系和安全约束，
-   旧 Milestone 16.3.1 当前阶段表述已修正。四份原业务权威文档与历史验收记录未修改。
+5. AGENTS 的强制读取规则与过时阶段表述修正已在 276cc262 交付；本轮仅修改 PROJECT_STATUS。
+   AGENTS、其余治理文档、业务代码、测试、配置、数据库、CI 和历史验收记录均不修改。
 6. 下一项仅为待审诊断整改方案；BIZ-PERF-03-A 仍为 PARTIAL，不授权 BIZ-PERF-03-A-R1 实施、性能实验或生产数据库操作。
 
 后续更新遵守[任务规范](docs/tasks/README.md)：记录核查时间、源码 SHA、证据范围、
 唯一任务与下一步；主线变更先追加[决策](DECISION_LOG.md)，不能只改本文件的状态字段。
+
+## 8. 五份治理文件的一致性核对
+
+已按 AGENTS 顺序读取五文件：长期目标、历史性能主线、诊断未验收、治理待负责人最终验收
+及后续实施需独立批准的规则一致。PROJECT_CHARTER、PROJECT_ROADMAP、DECISION_LOG 中
+的草案/待审及旧 SHA 描述保留原任务语境，不表示新的业务授权；docs/tasks/README 所记
+31bf700 是首次交付，其“本轮三文档收口”是 276cc262 的历史范围，不是本次修改许可。
+上述存在跨轮次措辞时效差异，本轮在本文件澄清，不越权修改其余四份治理文件。
+当前 SHA、交付状态与唯一下一步以本文件本次核查和负责人最新要求为准。
