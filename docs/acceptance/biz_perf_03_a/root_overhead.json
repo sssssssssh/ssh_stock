@@ -1,0 +1,90 @@
+{
+  "evidence_kind": "ISOLATED_PG17_REAL_WORKER_SMALL_SYNTHETIC",
+  "baseline_commit": "fe94bddc6cf597b3e3a48f11024993cc6c7f2b01",
+  "worktree": "DIRTY_CANDIDATE",
+  "tests": [
+    {
+      "test": "test_real_root_parity_and_local_reports[success-0]",
+      "measurements": [
+        {
+          "enabled": false,
+          "pair": 0,
+          "wall_ms": 40048.0447000009
+        },
+        {
+          "enabled": true,
+          "pair": 0,
+          "wall_ms": 42008.89459999962
+        }
+      ]
+    },
+    {
+      "test": "test_real_root_parity_and_local_reports[success-1]",
+      "measurements": [
+        {
+          "enabled": false,
+          "pair": 1,
+          "wall_ms": 37756.22959999964
+        },
+        {
+          "enabled": true,
+          "pair": 1,
+          "wall_ms": 37380.0255999995
+        }
+      ]
+    },
+    {
+      "test": "test_real_root_parity_and_local_reports[success-2]",
+      "measurements": [
+        {
+          "enabled": false,
+          "pair": 2,
+          "wall_ms": 37157.09659999993
+        },
+        {
+          "enabled": true,
+          "pair": 2,
+          "wall_ms": 39889.497799998935
+        }
+      ]
+    },
+    {
+      "test": "test_real_root_parity_and_local_reports[cancel-0]",
+      "measurements": [
+        {
+          "enabled": false,
+          "pair": 0,
+          "wall_ms": 5144.235399999161
+        },
+        {
+          "enabled": true,
+          "pair": 0,
+          "wall_ms": 5133.37859999956
+        }
+      ]
+    },
+    {
+      "test": "test_real_root_parity_and_local_reports[error-0]",
+      "measurements": [
+        {
+          "enabled": false,
+          "pair": 0,
+          "wall_ms": 4984.025800000381
+        },
+        {
+          "enabled": true,
+          "pair": 0,
+          "wall_ms": 8209.336899999471
+        }
+      ]
+    }
+  ],
+  "medians_ms": {
+    "False": 37756.22959999964,
+    "True": 39889.497799998935
+  },
+  "overhead_percent": 5.65010919416411,
+  "outputs_equal": true,
+  "acceptance_scope": "small_input_not_capacity",
+  "order": "OFF_ON_each_pair"
+}

@@ -131,10 +131,13 @@ class ProgressStep:
 
 
 def run_calculation(name, calculate, *args, **kwargs):
+    from app.services.performance_diagnostics import span
+
     step = ProgressStep(name, "compute")
     step.report("compute", log=True)
     try:
-        result = calculate(*args, **kwargs)
+        with span("factor.compute"):
+            result = calculate(*args, **kwargs)
     except BaseException:
         step.report("failed", log=True)
         raise

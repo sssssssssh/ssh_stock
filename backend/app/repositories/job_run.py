@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from datetime import UTC, date, datetime
 from time import monotonic
 from typing import Any
@@ -168,7 +169,13 @@ def _update_owned_data_job(db, job, *, status, step, row_count, error_message, m
         db.rollback()
         checkpoint()
         raise JobOwnershipLost("JOB_OWNERSHIP_LOST")
-    db.commit()
+    from app.services.performance_diagnostics import span, terminal
+
+    with (span("publish.commit") if status in {"SUCCESS", "PARTIAL"}
+          else span("task.finalize") if status in {"FAILED", "CANCELLED"} else nullcontext()):
+        db.commit()
+    if status in {"SUCCESS", "PARTIAL", "FAILED", "CANCELLED"}:
+        terminal(status, job.id)
     db.refresh(job)
     return job
 

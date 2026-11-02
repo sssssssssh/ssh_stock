@@ -1,0 +1,41 @@
+[
+  {
+    "git_sha": null,
+    "config_fingerprint": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "runs": 1,
+    "context": {
+      "cache_used": null,
+      "data_range": null,
+      "raw_rows": null,
+      "stock_count": null
+    },
+    "measured_union_wall_ms": 1.0001659393310547,
+    "measured_union_wall_percent": null,
+    "median_ms": 0,
+    "min_ms": 0,
+    "max_ms": 0,
+    "p95_ms": null,
+    "p95_note": "insufficient_samples",
+    "stdev_ms": null,
+    "rss_peak_bytes": 36167680,
+    "stages": [
+      {
+        "stage": "data.transform",
+        "inclusive_ms": 0.0,
+        "covered_wall_percent": null,
+        "output_rows": null,
+        "note": "inclusive_nested_do_not_sum_or_treat_as_wall_share"
+      },
+      {
+        "stage": "factor.compute",
+        "inclusive_ms": 0.0,
+        "covered_wall_percent": null,
+        "output_rows": null,
+        "note": "inclusive_nested_do_not_sum_or_treat_as_wall_share"
+      }
+    ],
+    "sql_top_time": [],
+    "sql_top_calls": [],
+    "overlap_note": "stage times are inclusive; never added to SQL/fetch or total wall"
+  }
+]

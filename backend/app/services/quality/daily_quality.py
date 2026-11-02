@@ -28,6 +28,7 @@ from app.services.analysis_identity import (
     TREND_CALC_VERSION,
     analysis_strategy_hash,
 )
+from app.services.performance_diagnostics import observed
 from app.services.quality.sector_quality import check_sector_factor_coverage
 from app.services.universe import is_stock_active_on
 
@@ -369,6 +370,7 @@ def record_cross_table_quality(
     return result
 
 
+@observed("quality.check")
 def validate_cross_table_range(
     db: Session,
     start: date,

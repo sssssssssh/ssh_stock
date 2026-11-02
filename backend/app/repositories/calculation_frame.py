@@ -10,6 +10,7 @@ from app.core.db import database_error_summary
 from app.services.calculation_progress import ProgressStep
 from app.services.execution_diagnostics import operation, record_duration
 from app.services.job_execution import JobCancelled, checkpoint
+from app.services.performance_diagnostics import measured_interval, span
 
 FETCH_ROWS = 5000
 
@@ -20,6 +21,9 @@ def read_calculation_frame(
     """Keep the original SELECT and transaction, but bound each network FETCH."""
     if len(name) > 80 or not re.fullmatch(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?", name):
         raise ValueError("CALCULATION_READ_NAME_INVALID")
+    stage = ("raw.read" if name.split(".")[-1] in {"stock_daily", "stock_basic",
+             "adj_factor", "index_daily", "stock_st_daily", "stock_suspend_daily"}
+             else "candidate.query")
     checkpoint()
     if consume_batch is not None and not records_only:
         raise ValueError("CALCULATION_READ_CONSUMER_REQUIRES_RECORD_MODE")
@@ -38,12 +42,13 @@ def read_calculation_frame(
         policy = active_policy.get()
         if policy is not None:
             fetch_observer = DriverFetchObserver(db, name, policy)
-        with operation(name, "query"):
+        with span(stage), operation(name, "query"):
             result = db.execute(statement.execution_options(
                 yield_per=FETCH_ROWS, calculation_query_name=name))
         fetched_at = monotonic()
         timing_phase = "fetch"
         for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
+            measured_interval(stage, monotonic()-fetched_at, rows=len(batch), batches=1)
             record_duration(name, "fetch", monotonic()-fetched_at, rows=len(batch))
             if policy is not None:
                 policy.observe_fetch(name, len(batch), monotonic()-fetched_at)
@@ -66,7 +71,7 @@ def read_calculation_frame(
         # inference (including all-NULL batches), ordering and empty-frame behavior.
         progress.report("frame", completed_rows=row_count, log=True)
         timing_phase = "frame"
-        with operation(name, "frame"):
+        with span("data.transform"), operation(name, "frame"):
             frame = rows if records_only else pd.DataFrame(rows)
         progress.report("complete", completed_rows=row_count, advanced=True, log=True)
         logger.info("calculation read complete query={} rows={} elapsed_seconds={:.1f}",

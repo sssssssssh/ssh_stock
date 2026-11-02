@@ -1,0 +1,30 @@
+{
+  "baseline_sha": "fe94bddc6cf597b3e3a48f11024993cc6c7f2b01",
+  "worktree": "DIRTY_CANDIDATE",
+  "files_sha256": {
+    "backend/app/services/performance_diagnostics.py": "e38d6b21df0aea35d5a1bed7033799f04564a63ba3afb124e1f05c3e2a0be6fb",
+    "backend/app/services/performance_sql_diagnostics.py": "9a728616c94f3036b1d647eaf2822407b903087f0b65f719fe05140e39fa69dc",
+    "tests/integration/test_perf03_root_diagnostics.py": "5f6ac7c5c063a60cf06ac6edfbd739e548bea58c58b000f1657b43e4a5f81a4f",
+    "tests/unit/test_performance_diagnostics.py": "1172bf5fde882dd077e82b3fc404393f16e7ca6ee4d07280c11e726a21a9f335"
+  },
+  "unit": {
+    "passed": 28,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 4.32
+  },
+  "full_pytest": {
+    "exit_code": 1,
+    "collection_errors": 10,
+    "cause": "Windows fcntl/resource unavailable"
+  },
+  "ruff": "PASS",
+  "pg17_revision1": {
+    "passed": 5,
+    "seconds": 326.81,
+    "overhead_percent": 5.65010919416411
+  },
+  "pg17_current_revision": "INCOMPLETE",
+  "production_operations": false,
+  "acceptance": "PARTIAL_OVERHEAD_AND_FULL_REGRESSION_OPEN"
+}

@@ -1,0 +1,49 @@
+{
+  "evidence_kind": "OFFLINE_CPU_TIMER_ONLY_NOT_ROOT_ACCEPTANCE",
+  "observations": [
+    {
+      "pair": 1,
+      "enabled": false,
+      "wall_ms": 557.4172000015096,
+      "output": 7724011075
+    },
+    {
+      "pair": 1,
+      "enabled": true,
+      "wall_ms": 718.511999999464,
+      "output": 7724011075
+    },
+    {
+      "pair": 2,
+      "enabled": true,
+      "wall_ms": 646.4477000008628,
+      "output": 7724011075
+    },
+    {
+      "pair": 2,
+      "enabled": false,
+      "wall_ms": 527.5765000005777,
+      "output": 7724011075
+    },
+    {
+      "pair": 3,
+      "enabled": false,
+      "wall_ms": 438.0411999991338,
+      "output": 7724011075
+    },
+    {
+      "pair": 3,
+      "enabled": true,
+      "wall_ms": 452.6229999974021,
+      "output": 7724011075
+    }
+  ],
+  "medians_ms": {
+    "off": 527.5765000005777,
+    "on": 646.4477000008628
+  },
+  "overhead_percent": 22.531557034885942,
+  "outputs_equal": true,
+  "database_calls": 0,
+  "root_overhead_acceptance": "NOT_MEASURED"
+}

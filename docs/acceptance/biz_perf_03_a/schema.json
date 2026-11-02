@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "BIZ-PERF-03-A local trace",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "trace_id",
+    "task_id",
+    "root_id",
+    "git_sha",
+    "started_at",
+    "ended_at",
+    "total_wall_ms",
+    "status",
+    "environment",
+    "stages",
+    "database_summary",
+    "worker_resources",
+    "diagnostic_overhead",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "biz-perf-03-a.v1"
+    },
+    "trace_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "root_id": {
+      "type": "string"
+    },
+    "git_sha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "total_wall_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "status": {
+      "enum": [
+        "success",
+        "error",
+        "cancelled",
+        "skipped",
+        "incomplete"
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "span_id",
+          "parent_span_id",
+          "started_at",
+          "ended_at",
+          "duration_ms",
+          "status",
+          "input_rows",
+          "output_rows",
+          "calls",
+          "batches",
+          "metrics"
+        ],
+        "properties": {
+          "duration_ms": {
+            "type": "number",
+            "minimum": 0
+          },
+          "input_rows": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "output_rows": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "calls": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "batches": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "stage": {
+            "enum": [
+              "task.queue_wait",
+              "worker.claim",
+              "raw.read",
+              "data.transform",
+              "factor.compute",
+              "candidate.query",
+              "candidate.filter",
+              "quality.check",
+              "candidate.write",
+              "publish.prepare",
+              "publish.commit",
+              "task.finalize"
+            ]
+          },
+          "status": {
+            "enum": [
+              "success",
+              "error",
+              "cancelled",
+              "skipped",
+              "incomplete"
+            ]
+          },
+          "span_id": {
+            "type": "string"
+          },
+          "parent_span_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metrics": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "environment": {
+      "type": "object"
+    },
+    "database_summary": {
+      "type": "object"
+    },
+    "worker_resources": {
+      "type": "object"
+    },
+    "diagnostic_overhead": {
+      "type": "object"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

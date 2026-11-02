@@ -313,8 +313,14 @@ class DriverFetchObserver:
                 try:
                     rows = super().fetchmany(*args, **kwargs)
                 except BaseException:
+                    from app.services.performance_diagnostics import driver_fetch
+
+                    driver_fetch(monotonic()-began, None)
                     policy.observe_driver_fetch(name, None, monotonic()-began, failed=True)
                     raise
+                from app.services.performance_diagnostics import driver_fetch
+
+                driver_fetch(monotonic()-began, len(rows))
                 policy.observe_driver_fetch(name, len(rows), monotonic()-began)
                 return rows
 

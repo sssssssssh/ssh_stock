@@ -35,6 +35,8 @@ def load_yaml_config(path: Path) -> dict[str, Any]:
 
 
 class Settings(BaseSettings):
+    perf_diagnostics_enabled: bool = False
+    perf_diagnostics_directory: Path = ROOT_DIR / "data/diagnostics/performance"
     # Independent observability opt-in, not a calculation/optimization switch.
     worker_diagnostics_enabled: bool = False
     # Stage A read path is opt-in until same-scale acceptance is reviewed.

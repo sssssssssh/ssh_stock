@@ -78,6 +78,7 @@ from app.services.performance.trade_application import (
 from app.services.performance.trade_recovery import (
     recover_stale_performance_trade_jobs,
 )
+from app.services.performance_diagnostics import observe_worker
 from app.services.portfolio.backtest_application import (
     BACKTEST_JOB_TYPE,
     BacktestRunner,
@@ -205,6 +206,7 @@ def claim_next_job(db: Session, worker_id: str) -> uuid.UUID | None:
     return job.id
 
 
+@observe_worker
 def execute_claimed_job(
     db: Session, job_id: uuid.UUID, *,
     expected_worker: str | None = None, expected_token: uuid.UUID | None = None,
@@ -228,6 +230,9 @@ def execute_claimed_job(
         db.info["data_execution_job_id"] = job.id
         progress_token = current_progress.set(CalculationProgress())
     metadata = dict(job.job_metadata or {})
+    from app.services.performance_diagnostics import bind_task
+
+    bind_task(job, metadata, get_settings())
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
     publication_workspace = None

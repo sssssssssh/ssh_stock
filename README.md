@@ -1,5 +1,12 @@
 # A 股机会发现与趋势研究系统
 
+## BIZ-PERF-03-A 可选性能诊断（2026-11-02）
+
+新增 `PERF_DIAGNOSTICS_ENABLED=false` 与 `PERF_DIAGNOSTICS_DIRECTORY`，启用并重启 Worker 后
+为后续任务输出本地 JSON。离线汇总：`python -m scripts.performance_diagnostics_report 报告.json`。
+实现、测量边界、原始开销和未完成验收见 [交付说明](docs/acceptance/BIZ_PERF_03_A_closeout.md)。
+当前诊断开销及完整工程回归未收口，保持 PARTIAL，不代表计算提速或生产性能通过。
+
 ## BIZ-PERF-02 质量写入验证（2026-11-02）
 
 PR #1 已合并到 master，开发分支已删除；下方 Draft/待合并描述仅保留历史语境。

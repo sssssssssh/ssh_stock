@@ -27,6 +27,7 @@ from app.models.job import JobRun
 from app.services.calculation_progress import ProgressStep
 from app.services.job_execution import JobCancelled, JobOwnershipLost, checkpoint
 from app.services.job_guard import data_queue_identity, scheduler_setting
+from app.services.performance_diagnostics import observed
 
 MODELS = (
     m.StockTradeStatusDaily,
@@ -219,6 +220,8 @@ class PublicationWorkspace:
             for row in self.db.execute(select(*selected).where(condition)).mappings()
         }
 
+    @observed(
+        "candidate.query")
     def _lookup_batch(self, model, payload):
         """Resolve only the requested keys; never re-evaluate the overlay view.
 
@@ -393,6 +396,8 @@ class PublicationWorkspace:
         for offset in range(0, len(rows), 500):
             self._store_batch(rows[offset : offset + 500])
 
+    @observed(
+        "candidate.write")
     def _store_batch(self, rows):
         # Independent observer: cancellation/ownership must be visible even while
         # this Session holds candidate writes and FK KEY SHARE locks on the Job.
@@ -742,6 +747,7 @@ def _verify_candidate(db, current):
                 raise ValueError(f"PUBLICATION_CANDIDATE_IDENTITY_MISMATCH:{name}")
 
 
+@observed("publish.prepare")
 def finish_publication(db, job, status):
     """Called inside the Job terminal CAS transaction; never commits itself."""
     current = workspace(db)
