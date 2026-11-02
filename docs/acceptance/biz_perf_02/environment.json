@@ -1,0 +1,12 @@
+{
+  "schema": "biz-perf-02.environment.v1",
+  "cpu": "Intel(R) Xeon(R) CPU E5-1620 v4 @ 3.50GHz",
+  "cores": 4,
+  "logical_processors": 8,
+  "total_memory_bytes": 34271772672,
+  "available_memory_bytes": 12517941248,
+  "free_disk_bytes": 801042640896,
+  "scope": "shared Windows host; loopback dedicated UUID PG17; no hard host resource quota",
+  "linux_vm_kernel": "3.10.0-1160.el7.x86_64",
+  "linux_pidfd_capable": false
+}

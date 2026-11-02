@@ -1,0 +1,54 @@
+{
+  "schema": "biz-perf-02.baseline.v1",
+  "baseline_sha": "3940d9b905e5234368f8a7474ae2ce6de73b0cb3",
+  "tree": "1557c020c0fc47a2c2ed4d87b08865c28c1e0631",
+  "branch": "master",
+  "clean": true,
+  "recent_commits": [
+    "3940d9b Merge pull request #1 from sssssssssh/codex/biz-worker-02",
+    "8d6d322 fix(ci): bind live patch checks to the development commit",
+    "483d726 fix(ci): bound history CLI and cache immutable Git source blobs",
+    "47d432d fix(ci): reject changed originals before historical test routing",
+    "afdaede feat(ci): separate development source contracts from immutable A4 history"
+  ],
+  "platform": "Windows-10-10.0.19045-SP0",
+  "python": "3.12.14",
+  "dependencies": {
+    "SQLAlchemy": "2.0.52",
+    "psycopg": "3.3.4",
+    "pandas": "3.0.5",
+    "numpy": "2.3.3",
+    "pytest": "9.1.1",
+    "alembic": "1.19.1"
+  },
+  "requirements_lock_sha256": "aa8d7f344bc70c749cb91375950ad0620a551add2933329b82520c35bd7c59b5",
+  "taskbook_sha256": "3efbecec45f4ff4889b39a45ddc9c7f313fa037d81740476d231574d8fcf6323",
+  "scope": "synthetic loopback only; no business .env, cloud, provider or production access",
+  "marker": "9b6f3c1d0eaf4dc49a4c21951ac0d887",
+  "system_identifier": "7703381685940998636",
+  "performance_status": "PERFORMANCE_OPEN",
+  "capacity_status": "RESOURCE_DEFERRED",
+  "cloud_status": "REAL_CLOUD_RECALC_NOT_AUTHORIZED",
+  "alembic_current": [
+    "0058_data_publication"
+  ],
+  "alembic_heads": [
+    "0058_data_publication"
+  ],
+  "postgres": {
+    "server_version": "17.6",
+    "shared_buffers": "128MB",
+    "work_mem": "4MB",
+    "max_connections": "30",
+    "statement_timeout": "0",
+    "lock_timeout": "0",
+    "TimeZone": "Asia/Shanghai"
+  },
+  "flags": {
+    "factor_input_reuse_enabled": false,
+    "raw_preflight_batch_enabled": false,
+    "factor_cpu_optimization_enabled": false,
+    "ab_merge_read_enabled": false
+  },
+  "strategy_sha256": "bb824f8a3ef90442eafc8d0dae7796bc3d9992f671c6d06733975c7f877ce28b"
+}

@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -26,6 +27,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--optimized", action="store_true")
     parser.add_argument("--profile", action="store_true")
+    parser.add_argument("--candidate-diagnostics", action="store_true")
+    parser.add_argument("--implementation-sha")
     args = parser.parse_args()
     if not 1 <= args.stocks <= 5000:
         parser.error("stocks must be between 1 and 5000")
@@ -79,6 +82,19 @@ def main():
         source_files, sort_keys=True).encode()).hexdigest()
     report["git_text_sources_sha256"] = hashlib.sha256(json.dumps(
         canonical_sources, sort_keys=True).encode()).hexdigest()
+    if args.implementation_sha is not None:
+        from scripts.business_source_contract import committed_hashes
+
+        if not re.fullmatch(r"[0-9a-f]{40}", args.implementation_sha):
+            raise ValueError("BUSINESS_IMPLEMENTATION_SHA_INVALID")
+        paths = subprocess.check_output(["git", "ls-tree", "-r", "--name-only",
+            args.implementation_sha, "--", "backend", "config", "migrations"], text=True)
+        paths = tuple(p for p in paths.splitlines() if Path(p).suffix in {".py", ".yaml"})
+        if dict(committed_hashes(Path.cwd(), args.implementation_sha, paths)) != canonical_sources:
+            raise ValueError("BUSINESS_IMPLEMENTATION_BYTES_MISMATCH")
+        report["driver_checkout_sha"] = head
+        report["head_sha"] = args.implementation_sha
+        report["implementation_git_bytes_verified"] = True
     report["harness_sha256"] = hashlib.sha256(Path(__file__).read_bytes().replace(
         b"\r\n", b"\n")).hexdigest()
     report["observation_limits"] = [
@@ -88,6 +104,7 @@ def main():
     ]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     monkeypatch = pytest.MonkeyPatch()
+    candidate_observer = None
     try:
         with isolated_v14_database(monkeypatch) as (factory, engine):
             # Heartbeat and checkpoint must use the SAME newly-owned test DB.
@@ -297,11 +314,16 @@ def main():
 
             def failed(context):
                 sql_failures.append(dict(error_class=type(context.original_exception).__name__,
-                    sqlstate=getattr(context.original_exception, "sqlstate", None)))
+                    sqlstate=getattr(context.original_exception, "sqlstate", None),
+                    stage=getattr(context.execution_context, "biz_stage", None)))
 
             event.listen(engine, "before_cursor_execute", before)
             event.listen(engine, "after_cursor_execute", after)
             event.listen(engine, "handle_error", failed)
+            if args.candidate_diagnostics:
+                from scripts.business_candidate_observer import CandidateObserver
+
+                candidate_observer = CandidateObserver(engine, monkeypatch, rss_bytes)
             started, cpu = monotonic(), process_time()
             profile = cProfile.Profile()
             if args.profile:
@@ -376,6 +398,8 @@ def main():
         report["failure_class"] = type(exc).__name__
         raise
     finally:
+        if candidate_observer is not None:
+            report["candidate_diagnostics"] = candidate_observer.close()
         monkeypatch.undo()
         args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps({"output": str(args.output), "runs": report["runs"]}))

@@ -274,56 +274,31 @@ def record_cross_table_quality(
     }
     expected = expected_stock_daily_codes(db, trade_date)
     results = {}
-    results["stock_daily_vs_expected"] = _persist_simple(
-        db,
-        trade_date,
-        "stock_daily_vs_expected",
-        len(expected),
-        counts["stock_daily"],
-        job_id,
-        warning_coverage_rate=_daily_threshold(strategy, "warning", 0.98),
-        error_coverage_rate=_daily_threshold(strategy, "error", 0.95),
-    )
-    results["adj_vs_daily"] = _persist_simple(
-        db,
-        trade_date,
-        "adj_vs_daily",
-        counts["stock_daily"],
-        counts["stock_adj_factor"],
-        job_id,
-        warning_coverage_rate=_cross_table_threshold(strategy, "adj_vs_daily", "warning", 0.98),
-        error_coverage_rate=_cross_table_threshold(strategy, "adj_vs_daily", "error", 0.95),
-    )
-    results["basic_vs_daily"] = _persist_simple(
-        db,
-        trade_date,
-        "basic_vs_daily",
-        counts["stock_daily"],
-        counts["stock_daily_basic"],
-        job_id,
-        warning_coverage_rate=_cross_table_threshold(strategy, "basic_vs_daily", "warning", 0.98),
-        error_coverage_rate=_cross_table_threshold(strategy, "basic_vs_daily", "error", 0.95),
-    )
-    results["factor_vs_daily"] = _persist_simple(
-        db,
-        trade_date,
-        "factor_vs_daily",
-        counts["stock_daily"],
-        counts["stock_factor_daily"],
-        job_id,
-        warning_coverage_rate=_cross_table_threshold(strategy, "factor_vs_daily", "warning", 0.98),
-        error_coverage_rate=_cross_table_threshold(strategy, "factor_vs_daily", "error", 0.90),
-    )
-    results["state_vs_factor"] = _persist_simple(
-        db,
-        trade_date,
-        "state_vs_factor",
-        counts["stock_factor_daily"],
-        counts["stock_state_daily"],
-        job_id,
-        warning_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "warning", 0.98),
-        error_coverage_rate=_cross_table_threshold(strategy, "state_vs_factor", "error", 0.90),
-    )
+    from app.services.data_publication import workspace
+
+    pending = [] if job_id is not None and workspace(db) is not None else None
+    try:
+        # These five independent rows have no intervening reads. Keep their order
+        # and flush before sector SQL, including the valid prefix on an error.
+        for dataset, expected_rows, actual_rows, error_rate in (
+            ("stock_daily_vs_expected", len(expected), counts["stock_daily"], 0.95),
+            ("adj_vs_daily", counts["stock_daily"], counts["stock_adj_factor"], 0.95),
+            ("basic_vs_daily", counts["stock_daily"], counts["stock_daily_basic"], 0.95),
+            ("factor_vs_daily", counts["stock_daily"], counts["stock_factor_daily"], 0.90),
+            ("state_vs_factor", counts["stock_factor_daily"], counts["stock_state_daily"], 0.90),
+        ):
+            daily = dataset == "stock_daily_vs_expected"
+            results[dataset] = _persist_simple(
+                db, trade_date, dataset, expected_rows, actual_rows, job_id,
+                warning_coverage_rate=(_daily_threshold(strategy, "warning", 0.98) if daily
+                    else _cross_table_threshold(strategy, dataset, "warning", 0.98)),
+                error_coverage_rate=(_daily_threshold(strategy, "error", error_rate) if daily
+                    else _cross_table_threshold(strategy, dataset, "error", error_rate)),
+                _pending_rows=pending,
+            )
+    finally:
+        if pending:
+            upsert_rows(db, DataQualityDaily, pending, ["trade_date", "dataset"])
     sector_quality = check_sector_factor_coverage(
         db,
         trade_date,
@@ -431,6 +406,7 @@ def _persist_simple(
     *,
     warning_coverage_rate: float,
     error_coverage_rate: float,
+    _pending_rows: list[dict[str, Any]] | None = None,
 ) -> str:
     if expected_rows <= 0:
         coverage_rate = None
@@ -456,32 +432,31 @@ def _persist_simple(
         else:
             warning_count = 0
             error_count = 0
-    upsert_rows(
-        db,
-        DataQualityDaily,
-        [
-            {
-                "trade_date": trade_date,
-                "dataset": dataset,
-                "expected_rows": expected_rows,
-                "actual_rows": actual_rows,
+    rows = [
+        {
+            "trade_date": trade_date,
+            "dataset": dataset,
+            "expected_rows": expected_rows,
+            "actual_rows": actual_rows,
+            "coverage_rate": coverage_rate,
+            "missing_count": max(expected_rows - actual_rows, 0),
+            "duplicate_count": 0,
+            "null_count": 0,
+            "warning_count": warning_count,
+            "error_count": error_count,
+            "status": status,
+            "issue_codes": {
                 "coverage_rate": coverage_rate,
-                "missing_count": max(expected_rows - actual_rows, 0),
-                "duplicate_count": 0,
-                "null_count": 0,
-                "warning_count": warning_count,
-                "error_count": error_count,
-                "status": status,
-                "issue_codes": {
-                    "coverage_rate": coverage_rate,
-                    "warning_coverage_rate": warning_coverage_rate,
-                    "error_coverage_rate": error_coverage_rate,
-                },
-                "job_id": job_id,
-            }
-        ],
-        ["trade_date", "dataset"],
-    )
+                "warning_coverage_rate": warning_coverage_rate,
+                "error_coverage_rate": error_coverage_rate,
+            },
+            "job_id": job_id,
+        }
+    ]
+    if _pending_rows is not None:
+        _pending_rows.extend(rows)
+    else:
+        upsert_rows(db, DataQualityDaily, rows, ["trade_date", "dataset"])
     return status
 
 
