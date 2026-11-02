@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from scripts.business_candidate_observer import CandidateObserver, safe_plan
-from scripts.business_quality_matrix import compare, p95
+from scripts.business_quality_matrix import compare, p95, retention_rule
 
 
 def test_plan_redacts_sql_parameters_conditions_and_nested_output():
@@ -110,3 +110,9 @@ def test_matrix_never_accepts_missing_evidence(field):
 
 def test_p95_uses_inclusive_interpolation_not_best_run():
     assert p95([3, 1, 2]) == pytest.approx(2.9)
+
+
+def test_retention_does_not_waive_overall_regression_for_faster_substage():
+    assert not retention_rule(1, -0.0534154125176263, 0.423364485981465, 2)
+    assert retention_rule(3, 0.09108301198698, 0.459203402939211, 3)
+    assert not retention_rule(12, 0, 0.5, 3)

@@ -8,6 +8,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -47,17 +48,31 @@ def p95(values):
     return ordered[lo] + (ordered[min(lo + 1, len(ordered) - 1)] - ordered[lo]) * (position - lo)
 
 
+def retention_rule(months, overall_improvement, quality_improvement, improved_pairs):
+    return (
+        quality_improvement >= 0.15
+        and improved_pairs >= 2
+        and overall_improvement >= -0.05
+        and (months != 12 or overall_improvement > 0)
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stocks", type=int, default=4)
     parser.add_argument("--months", type=int, nargs="+", choices=(1, 3, 12), default=[1, 3, 12])
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--candidate-sha", help="explicit historical candidate; never latest approval"
+    )
     args = parser.parse_args()
     if not 1 <= args.stocks <= 100 or not 3 <= args.repeats <= 5:
         parser.error("bounded diagnostic only: stocks 1..100, repeats 3..5")
     if args.output.exists():
         parser.error("existing evidence must not be overwritten")
+    if args.candidate_sha and not re.fullmatch(r"[0-9a-f]{40}", args.candidate_sha):
+        parser.error("candidate-sha must be a complete commit SHA")
     from scripts.v14_test_database import verified_test_url
 
     verified_test_url()  # Before archives, app imports, children or any DDL.
@@ -67,16 +82,21 @@ def main():
     root = Path.cwd()
     reference = args.output / "baseline-source"
     candidate = args.output / "candidate-source"
-    candidate_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    driver_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    candidate_sha = args.candidate_sha or driver_sha
     # Both runtimes need identical Git presence and checkout line endings. A bare
     # archive would omit baseline runtime identity checks and bias overall time.
     for directory, sha in ((reference, BASELINE), (candidate, candidate_sha)):
-        subprocess.run(["git", "clone", "--quiet", "--shared", "--no-checkout",
-                        str(root), str(directory)], check=True)
-        subprocess.run(["git", "-C", str(directory), "config", "core.autocrlf", "false"],
-                       check=True)
-        subprocess.run(["git", "-C", str(directory), "checkout", "--quiet", "--detach", sha],
-                       check=True)
+        subprocess.run(
+            ["git", "clone", "--quiet", "--shared", "--no-checkout", str(root), str(directory)],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(directory), "config", "core.autocrlf", "false"], check=True
+        )
+        subprocess.run(
+            ["git", "-C", str(directory), "checkout", "--quiet", "--detach", sha], check=True
+        )
     report = dict(
         schema="biz-perf-02.matrix.v1",
         status="INCOMPLETE",
@@ -85,6 +105,7 @@ def main():
         cloud_status="REAL_CLOUD_RECALC_NOT_AUTHORIZED",
         baseline_sha=BASELINE,
         candidate_sha=candidate_sha,
+        driver_sha=driver_sha,
         source_layout="two clean detached local shared Git clones; autocrlf false",
         harness_sha256=digest(root / "scripts/business_recalc_measure.py"),
         observer_sha256=digest(root / "scripts/business_candidate_observer.py"),
@@ -220,12 +241,7 @@ def main():
         if complete and comparison:
             old, new = (statistics.median(groups[v]) for v in ("old", "new"))
             improved = sum(n < o for o, n in zip(groups["old"], groups["new"], strict=True))
-            keep = (
-                1 - new / old >= 0.15
-                and improved >= 2
-                and comparison["median_improvement"] >= -0.05
-                and (months != 12 or comparison["median_improvement"] > 0)
-            )
+            keep = retention_rule(months, comparison["median_improvement"], 1 - new / old, improved)
             retention.append(
                 dict(
                     months=months,

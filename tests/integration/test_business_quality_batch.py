@@ -1,5 +1,13 @@
-"""Real UUID-owned PG17 proofs for bounded, transaction-local derived quality writes."""
+"""Retained rejected-candidate proofs, plus separate current-code safety checks.
 
+The six candidate cases explicitly load the immutable measured implementation;
+they are not evidence that batching is enabled in current production code.
+"""
+
+import hashlib
+import importlib.util
+import subprocess
+import sys
 from copy import deepcopy
 
 import pytest
@@ -8,7 +16,6 @@ from app.models import market_data as m
 from app.models.data_publication import DataPublicationRow
 from app.repositories.upsert import upsert_rows
 from app.services.data_publication import PublicationWorkspace
-from app.services.quality import daily_quality as quality
 from sqlalchemy import select, text
 
 from scripts.v14_test_database import isolated_v14_database
@@ -22,6 +29,29 @@ DATASETS = (
     "state_vs_factor",
     "sector_factor_vs_expected",
 )
+REJECTED_SHA = "6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+
+
+@pytest.fixture
+def quality(tmp_path, monkeypatch, request):
+    source = subprocess.check_output(
+        ["git", "show", REJECTED_SHA + ":backend/app/services/quality/daily_quality.py"]
+    )
+    path = tmp_path / "rejected_candidate_quality.py"
+    path.write_bytes(source)
+    name = "biz02_rejected_quality"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)
+    spec.loader.exec_module(module)
+    request.node.user_properties.extend(
+        [
+            ("implementation_subject", "REJECTED_CANDIDATE_NOT_CURRENT"),
+            ("implementation_sha", REJECTED_SHA),
+            ("quality_source_sha256", hashlib.sha256(source).hexdigest()),
+        ]
+    )
+    return module
 
 
 @pytest.fixture
@@ -67,7 +97,7 @@ def patches(db, job):
     )
 
 
-def test_quality_uses_two_bounded_candidate_batches_per_day(isolated, monkeypatch):
+def test_quality_uses_two_bounded_candidate_batches_per_day(isolated, monkeypatch, quality):
     factory, engine = isolated
     old = seed(factory)
     original, sizes = PublicationWorkspace.upsert, []
@@ -89,7 +119,7 @@ def test_quality_uses_two_bounded_candidate_batches_per_day(isolated, monkeypatc
         assert sizes == [5, 1]
 
 
-def test_repeat_keeps_ids_first_preimages_and_readers_only_see_a(isolated):
+def test_repeat_keeps_ids_first_preimages_and_readers_only_see_a(isolated, quality):
     factory, engine = isolated
     old = seed(factory)
     with candidate(factory, engine) as (db, job):
@@ -113,7 +143,7 @@ def test_repeat_keeps_ids_first_preimages_and_readers_only_see_a(isolated):
             assert all(row.status == "PASS" and row.job_id == old for row in rows)
 
 
-def test_sector_failure_still_observes_five_prior_quality_rows(isolated, monkeypatch):
+def test_sector_failure_still_observes_five_prior_quality_rows(isolated, monkeypatch, quality):
     factory, engine = isolated
     seed(factory)
     with candidate(factory, engine) as (db, job):
@@ -127,7 +157,7 @@ def test_sector_failure_still_observes_five_prior_quality_rows(isolated, monkeyp
             quality.record_cross_table_quality(db, DAY, job_id=job.id)
 
 
-def test_malformed_later_threshold_preserves_valid_prefix(isolated):
+def test_malformed_later_threshold_preserves_valid_prefix(isolated, quality):
     factory, engine = isolated
     seed(factory)
     strategy = deepcopy(get_settings().strategy)
@@ -138,7 +168,7 @@ def test_malformed_later_threshold_preserves_valid_prefix(isolated):
         assert [row.row_data["dataset"] for row in patches(db, job)] == list(DATASETS[:3])
 
 
-def test_mid_store_failure_rolls_back_b_without_touching_a(isolated, monkeypatch):
+def test_mid_store_failure_rolls_back_b_without_touching_a(isolated, monkeypatch, quality):
     factory, engine = isolated
     old = seed(factory)
     original = PublicationWorkspace._store_batch
@@ -163,7 +193,7 @@ def test_mid_store_failure_rolls_back_b_without_touching_a(isolated, monkeypatch
             )
 
 
-def test_standalone_quality_keeps_original_six_write_order(isolated, monkeypatch):
+def test_standalone_quality_keeps_original_six_write_order(isolated, monkeypatch, quality):
     factory, engine = isolated
     old = seed(factory)
     captured, original = [], quality.upsert_rows
@@ -177,3 +207,39 @@ def test_standalone_quality_keeps_original_six_write_order(isolated, monkeypatch
         quality.record_cross_table_quality(db, DAY, job_id=old)
         assert captured == [[name] for name in DATASETS]
         assert db.scalar(text("SELECT count(*) FROM data_quality_daily")) == 6
+
+
+def test_live_quality_preserves_fields_ids_preimages_and_a_visibility(isolated):
+    from app.services.quality.daily_quality import record_cross_table_quality
+
+    factory, engine = isolated
+    old = seed(factory)
+    with candidate(factory, engine) as (db, job):
+        result = record_cross_table_quality(db, DAY, job_id=job.id)
+        assert result.has_error
+        rows = patches(db, job)
+        assert [row.row_data["dataset"] for row in rows] == list(DATASETS)
+        assert [row.row_data["id"] for row in rows] == list(range(1, 7))
+        assert all(row.row_data["job_id"] == str(job.id) for row in rows)
+        assert all(row.base_row["job_id"] == str(old) for row in rows)
+        with factory() as reader:
+            assert all(
+                row.status == "PASS" and row.job_id == old
+                for row in reader.scalars(select(m.DataQualityDaily))
+            )
+
+
+def test_live_sector_failure_preserves_existing_prefix(isolated, monkeypatch):
+    from app.services.quality import daily_quality as live
+
+    factory, engine = isolated
+    seed(factory)
+    with candidate(factory, engine) as (db, job):
+
+        def fail(*args, **kwargs):
+            assert len(patches(db, job)) == 5
+            raise ValueError("SYNTHETIC_LIVE_SECTOR_FAILURE")
+
+        monkeypatch.setattr(live, "check_sector_factor_coverage", fail)
+        with pytest.raises(ValueError, match="SYNTHETIC_LIVE_SECTOR_FAILURE"):
+            live.record_cross_table_quality(db, DAY, job_id=job.id)

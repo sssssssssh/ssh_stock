@@ -1,0 +1,204 @@
+{
+  "schema": "biz-perf-02.local-logs.v1",
+  "logs": [
+    {
+      "name": "continuity.log",
+      "sha256": "d296de262ba81446ebfc8933bfe4170891562a8506c069a72fefa9d3c562b748",
+      "bytes": 1236,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "full-windows.log",
+      "sha256": "04a5a90bbdeb76339c00fdf7b7cbaadcdfd214e5c73d617909ef9c9156e7c0be",
+      "bytes": 10827,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix/1m-0-new.log",
+      "sha256": "9166f788e2d22cc307c6da671356a07ef9d756a2fcae9daebf3f18e6b88a8ecc",
+      "bytes": 260198,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix/1m-0-old.log",
+      "sha256": "26511a18091a8f23551608d009dbbcb183ccfad4759f007e619a258ce135bd69",
+      "bytes": 327722,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix/1m-1-new.log",
+      "sha256": "a9ab107ce7871a05757d7bd554958706ac700599eea39bf94d141a7c980c4584",
+      "bytes": 260165,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-0-new.log",
+      "sha256": "81d05ea6cea933a8ee76c1aa7bc844bcf696b9dbe70a93aac8a11a88fe885786",
+      "bytes": 884663,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-0-old.log",
+      "sha256": "50098d06b163e862bcd55f7fcb383211423f1c1fd655132a5a4e78ea0a6723a1",
+      "bytes": 1670038,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-1-new.log",
+      "sha256": "890c3baf8c9b97677765bb583d160d026424bbb84b4ed950a33d74861ed2f823",
+      "bytes": 884707,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-1-old.log",
+      "sha256": "9942c4d58d2ad227a896544f184c503387b7aaded16712c7c5811ff435e1cdad",
+      "bytes": 1668681,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-2-new.log",
+      "sha256": "afa7c57c987db5752b640b6950884a443869fc486625b2e62b77303bc25de846",
+      "bytes": 884636,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/12m-2-old.log",
+      "sha256": "09f0ca96af4e25407193065a7298f95cc9482a1583eb52bcee92c74f4aa405bd",
+      "bytes": 1668783,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-0-new.log",
+      "sha256": "8df33ad789183ab61196d6a35bd63747f8fe895ad58356727fb0eb3ec272ccd5",
+      "bytes": 260292,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-0-old.log",
+      "sha256": "28ec798fc373a7d62c6c6ac109c23a56482aca30738538d544542f6e4476a814",
+      "bytes": 329381,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-1-new.log",
+      "sha256": "edb62102d101a6bd3dba46ba783b1baa2aac25f5bc0700a68a54767f57658265",
+      "bytes": 260236,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-1-old.log",
+      "sha256": "8f563dc3130b9f5eb63670aecb3bb3bcdd789a7c55df00b86eea21d81849d1d2",
+      "bytes": 329211,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-2-new.log",
+      "sha256": "adde44207e569bab711247a8272594fa0bc3650a79a185b5102402c3c173a43b",
+      "bytes": 260080,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/1m-2-old.log",
+      "sha256": "bb4320bdb7481758e67f5e034295359f850b677172ac3ea9d2ab238af1c2029e",
+      "bytes": 329116,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-0-new.log",
+      "sha256": "bd076fc58ddf5f5a428e2780c4d2f81b8890359c4a9c2b3b10c406a0d3fb08dd",
+      "bytes": 370022,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-0-old.log",
+      "sha256": "3212d4f233198478a7f8a984f70179185cfdb0bb86f0a0d165836fe39f701325",
+      "bytes": 562379,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-1-new.log",
+      "sha256": "0cfe9149681f40e12022e97b46efd36edc3ed44bfe09b500a518f7fbf424f4ea",
+      "bytes": 370071,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-1-old.log",
+      "sha256": "437218ce9e4e5c285d4fd7ebe7632d1df8ddee16bc4ada0d6c91060780721c37",
+      "bytes": 562303,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-2-new.log",
+      "sha256": "51db1d9cdb51c6b739841daed87460168ce528a0866c743d3725f3972a07a99c",
+      "bytes": 370093,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric/3m-2-old.log",
+      "sha256": "31e7a3ff495ff73f5c287e7ff440da8cf2e661f6bccf1e9bb080a33bbaccbe9c",
+      "bytes": 562219,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix-symmetric.log",
+      "sha256": "017c33f4f8e899254d9663c386f57bc895f8f12cd792f9fca690325c0df13b9f",
+      "bytes": 744,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "matrix.log",
+      "sha256": "82e780b74e5cd47c678d8720dbefcd1aa1560345307824a63f798b125c9b4158",
+      "bytes": 82,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "precommit.log",
+      "sha256": "6b51f9201b86753e87ea24072ab4d0da621d76bc1a6ae5ca85a1ee3e94d23717",
+      "bytes": 1364,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "quality-green.log",
+      "sha256": "354f3640939246f5fb4dd0ca10bab8e36aa140b8f2e518a1eff9e0d88202a919",
+      "bytes": 1473,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "quality-red.log",
+      "sha256": "b6d17b10189d4d46cded258badc9f18533de4e73c4ac0887f6c300e1a0da4341",
+      "bytes": 23899,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "w01-12m.log",
+      "sha256": "e08ce3063ed98cfbb9322730a85f22c4ab65c75177f615ab4a5f61475abf5f5d",
+      "bytes": 1326081,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "w01.log",
+      "sha256": "37fb830fdebf12fb6fe1d7d000ba86fdb9dc86fb4b7c87d498bdc7e2f249dece",
+      "bytes": 31740,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "w01b.log",
+      "sha256": "514cf96df8253f61ed41c8f8ae5742b0f15b4c7fbc25c46c17902690b7376982",
+      "bytes": 31700,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "w01c.log",
+      "sha256": "fbc1e1e814c709a85805fc54d9baa4de6b32ce466b2f38ac1996e56f690ed62b",
+      "bytes": 265046,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    },
+    {
+      "name": "withdrawal-green.log",
+      "sha256": "c59ac825dd9027b61c8f9322d5f040f0240665886a4ac77ecf30261ffc0654bb",
+      "bytes": 1583,
+      "disposition": "ORIGINAL_LOCAL_LOG_NOT_REWRITTEN"
+    }
+  ],
+  "note": "Logs remain in the ignored owned lab; relative names and hashes only, no SQL or host paths"
+}

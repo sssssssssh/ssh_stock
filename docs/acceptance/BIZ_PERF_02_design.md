@@ -5,6 +5,11 @@ PR #1 merged at 2026-11-02T01:14:24Z and contains `8d6d3222`.
 The taskbook's older Draft/Open observation is superseded by verified GitHub state.
 Only master is used. Historical manifests/tests/receipts are not rewritten.
 
+Measured outcome: RETENTION_FAILED / BUSINESS_CHANGE_WITHDRAWN. All nine pairs
+matched, but the one-month whole-root median regressed 5.34%, exceeding the
+registered 5% ceiling below. Current daily_quality.py is restored to baseline.
+The description below applies only to preserved candidate 6c4096e5de77368c67ff1c2cff7ddd3285a8e56e.
+
 ## W00 And W01
 
 The single baseline receipt is [baseline.json](biz_perf_02/baseline.json).
@@ -29,9 +34,9 @@ extended-protocol notice delivery on the next Sync; the observer now keeps its
 capture target until control SQL is drained. No failed attempt is replaced by
 the successful observation or used as a timing denominator.
 
-## W02 Minimal Change
+## W02 Rejected Minimal Candidate
 
-Only `quality/daily_quality.py` changes business behavior. The five basic quality
+Only `quality/daily_quality.py` changed business behavior in that candidate. The five basic quality
 rows have the same date/job, static distinct natural keys and no intervening SQL.
 A function-local list collects them in original order only inside an existing
 PublicationWorkspace. Its finally flush occurs BEFORE the original sector query;
@@ -91,3 +96,9 @@ source drift, tombstone, cancellation, transport, unknown-commit, publication an
 Worker safety tests remain untouched and must run in full native CI. Ten different
 real roots separately exercise FIFO, parameter deduplication and PUBLISHED results.
 Synthetic test roots/faults do not authorize production execution or recovery.
+
+After withdrawal, the six new candidate-specific cases explicitly load the pinned
+rejected candidate and record that subject/SHA in JUnit. They do not route original
+tests or claim current batching is enabled. Two additional live quality cases
+cover the restored implementation. The registered retention rule is unchanged;
+its refusal of the observed 5.34% regression has an explicit unit regression.

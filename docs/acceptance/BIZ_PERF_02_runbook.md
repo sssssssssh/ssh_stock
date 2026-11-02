@@ -1,5 +1,8 @@
 # BIZ-PERF-02 Isolated Runbook
 
+Outcome: BUSINESS_CHANGE_WITHDRAWN. Current quality writes use the baseline six
+singleton calls. Do not deploy or replay the rejected candidate to obtain a pass.
+
 Do not load business `.env` or supply a cloud URL. Use a freshly owned dedicated
 loopback PG17 instance; record its independently obtained physical system ID and
 UUID marker. Supply TEST_DATABASE_URL, V14_TEST_INSTANCE and
@@ -16,10 +19,12 @@ the harness invokes existing claim/execute functions only against its verified D
 $env:PYTHONPATH = 'backend;.'
 python -m scripts.business_test_runner tests/integration/test_business_quality_batch.py -q
 python -m scripts.business_test_runner tests/integration/test_business_quality_continuity.py -q
-python -m scripts.business_quality_matrix --stocks 4 --repeats 3 --output .codex_tmp/biz02-new
+python -m scripts.business_quality_matrix --stocks 4 --repeats 3 --candidate-sha 6c4096e5de77368c67ff1c2cff7ddd3285a8e56e --output .codex_tmp/biz02-new
 ```
 
-The matrix must start on master, with the candidate business bytes committed.
+The command above reproduces the rejected historical candidate, not current code.
+Do not rerun merely to override its failed retention rule. The matrix must start
+on master, with the candidate business bytes committed.
 It independently verifies actual backend/config/migration bytes against each
 implementation SHA. It obtains the fixed old source without switching the user's branch.
 Both source contexts now use clean detached local shared Git clones with LF bytes;
@@ -49,10 +54,13 @@ tests require a capable native runner, not Windows collection or the Linux 3.10 
 Keep original tests, coverage >=70%, migrations, frontend/build and Compose checks.
 Never weaken source contracts, xfail, skip or dispatch costly experiments to get green.
 
-Rollback by a new revert commit for the BIZ-PERF-02 business change after review.
-No schema downgrade, quality certificate rewrite, cache purge, task replay or
-publication cleanup is needed. Existing false flags do not disable this small
-always-equivalent candidate batching change; revert its code to restore singleton
-writes. In production, any future deployment/drain/restart needs separate approval.
+Business rollback is already performed by a new withdrawal commit; candidate
+commits remain in history. No schema downgrade, quality certificate rewrite,
+cache purge, task replay or publication cleanup is needed. To undo all task tooling
+after review, prepare one combined new revert of all BIZ-PERF-02 commits in reverse
+order using --no-commit, inspect the combined diff and test before committing.
+Never revert the withdrawal alone: that would re-enable the rejected candidate.
+Never reset, amend or rewrite history. Any production deployment/drain/restart
+needs separate approval.
 Stop only this task's UUID PG instance once evidence is collected; never kill
 another test/app process, prune containers or delete earlier lab artifacts.

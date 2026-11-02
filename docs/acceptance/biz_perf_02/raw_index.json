@@ -1,0 +1,188 @@
+{
+  "schema": "biz-perf-02.raw-index.v1",
+  "artifacts": [
+    {
+      "path": "raw/1m-0-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "943c7cbaf6090a0a558b879c2dd9a7618f69f79c131c4291833de612112cb57d",
+      "uncompressed_sha256": "2a90df51dfb047168e8fd2298ebe9876c6b2a4fb1731efa79edda4728fef02c0",
+      "uncompressed_bytes": 2265786
+    },
+    {
+      "path": "raw/1m-0-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "f7203840b587feabc8fc0453c89ca27ec8456189fb3e5a4247116df656a0b788",
+      "uncompressed_sha256": "ec844cd6a51aaf4b4da41b5a2336b227bcb8f4de4ff3fea2fe31cc74fc5069b1",
+      "uncompressed_bytes": 2175947
+    },
+    {
+      "path": "raw/1m-1-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "e10be36619c3ae211430f3c53d3d5c461f24edb093b58070f103b6ac6e2a8049",
+      "uncompressed_sha256": "05b0d511dc8429ff999e42374cd1a472ae5d682b71c74a622b9231656fd9c859",
+      "uncompressed_bytes": 2176177
+    },
+    {
+      "path": "raw/1m-1-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "eff8f28f586e5b47cf92bb1fd940510236d7d3b044454a619a282babfc15e6f8",
+      "uncompressed_sha256": "3d1a81fd20160e81d0b3d282f47ad5c5e43c16860a6ffdd906cd510fd1848395",
+      "uncompressed_bytes": 2265956
+    },
+    {
+      "path": "raw/1m-2-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "d833cdf1a71f5bbb4fdc8488979eb8cc6e42e4bb7b8fbb9b2fa779c147766fd5",
+      "uncompressed_sha256": "71457752372b2fb80168aeb8362ac5af762d01448d59346e4cfc1e03e4460f99",
+      "uncompressed_bytes": 2266176
+    },
+    {
+      "path": "raw/1m-2-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "387da6c1264a46bf88daa6e0e0f1131c2fd4689e5d51b8268784e46aa24d7880",
+      "uncompressed_sha256": "a48d9ca2c38ab420df7c8d359f575ea575802c3e778ac804f336e8b6307865c1",
+      "uncompressed_bytes": 2175902
+    },
+    {
+      "path": "raw/3m-0-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "3c9155f2bf9262bc3a99829080b39aa353b8a4ebe7763b7459f960408e904903",
+      "uncompressed_sha256": "bc948baa7593fe1630a6b30a3dac924eb4b83c8a1e7cdf873cb901e86e3f05eb",
+      "uncompressed_bytes": 3068014
+    },
+    {
+      "path": "raw/3m-0-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "b7b480f87a8fd95a5f7e40858e26ecae121ab8d6ccdbddf73aa06ca81b5c5310",
+      "uncompressed_sha256": "2f0d6810cd611dd7e78106fccd6a3dfd264bc2c45f8d3256b70a9341fb648353",
+      "uncompressed_bytes": 2818203
+    },
+    {
+      "path": "raw/3m-1-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "ceb15ab6eb675a7a8b76d927a1f2c557ea5c3eec5c8505fa9db5fe14334f0c68",
+      "uncompressed_sha256": "8847a96f222eaf7184e73a135b0d503c7dcaf4a8837fbef2ae575397b817e98d",
+      "uncompressed_bytes": 2818146
+    },
+    {
+      "path": "raw/3m-1-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "46bda36e0f0d80e623caacedf56b82ea241d7d31ca370db66f6a7e2ddfcc9491",
+      "uncompressed_sha256": "38e2669ff2d1183acd5c5eefa068360858a3a26351244fce6294ffc99f1ab325",
+      "uncompressed_bytes": 3068123
+    },
+    {
+      "path": "raw/3m-2-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "a1499c6936bad17ffedcdffdbbf00b86788edbed18a744e4019b0c41354d9b2a",
+      "uncompressed_sha256": "0f1f6a752bb64c6b97e3c177817df0858f4ee2b2706d8e318ea86fa93c2e3192",
+      "uncompressed_bytes": 3068470
+    },
+    {
+      "path": "raw/3m-2-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "5a429b34a8f6b7767222346e0b6ee01c898731a134d6622bf2e61b6643df28b3",
+      "uncompressed_sha256": "607bdd7cc9289e7ec1b693a28b0129243456f09689cdece128ccaf014419fd9a",
+      "uncompressed_bytes": 2818239
+    },
+    {
+      "path": "raw/12m-0-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "d9338bba91e13467da37d1ae6dd44f7e16f76f18abc72befa54c9df52325a6b7",
+      "uncompressed_sha256": "9cac7ee24140d0235c4da7b0644021ff368656202fef2ccc7cd42430807336e7",
+      "uncompressed_bytes": 6926458
+    },
+    {
+      "path": "raw/12m-0-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "1b7eba4b7f187a923ef89c12985ed4106448dfe673620e8bc32fc5184f9d2141",
+      "uncompressed_sha256": "5f4840e243f88ddab9ab17654d0d157fde068ed277df7a4caecbdfa1c9509220",
+      "uncompressed_bytes": 5898921
+    },
+    {
+      "path": "raw/12m-1-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "b2616ca5c4dab6adac054df6b581169a83cfb066dfc8437a892a4d122d1f7c59",
+      "uncompressed_sha256": "935c3ab244e141c7d37d880634d2b670aa791c8c9524d583329aec86020c5410",
+      "uncompressed_bytes": 5899108
+    },
+    {
+      "path": "raw/12m-1-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "bf4431b77746301cfe0c4666620f3dc10ec23bad65c86fcdfe42ceabe0ad8ab9",
+      "uncompressed_sha256": "dd21612d9231f4c935055962e85b7db83a75508af7391a84f9f76dcc08cd7e9e",
+      "uncompressed_bytes": 6926372
+    },
+    {
+      "path": "raw/12m-2-old.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "d71620c7d18e8e4deafae4337481b758ca064c24280b44ec1f3f9ad1a131bc2c",
+      "uncompressed_sha256": "5632cceee7e311e9b2a0f627d463188b83ae3d7b7492ebd68ffa73d95a5c5e5b",
+      "uncompressed_bytes": 6925362
+    },
+    {
+      "path": "raw/12m-2-new.json.gz",
+      "scope": "SYMMETRIC_REJECTED_CANDIDATE_COMPARISON",
+      "sha256": "382af48bd46f89676ec0bfb34dc3299fe9e814404fd10f3c0249d7825d560f9d",
+      "uncompressed_sha256": "516f52080ac1e6dc04f4cbba5013d00fea5150eca66b7f9f6e31c2fc03719312",
+      "uncompressed_bytes": 5898923
+    },
+    {
+      "path": "raw/w01.json.gz",
+      "scope": "EXPLORATORY_DIAGNOSTIC_NOT_CONTROLLED_COMPARISON",
+      "sha256": "46822be5d002cb126f7cbffb693be47f224b9539b9f9aea44d0fb0c8ba84cc7d",
+      "uncompressed_sha256": "fc61e06135544d06f25b8597faba09dd716c2d744d3731089d50fb4e2616be29",
+      "uncompressed_bytes": 1101067
+    },
+    {
+      "path": "raw/w01b.json.gz",
+      "scope": "EXPLORATORY_DIAGNOSTIC_NOT_CONTROLLED_COMPARISON",
+      "sha256": "b61bf7cb10e8e25810ea5a32fef9046f4ddf30d192f248559dd1473a76889ec8",
+      "uncompressed_sha256": "56c01dc91e4c8f587350f13822ee32ffe785c48a4753f48e74956a705586721a",
+      "uncompressed_bytes": 1101407
+    },
+    {
+      "path": "raw/w01c.json.gz",
+      "scope": "EXPLORATORY_DIAGNOSTIC_NOT_CONTROLLED_COMPARISON",
+      "sha256": "5923774f12c371a7f2c30cb62ac389bb5d7187844faa758cc851bd26879613a3",
+      "uncompressed_sha256": "3ec44081a3d8d690efab8698f579cfa17106032a39735d9e7f05555ec9692381",
+      "uncompressed_bytes": 2248940
+    },
+    {
+      "path": "raw/w01-12m.json.gz",
+      "scope": "EXPLORATORY_DIAGNOSTIC_NOT_CONTROLLED_COMPARISON",
+      "sha256": "f3d735909e59b3ec7d685e91a19238fcbc933b9c91fd80efda1cfd3169959b8d",
+      "uncompressed_sha256": "16db97d4db4abb0322a69985467bfb9d1494e8b3787217a269089fbdd9f2d9e2",
+      "uncompressed_bytes": 6915095
+    },
+    {
+      "path": "raw/asymmetric-1m-0-new.json.gz",
+      "scope": "INCOMPLETE_ASYMMETRIC_COHORT_NOT_RETENTION_EVIDENCE",
+      "sha256": "ee3d2ab401d287af7a8ffd492560c8b0214bab703d45dca1d6571ea22405feb4",
+      "uncompressed_sha256": "d979888edc2aab08f363ba429e80fe4d0907ad7e4545f68e50072153687bbf00",
+      "uncompressed_bytes": 2175844
+    },
+    {
+      "path": "raw/asymmetric-1m-0-old.json.gz",
+      "scope": "INCOMPLETE_ASYMMETRIC_COHORT_NOT_RETENTION_EVIDENCE",
+      "sha256": "cab1ef917f79385af20f518ad81dda0b0437a9cbe378cae109c45e302c8b5db5",
+      "uncompressed_sha256": "6b572aec236cb30162bebff50fd18e12ab464898741a83e49fd2e2012bfbabc1",
+      "uncompressed_bytes": 2264665
+    },
+    {
+      "path": "raw/asymmetric-1m-1-new.json.gz",
+      "scope": "INCOMPLETE_ASYMMETRIC_COHORT_NOT_RETENTION_EVIDENCE",
+      "sha256": "21d759243817e1644ce5ce9cb772de184cfb7e5f99577bf5939684f21d4aa39b",
+      "uncompressed_sha256": "beaf06f8f293bc403f9d804ca14cd35935067fb863dc3d7ec8985afc672ded17",
+      "uncompressed_bytes": 2175832
+    }
+  ],
+  "implementation_status": "WITHDRAWN_RETENTION_FAILED",
+  "performance_status": "PERFORMANCE_OPEN",
+  "notes": [
+    "JSON observations are lossless, synthetic and contain no DB dumps or secrets",
+    "Original .log/.xml stay in the owned ignored lab; XML below is a parsed receipt, not rewritten raw",
+    "Controller wrapper returned nonzero; child returncodes are actual subprocess results",
+    "Asymmetric controller was intentionally stopped; its last child finished naturally, exit not observed"
+  ]
+}
