@@ -1,5 +1,20 @@
 # 项目开发规则
 
+## 源码合同治理新授权（2026-10-30）
+
+项目负责人在当前任务明确授权版本化分离，取代下方各历史阶段“日常源码继续匹配旧冻结集合”
+和“治理迁移尚未获准”的限制；不追认历史测试结果，不授予高风险执行或合并权限。
+`development.source.v1` 只验证当前静态内容身份和历史原件完整性，无性能、容量、恢复、G1
+或生产读取授权。日常合法修改不以历史 33-path/40-path 集合作为准入条件。
+历史 `a42366.source.v1` 绑定完整历史 SHA/tree，仅在其对应源码上适用；不得回填当前 identity。
+历史 manifest、原测试及记录不改写，原始正反例必须继续在对应版本执行；跨版本、缺对象、
+失败、跳过或缺证据不能当作成功。历史节点登记必须逐节点且有明确理由，不能使用目录通配
+把当前业务安全测试转移到历史版本。新路由和原执行授权不得共用“已批准”状态。
+工作流、金融公式、A/B 发布、Schema、恢复权限及高成本授权/门槛保持原样；本轮不读写生产库。
+日常 pytest 的唯一历史阶段集合节点在独立 checkout 执行并标注 SHA，其余原测试保持当前执行。
+完整七模块历史回归另有明确子进程计数，不混入当前 backend 覆盖率或容量证明。
+实施与回滚见 docs/acceptance/source_contract_governance_20261030.md；等待重新审阅，不自动合并。
+
 ## BIZ-PERF-01 业务补算性能边界
 
 2026-10-27 用户任务书授权修改真实业务热点，不以 G1 平台或性能资格作为依赖。
@@ -1178,3 +1193,55 @@ A42365 仅为 G1 工程增量，PARTIAL_ENGINEERING_BLOCKED。业务源码及历
 不热更新 Worker、不连接云库、不重拉 TuShare、不修改金融、A/B、DDL、默认开关或 G1 门禁。
 现场具体 H1/H2 原因仍未证实；本轮源修复和隔离回归不能标 BUSINESS_POLICY_CONFIRMED，
 性能仍 PERFORMANCE_OPEN。验收见 docs/acceptance/BIZ_POLICY_01_closeout.md。
+
+
+## BIZ-WORKER-02：心跳与安全人工对账（2026-10-28）
+
+保留 BIZ-POLICY 的业务内容身份，Git-only 不作为计算漂移。心跳续租与进度 JSONB 使用
+独立短事务，owner/token CAS、1s 锁/3s SQL 时限、单调进度和取消保持生效；失败不解锁未知 Writer。
+新增只读 reconcile --dry-run；维护原语须独立核验所有执行者退出和提交确定，默认没有生产 authority。
+历史冻结迁移待独立签署，旧 manifest/测试/工作流不改；CONTRACT_MIGRATION_BLOCKED。
+百万级三轮容量因资源预检不足尚未执行，PERFORMANCE_OPEN / FIELD_NOT_RETESTED；
+不得部署长补算或把隔离心跳回归表示为现场 57014 根因已关闭。
+详见 [BIZ-WORKER-02 整改记录](docs/acceptance/BIZ_WORKER_02_review.md)。
+
+
+## WORKER-02 revision：运行观测闭环（2026-10-28）
+
+独立 WORKER_DIAGNOSTICS_ENABLED 默认 false；普通 Worker 安装根任务诊断上下文，心跳期间及
+成功/失败/取消后以独立短事务 owner/token CAS 合并快照，不能提交或回滚主计算的 pinned Connection。
+有限标签/数值、128组/32事件；缺失为 NOT_INSTRUMENTED，FETCH 为混合耗时，嵌套阶段不可相加。
+PG 会话登记真实 PID/backend_start/实例事实与固定角色/根UUID/token摘要；名字或空列表均非退出证明。
+HEARTBEAT_DEGRADED 仅为通信诊断，不能替代执行状态、证明计算成功或自动释放 Writer。
+新恢复审批时间/子身份拒绝保护不等于生产 authority 已安装；仍无普通维护 apply/force/unlock 入口。
+历史合同审批缺失仍 BLOCKED、PR 保持 Draft；百万行三轮 RESOURCE_DEFERRED，现场 FIELD_NOT_RETESTED。
+无新 schema/金融算法/生产 A/B SQL/优化开关变化；不部署、不操作云端或物理 G1。
+规则、实证和剩余缺口见 [revision交付](docs/acceptance/WORKER_02_revision_closeout.md)。
+
+
+## WORKER-02-R2：迟到观察与恢复竞态（2026-10-29）
+
+lease时间不回退，健康快照按规范UTC观测顺序CAS写入；迟到线程不能覆盖终态或最终
+UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺失指标仍NOT_INSTRUMENTED。
+三个真实队列根任务OFF/ON合成小输入验证财务发布等价并记录成本，默认开关不变。
+内部恢复锁定root/账本并提交前再次核验authority；未知ACK仅新连接只读核对，不重放。
+生产authority未安装、合同未独立签署、Linux全量及百万行矩阵仍阻断，现场未授权未复测。
+不合并/部署，不改金融公式、生产A/B SQL、schema或历史合同。详见[R2交付](docs/acceptance/worker02_r2/closeout.md)。
+
+## WORKER-02-R4：恢复收据一致性边界
+
+重复调用和丢失 ACK 的只读复核必须执行同一完整收据判定，不能仅凭旧审批 ID 或 FAILED/ABORTED 两个状态确认成功。
+根/账本 token、owner、审计执行指纹及原终态转换必须匹配；发布开始/完成证据或活跃子任务存在时保持未确认。
+合法重复调用只读回执，不重新执行中止、不追加审计、不重新消费 authority；未知提交不自动重放。
+上述判定不是全主机退出或独立生产授权证明。旧合同、负例、金融/Raw/发布 SQL/默认开关保持原样。
+无独立签署不激活新合同，不将普通 CI 或小样本结果当容量准入。R4 仅推送现有特性分支，PR 保持 Draft；
+合并/部署仍未授权，详见 docs/acceptance/worker02_r4/merge_readiness.md。
+
+## WORKER-02-R5：证据与准入边界
+
+R5 仅增加显式启用的测试诊断与平台预检，不改业务后端、冻结合同、原测试、工作流或默认开关。
+诊断结果不得把未知值写成零、改写原失败，或用 standalone PASS 关闭 full-context 未归因项。
+合同迁移保持 activation_allowed=false，独立签署、最终树身份及审批缺失时必须 BLOCKED；不得扩大旧路径集合。
+不具备 pidfd 的平台不能证明独立进程安全验收；小型合成回归不能替代 1,443,097 行三轮容量。
+原合并/发布门槛不降级，现场仍 FIELD_NOT_RETESTED，无自动合并、删分支、部署或下一阶段授权。
+详见 [R5 合并结论](docs/acceptance/worker02_r5/merge_readiness.md)。

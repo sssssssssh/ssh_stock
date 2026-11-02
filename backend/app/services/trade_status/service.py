@@ -25,6 +25,7 @@ from app.services.analysis_identity import (
 )
 from app.services.calc_metadata import calculation_metadata
 from app.services.calculation_progress import run_calculation
+from app.services.execution_diagnostics import operation
 from app.services.trade_status.engine import calculate_trade_status_rows
 
 
@@ -61,18 +62,21 @@ class TradeStatusService:
             calc_version=TRADE_STATUS_CALC_VERSION,
             calc_run_id=calc_run_id,
         )
-        rows = [{**_clean_row(row), **metadata} for row in status.to_dict("records")]
-        count = replace_slice_rows(
-            self.db,
-            StockTradeStatusDaily,
-            rows,
-            scope_filters=[
-                StockTradeStatusDaily.trade_date >= start,
-                StockTradeStatusDaily.trade_date <= end,
-            ],
-            key_columns=["trade_date", "ts_code"],
-        )
-        self.db.commit()
+        with operation("trade_status.rows", "materialize"):
+            rows = [{**_clean_row(row), **metadata} for row in status.to_dict("records")]
+        with operation("trade_status.replace", "replace"):
+            count = replace_slice_rows(
+                self.db,
+                StockTradeStatusDaily,
+                rows,
+                scope_filters=[
+                    StockTradeStatusDaily.trade_date >= start,
+                    StockTradeStatusDaily.trade_date <= end,
+                ],
+                key_columns=["trade_date", "ts_code"],
+            )
+        with operation("trade_status.commit", "commit"):
+            self.db.commit()
         logger.info(
             "recalculated stock_trade_status_daily start={} end={} rows={}",
             start,

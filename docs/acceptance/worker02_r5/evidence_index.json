@@ -1,0 +1,2235 @@
+{
+  "schema": "worker02.r5.baseline.evidence.v1",
+  "source_sha": "2bf219a0d05c0aa8090d9050e043c60343db684d",
+  "base_sha": "75076eac443d935d622bf59e12aad20ce5aba85e",
+  "historical_sha": "2779a2a7a7120c86f67b4991bce196c652b5ebb0",
+  "pr_head_sha": "2bf219a0d05c0aa8090d9050e043c60343db684d",
+  "pr_merge_sha": "4c0d0b57f784067089dc20518527ef79ead4eaa9",
+  "tree_sha": "aa0b07cec1ca4b3d9fb990a8ccb8b52e592d3c33",
+  "original_r4_receipt": "https://github.com/sssssssssh/ssh_stock/pull/1#issuecomment-6489296745",
+  "runs": [
+    {
+      "id": 40810024032,
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40810024032",
+      "jobs": [
+        {
+          "id": 123237880915,
+          "name": "workflow-contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run python -m pytest tests/unit/test_a4_ci_governance.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts .github/actions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15
+            }
+          ]
+        },
+        {
+          "id": 123237881048,
+          "name": "test",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Initialize containers",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run python -m pip install --upgrade pip",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "V1.4 physically isolated and marked PG17",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "V1.4 calendar and overlay read regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Redact existing V14 JUnit before any artifact export",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            },
+            {
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12
+            },
+            {
+              "name": "Run python -m alembic downgrade 0019_research_source_lineage",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "M17.1.2 suspension schema and ingestion regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15
+            },
+            {
+              "name": "M17.1 targeted dirty dependency regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 16
+            },
+            {
+              "name": "Data publication and schedule compensation regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 17
+            },
+            {
+              "name": "Cold start engines and zero-write CLI regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18
+            },
+            {
+              "name": "Cold start baseline golden and missing-input comparison",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            },
+            {
+              "name": "M17.1.1 reference-aware retention regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20
+            },
+            {
+              "name": "M17.1 isolated PAPER continuity regressions",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21
+            },
+            {
+              "name": "Archive identity and observer failure-path regressions before full suite",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 22
+            },
+            {
+              "name": "Run python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN --cov=backend/app --cov-report=term-missing --cov-fail-under=70 --junitxml=.codex_tmp/m17_1_2-full.xml",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 23
+            },
+            {
+              "name": "M16.6 capture capacity measurements",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 24
+            },
+            {
+              "name": "Run python -m alembic current",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 25
+            },
+            {
+              "name": "Run python -m alembic heads",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 26
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 27
+            },
+            {
+              "name": "Run cp .env.example .env",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 28
+            },
+            {
+              "name": "Run docker compose config",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 29
+            },
+            {
+              "name": "Run docker compose build",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 30
+            },
+            {
+              "name": "Data queue single/two Worker and atomic publication acceptance",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 31
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 32
+            },
+            {
+              "name": "Run docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 33
+            },
+            {
+              "name": "Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 34
+            },
+            {
+              "name": "Run npm ci",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 35
+            },
+            {
+              "name": "Run npm run test:coverage",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 36
+            },
+            {
+              "name": "Run npm run build",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 37
+            },
+            {
+              "name": "M16.6 browser acceptance (isolated runner tooling)",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 38
+            },
+            {
+              "name": "M17.1.1 and M17.1.2 exact HEAD and migration receipts",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 39
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 40
+            },
+            {
+              "name": "Runtime reliability desktop and narrow-screen synthetic acceptance",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 41
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 42
+            },
+            {
+              "name": "Mandatory safe test/failure evidence even when later stages never ran",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 43
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 44
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 45
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 46
+            },
+            {
+              "name": "Core exact SHA bundle, independent of long capacity workloads",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 47
+            },
+            {
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 48
+            },
+            {
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 49
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 50
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 51
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 52
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 53
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 54
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 55
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 108
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 109
+            },
+            {
+              "name": "Stop containers",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 110
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 111
+            }
+          ]
+        },
+        {
+          "id": 123237881098,
+          "name": "lookup-diagnosis",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Lookup rewrite and safety regressions before measurements",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 6
+            },
+            {
+              "name": "Fetch pinned historical evidence, never new SHA performance evidence",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 7
+            },
+            {
+              "name": "A4-2.3 P0 replay only; no approved repair, no repeated performance trial",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 23
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 24
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25
+            }
+          ]
+        },
+        {
+          "id": 123237881104,
+          "name": "dependency-audit",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run npm ci",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "M17.1 dependency risk inventory (not an upgrade)",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run python scripts/ci_release_gate_v14_a4_2_1.py audit-status --output .codex_tmp/a421/audit",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Post Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 15
+            }
+          ]
+        },
+        {
+          "id": 123237882113,
+          "name": "authorize",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123237882304,
+          "name": "ui-visual-acceptance",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123237882751,
+          "name": "lookup-tail-attribution",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123238407710,
+          "name": "capacity",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123240372555,
+          "name": "publication-release-gate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024032,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "id": 40810024047,
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40810024047",
+      "jobs": [
+        {
+          "id": 123237881217,
+          "name": "contracts",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 40810024047,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Observer regressions and frozen safety tests",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 6
+            },
+            {
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 17
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 18
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            }
+          ]
+        },
+        {
+          "id": 123237882373,
+          "name": "authorize",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024047,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123238688659,
+          "name": "isolated-baseline",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024047,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "id": 40810024039,
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40810024039",
+      "jobs": [
+        {
+          "id": 123237881262,
+          "name": "contract-and-safety",
+          "status": "completed",
+          "conclusion": "failure",
+          "run_id": 40810024039,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Exact legacy matrix, no omissions or duplicate assignments",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Frozen sources and formal parent migration",
+              "status": "completed",
+              "conclusion": "failure",
+              "number": 7
+            },
+            {
+              "name": "Original safety, golden, Worker and new failure-closed regressions",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 8
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 9
+            },
+            {
+              "name": "Explicit contract status, including early failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            },
+            {
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12
+            },
+            {
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 14
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "skipped",
+              "number": 27
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 28
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 29
+            }
+          ]
+        },
+        {
+          "id": 123237882273,
+          "name": "authorize",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024039,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123238111336,
+          "name": "laboratory",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024039,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123238112009,
+          "name": "a42-acceptance-gate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024039,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    },
+    {
+      "id": 40810024253,
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40810024253",
+      "jobs": [
+        {
+          "id": 123237882069,
+          "name": "contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "run_id": 40810024253,
+          "logs_url": null,
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run python -m alembic current",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Run python -m alembic heads",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Candidate equivalence, real row locks, isolation and cancellation",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 11
+            },
+            {
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 12
+            },
+            {
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 13
+            },
+            {
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 25
+            },
+            {
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 26
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 27
+            }
+          ]
+        },
+        {
+          "id": 123237883802,
+          "name": "authorize",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024253,
+          "logs_url": null,
+          "steps": null
+        },
+        {
+          "id": 123238494190,
+          "name": "candidate-performance",
+          "status": "completed",
+          "conclusion": "skipped",
+          "run_id": 40810024253,
+          "logs_url": null,
+          "steps": null
+        }
+      ]
+    }
+  ],
+  "baseline_raw_files": [
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/a42-baseline-contract.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/a42-baseline-source.json",
+      "sha256": "a3e46acecd71a8d1a056f312875ccde46146f88f8ee07c3af38920e1be51e2a6",
+      "bytes": 1855
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/alembic-current-final.log",
+      "sha256": "55a346a383d088281b27c73d71ba3b5fbbd53f50eaaa002bfb09b440a8e370e0",
+      "bytes": 157
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/alembic-heads-final.log",
+      "sha256": "f50e1df364d980fb98c619817e650d8e40b876daff66139bf82db6c36c55d489",
+      "bytes": 29
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/baseline-diagnostic-probe.log",
+      "sha256": "3b5b85b456ff8e685833d34775eb6f8bf8cef4711cb470f5791ae162a7e3ad32",
+      "bytes": 240
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/baseline-diagnostic-valid-root.log",
+      "sha256": "3d9fad5c69b8c1d13539201bc0ed8ae51430a5bdd035d409817f07f3773cf7c7",
+      "bytes": 25042
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/baseline-diagnostic-valid-root.xml",
+      "sha256": "bccc1067e26738196940589f54d064c19fd2cc74b02228857e4da9b68f82bf51",
+      "bytes": 584,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "2",
+          "time": "22.313"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/baseline-pidfd.log",
+      "sha256": "20a3d877f86af7fc914a621a2912701bfa7927fe95480d9922aad48df5c5ad86",
+      "bytes": 1398
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/baseline-pidfd.xml",
+      "sha256": "20b3c54921fed52d79833761bb1df0e76b9a690d540e40a2f12b12f3d40c2a03",
+      "bytes": 1338,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "2",
+          "skipped": "0",
+          "tests": "2",
+          "time": "3.182"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/dependency-lock.log",
+      "sha256": "0ca4d3095a16ac8e0267e3356df938364153382698f5cce1520ce59a7a47a0da",
+      "bytes": 1868
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/diagnostic-probe.py",
+      "sha256": "b68f6c672d971a350ade5e8dc501d78f0613093206ef98a923cfa636094dbcec",
+      "bytes": 1328
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/final-diagnostic-probe.log",
+      "sha256": "73fbe818981b70c6dbcd89b26bb3962f71ec7581ddc40469312022271ccf55c0",
+      "bytes": 237
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/final-diagnostic-valid-root.log",
+      "sha256": "facb87056f7fbdcbfd1bd37ec67f08288eb717ebd773e21648a0270d25594829",
+      "bytes": 25039
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/final-diagnostic-valid-root.xml",
+      "sha256": "7f28963a2f80d9cbcaf8d229927e8bd797b98721a35ca2c365ce0b97dc296b79",
+      "bytes": 584,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "2",
+          "time": "22.746"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/full-coverage-partial.log",
+      "sha256": "ee1e0ed636750ca2fd2dcb6b5c75834ba01595cbb6f3ae67783e1b88ef635e7e",
+      "bytes": 126414
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/full-coverage-partial.xml",
+      "sha256": "54fe8a227d5c934ea696daa20931c5d28158c9fedba9d326dff782f45eac995d",
+      "bytes": 173568,
+      "suites": [
+        {
+          "errors": "95",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "246",
+          "time": "1837.633"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/full-failure-details.json",
+      "sha256": "1f21bab10217cc03e9bb3aaa249e859a63218aee56c8ed239092defeb326e7f3",
+      "bytes": 219810
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/full-unfiltered-final.log",
+      "sha256": "50d61304bed09780223f56caaa0cda6056d93c12b17451e4230f65b58a2880c4",
+      "bytes": 219181
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/full-unfiltered-final.xml",
+      "sha256": "9f82418832b55e1719e5f4bdedbb42310c629ec59f876c514ba786e8150f6aec",
+      "bytes": 1197436,
+      "suites": [
+        {
+          "errors": "137",
+          "failures": "45",
+          "skipped": "0",
+          "tests": "5209",
+          "time": "4290.558"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/green-pg17-retry.log",
+      "sha256": "1db6e8658b22b97c796ad0656df171bb83c3085e68295099eafb5ed9fc7a5899",
+      "bytes": 3864
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/green-pg17-retry.xml",
+      "sha256": "67107e9aaaa63675f0f96ea5f4f95193a92d9054b89694984181e52ccbc6d56f",
+      "bytes": 199524,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "66",
+          "time": "487.277"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/green-pg17.log",
+      "sha256": "e371e4fa7dc700c218588106a11f416fd82950ff5f0c0bdbcfd443b4d01d30ff",
+      "bytes": 1070
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/green-pg17.xml",
+      "sha256": "22c94fbf05b698b72b3aa0c2ef40e718d5bc5eff6aa522b241dc02c677a46b8b",
+      "bytes": 781,
+      "suites": [
+        {
+          "errors": "1",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "1",
+          "time": "1.783"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/historical-linux.log",
+      "sha256": "b3c2eb5f0fbc89ee4e84a385de48e47320b506e5bdfeecb27f4c1860109f2da4",
+      "bytes": 797
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/historical-linux.xml",
+      "sha256": "31af5b4740b153a977c04b23e91c278c0b1ba305e58ce3acc20e3937b7802ddc",
+      "bytes": 2367,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "0",
+          "skipped": "0",
+          "tests": "14",
+          "time": "11.046"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/native-baseline-linux.log",
+      "sha256": "589f9aea789528289d42262ea2183006a1b86524fbaa12f3f52edb98ad54bc43",
+      "bytes": 3162
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/native-baseline-linux.xml",
+      "sha256": "43d58f75356c5abbb035d9820df23e3687085f7b1a820c95c9c48d6de8ca3a23",
+      "bytes": 3152,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "3",
+          "skipped": "0",
+          "tests": "3",
+          "time": "2.827"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/platform-final.json",
+      "sha256": "85b862f2e0578777d7cfc00c6eb749f57eda2f841f0029e05b97e127300bc6e7",
+      "bytes": 149
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/red-pg17-corrected-fixture.log",
+      "sha256": "1964ac63bf0e92057607e777e4a537d657888bffb92a09fc83d86aab60731240",
+      "bytes": 3407
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/red-pg17-corrected-fixture.xml",
+      "sha256": "b7e3102aca6cde311e6d0118b4f2c79f74a1c9053e05792e7d4425afc409419a",
+      "bytes": 3181,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "6",
+          "time": "16.727"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/red-pg17.log",
+      "sha256": "e1a40106861437203840f7dabea5b21e3727fb2c3e2d891795177624d7738d9c",
+      "bytes": 58757
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/red-pg17.xml",
+      "sha256": "779ab84da35e0bbbf90cec6d530eb2e7c19da06644fec555babd9bab99dcebe8",
+      "bytes": 11445,
+      "suites": [
+        {
+          "errors": "0",
+          "failures": "5",
+          "skipped": "0",
+          "tests": "6",
+          "time": "17.992"
+        }
+      ]
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/resource-preflight.json",
+      "sha256": "448ebeccad64e4354387a2cca74455c908741e8a9193ec860df1b1ca5854580d",
+      "bytes": 455
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/ruff-final.log",
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence/test-db-identity.log",
+      "sha256": "6ec8fa4772d7fe19ac7a563953dfe3fef1555380789b7654c038cf247b43bf11",
+      "bytes": 237
+    }
+  ],
+  "baseline_native_artifacts": [
+    {
+      "file": "worker02-r4-final-artifact-12869139301.zip",
+      "sha256": "9f88e0a0beec03a94e948e68753ec401494ab690bf1eaa9eea6456848a3f4b5e",
+      "xml": [
+        {
+          "name": "lookup/tests.xml",
+          "sha256": "f87afc50b7a88b2dfac815fad17ac6cb4572e0d2fae04e309a68ddf951ede7e7",
+          "suites": [
+            {
+              "errors": "0",
+              "failures": "1",
+              "skipped": "0",
+              "tests": "107",
+              "time": "49.039"
+            }
+          ],
+          "failures": [
+            {
+              "classname": "tests.unit.test_lookup_tail_review_a423",
+              "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+              "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "worker02-r4-final-artifact-12869479233.zip",
+      "sha256": "658e0342757ceb51c9c74f95496845752fa5e5278565dbadb3695ea151cd7c3a",
+      "xml": [
+        {
+          "name": "lookup/tests.xml",
+          "sha256": "a5ea46d19f935181dcb68b827dd2932fed76ec86cc9c2c043c224c78e52bbf7e",
+          "suites": [
+            {
+              "errors": "0",
+              "failures": "1",
+              "skipped": "0",
+              "tests": "107",
+              "time": "39.178"
+            }
+          ],
+          "failures": [
+            {
+              "classname": "tests.unit.test_lookup_tail_review_a423",
+              "name": "test_workflow_does_not_repeat_the_disallowed_100_trial_or_weaken_capacity",
+              "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "worker02-r4-final-artifact-12869688400.zip",
+      "sha256": "d5ee596d2245b6bec47d2ec2cab219e7e93185b4f2aeb755e25d9dca56bd7f54",
+      "xml": [
+        {
+          "name": "v14-a4-targeted.xml",
+          "sha256": "a02cb83f64fb1d484c53e4cc88ff862d0d83feec8826ae1d9d3598a9377ae7de",
+          "suites": [
+            {
+              "errors": "0",
+              "failures": "1",
+              "skipped": "0",
+              "tests": "49",
+              "time": "98.738"
+            }
+          ],
+          "failures": [
+            {
+              "classname": "tests.unit.test_ab_read_profile_v14_a4",
+              "name": "test_a4_diagnostic_freezes_production_sources",
+              "first_error": "scripts.a4235_calibration_adapter_contract.Fault: A4235_FROZEN_FILE_CHANGED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "file": "worker02-r4-final-artifact-12869922607.zip",
+      "sha256": "55309d6fd501b712f632db87b4793aa2d8673470c8dbdc95902c02e2156d4a66",
+      "xml": [
+        {
+          "name": "a42331-targeted.xml",
+          "sha256": "17ec18256271b2da4f4949b4dfa1fa2ed573655cdc388c1f176f5909c23bb77e",
+          "suites": [
+            {
+              "tests": "143",
+              "failures": "1",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": [
+            {
+              "classname": "tests.unit.test_a4233_background_observer",
+              "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+              "first_error": "A42331_TEST_FAILURE"
+            }
+          ]
+        },
+        {
+          "name": "cold-start-targeted.xml",
+          "sha256": "9d637b73a7977004e63749fd589e1487ab3eb1ae5073017fccaf759d98b0acaf",
+          "suites": [
+            {
+              "tests": "114",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "data-publication-targeted.xml",
+          "sha256": "3b53c87d03c14e27caf5b66743e51f5f742935114a6795a0765cae22f1bceda1",
+          "suites": [
+            {
+              "tests": "45",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "m17_1_2-targeted.xml",
+          "sha256": "ab2f6d518732f25999077c9ec39453b17bfc6a1eba73bf1aed54b966f90bbca2",
+          "suites": [
+            {
+              "tests": "85",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "v14-targeted.xml",
+          "sha256": "9f423708202f5a8c40a7ad5973a415c8f9dba116f4a681e9a0be15b43f5e61b1",
+          "suites": [
+            {
+              "tests": "51",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "worker02-r4-final-artifact-12870051964.zip",
+      "sha256": "945789a07e108ed7becff85cb339e5b479573a3928f7f2eb25885299ea84290e",
+      "xml": []
+    },
+    {
+      "file": "worker02-r4-final-artifact-12870440254.zip",
+      "sha256": "4a3661d864f6ec6a27440072afc5b17d4fb713b6e337832b632a96547f66ec7e",
+      "xml": [
+        {
+          "name": "v13-targeted.xml",
+          "sha256": "92a11aa6ba9d952343c2c518fd5d69ca22d25a72ca39ef2471e59676d15dee51",
+          "suites": [
+            {
+              "errors": "0",
+              "failures": "0",
+              "skipped": "0",
+              "tests": "85",
+              "time": "69.994"
+            }
+          ],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "worker02-r4-final-artifact-12870715149.zip",
+      "sha256": "49ee2783aaae6b36c8e2e63164ea6e468c13c847a37fba34564f059531e4e3a1",
+      "xml": [
+        {
+          "name": "a42331-targeted.xml",
+          "sha256": "57ef01168c92af7c9c7457e47778eeaa4d83f6d0cd873f9acd63b656163f03c1",
+          "suites": [
+            {
+              "tests": "143",
+              "failures": "1",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": [
+            {
+              "classname": "tests.unit.test_a4233_background_observer",
+              "name": "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+              "first_error": "A42331_TEST_FAILURE"
+            }
+          ]
+        },
+        {
+          "name": "cold-start-targeted.xml",
+          "sha256": "8cc8f41baa3df6159f328d3201dd27301dc6c4827eb3194d99e7a29d43182472",
+          "suites": [
+            {
+              "tests": "114",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "data-publication-targeted.xml",
+          "sha256": "ee6bc8fc1022e8b6a9d6198f199a5489d684a1e88df65c62e930527376d5ed15",
+          "suites": [
+            {
+              "tests": "45",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "m17_1_2-targeted.xml",
+          "sha256": "b2d782003c4450b3c36d410af349e4335990a1f90e79480cca09a281d8dc9e62",
+          "suites": [
+            {
+              "tests": "85",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        },
+        {
+          "name": "v14-targeted.xml",
+          "sha256": "3c3377e634a5d1381f1627e92fc1467750422f0805abdbf4ca4beaf6b2e8f417",
+          "suites": [
+            {
+              "tests": "51",
+              "failures": "0",
+              "errors": "0",
+              "skipped": "0"
+            }
+          ],
+          "failures": []
+        }
+      ]
+    }
+  ],
+  "baseline_native_job_logs": [
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237869159.log",
+      "sha256": "756512755581709ccba0d5eb29f6653c405a79531bae6152ba5ddb3ab24c3855",
+      "bytes": 358420
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237869294.log",
+      "sha256": "99449d2be760d35ee2ffc5acbe3f9ad844f0f7186fb849fddff44752a4f43581",
+      "bytes": 69373
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237881048.log",
+      "sha256": "c2f8c6a2ec67e4c6203ee74fc8c48df24d4562e5b8579161928287c83c652693",
+      "bytes": 359356
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237881098.log",
+      "sha256": "3d78600c60a76cd02ab7613853fb732482a2e5b00ef100f5f983406ba122ffec",
+      "bytes": 70324
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237881217.log",
+      "sha256": "5dd41da2aa74ba2605d8c2f962274c7240cff78ebfce72f918e1b30842361cb5",
+      "bytes": 77332
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237881262.log",
+      "sha256": "2201c776319477628bf307d8140c019eed41a44f0bf29bea15239da7bf915141",
+      "bytes": 67348
+    },
+    {
+      "path": ".codex_tmp/worker02-r4-final-job-123237882069.log",
+      "sha256": "3e7b4c087ea34fce0451f7fb4914d31eb7ae16464836f599ac2eaf1a7a0b564b",
+      "bytes": 81785
+    }
+  ],
+  "retrieval": {
+    "local_archive": {
+      "path": ".codex_tmp/worker02-r4-closeout-evidence.tar.gz",
+      "sha256": "5c4160ad3f3b1f2e151b8d9c621a9642e211f5b4acfd6ef9ef8edce92198020a",
+      "status": "LOCAL_CUSTODIAN_REQUIRED_NOT_IN_GIT",
+      "command": "tar -tf .codex_tmp/worker02-r4-closeout-evidence.tar.gz"
+    },
+    "github_artifacts": "Authenticate to GitHub; GET the artifact ZIP API URLs by recorded ID and verify SHA256. Historical bytes are not R5 acceptance.",
+    "cross_machine_limit": "Git alone cannot recreate local raw logs. Obtain the archive from the evidence custodian and verify its digest; do not claim an unavailable blob was re-fetched."
+  },
+  "baseline_results": {
+    "tests": 5209,
+    "passed": 5027,
+    "failed": 45,
+    "errors": 137,
+    "skipped": 0,
+    "source_contract": 174,
+    "platform": 6,
+    "unclassified": 2
+  },
+  "r5_result_identity": "Final R5 source must be the containing delivery commit, not the input R4 SHA. Post-commit exact-SHA execution receipts belong to PR #1 without rewriting the tested tree.",
+  "r5_precommit_evidence": {
+    "source_identity": "PRECOMMIT_OVERLAY_AND_CLEAN_R4_INPUT_REPLAYS_NOT_FINAL_SHA",
+    "archive": ".codex_tmp/worker02-r5-precommit-complete.tar.gz",
+    "sha256": "9a16d421ac024cea33c7cbd83cba4066258eac491802bbd17f5a7f26d59ff04d",
+    "retrieval": "Evidence custodian supplies exact archive; verify SHA256, then extract under a new ignored directory. Not in Git; cloning alone cannot retrieve local logs.",
+    "local_windows_xml": {
+      "path": ".codex_tmp/worker02-r5-unit-complete.xml",
+      "sha256": "b70993735420b254bd8c3413c265567ff3794f212a50faa50d6193ab92324796",
+      "passed": 57
+    },
+    "invalid_harness_rule": "Uncorrected contract-*.xml used input checkout after host Git -C failed; *-unmarked.json refused missing physical marker. Use *-corrected.xml and *-marked.json only as source replay evidence.",
+    "original_replay_plugin_sha256": "ae64ad2bc02666c9865a2692252e8007f1c8497bfb5ae9bb6fbfcb7ae5521542",
+    "taskbook_sha256": "df0828bbf3dd7386f1182fab877b6e8cec3bad9e2be41eb5407c6bae43135801",
+    "members": [
+      {
+        "member": "a42-historical-corrected-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-historical-corrected.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-historical-marked.json",
+        "sha256": "2be71f319d96f1eeaef1bef3b10245f50243259c9e4bb984a3bd00fa2f680267",
+        "bytes": 124440
+      },
+      {
+        "member": "a42-historical-marked.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-historical-original-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-historical.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-input-corrected-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-input-corrected.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-input-marked.json",
+        "sha256": "a3e46acecd71a8d1a056f312875ccde46146f88f8ee07c3af38920e1be51e2a6",
+        "bytes": 1855
+      },
+      {
+        "member": "a42-input-marked.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-input-original-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-input.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-master-corrected-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-master-corrected.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-master-marked.json",
+        "sha256": "a3e46acecd71a8d1a056f312875ccde46146f88f8ee07c3af38920e1be51e2a6",
+        "bytes": 1855
+      },
+      {
+        "member": "a42-master-marked.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "a42-master-original-unmarked.json",
+        "sha256": "c9bfe9b4d712b58b6218c797edbc7d70620185a67e78410d605cfcb2321068fc",
+        "bytes": 1658
+      },
+      {
+        "member": "a42-master.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "member": "candidate-clone.log",
+        "sha256": "600e656cd4fa361195ce24815950062208d0725cac5e2436d46cff9c0ab13c96",
+        "bytes": 78
+      },
+      {
+        "member": "checkout-historical-corrected.log",
+        "sha256": "b142aeb6713d7d2132cda6af3795e53d97915ccc48c3373e5f4c41973fc553e1",
+        "bytes": 145
+      },
+      {
+        "member": "checkout-input-corrected.log",
+        "sha256": "660ac821c769e8704a2c962d5f4b21d6d70df05ef5e5eb8b70eab7fa3b9aeb3b",
+        "bytes": 137
+      },
+      {
+        "member": "checkout-master-corrected.log",
+        "sha256": "23262beb925125c58145bc0b34eb687990750819f861cca826762d98fa755c2d",
+        "bytes": 140
+      },
+      {
+        "member": "clone-historical.log",
+        "sha256": "01e6e6b474733f380b6df86f4b2f0d0988113cc86ddf0558f5664b31735c4ddb",
+        "bytes": 400
+      },
+      {
+        "member": "clone-input.log",
+        "sha256": "783c8ebac52f8e1f98c5533abe369fd3d72abae66370be2233e5d3b6904d6e3c",
+        "bytes": 395
+      },
+      {
+        "member": "clone-master.log",
+        "sha256": "abbc61c8c59edebee9528edc2c8d7dfc36b7d595f8d047e97d5da28ebd32fcec",
+        "bytes": 396
+      },
+      {
+        "member": "contract-historical-corrected.log",
+        "sha256": "043e5f4a7f959f00621793d5f7a2a5c5c580779343bc60eb6c426f6ff21afefb",
+        "bytes": 99
+      },
+      {
+        "member": "contract-historical-corrected.xml",
+        "sha256": "e94323a32865996f4377e253341cc5594f223ed471789a5bef1c929b707779f5",
+        "bytes": 2366,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "7.928"
+          }
+        ]
+      },
+      {
+        "member": "contract-historical.log",
+        "sha256": "62c2d1dc8a4ddd857780d54ebe13f33fe1c8845e0c0b39d6b0ed39bc652f14d8",
+        "bytes": 5030
+      },
+      {
+        "member": "contract-historical.xml",
+        "sha256": "0901f6bf9147778bd306f6bee865158e908cdb846ed2ce2ae2b058542becc5f0",
+        "bytes": 8449,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "4",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.814"
+          }
+        ]
+      },
+      {
+        "member": "contract-input-corrected.log",
+        "sha256": "3b4cc980239bc6321573064f3cbe8504052f849dd77a1431eb2b45b919c3b964",
+        "bytes": 5025
+      },
+      {
+        "member": "contract-input-corrected.xml",
+        "sha256": "92fc3ea9dab27e11a79d7777cc4dade01a451fcd5465eee3a7bc7143a0e5096c",
+        "bytes": 8439,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "4",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.884"
+          }
+        ]
+      },
+      {
+        "member": "contract-input.log",
+        "sha256": "b06a26a1691fd40e5159517b69c42c08abb66312af42e4b1884e12b1cb41d37c",
+        "bytes": 5025
+      },
+      {
+        "member": "contract-input.xml",
+        "sha256": "34f44738d55609f3f1667503c36d74b58fbd3262c684551176e25221931d1f93",
+        "bytes": 8439,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "4",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.902"
+          }
+        ]
+      },
+      {
+        "member": "contract-master-corrected.log",
+        "sha256": "0d642b1841b1324e4d36901aa6d7ea5cc82207d726d88cb613868f173fecb0fa",
+        "bytes": 5026
+      },
+      {
+        "member": "contract-master-corrected.xml",
+        "sha256": "00978ca74ed21ef417ba28c7933c0af4973a955d1069c9652e1f68a38c5457c5",
+        "bytes": 8441,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "4",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.665"
+          }
+        ]
+      },
+      {
+        "member": "contract-master.log",
+        "sha256": "aabcb036f0954fea466f7bea1b713f74e73fe87257b971de933b936d4cacf730",
+        "bytes": 5026
+      },
+      {
+        "member": "contract-master.xml",
+        "sha256": "86121f22aec59a006fde68b3b26505a34f7ec9017c9f1a92a5cbfecedfec7a97",
+        "bytes": 8441,
+        "suites": [
+          {
+            "tests": "14",
+            "failed": "4",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.836"
+          }
+        ]
+      },
+      {
+        "member": "diagnostic-modules.log",
+        "sha256": "fc8371fc91c64881d1cd27c0d4927ed3c2f3eefb488198cc787792ba34354e41",
+        "bytes": 691
+      },
+      {
+        "member": "diagnostic-modules.xml",
+        "sha256": "f68773835f9e12791bb18044cba8c3435b9ac56c5dc3273cccde97e8f57b8b78",
+        "bytes": 2269,
+        "suites": [
+          {
+            "tests": "13",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "69.526"
+          }
+        ]
+      },
+      {
+        "member": "diagnostic-observer-prefix.log",
+        "sha256": "18e619f294f96b972132e5beb44ba130deff5d2a70d969060f38cb2553ca1352",
+        "bytes": 1123
+      },
+      {
+        "member": "diagnostic-observer-prefix.xml",
+        "sha256": "ca3b9b2ca9ce3dfadf8b0729ca890640c1f5ab3e52a8de2a886d025e323bd429",
+        "bytes": 1024,
+        "suites": [
+          {
+            "tests": "5",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "16.843"
+          }
+        ]
+      },
+      {
+        "member": "diagnostic-plugin-original-replay.py",
+        "sha256": "ae64ad2bc02666c9865a2692252e8007f1c8497bfb5ae9bb6fbfcb7ae5521542",
+        "bytes": 12522
+      },
+      {
+        "member": "diagnostic-standalone.log",
+        "sha256": "d6e17044aac96614e521e189cbc2e1eeb7952a43e064ddb0500b187e966057be",
+        "bytes": 802
+      },
+      {
+        "member": "diagnostic-standalone.xml",
+        "sha256": "5e947e5dddc989adf0bb90bac7c18f1a5b7c662b8fd4e05ea6b495620017afc5",
+        "bytes": 584,
+        "suites": [
+          {
+            "tests": "2",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "20.907"
+          }
+        ]
+      },
+      {
+        "member": "git-extracted-probe.log",
+        "sha256": "5c42cc0f555f7c99b0ae6ebd77103b3b76407c12f15e13f0cfdb417d30bc4a8f",
+        "bytes": 201
+      },
+      {
+        "member": "git-offline-install.log",
+        "sha256": "98647f88264d769b0889ac179c9970767556d6de953b831d2b5c6733622b4bfa",
+        "bytes": 962
+      },
+      {
+        "member": "git-package-download.log",
+        "sha256": "2481e40a56ea761d56e01626292f611e50a43ac36bcf7dc4e483aaa8e73ca72f",
+        "bytes": 145
+      },
+      {
+        "member": "installed-tool-original-negatives.log",
+        "sha256": "ac6fab108b6ca8dac8bbae0b2316df51171a0a4e46e753b0dbb71e8f0dbf5fed",
+        "bytes": 98
+      },
+      {
+        "member": "installed-tool-original-negatives.xml",
+        "sha256": "e386ac33589e364c3d35126e6b23e7478f15b0954ed8860d5dfbdd1fb3a3b156",
+        "bytes": 851,
+        "suites": [
+          {
+            "tests": "4",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "1.251"
+          }
+        ]
+      },
+      {
+        "member": "native-a41.log",
+        "sha256": "d48e60f871098d32f8cf08338249ed733a56eba98cb42037d3c9eeb1f6cd3a2a",
+        "bytes": 1734
+      },
+      {
+        "member": "native-a41.xml",
+        "sha256": "e4f7acba7f8d3d5991fcddf4a6abb408342148e28218a49628e111fbf1cc8a73",
+        "bytes": 8495,
+        "suites": [
+          {
+            "tests": "49",
+            "failed": "1",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "254.847"
+          }
+        ]
+      },
+      {
+        "member": "native-archive.log",
+        "sha256": "70dd9086e689a54b036a66954b88b453eeaffaef63ffb233bc8156c67cfbbe64",
+        "bytes": 1272
+      },
+      {
+        "member": "native-archive.xml",
+        "sha256": "3a1578d76aa26e37067f784c1124b964bcb14ffe818c058cdd5472bb3c23148d",
+        "bytes": 21793,
+        "suites": [
+          {
+            "tests": "143",
+            "failed": "1",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": null
+          }
+        ]
+      },
+      {
+        "member": "native-lookup.log",
+        "sha256": "1f90171e179ddf45be41df155288a3ee5c7165fc0de03d577c5af859f4f4a126",
+        "bytes": 1816
+      },
+      {
+        "member": "native-lookup.xml",
+        "sha256": "0868cb3b049acdb0266f9d565baf63a1a4fb8b27a668bec243a4949ffeba8227",
+        "bytes": 18563,
+        "suites": [
+          {
+            "tests": "107",
+            "failed": "1",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "172.800"
+          }
+        ]
+      },
+      {
+        "member": "parent-migration.log",
+        "sha256": "e380ec8dc8db3841ecf908e01ff9ea52f870c5962923a624c50426b999e8e33f",
+        "bytes": 9531
+      },
+      {
+        "member": "platform-after.json",
+        "sha256": "47cb0b65279f48b1267221ce61edbdc76da5138ea58665235a43e69ca34d759a",
+        "bytes": 434
+      },
+      {
+        "member": "platform-before.json",
+        "sha256": "728eb9dd45fcb348a3c444f097007efe3e076b82a078de4a9a87a8a5a83a64ae",
+        "bytes": 430
+      },
+      {
+        "member": "publication-native-preflight.log",
+        "sha256": "8321d3435a171de6f746d56aa9978646bdd3fcf454419e4a30f00cc9b386fc27",
+        "bytes": 1231
+      },
+      {
+        "member": "publication-native-preflight.xml",
+        "sha256": "dba079e23523c5f32fed53e116f66575e94a6f8b58e820aa157d9bd4a03d96ed",
+        "bytes": 27148,
+        "suites": [
+          {
+            "tests": "85",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "349.112"
+          }
+        ]
+      },
+      {
+        "member": "r5-ledger-parity.log",
+        "sha256": "1311116042819de5a70d5d776939279ff52ab67763dc7c8629530bd0b95aaff1",
+        "bytes": 1987
+      },
+      {
+        "member": "r5-ledger-parity.xml",
+        "sha256": "5b4a00886cd5e2b89c3d67339a1d4626c97e6915cd2779309b43ec27fea4bc2c",
+        "bytes": 186977,
+        "suites": [
+          {
+            "tests": "3",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "194.918"
+          }
+        ]
+      },
+      {
+        "member": "r5-new-pg17.log",
+        "sha256": "6486fd3d7a0be9e2be4e8cbb7a16d9f6fa4f031067e986a30e4b3be99ee19d65",
+        "bytes": 917
+      },
+      {
+        "member": "r5-new-pg17.xml",
+        "sha256": "77e1fa90d29336920e37622dffeb4ccddcaec0c0fc935a682bc7da1cc8e21c1d",
+        "bytes": 738,
+        "suites": [
+          {
+            "tests": "3",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "12.179"
+          }
+        ]
+      },
+      {
+        "member": "runtime-facts.log",
+        "sha256": "d8e07cbcc939bc2db666d8fc9bd7ae2ee026f1d554f6e1dba466067889daba73",
+        "bytes": 733
+      },
+      {
+        "member": "toolchain-install.log",
+        "sha256": "722d93ade55835f390b9c2b69982529ebde7768d531dea20bf77b85ab7d9101a",
+        "bytes": 10946
+      },
+      {
+        "member": "toolchain-offline-install.log",
+        "sha256": "0f6f9f067bc4e929505f8c42dd13a21316ab5033db189db7a67f571e600ebaaf",
+        "bytes": 14695
+      },
+      {
+        "member": "worker-protection.log",
+        "sha256": "8c1b3019beb698e0e25ece08fd12749de4614b9d7342732391f0a0d60f9fb99a",
+        "bytes": 3064
+      },
+      {
+        "member": "worker-protection.xml",
+        "sha256": "f5fd478448bd2c12631ca2ecc1e0ccc38bed9eb8640eeb4709792e52c52e5e05",
+        "bytes": 202815,
+        "suites": [
+          {
+            "tests": "87",
+            "failed": "0",
+            "errors": "0",
+            "skipped": "0",
+            "seconds": "485.049"
+          }
+        ]
+      },
+      {
+        "member": "worker02_r5_diagnostics.py",
+        "sha256": "ae64ad2bc02666c9865a2692252e8007f1c8497bfb5ae9bb6fbfcb7ae5521542",
+        "bytes": 12522
+      },
+      {
+        "member": "worker02_r5_preflight.py",
+        "sha256": "34e18742fda3690083f5900151de733849da18f5cb5990e83942468db410527b",
+        "bytes": 2692
+      },
+      {
+        "member": "context-modules/416088cc70a6783003a5.json",
+        "sha256": "d634a2c1cd1d9fb411802f0e1cf730384a2848f7d1aaa7d2fee21743470d4c13",
+        "bytes": 3188
+      },
+      {
+        "member": "context-modules/ac2724701135f230cb73.json",
+        "sha256": "348cffeb5bfa59c77fa6d39bd50e84bb44fbbfd385ff4a5ade64779a4fdcdb87",
+        "bytes": 3870
+      },
+      {
+        "member": "context-modules/collection.json",
+        "sha256": "2d9c4420b9fb77e402a0a953fde9a938e1550186264df1cf46ed0ce2e6059c64",
+        "bytes": 2862
+      },
+      {
+        "member": "context-modules/result.json",
+        "sha256": "61f226d34b6d7d524b428b63681b486699d847269027b4bf880e11fb389f57b6",
+        "bytes": 174
+      },
+      {
+        "member": "context-observer-prefix/416088cc70a6783003a5.json",
+        "sha256": "19e7f0bbd5a5a39058cea1c0c20c3a9d2a7edd11ae4b0de610643ac2f82d0290",
+        "bytes": 3188
+      },
+      {
+        "member": "context-observer-prefix/collection.json",
+        "sha256": "d050aac7ae054719bb3b82fd4174737a75989b01ce7e0124346b0b83aa2b7bb9",
+        "bytes": 1171
+      },
+      {
+        "member": "context-observer-prefix/result.json",
+        "sha256": "fdd1d1ac395206caed39e70f2f4221d4b294bcef2794dbfe7800a57623053fab",
+        "bytes": 174
+      },
+      {
+        "member": "context-standalone/416088cc70a6783003a5.json",
+        "sha256": "5e498ef4d71b2d2052a7f913a25333da22d6fc414db0b69e1ba33396f00853f1",
+        "bytes": 2378
+      },
+      {
+        "member": "context-standalone/ac2724701135f230cb73.json",
+        "sha256": "fd744254935cf9e099c9beaf927ac6a35f075cd6fea67ff9a92600e10a0638f0",
+        "bytes": 1587
+      },
+      {
+        "member": "context-standalone/collection.json",
+        "sha256": "7884be4343cabbe99e8ccf1c30599facfad3d0660bbf0d05e1f92088abcacfb6",
+        "bytes": 578
+      },
+      {
+        "member": "context-standalone/result.json",
+        "sha256": "61f226d34b6d7d524b428b63681b486699d847269027b4bf880e11fb389f57b6",
+        "bytes": 174
+      }
+    ]
+  },
+  "r5_historical_guard_modules": {
+    "source_sha": "2779a2a7a7120c86f67b4991bce196c652b5ebb0",
+    "archive": ".codex_tmp/worker02-r5-historical-guards.tar.gz",
+    "sha256": "15cc18fa1eeb11bd4942ea5c3e6bc05635efe54bd959a7d70896ef3479a9b332",
+    "stdout_log_sha256": "a171ee53af394e80b61689be58c22d3d4eb77d9e543eb0f030eea7248aa23953",
+    "xml_sha256": "3b719c2093b00a85cca874ab928269d93145c74c4c215071b5d844cced5c9fc2",
+    "passed": 73,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "exit_code": 0,
+    "seconds": 88.94,
+    "retrieval": "Same controlled-local custodian procedure; original seven source-guard modules, no filter."
+  },
+  "qualification": false
+}

@@ -1,0 +1,2227 @@
+{
+  "schema": "worker02.r5.UNSIGNED_EXACT_PATH_REVIEW.v1",
+  "guard_baseline": "f00be6aa149d5fde145ae4137c01368a332b022f",
+  "historical_valid": "2779a2a7a7120c86f67b4991bce196c652b5ebb0",
+  "r4_input": "2bf219a0d05c0aa8090d9050e043c60343db684d",
+  "first_divergent_commit": "c70c8ca7eff810fee4dccda16ab7ca54813a5567",
+  "first_divergent_count": 40,
+  "index_tree_before_inventory": "3e42b0a7dd8a661f7ee2a7fc71878e18ac20cb81",
+  "final_source_identity": "containing delivery commit; final tree and self digest must be independently signed after commit",
+  "reviewer": null,
+  "organization": null,
+  "reviewed_at": null,
+  "approval_id": null,
+  "expires_at": null,
+  "detached_signature": null,
+  "activation_allowed": false,
+  "dispatcher_implemented": false,
+  "expected_old_paths": 33,
+  "proposed_paths": 104,
+  "missing_old_paths": [],
+  "additional_paths": [
+    "backend/app/api/v1/jobs.py",
+    "backend/app/cli.py",
+    "backend/app/core/config.py",
+    "backend/app/core/db.py",
+    "backend/app/repositories/calculation_frame.py",
+    "backend/app/repositories/job_run.py",
+    "backend/app/services/calculation_policy.py",
+    "backend/app/services/calculation_progress.py",
+    "backend/app/services/data_job_diagnostics.py",
+    "backend/app/services/data_job_reconcile.py",
+    "backend/app/services/execution_diagnostics.py",
+    "backend/app/services/job_worker.py",
+    "backend/app/services/quality/raw_completeness.py",
+    "backend/app/services/trade_status/service.py",
+    "backend/app/services/worker_observation.py",
+    "docs/acceptance/BIZ_POLICY_01_closeout.md",
+    "docs/acceptance/BIZ_POLICY_01_runbook.md",
+    "docs/acceptance/BIZ_WORKER_02_contract_migration_ADR.md",
+    "docs/acceptance/BIZ_WORKER_02_proposed_source_contract.json",
+    "docs/acceptance/BIZ_WORKER_02_review.md",
+    "docs/acceptance/BIZ_WORKER_02_validation.json",
+    "docs/acceptance/WORKER_02_recovery_authority_proposal.md",
+    "docs/acceptance/WORKER_02_revision_baseline.md",
+    "docs/acceptance/WORKER_02_revision_closeout.md",
+    "docs/acceptance/WORKER_02_revision_contract_PROPOSED.json",
+    "docs/acceptance/WORKER_02_revision_failures.json",
+    "docs/acceptance/WORKER_02_revision_validation.json",
+    "docs/acceptance/worker02_r2/closeout.md",
+    "docs/acceptance/worker02_r2/failure_inventory.md",
+    "docs/acceptance/worker02_r2/pre_full_validation.json",
+    "docs/acceptance/worker02_r2/review_baseline.json",
+    "docs/acceptance/worker02_r2/small_input_cost_observations.json",
+    "docs/acceptance/worker02_r2/source_inventory_PROPOSED.json",
+    "docs/acceptance/worker02_r4/baseline.md",
+    "docs/acceptance/worker02_r4/baseline_evidence.json",
+    "docs/acceptance/worker02_r4/business_parity.md",
+    "docs/acceptance/worker02_r4/business_parity_results.json",
+    "docs/acceptance/worker02_r4/contract_migration_proposal.md",
+    "docs/acceptance/worker02_r4/evidence_index.json",
+    "docs/acceptance/worker02_r4/failure_matrix.csv",
+    "docs/acceptance/worker02_r4/merge_readiness.md",
+    "docs/acceptance/worker02_r4/source_inventory_PROPOSED.json",
+    "docs/acceptance/worker02_r4/worker_regression.md",
+    "docs/acceptance/worker02_r5/baseline.md",
+    "docs/acceptance/worker02_r5/contract_migration_review.md",
+    "docs/acceptance/worker02_r5/evidence_index.json",
+    "docs/acceptance/worker02_r5/failure_matrix.csv",
+    "docs/acceptance/worker02_r5/merge_readiness.md",
+    "docs/acceptance/worker02_r5/source_inventory_PROPOSED.json",
+    "docs/acceptance/worker02_r5/validation.json",
+    "docs/acceptance/worker02_r5/validation.md",
+    "docs/runbooks/WORKER_02_readonly_recovery.md",
+    "scripts/business_worker_resource_preflight.py",
+    "scripts/worker02_r5_diagnostics.py",
+    "scripts/worker02_r5_preflight.py",
+    "tests/integration/test_business_policy_worker_pg17.py",
+    "tests/integration/test_business_worker_02_diagnostics.py",
+    "tests/integration/test_business_worker_02_pg17.py",
+    "tests/integration/test_worker02_r2.py",
+    "tests/integration/test_worker02_r2_lifecycle.py",
+    "tests/integration/test_worker02_r4_recovery_receipt.py",
+    "tests/integration/test_worker02_r5_diagnostic_pg17.py",
+    "tests/integration/test_worker02_r5_ledger_parity.py",
+    "tests/integration/test_worker02_revision.py",
+    "tests/unit/test_business_policy_identity.py",
+    "tests/unit/test_business_worker_02.py",
+    "tests/unit/test_worker02_r2_contract.py",
+    "tests/unit/test_worker02_r4_receipt_contract.py",
+    "tests/unit/test_worker02_r5_diagnostics.py",
+    "tests/unit/test_worker02_r5_preflight.py",
+    "tests/unit/test_worker02_revision_contract.py"
+  ],
+  "historical_manifest_sha256": {
+    "docs/acceptance/BIZ_PERF_01_review_source_manifest.json": "47e64a62424936f9a05645453f86cd7cfaa3d216518a2b2bc55eae7243161a62",
+    "docs/acceptance/a42351_reviewer_overlay_manifest.json": "ea795278e3fb84e4eebabeba737d23a92a4a0c42e6402cc828bf3801d3c9f648",
+    "docs/acceptance/a42361_overlay_manifest.json": "a88d62d980751cfe182bcffc0a450c21d57195810bdce4e24c80f43c4ff1fb64",
+    "docs/acceptance/a42362_overlay_manifest.json": "692b2ca9f3f1f95404a6ec953b557d6a6b510123a522b9f357163d3b016b1817",
+    "docs/acceptance/a42363_complete_overlay_manifest.json": "d3f5bdce5c9a05b578eda1f599f9404f78f696170d233a3da1d105008ebbd9ff",
+    "docs/acceptance/a42363_overlay_manifest.json": "92f67e70c19eee81ef2ce19283aa9969748480cbc36921df01ebba902bc64662",
+    "docs/acceptance/a42363_review_overlay_manifest.json": "ec3d15819acf7c2303b1ac04771dbe9aadf78f121b0a9c00320d69d043905ba2",
+    "docs/acceptance/a42364_overlay_manifest.json": "e1a594a7579ce7d79b62f828126c35f56c38df1de7f84b0b589d645e6e2c9cd7",
+    "docs/acceptance/a42365_overlay_manifest.json": "cc0ab53e5d1381e1d597bfcc00cd1f86b2eb4c76cf294bcd596596288adb550e",
+    "docs/acceptance/a42366_overlay_manifest.json": "43ea851cea8741111b8e20edf14b850baedc8966f8057ab2ab720df7a3b2945c",
+    "docs/acceptance/a4236_overlay_manifest.json": "d93bf795a59cb0a168f0e96f4382d58efcbdc2833bc43e22ebde3254a09c1156"
+  },
+  "categories": {
+    "AUTHORITY_APPEND": {
+      "necessity": "Append R5 scope, test-only invocation and unclosed formal gates",
+      "risk": "Documentation/source identity changes; no approval or runtime enablement",
+      "tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ]
+    },
+    "R5_DIAGNOSTIC": {
+      "necessity": "Bounded opt-in failure/order/context evidence or actual platform capability probe",
+      "risk": "Test-only read-only diagnostic connection and artifact privacy; never outcome-to-PASS",
+      "tests": [
+        "tests/unit/test_worker02_r5_diagnostics.py",
+        "tests/unit/test_worker02_r5_preflight.py",
+        "tests/integration/test_worker02_r5_diagnostic_pg17.py"
+      ]
+    },
+    "R5_LEDGER_TEST": {
+      "necessity": "Preserve original lifecycle assertions and close missing full ledger business comparison",
+      "risk": "Only generated physically verified PG17 test databases; no source behavior change",
+      "tests": [
+        "tests/integration/test_worker02_r5_ledger_parity.py",
+        "tests/integration/test_worker02_r2_lifecycle.py"
+      ]
+    },
+    "PRIOR_BUSINESS_SOURCE": {
+      "necessity": "Pre-R5 business identity, scoped execution, observation or strict recovery behavior; independent review required",
+      "risk": "Can affect production behavior; R5 does not authorize or alter it",
+      "tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ]
+    },
+    "LEGACY_STAGE": {
+      "necessity": "Already in original exact 33-path stage; preserve approved historical meaning",
+      "risk": "Security/publication/physical protocol scope; cannot be automatically migrated",
+      "tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ]
+    },
+    "TEST_ONLY": {
+      "necessity": "Existing business/Worker regression protection; original assertions unchanged in R5",
+      "risk": "Review test coverage and all failure-closed negatives; not a production grant",
+      "tests": []
+    },
+    "REVIEW_ONLY": {
+      "necessity": "Evidence/review/runbook, not executable authority",
+      "risk": "Must not be consumed as approval, capacity or field qualification",
+      "tests": [
+        "git diff --check"
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "PROJECT_RULES.md",
+      "old_approved": {
+        "git_blob_oid": "635395c99e24ec3fdad3369983fc8ff87db3f8ba",
+        "sha256": "25a4f7a40c6b3da4c89002a4906f37d89a3721d0dfa462dbb235de13ea9c0d5e"
+      },
+      "r4_blob_oid": "a0866f423215a33d3705073effda53d86ca6f7e1",
+      "proposed": {
+        "git_blob_oid": "d5b3570c2f73469fa96c6664116d0df75e53c257",
+        "sha256": "69e7c1ebe398afdb2f51fc6067999b44d7d3cc652a2eb665bff6c33983f6f784"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "AUTHORITY_APPEND",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "README.md",
+      "old_approved": {
+        "git_blob_oid": "32fe9914b1bac27e8c84175dd0e0e3b749863fc4",
+        "sha256": "709c863ef752c766a7cc730b7092400552a3d6394dbbf306c881b3fee4adebfd"
+      },
+      "r4_blob_oid": "4b701a1199b6a65573aefac868d63bf94bf4301c",
+      "proposed": {
+        "git_blob_oid": "07c88ed8de66a221bc373e187b12aa03228d5e93",
+        "sha256": "ac5668b1f9cc649a8ba1589d72ab6d01fab879160fc4dbe64be0ce55a1e2edee"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "AUTHORITY_APPEND",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/api/v1/jobs.py",
+      "old_approved": {
+        "git_blob_oid": "7d7e07d55bf1cc8f37c52c7de98c6cb1a1776530",
+        "sha256": "4acce1a8cad37412c66110de2ccba0cf9e28e2fef9f7e204af0b0e7659aeba2f"
+      },
+      "r4_blob_oid": "e055da151d3efae7e01ee4d1d070388ace619a19",
+      "proposed": {
+        "git_blob_oid": "e055da151d3efae7e01ee4d1d070388ace619a19",
+        "sha256": "83e761f21f45d5fd7a74163732a9c37427c9119bdaf834305cbacb2e0726d6bc"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/integration/test_worker02_revision.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/cli.py",
+      "old_approved": {
+        "git_blob_oid": "2030632057c6b10bc555513c71b633684b6c83e7",
+        "sha256": "78a488175f1a97d9015fe41753095e22f1a6073f8a42e2d681deb20431b2a2c4"
+      },
+      "r4_blob_oid": "a848b6171241f0b44713e13e8f0bac1f5f6d1fab",
+      "proposed": {
+        "git_blob_oid": "a848b6171241f0b44713e13e8f0bac1f5f6d1fab",
+        "sha256": "e989255bc7e04a7f356d58b0146f7c4cee0d20302877a57bcbd1051dfc0896ca"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_cli_derived_safety.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "old_approved": {
+        "git_blob_oid": "863dbdf690cae6bb4382cdc4470bf487726ceb47",
+        "sha256": "e00253ef24149e813fe999c661a09f7fd079023029f045a4446e55febeeb2459"
+      },
+      "r4_blob_oid": "ab1a4d8eb3608a49b3919aee1473f328be70bafa",
+      "proposed": {
+        "git_blob_oid": "ab1a4d8eb3608a49b3919aee1473f328be70bafa",
+        "sha256": "1aec2c3d3757c47ab8fde23c19cbba5faaae83a71f4396dabc1623a2119ee448"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/core/db.py",
+      "old_approved": {
+        "git_blob_oid": "44732a0a0b30cda3c2a1c12c686ee2ff7f85649c",
+        "sha256": "eb5cfea7a8090c3d4d95d0bb4c12cc6887b16ec6f1d3d0247751c08e6cf7fd8f"
+      },
+      "r4_blob_oid": "ba98692524634ae0db8537dcd841ef3efc62ab17",
+      "proposed": {
+        "git_blob_oid": "ba98692524634ae0db8537dcd841ef3efc62ab17",
+        "sha256": "a94bd31b9ab13a3b78c88da4f3f02f83870a834cff405618cf33f7ee3fb5aba8"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/repositories/calculation_frame.py",
+      "old_approved": {
+        "git_blob_oid": "6e2b0e15525a9b1a308f8f0139890b0c120f7074",
+        "sha256": "aef677456e1eef990dd0c885d909f7c8b2ff57dbc2462575c04c94b3fe10583d"
+      },
+      "r4_blob_oid": "7ced967d9e2237c0ae606ba4503219e70fa56598",
+      "proposed": {
+        "git_blob_oid": "7ced967d9e2237c0ae606ba4503219e70fa56598",
+        "sha256": "a10527d842ed7aad8642d0d083a6497aa7ba888b71f33c292ed3862cd83eb6d3"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_calculation_frame.py",
+        "tests/integration/test_calculation_frame_streaming.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/repositories/job_run.py",
+      "old_approved": {
+        "git_blob_oid": "4dd5af6fe2181f399e933878259cc5418e77089f",
+        "sha256": "92d3971c3097cc9b5f9d399b00c0005d04a5375181e7c753dc9877a56b2f577e"
+      },
+      "r4_blob_oid": "fc5b5a2c2188f3117cb8c39b5d6a73a4d7cfc7aa",
+      "proposed": {
+        "git_blob_oid": "fc5b5a2c2188f3117cb8c39b5d6a73a4d7cfc7aa",
+        "sha256": "5b1ee6ec09fba98867b6b814190412ecb9027065021f57e513737f3248764d16"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/calculation_policy.py",
+      "old_approved": {
+        "git_blob_oid": "bcc1708ef038225127eb5c36b25c626dcd279bcd",
+        "sha256": "40825499c679181d5ad11c8c38b7f5b56785cb6b560628ae85e7279dea759970"
+      },
+      "r4_blob_oid": "f402d2119809a5312f11db05203ee3c8e5deb8ca",
+      "proposed": {
+        "git_blob_oid": "f402d2119809a5312f11db05203ee3c8e5deb8ca",
+        "sha256": "7fecbb2436af5be01a8e2dbb2a06962b73b9e35012af1b7b2fd6323c428ba888"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/calculation_progress.py",
+      "old_approved": {
+        "git_blob_oid": "01b590d6930bbcf74391ae8e43dc0a6e7aa32a52",
+        "sha256": "b0d66e0955a8f67beb995bde88f7485f20920c587dcc50d8dcbef24ce4f612c7"
+      },
+      "r4_blob_oid": "9887a63bd8fca4473dfcf01ca069b4b25524891f",
+      "proposed": {
+        "git_blob_oid": "9887a63bd8fca4473dfcf01ca069b4b25524891f",
+        "sha256": "d69147b3a6417aa1b1b0d2b63a554d2ad2f678bdceab693a6bbc2c99f81d79f4"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_calculation_progress.py",
+        "tests/integration/test_calculation_batch_progress.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/data_job_diagnostics.py",
+      "old_approved": {
+        "git_blob_oid": "6fbba8b02cac75e259385fb9380cd1e0989c16cc",
+        "sha256": "01c14fe23e6b1bcb65fd2754c5f14345ed090350bf69cb02b54d7188521b10c6"
+      },
+      "r4_blob_oid": "c334e60f5a32e80f2c28a53b48e43015b5e1d0da",
+      "proposed": {
+        "git_blob_oid": "c334e60f5a32e80f2c28a53b48e43015b5e1d0da",
+        "sha256": "84b4b4e508a987b7b8969111adedcea648be4c2dbf12f8753c681ddf6af225ef"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/data_job_reconcile.py",
+      "old_approved": null,
+      "r4_blob_oid": "62556cf53ab4e0bbaba0fca5c6099b276a319bf3",
+      "proposed": {
+        "git_blob_oid": "62556cf53ab4e0bbaba0fca5c6099b276a319bf3",
+        "sha256": "a59a7eb4bec5a68ea8d1424d0f53e13eef15922f944d85484a6878c736bb7680"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_worker02_r4_receipt_contract.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/execution_diagnostics.py",
+      "old_approved": null,
+      "r4_blob_oid": "03c1c023b77c262e2bada304b913e858b6b17526",
+      "proposed": {
+        "git_blob_oid": "03c1c023b77c262e2bada304b913e858b6b17526",
+        "sha256": "bc31d3e718122b024b142cbd4e2602d410a923e6b54d58899f66e097f48d80ff"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/job_worker.py",
+      "old_approved": {
+        "git_blob_oid": "86ae04900e0d31503b3a13260285a67b41cad160",
+        "sha256": "2a3d38ffa9efb9562de68e4321632a69368435c00b3caf4a345b0ca0170ffcc5"
+      },
+      "r4_blob_oid": "18b9bb2db56a3034c4565fd3fdb59c880597ef07",
+      "proposed": {
+        "git_blob_oid": "18b9bb2db56a3034c4565fd3fdb59c880597ef07",
+        "sha256": "d943ddc503672017a748135f15c8745aef466d6ed027b4523d1895ed6201341c"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_job_worker.py",
+        "tests/integration/test_worker02_r2_lifecycle.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/quality/raw_completeness.py",
+      "old_approved": {
+        "git_blob_oid": "9c8d84462ad3a1b491d0f8a13bef305a9bb520bb",
+        "sha256": "5c1ee3f10601f80f900d290dbc2d8a1ac05c1bfd018dcbebb53c202a53791ff1"
+      },
+      "r4_blob_oid": "ab25f1f9d872bba34ebc864e2fe64ba5b449dee1",
+      "proposed": {
+        "git_blob_oid": "ab25f1f9d872bba34ebc864e2fe64ba5b449dee1",
+        "sha256": "da4b5ce9768e8c9c0f4f33e0f4440b6ad9d93778e923335eb86b7d359386fd40"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_raw_completeness.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/trade_status/service.py",
+      "old_approved": {
+        "git_blob_oid": "f777522d3f30f745bd3136e21dc0b760f0fc3eea",
+        "sha256": "f214c18ba6357b6565ab495d7b518722cf8fde913707070c5f25e9827caf3316"
+      },
+      "r4_blob_oid": "f0ca6f6ce30c689062d3ab5244bae4b1834ce09e",
+      "proposed": {
+        "git_blob_oid": "f0ca6f6ce30c689062d3ab5244bae4b1834ce09e",
+        "sha256": "4580030544f96cf1d064e10b976996d7018354e8a23fc3f5ed4ccd25154ef327"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_trade_status.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "backend/app/services/worker_observation.py",
+      "old_approved": null,
+      "r4_blob_oid": "e8464b2f27ba219011df978d5d76e332f9336823",
+      "proposed": {
+        "git_blob_oid": "e8464b2f27ba219011df978d5d76e332f9336823",
+        "sha256": "d6cac9bca33c87a7d245c7c57feef5937ec90290fbbef05676e8d4eb0e2529e5"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": true,
+      "review_category": "PRIOR_BUSINESS_SOURCE",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py",
+        "tests/integration/test_business_policy_worker_pg17.py",
+        "tests/integration/test_business_worker_02_pg17.py",
+        "tests/integration/test_worker02_r2.py",
+        "tests/integration/test_worker02_r2_lifecycle.py",
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_POLICY_01_closeout.md",
+      "old_approved": null,
+      "r4_blob_oid": "4afec8043df1d7ffc748527f72335d7a10266590",
+      "proposed": {
+        "git_blob_oid": "4afec8043df1d7ffc748527f72335d7a10266590",
+        "sha256": "177fabbc454cc8ec17e9e361db90193436568b8da57d1fed94653050c584c142"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_POLICY_01_runbook.md",
+      "old_approved": null,
+      "r4_blob_oid": "e10c05cd50a7e6384b9364e260ccae89c47e6150",
+      "proposed": {
+        "git_blob_oid": "e10c05cd50a7e6384b9364e260ccae89c47e6150",
+        "sha256": "f354eb2af9f15cecd283cba5883e9889ea9c516bfe4dd68eb9ae5aa758a1a1cf"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_WORKER_02_contract_migration_ADR.md",
+      "old_approved": null,
+      "r4_blob_oid": "c36a66058c7681e5cdb28b9e18e8fa2fba2a05d5",
+      "proposed": {
+        "git_blob_oid": "c36a66058c7681e5cdb28b9e18e8fa2fba2a05d5",
+        "sha256": "9fc59b429b509c5abbad8e3327c886a6513f41d2678882cff6176a273de1e6d4"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_WORKER_02_proposed_source_contract.json",
+      "old_approved": null,
+      "r4_blob_oid": "ee5daacf336ab36ac2b7c1d780909aa26fef0742",
+      "proposed": {
+        "git_blob_oid": "ee5daacf336ab36ac2b7c1d780909aa26fef0742",
+        "sha256": "05f1f8bf427469602293a9387dfc25f246ad8c3843bd4af43abca1a39288a4a5"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_WORKER_02_review.md",
+      "old_approved": null,
+      "r4_blob_oid": "10f78ffa936cdbcdb8777816fb19387445ac5e26",
+      "proposed": {
+        "git_blob_oid": "10f78ffa936cdbcdb8777816fb19387445ac5e26",
+        "sha256": "71c1e61d86fbae91b3ace58f728420faaec0cb844aeabfb6cb86b72945b45191"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/BIZ_WORKER_02_validation.json",
+      "old_approved": null,
+      "r4_blob_oid": "599c7148871025564b4797f680ee5e36261f696f",
+      "proposed": {
+        "git_blob_oid": "599c7148871025564b4797f680ee5e36261f696f",
+        "sha256": "657bc7e3b80859499892f478ba9eb774f680aa4eea1125eeace5941ac43fcef9"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_recovery_authority_proposal.md",
+      "old_approved": null,
+      "r4_blob_oid": "774bcacb728d2c2f2678f64e05c236a4afd50cc1",
+      "proposed": {
+        "git_blob_oid": "774bcacb728d2c2f2678f64e05c236a4afd50cc1",
+        "sha256": "c5ebc4bc089a1250eb2651695a399ed718bdaef35d0ee392c374a24d3db5431e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_revision_baseline.md",
+      "old_approved": null,
+      "r4_blob_oid": "c5ab17ec0b9ae7b4a9dc572be2eb7e3780f040d9",
+      "proposed": {
+        "git_blob_oid": "c5ab17ec0b9ae7b4a9dc572be2eb7e3780f040d9",
+        "sha256": "a1aed8956eedf98d01676c7d0525d53bcf3fcc91936f22397074cbdddffdea5d"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_revision_closeout.md",
+      "old_approved": null,
+      "r4_blob_oid": "3991e4e3336a05af6e3550c9d02ff8c9ea1efe1d",
+      "proposed": {
+        "git_blob_oid": "3991e4e3336a05af6e3550c9d02ff8c9ea1efe1d",
+        "sha256": "ca211544c60195497081c363dfc4857b1bf17f08a1c500f0ebf305306bf53569"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_revision_contract_PROPOSED.json",
+      "old_approved": null,
+      "r4_blob_oid": "7bb2fe89e84e2b86de7d73d5725d617a4ce03fa9",
+      "proposed": {
+        "git_blob_oid": "7bb2fe89e84e2b86de7d73d5725d617a4ce03fa9",
+        "sha256": "31bca8c95cb670295dd3693b4144082b80c41f39467dd5a6aac376e14097808e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_revision_failures.json",
+      "old_approved": null,
+      "r4_blob_oid": "81198049bd75da8fd370f056f34d343b1eac8e53",
+      "proposed": {
+        "git_blob_oid": "81198049bd75da8fd370f056f34d343b1eac8e53",
+        "sha256": "4cef6605a54fbd2c31d55cac3e7c45d950ee78284bd787a7255d604ebbec60a3"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/WORKER_02_revision_validation.json",
+      "old_approved": null,
+      "r4_blob_oid": "394aff0e4c8801505421f9afe4a2b6f7c3b83fa8",
+      "proposed": {
+        "git_blob_oid": "394aff0e4c8801505421f9afe4a2b6f7c3b83fa8",
+        "sha256": "0e468ab4851ea40f48c4bb04ce8a8a98a4b9ffb1f6f85280e560a3d6dac9c20a"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_baseline.md",
+      "old_approved": {
+        "git_blob_oid": "361120835757756bb3de2f1fa5928ae10bbed2c0",
+        "sha256": "ddd440703c2cc7c8465f396cf76a94a641662db6b685816733b6db93d67c0d42"
+      },
+      "r4_blob_oid": "361120835757756bb3de2f1fa5928ae10bbed2c0",
+      "proposed": {
+        "git_blob_oid": "361120835757756bb3de2f1fa5928ae10bbed2c0",
+        "sha256": "ddd440703c2cc7c8465f396cf76a94a641662db6b685816733b6db93d67c0d42"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_capability_matrix.md",
+      "old_approved": {
+        "git_blob_oid": "61e1706ac76ac4effb5bd60b9309c4e9702f0aaf",
+        "sha256": "d672718719dd2810293c2ea4e6b71ba20c6355b504150875973c61d376caaa09"
+      },
+      "r4_blob_oid": "61e1706ac76ac4effb5bd60b9309c4e9702f0aaf",
+      "proposed": {
+        "git_blob_oid": "61e1706ac76ac4effb5bd60b9309c4e9702f0aaf",
+        "sha256": "d672718719dd2810293c2ea4e6b71ba20c6355b504150875973c61d376caaa09"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_closeout.md",
+      "old_approved": {
+        "git_blob_oid": "fb828e93c77c5c26107b4cbed1dd951bdd4989c9",
+        "sha256": "8d615b65805c0a3337d45e6c73cf7d77d4cba49722c132ef9874d8fd23f71589"
+      },
+      "r4_blob_oid": "fb828e93c77c5c26107b4cbed1dd951bdd4989c9",
+      "proposed": {
+        "git_blob_oid": "fb828e93c77c5c26107b4cbed1dd951bdd4989c9",
+        "sha256": "8d615b65805c0a3337d45e6c73cf7d77d4cba49722c132ef9874d8fd23f71589"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_evidence.json",
+      "old_approved": {
+        "git_blob_oid": "489d8d7b48eaa6a4fbac419bd37bdb02d890c69d",
+        "sha256": "f7723abb79c6868a3f4629fac2c1521d05e704f294fbab1ece1dbadad24bcd8f"
+      },
+      "r4_blob_oid": "489d8d7b48eaa6a4fbac419bd37bdb02d890c69d",
+      "proposed": {
+        "git_blob_oid": "489d8d7b48eaa6a4fbac419bd37bdb02d890c69d",
+        "sha256": "f7723abb79c6868a3f4629fac2c1521d05e704f294fbab1ece1dbadad24bcd8f"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_overlay_manifest.json",
+      "old_approved": {
+        "git_blob_oid": "4c95242ab20af9dd2863952175e145c8aed5e76d",
+        "sha256": "43ea851cea8741111b8e20edf14b850baedc8966f8057ab2ab720df7a3b2945c"
+      },
+      "r4_blob_oid": "4c95242ab20af9dd2863952175e145c8aed5e76d",
+      "proposed": {
+        "git_blob_oid": "4c95242ab20af9dd2863952175e145c8aed5e76d",
+        "sha256": "43ea851cea8741111b8e20edf14b850baedc8966f8057ab2ab720df7a3b2945c"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_platform_handoff.md",
+      "old_approved": {
+        "git_blob_oid": "362ba720d42c8abbe129ba46774fb2e87a88d20c",
+        "sha256": "75353f75c9cf9b507c136f56257d3d1af52bea253016b410540f454cf74241df"
+      },
+      "r4_blob_oid": "362ba720d42c8abbe129ba46774fb2e87a88d20c",
+      "proposed": {
+        "git_blob_oid": "362ba720d42c8abbe129ba46774fb2e87a88d20c",
+        "sha256": "75353f75c9cf9b507c136f56257d3d1af52bea253016b410540f454cf74241df"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_runbook.md",
+      "old_approved": {
+        "git_blob_oid": "c204c58f1b21d01dfe79509cb3827321c3d10b0c",
+        "sha256": "01d165b5f9c326cc4ac9870bc447ef53215041cf81e6865c695c168d7ba09832"
+      },
+      "r4_blob_oid": "c204c58f1b21d01dfe79509cb3827321c3d10b0c",
+      "proposed": {
+        "git_blob_oid": "c204c58f1b21d01dfe79509cb3827321c3d10b0c",
+        "sha256": "01d165b5f9c326cc4ac9870bc447ef53215041cf81e6865c695c168d7ba09832"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/a42366_test_matrix.md",
+      "old_approved": {
+        "git_blob_oid": "586d4a8553a0491b0e209c117f33bea89726554a",
+        "sha256": "33357534ce363b97f6a870a07057e11bbf61d436abb592f1bbbba243b71df49e"
+      },
+      "r4_blob_oid": "586d4a8553a0491b0e209c117f33bea89726554a",
+      "proposed": {
+        "git_blob_oid": "586d4a8553a0491b0e209c117f33bea89726554a",
+        "sha256": "33357534ce363b97f6a870a07057e11bbf61d436abb592f1bbbba243b71df49e"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/closeout.md",
+      "old_approved": null,
+      "r4_blob_oid": "81d3f24925f1115d91db2cc20ff079d55ae22c69",
+      "proposed": {
+        "git_blob_oid": "81d3f24925f1115d91db2cc20ff079d55ae22c69",
+        "sha256": "cfe9e5a5a38f18adcf1cae2c0e7033b7ee28cf0e8effc44029a14e392722ef26"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/failure_inventory.md",
+      "old_approved": null,
+      "r4_blob_oid": "7bb8d73c029ae6b693c9059df1523d52b3d0a24c",
+      "proposed": {
+        "git_blob_oid": "7bb8d73c029ae6b693c9059df1523d52b3d0a24c",
+        "sha256": "90c7432f18dc965b060fba3675141249a49fad5eea1706769c6105e00a4287a6"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/pre_full_validation.json",
+      "old_approved": null,
+      "r4_blob_oid": "4625c384314533a14e8eb1a0c728e9fe8fdaff14",
+      "proposed": {
+        "git_blob_oid": "4625c384314533a14e8eb1a0c728e9fe8fdaff14",
+        "sha256": "b121fbd2f7c60c6c6832f748482176857b8c6bf78980fdca41f54689ed42d16f"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/review_baseline.json",
+      "old_approved": null,
+      "r4_blob_oid": "832a7f63ba55ff6bc1aafbba25a53f79d88a3bc5",
+      "proposed": {
+        "git_blob_oid": "832a7f63ba55ff6bc1aafbba25a53f79d88a3bc5",
+        "sha256": "1329f719836c2cad82cb929b64c4048b2c01a51ee1cba08be1808a52fcc9d5b8"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/small_input_cost_observations.json",
+      "old_approved": null,
+      "r4_blob_oid": "c627a0e710156965ef7fa3e222fe7c8e223d0bad",
+      "proposed": {
+        "git_blob_oid": "c627a0e710156965ef7fa3e222fe7c8e223d0bad",
+        "sha256": "adb32006251ba62a05ed1004dd96104e9c082bf43d8153a82c917bd55215fe3e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r2/source_inventory_PROPOSED.json",
+      "old_approved": null,
+      "r4_blob_oid": "fa0328ff24beae0cdc44db691d243c8ba330518c",
+      "proposed": {
+        "git_blob_oid": "fa0328ff24beae0cdc44db691d243c8ba330518c",
+        "sha256": "d4fbd89fc4692858e8b6bf865806e116e4fef53e01ebcfffd1b446dde3b3c86e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/baseline.md",
+      "old_approved": null,
+      "r4_blob_oid": "0e388aed352bfd38b91b5f15ce67ac81eb949e63",
+      "proposed": {
+        "git_blob_oid": "0e388aed352bfd38b91b5f15ce67ac81eb949e63",
+        "sha256": "c3cf11950f4066a39007d1dc6bfd9f04fd576988c6960177c287f2734c39244f"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/baseline_evidence.json",
+      "old_approved": null,
+      "r4_blob_oid": "2c8f695734e40d703e561f4ad057ec03aafc0054",
+      "proposed": {
+        "git_blob_oid": "2c8f695734e40d703e561f4ad057ec03aafc0054",
+        "sha256": "525090c1586ef7f300200ba68b260a840644fc05be7c49e59fb43326e86ad8ab"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/business_parity.md",
+      "old_approved": null,
+      "r4_blob_oid": "6ec6d586428f6eb70b782d81a44cc0089b458223",
+      "proposed": {
+        "git_blob_oid": "6ec6d586428f6eb70b782d81a44cc0089b458223",
+        "sha256": "ac5a6fba675725bf6222ad3d8d141e4c54a85acf385c3bd266f752c7e9232be3"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/business_parity_results.json",
+      "old_approved": null,
+      "r4_blob_oid": "ef54e8593c4d6e9ad2af7c5358fbb1aeec539858",
+      "proposed": {
+        "git_blob_oid": "ef54e8593c4d6e9ad2af7c5358fbb1aeec539858",
+        "sha256": "ca6916c3613dc95973bd1cccd7b8670f93278708f8702ed203119af55e3acfdd"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/contract_migration_proposal.md",
+      "old_approved": null,
+      "r4_blob_oid": "cdbbd84f88d0a0788e8c80af49d7256b0529250f",
+      "proposed": {
+        "git_blob_oid": "cdbbd84f88d0a0788e8c80af49d7256b0529250f",
+        "sha256": "5369c33e625e30ad0d8e8ce940d0bde01b5d3240953e5fd0ceaee1435e9c8eb1"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/evidence_index.json",
+      "old_approved": null,
+      "r4_blob_oid": "fc747a7ae368c885a3be4b0d376ab1c9e6a1e335",
+      "proposed": {
+        "git_blob_oid": "fc747a7ae368c885a3be4b0d376ab1c9e6a1e335",
+        "sha256": "deba615daef965548f3f73dfdbc258fab2fd51da13e9a09a5c57b66ce57a8713"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/failure_matrix.csv",
+      "old_approved": null,
+      "r4_blob_oid": "9f6638f9128c5fdac9dd86d5c7db9327ea81c062",
+      "proposed": {
+        "git_blob_oid": "9f6638f9128c5fdac9dd86d5c7db9327ea81c062",
+        "sha256": "6b7329e150c9bd8cf6938fc94151bce748d0f9e654342c511194111a62e8eacd"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/merge_readiness.md",
+      "old_approved": null,
+      "r4_blob_oid": "b699f299a8b7f476dea16a282ff5505196fffeb6",
+      "proposed": {
+        "git_blob_oid": "b699f299a8b7f476dea16a282ff5505196fffeb6",
+        "sha256": "95286e3296ef0b8079df7f19dc7946fd76808ba9fda5b110ecf2ba150e41ca81"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/source_inventory_PROPOSED.json",
+      "old_approved": null,
+      "r4_blob_oid": "769c28253bbb20743ff1252ee7a2078650af0e05",
+      "proposed": {
+        "git_blob_oid": "769c28253bbb20743ff1252ee7a2078650af0e05",
+        "sha256": "4ae5ce6d5b2262375cbbf101c52c38015700ef812512dd8aed6250f357276235"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r4/worker_regression.md",
+      "old_approved": null,
+      "r4_blob_oid": "a8bc02a687b546c2e0d3dd860e9afc1446078ca2",
+      "proposed": {
+        "git_blob_oid": "a8bc02a687b546c2e0d3dd860e9afc1446078ca2",
+        "sha256": "fa3ae59682b6f2743f724177b4a61ace705a7fcdd95dc005bd55366fa5a39e3e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/baseline.md",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "cc75b2f7a55fe22e8ada2b10fb8a83ed39c32c10",
+        "sha256": "de8733bb5e0c110b1f7c10c5ecb3521aeb58dcc25e1b370c92743740328be202"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/contract_migration_review.md",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "4b6372ea2ce7714d5b123efb8c918ea4b747cada",
+        "sha256": "4f4ed35e19e40b28c850043b7df0443e74254fe618d3c8740bd3f406eb574cd0"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/evidence_index.json",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "12db29fe730adb624ca476880b53e10ef9475c18",
+        "sha256": "413b495f456a5df0ec244d7eb7da6bf234b8655feeb3b39f6d7c6db9d88599a7"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/failure_matrix.csv",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "c3aa4b268226f8164f5438d0d44c858a290429d6",
+        "sha256": "13d4dece1387b26dddc8fe39ebb9e862ec6be48d8f04b39a57f3b9a05fdaa3fc"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/merge_readiness.md",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "8f67de70a6f9b5dd859003677b9c4d420002814f",
+        "sha256": "c4b18b415bf3eb2d2093f77fe7588149e2d46399455d720de3165ef9355bad6d"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/source_inventory_PROPOSED.json",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": null,
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": true
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/validation.json",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "5e1c742dbc40bc3530f490ae72389d54a05da77b",
+        "sha256": "75729746c77dc407142a5f31d23a39763f109c3e7b6d8a2749c545bb09bfd0ae"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/acceptance/worker02_r5/validation.md",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "12d4345aa0cbfa406b59d9def6bb70290ff205d1",
+        "sha256": "905fb10eed25557ea1f85ba511b501e1859f7467201e57034548108a41b64e7b"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/runbooks/WORKER_02_readonly_recovery.md",
+      "old_approved": null,
+      "r4_blob_oid": "3d11a7f29f022637e26ddd29b0ff981ad74641a2",
+      "proposed": {
+        "git_blob_oid": "3d11a7f29f022637e26ddd29b0ff981ad74641a2",
+        "sha256": "863292a593c01614d11f1a4ac4e5f970c37cd1ca429fcb3f651bc79d433a61f3"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/股票机会发现系统_PRD_V1.0.md",
+      "old_approved": {
+        "git_blob_oid": "8eb7adf8137e77114916883d18e67bdb9cae755f",
+        "sha256": "48c27578130d8b747a36ecfeba3d879681fc70f37dc63054d3a5d986bedb856d"
+      },
+      "r4_blob_oid": "472df879d02fd89d486d453d114b6fc1191bca9d",
+      "proposed": {
+        "git_blob_oid": "4652630f68a2f7a7683cb651430bc94bfcd72bb7",
+        "sha256": "940e947b4358af6e3881e629a0f3fbda4f9cdca729d25ddf6a0b65d90fdbb34e"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "AUTHORITY_APPEND",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "docs/股票机会发现系统_系统设计_V1.0.md",
+      "old_approved": {
+        "git_blob_oid": "07a066d7181bdbe1611d7cf82c13403188c37241",
+        "sha256": "24979ab95929ab72128d43b7a7655b8d38a02d8a0d4cb1ea01ec03f7eb06aa3d"
+      },
+      "r4_blob_oid": "a15ebc0966b31fb1cdc9b5f62893615de1fbd908",
+      "proposed": {
+        "git_blob_oid": "7a84d771cff750761768d9114108e9a122ade526",
+        "sha256": "a89d48bd73663a127f4f8746a32cc23be9ee0167b8ecc36097605fa167483fc7"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "AUTHORITY_APPEND",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42364_installation_verify.py",
+      "old_approved": {
+        "git_blob_oid": "62df37a27b438a8856f54afbca30a827341f4e9d",
+        "sha256": "d4fabc49c0c4bffe3136ac1113f99ec6afe41bc44120304bd103a18a84af6654"
+      },
+      "r4_blob_oid": "62df37a27b438a8856f54afbca30a827341f4e9d",
+      "proposed": {
+        "git_blob_oid": "62df37a27b438a8856f54afbca30a827341f4e9d",
+        "sha256": "d4fabc49c0c4bffe3136ac1113f99ec6afe41bc44120304bd103a18a84af6654"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42364_manager.py",
+      "old_approved": {
+        "git_blob_oid": "76890a58ec052fb31d7fb676238f1c4638178595",
+        "sha256": "fefcf71ec90dc5da6888e2e0af4a57b93886b7bde34f9e1e2d3a88abe7de9fc7"
+      },
+      "r4_blob_oid": "76890a58ec052fb31d7fb676238f1c4638178595",
+      "proposed": {
+        "git_blob_oid": "76890a58ec052fb31d7fb676238f1c4638178595",
+        "sha256": "fefcf71ec90dc5da6888e2e0af4a57b93886b7bde34f9e1e2d3a88abe7de9fc7"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_budget.py",
+      "old_approved": {
+        "git_blob_oid": "b47f37023dc7888843cfcc4fa765aa201b42738c",
+        "sha256": "f13d3a27510eaea19d496bf8508e13f6dce6be3c899acb58335cc67b7987d33c"
+      },
+      "r4_blob_oid": "b47f37023dc7888843cfcc4fa765aa201b42738c",
+      "proposed": {
+        "git_blob_oid": "b47f37023dc7888843cfcc4fa765aa201b42738c",
+        "sha256": "f13d3a27510eaea19d496bf8508e13f6dce6be3c899acb58335cc67b7987d33c"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_ipc.py",
+      "old_approved": {
+        "git_blob_oid": "ed8e6fbb28e449e95e07fa29dc041057661d57f6",
+        "sha256": "1205f2828b996ba2fab31c9e62a358f4039164eace47c747c5a192df851209a0"
+      },
+      "r4_blob_oid": "ed8e6fbb28e449e95e07fa29dc041057661d57f6",
+      "proposed": {
+        "git_blob_oid": "ed8e6fbb28e449e95e07fa29dc041057661d57f6",
+        "sha256": "1205f2828b996ba2fab31c9e62a358f4039164eace47c747c5a192df851209a0"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_lifecycle.py",
+      "old_approved": {
+        "git_blob_oid": "36212d4dae87b18a62e9e1ba5c4c9062ee6e58e2",
+        "sha256": "0c13f06a69621b06d5273ea1c30bb59139cacb15bc9a4ce0c6535b3a8773dd0d"
+      },
+      "r4_blob_oid": "36212d4dae87b18a62e9e1ba5c4c9062ee6e58e2",
+      "proposed": {
+        "git_blob_oid": "36212d4dae87b18a62e9e1ba5c4c9062ee6e58e2",
+        "sha256": "0c13f06a69621b06d5273ea1c30bb59139cacb15bc9a4ce0c6535b3a8773dd0d"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_owner.py",
+      "old_approved": {
+        "git_blob_oid": "10c21854aeb831043147a8fb8b342744775eaffc",
+        "sha256": "ed812a6d9d99a19b1db73c62c1c27ecb9537aa8956547dc38ed3d6c03644eaba"
+      },
+      "r4_blob_oid": "10c21854aeb831043147a8fb8b342744775eaffc",
+      "proposed": {
+        "git_blob_oid": "10c21854aeb831043147a8fb8b342744775eaffc",
+        "sha256": "ed812a6d9d99a19b1db73c62c1c27ecb9537aa8956547dc38ed3d6c03644eaba"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_runtime.py",
+      "old_approved": {
+        "git_blob_oid": "e47c7aa42327b2b30eeafb8d13fe6b69a704c1c6",
+        "sha256": "f010db235d26cdca13913cae0fd5b9526310fff60b30ab792cf263c514a01b64"
+      },
+      "r4_blob_oid": "e47c7aa42327b2b30eeafb8d13fe6b69a704c1c6",
+      "proposed": {
+        "git_blob_oid": "e47c7aa42327b2b30eeafb8d13fe6b69a704c1c6",
+        "sha256": "f010db235d26cdca13913cae0fd5b9526310fff60b30ab792cf263c514a01b64"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_runtime_factory.py",
+      "old_approved": {
+        "git_blob_oid": "9cca43317092f0bccdc380c6033d8a88fea4d6f0",
+        "sha256": "9702b75c2cc5e0a1a2fc7754a021ea632ceae6d8d36747384d0fb277cb2d6270"
+      },
+      "r4_blob_oid": "9cca43317092f0bccdc380c6033d8a88fea4d6f0",
+      "proposed": {
+        "git_blob_oid": "9cca43317092f0bccdc380c6033d8a88fea4d6f0",
+        "sha256": "9702b75c2cc5e0a1a2fc7754a021ea632ceae6d8d36747384d0fb277cb2d6270"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42365_supervisor.py",
+      "old_approved": {
+        "git_blob_oid": "d4e7ded321f7555150582f0cd7f8092789d428ad",
+        "sha256": "adb7adddfdd9504acb7df1a8d09e3abe28471a5838cd55bc8ca99b27c9fc46ed"
+      },
+      "r4_blob_oid": "d4e7ded321f7555150582f0cd7f8092789d428ad",
+      "proposed": {
+        "git_blob_oid": "d4e7ded321f7555150582f0cd7f8092789d428ad",
+        "sha256": "adb7adddfdd9504acb7df1a8d09e3abe28471a5838cd55bc8ca99b27c9fc46ed"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_installation.py",
+      "old_approved": {
+        "git_blob_oid": "f63532b59ee1c120ca7f96e40ca2f70637d65c1d",
+        "sha256": "d2de75896bfc526c78e8d4828e169949bbbb9d8d5b51064a9d36040f5cd4ffba"
+      },
+      "r4_blob_oid": "f63532b59ee1c120ca7f96e40ca2f70637d65c1d",
+      "proposed": {
+        "git_blob_oid": "f63532b59ee1c120ca7f96e40ca2f70637d65c1d",
+        "sha256": "d2de75896bfc526c78e8d4828e169949bbbb9d8d5b51064a9d36040f5cd4ffba"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_mediation.py",
+      "old_approved": {
+        "git_blob_oid": "9c3260fbda2dbd03c18584d72b1a2494dd6ed780",
+        "sha256": "1c2414f0fe1d94c90bbe5dcca55bca9b9e363004051950ead4782c04f5e035a1"
+      },
+      "r4_blob_oid": "9c3260fbda2dbd03c18584d72b1a2494dd6ed780",
+      "proposed": {
+        "git_blob_oid": "9c3260fbda2dbd03c18584d72b1a2494dd6ed780",
+        "sha256": "1c2414f0fe1d94c90bbe5dcca55bca9b9e363004051950ead4782c04f5e035a1"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_owner.py",
+      "old_approved": {
+        "git_blob_oid": "13026e3400c94f234b23c0704bd6cbaa74c54555",
+        "sha256": "ffbef580398fbbf9e864fe4ba7a21a0747962555aadb8b3230bbc12a2debf15c"
+      },
+      "r4_blob_oid": "13026e3400c94f234b23c0704bd6cbaa74c54555",
+      "proposed": {
+        "git_blob_oid": "13026e3400c94f234b23c0704bd6cbaa74c54555",
+        "sha256": "ffbef580398fbbf9e864fe4ba7a21a0747962555aadb8b3230bbc12a2debf15c"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_publication.py",
+      "old_approved": {
+        "git_blob_oid": "479f186f76663afb9148063b046eb60b85a6c05f",
+        "sha256": "b7b4a1cadca811373013e5c191196f25ae8b69577471c0c4eb33e22049567377"
+      },
+      "r4_blob_oid": "479f186f76663afb9148063b046eb60b85a6c05f",
+      "proposed": {
+        "git_blob_oid": "479f186f76663afb9148063b046eb60b85a6c05f",
+        "sha256": "b7b4a1cadca811373013e5c191196f25ae8b69577471c0c4eb33e22049567377"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_reviewer.py",
+      "old_approved": {
+        "git_blob_oid": "67a6289e475ecc04f9de589ab08e209f326041e6",
+        "sha256": "6849b059657ab25f5254fa4f0a8d306a627a8319a879b41d4b27bb87c7a3111a"
+      },
+      "r4_blob_oid": "67a6289e475ecc04f9de589ab08e209f326041e6",
+      "proposed": {
+        "git_blob_oid": "67a6289e475ecc04f9de589ab08e209f326041e6",
+        "sha256": "6849b059657ab25f5254fa4f0a8d306a627a8319a879b41d4b27bb87c7a3111a"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_services.py",
+      "old_approved": {
+        "git_blob_oid": "9768a18a82f7fb11297e0b599fd758481a91de35",
+        "sha256": "14da91cc881faa85fcb1ec705c0a0dfb26f87b26d46ca03d0ee40ab80469dc50"
+      },
+      "r4_blob_oid": "9768a18a82f7fb11297e0b599fd758481a91de35",
+      "proposed": {
+        "git_blob_oid": "9768a18a82f7fb11297e0b599fd758481a91de35",
+        "sha256": "14da91cc881faa85fcb1ec705c0a0dfb26f87b26d46ca03d0ee40ab80469dc50"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/a42366_source_guard.py",
+      "old_approved": {
+        "git_blob_oid": "0d6118b90ea2f08298cfa09f08365f587cd07985",
+        "sha256": "eeed69e0aca68568b5655bf0767e163a146e68453e211c7dedd4d3a6d057aeaa"
+      },
+      "r4_blob_oid": "0d6118b90ea2f08298cfa09f08365f587cd07985",
+      "proposed": {
+        "git_blob_oid": "0d6118b90ea2f08298cfa09f08365f587cd07985",
+        "sha256": "eeed69e0aca68568b5655bf0767e163a146e68453e211c7dedd4d3a6d057aeaa"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/business_source_contract.py",
+      "old_approved": {
+        "git_blob_oid": "33b1aa5003ab8276e0a63a718a7436ed284910b0",
+        "sha256": "fb563924e91e03e0001107e002e524979a718597375d8ced615915966af15e80"
+      },
+      "r4_blob_oid": "33b1aa5003ab8276e0a63a718a7436ed284910b0",
+      "proposed": {
+        "git_blob_oid": "33b1aa5003ab8276e0a63a718a7436ed284910b0",
+        "sha256": "fb563924e91e03e0001107e002e524979a718597375d8ced615915966af15e80"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py",
+        "tests/unit/test_a42364_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/business_worker_resource_preflight.py",
+      "old_approved": null,
+      "r4_blob_oid": "61d0db0d7e966de2a4b921a388ad730e12946f72",
+      "proposed": {
+        "git_blob_oid": "61d0db0d7e966de2a4b921a388ad730e12946f72",
+        "sha256": "3ebb29e6bab90648702941f301ee3323ea0f570c336a158369063ef3549a520a"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "REVIEW_ONLY",
+      "associated_tests": [
+        "git diff --check"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/worker02_r5_diagnostics.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "a71fec4e884ddd9a13ece9d98203428728a6adbc",
+        "sha256": "54c7eb93f79364b24c25f15d5e7693e9863bd597722d1bfb6965ace234d35075"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_DIAGNOSTIC",
+      "associated_tests": [
+        "tests/unit/test_worker02_r5_diagnostics.py",
+        "tests/unit/test_worker02_r5_preflight.py",
+        "tests/integration/test_worker02_r5_diagnostic_pg17.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "scripts/worker02_r5_preflight.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "f85239806b686b7f4ee07093d4e6451dc7be02a9",
+        "sha256": "34e18742fda3690083f5900151de733849da18f5cb5990e83942468db410527b"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_DIAGNOSTIC",
+      "associated_tests": [
+        "tests/unit/test_worker02_r5_diagnostics.py",
+        "tests/unit/test_worker02_r5_preflight.py",
+        "tests/integration/test_worker02_r5_diagnostic_pg17.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_business_policy_worker_pg17.py",
+      "old_approved": null,
+      "r4_blob_oid": "abc30c354519416f0ec517a9c39f2f4f27489f5f",
+      "proposed": {
+        "git_blob_oid": "abc30c354519416f0ec517a9c39f2f4f27489f5f",
+        "sha256": "d58a8d99cb6877facb26c11b13392d984715429dc87376b1b76f29d693565492"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_business_policy_worker_pg17.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_business_worker_02_diagnostics.py",
+      "old_approved": null,
+      "r4_blob_oid": "eb0598c0f1e46ae9a173df439b053cfa4ee9251a",
+      "proposed": {
+        "git_blob_oid": "eb0598c0f1e46ae9a173df439b053cfa4ee9251a",
+        "sha256": "bf24e1eb6cff64e27c737ebb8e271861e0c9f85ba76f8783dea0e2cfd2890554"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_business_worker_02_diagnostics.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_business_worker_02_pg17.py",
+      "old_approved": null,
+      "r4_blob_oid": "b4026cc5c08494c5336306ab1a853380f766f14a",
+      "proposed": {
+        "git_blob_oid": "b4026cc5c08494c5336306ab1a853380f766f14a",
+        "sha256": "56d72e8cdd6ded298ea5710cfa2fc5d542515dfc707d2181a9714a7533c9d533"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_business_worker_02_pg17.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_r2.py",
+      "old_approved": null,
+      "r4_blob_oid": "28b7752bab04d73ad3f979b8f0648519e44f3138",
+      "proposed": {
+        "git_blob_oid": "28b7752bab04d73ad3f979b8f0648519e44f3138",
+        "sha256": "826e679405d12fe1b5bd5c19bee050642b7cf2bf85f16fac324b10c431aeda99"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_worker02_r2.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_r2_lifecycle.py",
+      "old_approved": null,
+      "r4_blob_oid": "59a9096003049be37035fb78bda19e83ef7cf4b9",
+      "proposed": {
+        "git_blob_oid": "59a9096003049be37035fb78bda19e83ef7cf4b9",
+        "sha256": "85237afac15214d76be0adeb1e45336728e2b107c78e697db9708916ca4e59ac"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_worker02_r2_lifecycle.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_r4_recovery_receipt.py",
+      "old_approved": null,
+      "r4_blob_oid": "55ddfdfcab0b13ecc87b70c89f68c6b08f5655cc",
+      "proposed": {
+        "git_blob_oid": "55ddfdfcab0b13ecc87b70c89f68c6b08f5655cc",
+        "sha256": "4b803c5005822e8329dd869d43e4f6dd2d54aed32e89595f31e6070dd2e28493"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_worker02_r4_recovery_receipt.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_r5_diagnostic_pg17.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "5bf10bc750201a36ca194a892f641a0330ed1379",
+        "sha256": "13ddff55b736640038c8f5bf7163c5caaa8b6f0b31eba68d96836732673a7a9c"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_DIAGNOSTIC",
+      "associated_tests": [
+        "tests/integration/test_worker02_r5_diagnostic_pg17.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_r5_ledger_parity.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "ae2dc27cc9657d624b6d54ed1e83acae12fc0832",
+        "sha256": "16411610e0e51d92e4b712d93b121090afee4eabc66abf5a788e8b38f93e1dc4"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_LEDGER_TEST",
+      "associated_tests": [
+        "tests/integration/test_worker02_r5_ledger_parity.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/integration/test_worker02_revision.py",
+      "old_approved": null,
+      "r4_blob_oid": "fec3d9f859703ad4f69b162f5bacffb7e548755f",
+      "proposed": {
+        "git_blob_oid": "fec3d9f859703ad4f69b162f5bacffb7e548755f",
+        "sha256": "86a1bebcbd57a45867d616e37ed6ac00ff43cfc27d3c9b696109c9d8297f754b"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/integration/test_worker02_revision.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_a42366_publication.py",
+      "old_approved": {
+        "git_blob_oid": "579c5b7f65c386d61822bb0392851182df8312f4",
+        "sha256": "f5276af09dfe164aab58c6106f3d14279ed14786aadef4d05ddca779271799b0"
+      },
+      "r4_blob_oid": "579c5b7f65c386d61822bb0392851182df8312f4",
+      "proposed": {
+        "git_blob_oid": "579c5b7f65c386d61822bb0392851182df8312f4",
+        "sha256": "f5276af09dfe164aab58c6106f3d14279ed14786aadef4d05ddca779271799b0"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_publication.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_a42366_reliability.py",
+      "old_approved": {
+        "git_blob_oid": "956c41b7712ec934aaaab098efe4307c1581ff3e",
+        "sha256": "48ca7c5a09d9b6100655f14af7001cf99a74b9a6a6f2487848808d6d060d4297"
+      },
+      "r4_blob_oid": "956c41b7712ec934aaaab098efe4307c1581ff3e",
+      "proposed": {
+        "git_blob_oid": "956c41b7712ec934aaaab098efe4307c1581ff3e",
+        "sha256": "48ca7c5a09d9b6100655f14af7001cf99a74b9a6a6f2487848808d6d060d4297"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_reliability.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_a42366_services.py",
+      "old_approved": {
+        "git_blob_oid": "f833fbb618dfeed9dd362228c7b80a2c0cf7123e",
+        "sha256": "13655e6ff75062e29dda232e3e9b11be5543c225b7658d648d1fc789a668c2cd"
+      },
+      "r4_blob_oid": "f833fbb618dfeed9dd362228c7b80a2c0cf7123e",
+      "proposed": {
+        "git_blob_oid": "f833fbb618dfeed9dd362228c7b80a2c0cf7123e",
+        "sha256": "13655e6ff75062e29dda232e3e9b11be5543c225b7658d648d1fc789a668c2cd"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_services.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_a42366_source_guard.py",
+      "old_approved": {
+        "git_blob_oid": "3a9cd0e79c97ef2ce3cf46746be266804f7da472",
+        "sha256": "4ba4fd46a5b090d60ba3bf99384c9351c0cbdafbc32a06b439617d63730549d3"
+      },
+      "r4_blob_oid": "3a9cd0e79c97ef2ce3cf46746be266804f7da472",
+      "proposed": {
+        "git_blob_oid": "3a9cd0e79c97ef2ce3cf46746be266804f7da472",
+        "sha256": "4ba4fd46a5b090d60ba3bf99384c9351c0cbdafbc32a06b439617d63730549d3"
+      },
+      "in_old_stage_paths": true,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "LEGACY_STAGE",
+      "associated_tests": [
+        "tests/unit/test_a42366_source_guard.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_business_policy_identity.py",
+      "old_approved": null,
+      "r4_blob_oid": "d25a4d281a9f6fb674449774916cde912f54beb5",
+      "proposed": {
+        "git_blob_oid": "d25a4d281a9f6fb674449774916cde912f54beb5",
+        "sha256": "a41c1fed8c31a3ab4da23757e6aa1fbd641dc49e49a99e462fa154a80591f85e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/unit/test_business_policy_identity.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_business_worker_02.py",
+      "old_approved": null,
+      "r4_blob_oid": "27bb9f2e060d8a8cfc27e5a27c50b6e393b4a909",
+      "proposed": {
+        "git_blob_oid": "27bb9f2e060d8a8cfc27e5a27c50b6e393b4a909",
+        "sha256": "2521e1083c0ec77d8695a81d3bdbbf8c9612ae798ba40a5117740c4b4f7843c7"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/unit/test_business_worker_02.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_worker02_r2_contract.py",
+      "old_approved": null,
+      "r4_blob_oid": "ba7e610a1c0f7d183886c43f219a1511598c60cf",
+      "proposed": {
+        "git_blob_oid": "ba7e610a1c0f7d183886c43f219a1511598c60cf",
+        "sha256": "e8cf47e2c188703d0879d80c86a11c368ff2ab69b1bb25e6b0e5426cd9809801"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/unit/test_worker02_r2_contract.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_worker02_r4_receipt_contract.py",
+      "old_approved": null,
+      "r4_blob_oid": "b0c3ff18933b3884cb0f04e8cdbdbc0e0b95cefb",
+      "proposed": {
+        "git_blob_oid": "b0c3ff18933b3884cb0f04e8cdbdbc0e0b95cefb",
+        "sha256": "4653ca8c989ad08879a4747bdcd63a2e7f6af001e5dd7594ca2641ce0fb7a45e"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/unit/test_worker02_r4_receipt_contract.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_worker02_r5_diagnostics.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "17df5cadd88a941dc4e5dd99f5045c68b435eff5",
+        "sha256": "77acd779643fc875442f9ccd405bcef0908270b438a6d2eb1efbd27c50e3f9f4"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_DIAGNOSTIC",
+      "associated_tests": [
+        "tests/unit/test_worker02_r5_diagnostics.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_worker02_r5_preflight.py",
+      "old_approved": null,
+      "r4_blob_oid": null,
+      "proposed": {
+        "git_blob_oid": "290917f4fb7d33179992291dbe6b5d342c2a15e2",
+        "sha256": "94fc8b1b6cbcd134424c7529312d2e6e2244d552bfb89218f671a49f77639636"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": true,
+      "production_behavior_scope": false,
+      "review_category": "R5_DIAGNOSTIC",
+      "associated_tests": [
+        "tests/unit/test_worker02_r5_preflight.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    },
+    {
+      "path": "tests/unit/test_worker02_revision_contract.py",
+      "old_approved": null,
+      "r4_blob_oid": "8b5c5be068baba1e7ab125d85ace29a8c533cb0c",
+      "proposed": {
+        "git_blob_oid": "8b5c5be068baba1e7ab125d85ace29a8c533cb0c",
+        "sha256": "46831b159546db4a2455d9c582df70a57ccdfbe0775ead02faf8962df532e01d"
+      },
+      "in_old_stage_paths": false,
+      "changed_in_r5": false,
+      "production_behavior_scope": false,
+      "review_category": "TEST_ONLY",
+      "associated_tests": [
+        "tests/unit/test_worker02_revision_contract.py"
+      ],
+      "reviewer_decision": null,
+      "external_final_commit_pin_required": false
+    }
+  ]
+}

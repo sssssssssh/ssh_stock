@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, or_, select, text
@@ -101,14 +102,43 @@ def diagnose_data_job(db, job_id: UUID):
     # No query text, query parameters, addresses, DSN or authentication tokens.
     backends = (
         db.execute(
-            text("""SELECT pid, state, xact_start, wait_event_type, wait_event
+            text("""SELECT pid, backend_start, datid AS database_oid,
+        pg_postmaster_start_time() AS postmaster_start, application_name,
+        state, xact_start, wait_event_type, wait_event, pg_blocking_pids(pid) AS blocking_pids
         FROM pg_stat_activity WHERE datname=current_database() AND pid <> pg_backend_pid()
-        AND application_name=:application ORDER BY pid LIMIT 101"""),
-            {"application": f"space-data/{root_id}"},
+        AND (application_name=:application OR application_name ~ :pattern)
+        ORDER BY pid LIMIT 101"""),
+            {"application": f"space-data/{root_id}",
+             "pattern": f"^space2/[mhd]/{UUID(str(root_id)).hex}/[0-9a-f]{{16}}$"},
         )
         .mappings()
         .all()
     )
+    from app.services.worker_observation import fingerprint
+
+    registration = dict(root.job_metadata or {}).get("database_sessions") or {}
+    valid_registration = (isinstance(registration, dict)
+        and registration.get("schema") == "worker.sessions.v1"
+        and registration.get("root_job_id") == str(root_id)
+        and registration.get("execution_fingerprint") == fingerprint(root.execution_token)
+        and registration.get("owner_fingerprint") == fingerprint(root.worker_id))
+    facts = []
+    if valid_registration and isinstance(registration.get("roles"), dict):
+        for role in ("main", "heartbeat", "diagnostic"):
+            pair = registration["roles"].get(role, {})
+            if isinstance(pair, dict):
+                facts.extend(x for key in ("first", "latest")
+                             if isinstance(x := pair.get(key), dict))
+
+    def same_backend(row, fact):
+        return all((row[key].isoformat() if isinstance(row[key], datetime) else row[key])
+                   == fact.get(key) for key in (
+                       "pid", "backend_start", "database_oid", "postmaster_start",
+                       "application_name"))
+
+    matched = [dict(row, identity_evidence="REGISTERED_BACKEND_FACT_MATCH" if any(
+        same_backend(row, fact) for fact in facts) else "NAME_ONLY_UNVERIFIED")
+        for row in backends[:100]]
     return dict(
         job=payload(job),
         root=payload(root),
@@ -126,7 +156,11 @@ def diagnose_data_job(db, job_id: UUID):
             else {"state": "LEGACY_NO_PUBLICATION_RECORD"}
         ),
         candidates=[dict(row) for row in candidates],
-        matching_database_backends=[dict(r) for r in backends],
+        matching_database_backends=matched,
+        matching_database_backends_truncated=len(backends) > 100,
+        session_registration_status="RECORDED_NOT_EXIT_PROOF" if valid_registration
+            else "NOT_REGISTERED",
+        backend_absence_meaning="NO_MATCH_IS_NOT_PROCESS_EXIT_PROOF",
         queued_count=db.scalar(
             select(func.count())
             .select_from(JobRun)

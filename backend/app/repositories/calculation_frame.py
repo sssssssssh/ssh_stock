@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import database_error_summary
 from app.services.calculation_progress import ProgressStep
+from app.services.execution_diagnostics import operation, record_duration
 from app.services.job_execution import JobCancelled, checkpoint
 
 FETCH_ROWS = 5000
@@ -30,16 +31,20 @@ def read_calculation_frame(
     progress.report("query", log=True)
     logger.info("calculation read started query={}", name)
     fetch_observer = None
+    timing_phase = "query"
     try:
         from app.services.calculation_policy import DriverFetchObserver, active_policy
 
         policy = active_policy.get()
         if policy is not None:
             fetch_observer = DriverFetchObserver(db, name, policy)
-        result = db.execute(statement.execution_options(
-            yield_per=FETCH_ROWS, calculation_query_name=name))
+        with operation(name, "query"):
+            result = db.execute(statement.execution_options(
+                yield_per=FETCH_ROWS, calculation_query_name=name))
         fetched_at = monotonic()
+        timing_phase = "fetch"
         for index, batch in enumerate(result.mappings().partitions(FETCH_ROWS), start=1):
+            record_duration(name, "fetch", monotonic()-fetched_at, rows=len(batch))
             if policy is not None:
                 policy.observe_fetch(name, len(batch), monotonic()-fetched_at)
             checkpoint()
@@ -60,12 +65,16 @@ def read_calculation_frame(
         # Construct once, not one frame per FETCH, to retain whole-result dtype
         # inference (including all-NULL batches), ordering and empty-frame behavior.
         progress.report("frame", completed_rows=row_count, log=True)
-        frame = rows if records_only else pd.DataFrame(rows)
+        timing_phase = "frame"
+        with operation(name, "frame"):
+            frame = rows if records_only else pd.DataFrame(rows)
         progress.report("complete", completed_rows=row_count, advanced=True, log=True)
         logger.info("calculation read complete query={} rows={} elapsed_seconds={:.1f}",
                     name, row_count, monotonic() - started)
         return frame
     except SQLAlchemyError as exc:
+        if timing_phase == "fetch":
+            record_duration(name, "fetch", monotonic()-fetched_at, error=exc)
         progress.report("failed", completed_rows=row_count, log=True)
         exc.calculation_query_name = name
         logger.error("calculation read failed query={} rows={} elapsed_seconds={:.1f} error={}",

@@ -160,7 +160,8 @@ def versioned_frozen_files(root, frozen):
     """Keep old manifests intact; compare their blobs at the immutable old source.
 
     The caller still validates current files with its original independent reader.
-    Current changed bytes must additionally match the exact BIZ manifest.
+    Current static definitions bind their scoped files to their own committed
+    version, not to a historical performance or business-overlay approval.
     """
     root = Path(root)
     if not (root / MANIFEST).exists():
@@ -186,8 +187,18 @@ def versioned_frozen_files(root, frozen):
         g.require(g.path_sha(root / closure_manifest) == A42366_MANIFEST_SHA,
                   "A4235_LIVE_OVERLAY_INVALID")
         patches.update(json.loads((root / closure_manifest).read_bytes())["patch_sha256"])
-    baseline_hashes = immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
-    return {path: patches.get(path, sha) for path, sha in baseline_hashes.items()}
+    immutable_frozen_hashes(root, tuple(sorted(frozen.items())))
+    head = git(root, "rev-parse", "HEAD").decode().strip()
+    result = dict(committed_hashes(root, head, tuple(sorted(frozen))))
+    g.require(head == git(root, "rev-parse", "HEAD").decode().strip(), "A4235_HEAD_MISMATCH")
+    return result
+
+
+@lru_cache(maxsize=32)
+def committed_hashes(root, head, paths):
+    """Immutable Git objects only; callers still read and validate live files."""
+    objects = git_blobs(root, [head + ":" + p for p in paths])
+    return tuple((p, hashlib.sha256(objects[head + ":" + p]).hexdigest()) for p in paths)
 
 
 @lru_cache(maxsize=8)
@@ -255,6 +266,7 @@ def source_versions(paths, *, historical_revision=HISTORICAL_SOURCE, root=ROOT):
     current = {p: record((root / p).read_bytes()) for p in paths}
     return dict(
         schema_version=VERSION,
+        source_contract_version="development.source.v1",
         historical_source=dict(
             commit_sha=historical_revision,
             files=old,
@@ -306,7 +318,25 @@ def verify_test_adaptation(before, after, names):
         raise ValueError("BUSINESS_UNREVIEWED_TEST_CHANGE")
 
 
-def verify(root=ROOT):
+def verify(root=ROOT, *, version="development.source.v1", expected_sha=None):
+    """Route by explicit contract version, never by a manifest's presence."""
+    from scripts.source_contract_governance import (
+        DEVELOPMENT,
+        HISTORICAL,
+        development_receipt,
+        fingerprint,
+        require_historical_source,
+    )
+
+    if version == DEVELOPMENT:
+        return fingerprint(development_receipt(root, expected_sha=expected_sha))
+    if version == HISTORICAL:
+        require_historical_source(root, expected_sha)
+        return verify_legacy(root)
+    raise ValueError("SOURCE_CONTRACT_UNKNOWN_VERSION")
+
+
+def verify_legacy(root=ROOT):
     from scripts import a4235_capability_guard as g
     from scripts import a42361_source_guard as fd_guard
     from scripts import a42364_source_guard as legacy

@@ -1,5 +1,15 @@
 # A股机会发现与趋势研究系统 PRD
 
+## 日常开发与历史验收分离（2026-10-30）
+
+本轮负责人授权仅调整源码合同治理，不新增股票功能或改变金融口径。日常 CI 可验证当前
+合法开发源码，不再因不同于历史 A4/G1 文件集合而拒绝。历史原件和正反安全用例保留，
+历史性能仅对应其原提交，不能替代当前源码的性能/容量验证。
+当前静态验证、历史正反例通过、业务正确性、平台能力、真实容量及生产恢复授权必须分别报告。
+历史合同不得授权当前源码执行高风险操作；普通 CI 通过不提供生产读取、恢复、发布或合并许可。
+PR 等待重新审阅，合并由项目负责人决定。下方各旧阶段的禁止适配描述保留其历史语境，
+本轮治理范围以本节新授权为准；其金融和高风险安全边界仍有效。
+
 ## BIZ-PERF-01 补算性能验收范围
 
 只优化现有数据补算，不增加产品入口、不改变选股公式、资格、日期覆盖或历史血缘。
@@ -1867,3 +1877,52 @@ A42365 不增加用户业务功能，不改变选股、回测、研究、PAPER �
 不新增界面或数据入口、不自动重试、不重拉行情，不将此正确性修复描述为补算提速。
 现场重新验证需用户确认安全停止及部署后创建新 Job；G1 状态独立、仍源码部分阻断。
 详见 [BIZ-POLICY-01 验收](acceptance/BIZ_POLICY_01_closeout.md)。
+
+
+## BIZ-WORKER-02：心跳与安全人工对账（2026-10-28）
+
+保留 BIZ-POLICY 的业务内容身份，Git-only 不作为计算漂移。心跳续租与进度 JSONB 使用
+独立短事务，owner/token CAS、1s 锁/3s SQL 时限、单调进度和取消保持生效；失败不解锁未知 Writer。
+新增只读 reconcile --dry-run；维护原语须独立核验所有执行者退出和提交确定，默认没有生产 authority。
+历史冻结迁移待独立签署，旧 manifest/测试/工作流不改；CONTRACT_MIGRATION_BLOCKED。
+百万级三轮容量因资源预检不足尚未执行，PERFORMANCE_OPEN / FIELD_NOT_RETESTED；
+不得部署长补算或把隔离心跳回归表示为现场 57014 根因已关闭。
+详见 [BIZ-WORKER-02 整改记录](acceptance/BIZ_WORKER_02_review.md)。
+
+
+## WORKER-02 revision：运行观测闭环（2026-10-28）
+
+独立 WORKER_DIAGNOSTICS_ENABLED 默认 false；普通 Worker 安装根任务诊断上下文，心跳期间及
+成功/失败/取消后以独立短事务 owner/token CAS 合并快照，不能提交或回滚主计算的 pinned Connection。
+有限标签/数值、128组/32事件；缺失为 NOT_INSTRUMENTED，FETCH 为混合耗时，嵌套阶段不可相加。
+PG 会话登记真实 PID/backend_start/实例事实与固定角色/根UUID/token摘要；名字或空列表均非退出证明。
+HEARTBEAT_DEGRADED 仅为通信诊断，不能替代执行状态、证明计算成功或自动释放 Writer。
+新恢复审批时间/子身份拒绝保护不等于生产 authority 已安装；仍无普通维护 apply/force/unlock 入口。
+历史合同审批缺失仍 BLOCKED、PR 保持 Draft；百万行三轮 RESOURCE_DEFERRED，现场 FIELD_NOT_RETESTED。
+无新 schema/金融算法/生产 A/B SQL/优化开关变化；不部署、不操作云端或物理 G1。
+产品边界、实证和剩余缺口见 [revision交付](acceptance/WORKER_02_revision_closeout.md)。
+
+
+## WORKER-02-R2：迟到观察与恢复竞态（2026-10-29）
+
+lease时间不回退，健康快照按规范UTC观测顺序CAS写入；迟到线程不能覆盖终态或最终
+UNCONFIRMED，终态诊断须匹配实际任务状态。recent快照复制，缺失指标仍NOT_INSTRUMENTED。
+三个真实队列根任务OFF/ON合成小输入验证财务发布等价并记录成本，默认开关不变。
+内部恢复锁定root/账本并提交前再次核验authority；未知ACK仅新连接只读核对，不重放。
+生产authority未安装、合同未独立签署、Linux全量及百万行矩阵仍阻断，现场未授权未复测。
+不合并/部署，不改金融公式、生产A/B SQL、schema或历史合同。详见[R2交付](acceptance/worker02_r2/closeout.md)。
+
+## WORKER-02-R4：恢复确认不得误报
+
+本轮不增加用户功能或强制解锁入口。内部重复恢复在执行身份、审计收据、发布状态或子任务不一致时，
+不得返回“已完成核对”；丢失提交确认时沿用新只读会话复核，不重放写操作。
+正常已完成恢复只保留一次审计，诊断开关、业务数据与金融结果不变。
+历史合同独立签署、生产 authority、完整回归及百万行容量均为独立门槛，未满足不得宣告可合并或部署。
+本轮现场 FIELD_NOT_RETESTED，合并建议及验收见 [R4 结论](acceptance/worker02_r4/merge_readiness.md)。
+
+## WORKER-02-R5：合并阻断证据收敛
+
+本轮不新增用户功能，不改变补算、发布、人工恢复流程或生产权限。
+两项全量失败只有获得因果证据及回归后才能关闭，单独或模块通过不能替代全量上下文验证。
+保留原合同、完整回归、覆盖率、容量和现场门槛；缺审批或支持环境时明确 BLOCKED，不宣称可合并。
+逐项结果及独立责任人见 [R5 验收](acceptance/worker02_r5/merge_readiness.md)。

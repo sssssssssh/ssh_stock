@@ -1,0 +1,91 @@
+{
+  "review_head": "b207431eb39502f3e31fb328aa03dc045895439c",
+  "parent": "84795e725bf03303dbd6333be642c203d15221f1",
+  "comparison": "4d183857cdf42e4f9e75bd2a78c792f0ef3847e3",
+  "master": "75076eac443d935d622bf59e12aad20ce5aba85e",
+  "branch": "codex/biz-worker-02",
+  "pr": 1,
+  "draft": true,
+  "local_platform": "macOS native PostgreSQL17",
+  "current_review_full": {
+    "counts": {
+      "passed": 4981,
+      "failed": 53,
+      "errors": 137,
+      "skipped": 0
+    },
+    "coverage": "0.8823",
+    "seconds": 1328.48,
+    "unassisted_completion": false,
+    "intervention": "One verified owned offline model test child SIGTERM; original assertion failed"
+  },
+  "older_full": {
+    "passed": 4953,
+    "failed": 53,
+    "errors": 137,
+    "skipped": 0
+  },
+  "precommit_targeted": {
+    "passed": 146,
+    "additional_narrow_passed": 6,
+    "not_final_sha_full": true
+  },
+  "evidence_sha256": {
+    "full.xml": "b1d5327119b6986a56b615c6d5e500999805ba3a2b49cbf32fcfe425c166704d",
+    "full.log": "2c75e59560369e9ca648812deee087c81c359db3cde8cec18f90fc8300f0d2ee",
+    "full-audit.json": "7a65ed43a5ec690448f908d5cb608bd18f3f43bdabcf82180584716afda46771",
+    "ci-artifact-audit.json": "3303d82b2331a0037cff476e5a7e03e66d18bd3538503c41d1fb9e2f7ada91fc",
+    "review-evidence.zip": "b3d8be95797180b28b215b3b9a841453d591727be1fb560e36a40778c4e481e2"
+  },
+  "ci": [
+    {
+      "run": 40716507370,
+      "name": "A4-1 read baseline diagnosis",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40716507370",
+      "event": "pull_request",
+      "result": "failure",
+      "head": "b207431eb39502f3e31fb328aa03dc045895439c",
+      "checkout": "c67247ed9a1c744038ead36a0daf4d0b946c4838"
+    },
+    {
+      "run": 40716507451,
+      "name": "A4-2 isolated read experiments",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40716507451",
+      "event": "pull_request",
+      "result": "failure",
+      "head": "b207431eb39502f3e31fb328aa03dc045895439c",
+      "checkout": "c67247ed9a1c744038ead36a0daf4d0b946c4838"
+    },
+    {
+      "run": 40716507477,
+      "name": "Publication V1.3",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40716507477",
+      "event": "pull_request",
+      "result": "success",
+      "head": "b207431eb39502f3e31fb328aa03dc045895439c",
+      "checkout": "c67247ed9a1c744038ead36a0daf4d0b946c4838"
+    },
+    {
+      "run": 40716507372,
+      "name": "CI",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40716507372",
+      "event": "pull_request",
+      "result": "failure",
+      "head": "b207431eb39502f3e31fb328aa03dc045895439c",
+      "checkout": "c67247ed9a1c744038ead36a0daf4d0b946c4838"
+    },
+    {
+      "run": 40716497041,
+      "name": "CI",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/40716497041",
+      "event": "push",
+      "result": "failure",
+      "head": "b207431eb39502f3e31fb328aa03dc045895439c",
+      "checkout": "b207431eb39502f3e31fb328aa03dc045895439c"
+    }
+  ],
+  "contract_approval": null,
+  "recovery_authority": "NOT_INSTALLED",
+  "field": "NOT_AUTHORIZED_THIS_REQUEST",
+  "performance": "OPEN"
+}
