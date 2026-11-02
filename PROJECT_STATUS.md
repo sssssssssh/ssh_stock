@@ -1,16 +1,16 @@
 # ssh_stock 当前状态与唯一执行指针
 
-状态版本：2026-11-02 治理基准 v1 草案，REVIEW_PENDING。
-核查日期使用 Asia/Shanghai；GitHub 最后取样为 **2026-11-02 15:56 +08:00**。
+状态版本：2026-11-02 治理基准 v1 收口草案，REVIEW_PENDING（已交付，待负责人最终验收）。
+核查日期使用 Asia/Shanghai；本轮 master/CI 核查时间为 **2026-11-02 16:04 +08:00**。
 这是带时间的事实快照，CI 后续可能变化；新会话必须重新核验，不能当实时监控。
 
 ## 1. 当前主线与下一步
 
-- 长期业务主线：股票历史读取 → Python 转换/计算 → 候选查询/写入 → 质量核验 → 原子发布的性能诊断及可靠性；问题尚未收口。
+- 当前唯一业务主线：股票历史读取 → Python 转换/计算 → 候选查询/写入 → 质量核验 → 原子发布的性能诊断及可靠性；问题尚未收口。
 - 当前唯一执行任务：**GOV-20261102-001，长期项目治理基准建设**。
-- 当前状态：**REVIEW_PENDING**；五文档交付待负责人审阅，禁止本轮提交、推送或业务开发。
-- 下一项明确工作：负责人审阅五文档、确认事实和主线；只有明确批准后，才确定后续诊断任务范围。
-- 候选后续：**BIZ-PERF-03-A 续项审查/收口，PENDING_APPROVAL**。代码已有部分实现，不能称“尚未开发”，也不能称“已经完成”。
+- 当前状态：**已交付、待负责人最终验收（REVIEW_PENDING）**，不得自行标 DONE；五份治理文件已按负责人指令提交推送，本轮入口与状态收口修改仍待审阅，禁止本轮提交、推送或业务开发。
+- 下一项仅为：诊断整改方案，待负责人安排/审阅；不得据此开始实施、实验或生产操作。
+- **BIZ-PERF-03-A 保持 PARTIAL**；部分实现已在 e610a92，开销与完整回归未收口。诊断整改方案为 PENDING_APPROVAL，**本轮未授权开始 BIZ-PERF-03-A-R1**。
 - 未获批准不得自行进入热点优化、扩大功能或重新规划另一条开发主线。
 
 ## 2. 仓库基线
@@ -18,16 +18,17 @@
 | 项目 | 核查事实 | 来源 |
 | --- | --- | --- |
 | 本地分支 | master | git status --short --branch |
-| HEAD / origin/master / GitHub master | e610a92890d89f0b58f1de6335ae918da07d67d9 | git rev-parse、git ls-remote --heads origin、GitHub 同 SHA 工作流 |
-| 最近提交 | feat(diagnostics): add opt-in task performance traces and offline reports | git log |
+| HEAD / origin/master / GitHub master | 31bf700c77b86fcb9be59787a0bde76d6f7d85bd | git rev-parse、git ls-remote --heads origin、GitHub 同 SHA 工作流 |
+| 最近提交 | docs(governance): establish project charter roadmap status and task workflow | git show HEAD |
 | 本轮开始工作区 | 干净，含未跟踪文件检查 | git status |
-| 远端分支 | 仅 refs/heads/master | 直接读取远端 heads |
+| 远端 master | refs/heads/master 指向上述 SHA；远端仅 master 的完整分支清单为上一轮核查事实，本轮仅复核 master | git ls-remote --heads origin master |
 | 历史集成 | PR #1 合并提交 3940d9b；其后 BIZ-PERF-02 候选、撤回和 R1 均在 master 历史 | git log |
-| 本轮改动 | 仅五份新增治理 Markdown，尚未提交 | 交付时再次核验 diff/status |
+| 治理文件交付 | PROJECT_CHARTER、PROJECT_ROADMAP、PROJECT_STATUS、DECISION_LOG、docs/tasks/README 五份文件已在 31bf700 提交推送，441 行新增 | git show --stat HEAD、此前推送成功及本轮远端 master 复核 |
+| 本轮改动 | 仅 AGENTS.md、PROJECT_STATUS.md、docs/tasks/README.md 的治理收口；尚未提交 | 交付时再次核验 diff/status |
 
-本文件中的 SHA 是**所审阅代码的提交**，不是尚未提交的治理文档提交；以后不能通过自写
-“当前 SHA”声称文件已在那个提交中。交付可在提交后另记代码 SHA、文档 SHA、核查时间，
-避免为自引用 SHA 无限追加提交。
+最新 master 为 **31bf700**，其中业务实现最近一次变更为 **e610a92**，31bf700 仅交付五份
+治理文档。本轮未提交的收口补丁不属于上述提交。以后分别记录代码基线、治理交付 SHA 和
+核查时间，避免通过自写“当前 SHA”冒充已提交或为自引用 SHA 无限追加提交。
 
 ## 3. 实际代码能力与证据层级
 
@@ -64,7 +65,19 @@
 
 ## 5. 当前 GitHub CI（仅工程证据）
 
-下列均为 push、attempt 1、精确 SHA e610a92890d89f0b58f1de6335ae918da07d67d9。
+本轮取样均为 push、attempt 1、精确 SHA **31bf700c77b86fcb9be59787a0bde76d6f7d85bd**：
+
+| 工作流 | 16:04 核查状态 |
+| --- | --- |
+| [主 CI 41409940664](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940664) | IN_PROGRESS，最终结论 PENDING |
+| [A4-2 41409940696](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940696) | IN_PROGRESS，最终结论 PENDING |
+| [A4-1 41409940667](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940667) | SUCCESS；工作流结果不等于性能实验验收 |
+| [Publication V1.3 41409940658](https://github.com/sssssssssh/ssh_stock/actions/runs/41409940658) | SUCCESS；工作流结果不等于性能实验验收 |
+
+### 历史 CI 快照（原样保留）
+
+下列为 **2026-11-02 15:56 +08:00** 的历史取样，均为 push、attempt 1、精确 SHA
+e610a92890d89f0b58f1de6335ae918da07d67d9，不能当作当前 master 的实时状态。
 
 | 工作流 | 核查状态 | Job 级事实 |
 | --- | --- | --- |
@@ -75,9 +88,12 @@
 
 skipped 不表示性能通过；成功的合同工作流未执行其高成本实验。本轮只读取 GitHub，
 不 rerun/dispatch/取消工作流。旧 8f4e607 的 5297 测试与 89.99% 覆盖率是 R1 归档的历史
-工程证据，不能贴为 e610a92 的测试数或覆盖率。当前最终覆盖率 PENDING。
+工程证据，不能贴为 e610a92 或 31bf700 的测试数或覆盖率。当前 master 最终覆盖率 PENDING。
 
 ## 6. 不得丢失的问题台账
+
+下表 e610a92 的验收数字及 CI 表述保留原证据时间与版本；当前 master 的 CI 状态见第 5 节，
+不以治理文档提交或工程 CI 结果关闭历史性能问题。
 
 | 编号 | 事实与来源 | 状态 / 关闭条件 |
 | --- | --- | --- |
@@ -99,12 +115,13 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 
 ## 7. 阻塞、边界与接续
 
-1. 五份治理文件尚待负责人审阅，当前不得自动开始 BIZ-PERF-03-A 或其他业务开发。
+1. 五份治理文件已提交推送，GOV-20261102-001 已交付、待负责人最终验收；本轮三文档收口待审阅，不自行标 DONE。
 2. 当前源码主 CI 未终结；诊断开销、最终根任务回归和插桩覆盖未验收。
 3. 正式规模代表性夹具、合格执行资源及授权尚未核实满足；不能临时缩规模或放宽门槛。
 4. 生产状态未知，现场读取/部署/数据库操作没有本轮授权。
-5. AGENTS/四份原权威文档未在本轮修改；其中旧阶段文字与当前治理指针的冲突应显式识别，
-   不据此恢复旧分支或重复规划。是否后续增加入口链接由负责人另行批准。
+5. 本轮仅更新治理入口、状态与任务接续规范；AGENTS 保留原业务权威关系和安全约束，
+   旧 Milestone 16.3.1 当前阶段表述已修正。四份原业务权威文档与历史验收记录未修改。
+6. 下一项仅为待审诊断整改方案；BIZ-PERF-03-A 仍为 PARTIAL，不授权 BIZ-PERF-03-A-R1 实施、性能实验或生产数据库操作。
 
 后续更新遵守[任务规范](docs/tasks/README.md)：记录核查时间、源码 SHA、证据范围、
 唯一任务与下一步；主线变更先追加[决策](DECISION_LOG.md)，不能只改本文件的状态字段。
