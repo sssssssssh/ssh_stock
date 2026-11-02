@@ -1,0 +1,1823 @@
+{
+  "schema": "biz-perf-02.r1-ci-review.v1",
+  "evidence_kind": "READ_ONLY_EVIDENCE_REVIEW_NOT_NEW_EXECUTION",
+  "reviewed_at_utc": "2026-11-02T06:13:16Z",
+  "repository": "sssssssssh/ssh_stock",
+  "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+  "branch": "master",
+  "origin_master_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+  "initial_worktree": "CLEAN",
+  "branch_inventory": [
+    "master",
+    "origin/master",
+    "origin/HEAD -> origin/master"
+  ],
+  "visible_concurrent_editing": {
+    "other_active_same_checkout_codex_threads": 0,
+    "scope": "App inventory on this host; no claim about unobserved remote computers",
+    "worktree_remained_unchanged_during_evidence_read": true
+  },
+  "pr": {
+    "number": 1,
+    "merged": true,
+    "state": "closed",
+    "merge_commit_sha": "3940d9b905e5234368f8a7474ae2ce6de73b0cb3",
+    "merged_at": "2026-11-02T01:14:24Z"
+  },
+  "baseline_sha": "3940d9b905e5234368f8a7474ae2ce6de73b0cb3",
+  "rejected_candidate_sha": "6c4096e5de77368c67ff1c2cff7ddd3285a8e56e",
+  "quality_blob": {
+    "path": "backend/app/services/quality/daily_quality.py",
+    "baseline_blob": "2d07cd4bbc86c3b7035babcbca0c52c086195d7c",
+    "current_blob": "2d07cd4bbc86c3b7035babcbca0c52c086195d7c",
+    "equal": true
+  },
+  "statuses": {
+    "overall": "PARTIAL",
+    "business_candidate": "BUSINESS_CHANGE_WITHDRAWN",
+    "performance": "PERFORMANCE_OPEN",
+    "capacity": "RESOURCE_DEFERRED",
+    "cloud": "REAL_CLOUD_RECALC_NOT_AUTHORIZED",
+    "engineering_ci": "PASS_FOR_8f4e6071_ONLY",
+    "r1_changes": "UNCOMMITTED_AWAITING_OWNER_DIFF_REVIEW"
+  },
+  "workflow_checks": {
+    "total": 19,
+    "success": 7,
+    "skipped_jobs": 12,
+    "failed_or_pending": 0,
+    "note": "Skipped authorization/experiment jobs are NOT passed experiments and are distinct from zero skipped pytest cases"
+  },
+  "workflows": [
+    {
+      "name": "CI",
+      "run_id": 41386309719,
+      "run_attempt": 1,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "event": "push",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-02T04:03:18Z",
+      "updated_at": "2026-11-02T05:05:05Z",
+      "jobs": [
+        {
+          "id": 125087811704,
+          "name": "dependency-audit",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087811704",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run npm ci",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "M17.1 dependency risk inventory (not an upgrade)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Run python scripts/ci_release_gate_v14_a4_2_1.py audit-status --output .codex_tmp/a421/audit",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 13,
+              "name": "Post Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 14,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 15,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087811732,
+          "name": "lookup-diagnosis",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087811732",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Lookup rewrite and safety regressions before measurements",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Fetch pinned historical evidence, never new SHA performance evidence",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "A4-2.3 P0 replay only; no approved repair, no repeated performance trial",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 10,
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 11,
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 12,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 23,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 24,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 25,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087811786,
+          "name": "test",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087811786",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Initialize containers",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Run python -m pip install --upgrade pip",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "V1.4 physically isolated and marked PG17",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "V1.4 calendar and overlay read regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 10,
+              "name": "Redact existing V14 JUnit before any artifact export",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 11,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 12,
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 13,
+              "name": "Run python -m alembic downgrade 0019_research_source_lineage",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 14,
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 15,
+              "name": "M17.1.2 suspension schema and ingestion regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 16,
+              "name": "M17.1 targeted dirty dependency regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 17,
+              "name": "Data publication and schedule compensation regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 18,
+              "name": "Cold start engines and zero-write CLI regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 19,
+              "name": "Cold start baseline golden and missing-input comparison",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 20,
+              "name": "M17.1.1 reference-aware retention regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 21,
+              "name": "M17.1 isolated PAPER continuity regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 22,
+              "name": "Archive identity and observer failure-path regressions before full suite",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 23,
+              "name": "Run python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN --cov=backend/app --cov-report=term-missing --cov-fail-under=70 --junitxml=.codex_tmp/m17_1_2-full.xml",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 24,
+              "name": "M16.6 capture capacity measurements",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 25,
+              "name": "Run python -m alembic current",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 26,
+              "name": "Run python -m alembic heads",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 27,
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 28,
+              "name": "Run cp .env.example .env",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 29,
+              "name": "Run docker compose config",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 30,
+              "name": "Run docker compose build",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 31,
+              "name": "Data queue single/two Worker and atomic publication acceptance",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 32,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 33,
+              "name": "Run docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 34,
+              "name": "Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 35,
+              "name": "Run npm ci",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 36,
+              "name": "Run npm run test:coverage",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 37,
+              "name": "Run npm run build",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 38,
+              "name": "M16.6 browser acceptance (isolated runner tooling)",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 39,
+              "name": "M17.1.1 and M17.1.2 exact HEAD and migration receipts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 40,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 41,
+              "name": "Runtime reliability desktop and narrow-screen synthetic acceptance",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 42,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 43,
+              "name": "Mandatory safe test/failure evidence even when later stages never ran",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 44,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 45,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 46,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 47,
+              "name": "Core exact SHA bundle, independent of long capacity workloads",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 48,
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 49,
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 50,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 51,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 52,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 53,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 54,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 55,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 107,
+              "name": "Post Run actions/setup-node@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 108,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 109,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 110,
+              "name": "Stop containers",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 111,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087811857,
+          "name": "workflow-contracts",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087811857",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Run python -m pytest tests/unit/test_a4_ci_governance.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Run python -m ruff check backend tests migrations scripts .github/actions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 13,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 14,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 15,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087812657,
+          "name": "authorize",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087812657",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125087812824,
+          "name": "ui-visual-acceptance",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087812824",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125087813805,
+          "name": "lookup-tail-attribution",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087813805",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125088249316,
+          "name": "capacity",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125088249316",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125105066315,
+          "name": "publication-release-gate",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125105066315",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    {
+      "name": "A4-1 read baseline diagnosis",
+      "run_id": 41386309854,
+      "run_attempt": 1,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "event": "push",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309854",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-02T04:03:18Z",
+      "updated_at": "2026-11-02T04:06:14Z",
+      "jobs": [
+        {
+          "id": 125087811870,
+          "name": "contracts",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309854/job/125087811870",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Observer regressions and frozen safety tests",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 17,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 18,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 19,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087812832,
+          "name": "authorize",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309854/job/125087812832",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125088629570,
+          "name": "isolated-baseline",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309854/job/125088629570",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    {
+      "name": "A4-2 isolated read experiments",
+      "run_id": 41386309794,
+      "run_attempt": 1,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "event": "push",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309794",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-02T04:03:18Z",
+      "updated_at": "2026-11-02T04:12:32Z",
+      "jobs": [
+        {
+          "id": 125087812161,
+          "name": "contract-and-safety",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309794/job/125087812161",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Exact legacy matrix, no omissions or duplicate assignments",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Frozen sources and formal parent migration",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "Original safety, golden, Worker and new failure-closed regressions",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 10,
+              "name": "Explicit contract status, including early failure",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 11,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 12,
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 13,
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 14,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 27,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 28,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 29,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087812999,
+          "name": "authorize",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309794/job/125087812999",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125090454219,
+          "name": "laboratory",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309794/job/125090454219",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125090454811,
+          "name": "a42-acceptance-gate",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309794/job/125090454811",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    },
+    {
+      "name": "Publication V1.3",
+      "run_id": 41386309722,
+      "run_attempt": 1,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "event": "push",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309722",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-11-02T04:03:18Z",
+      "updated_at": "2026-11-02T04:05:44Z",
+      "jobs": [
+        {
+          "id": 125087811730,
+          "name": "contracts",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309722/job/125087811730",
+          "status": "completed",
+          "conclusion": "success",
+          "steps": [
+            {
+              "number": 1,
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 2,
+              "name": "Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 3,
+              "name": "Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 4,
+              "name": "Run python -m pip install -r requirements.lock",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 5,
+              "name": "Run ./.github/actions/a421-pg",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 6,
+              "name": "Run python -m alembic upgrade head",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 7,
+              "name": "Run python -m alembic current",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 8,
+              "name": "Run python -m alembic heads",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 9,
+              "name": "Candidate equivalence, real row locks, isolation and cancellation",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 10,
+              "name": "Run python -m ruff check backend tests migrations scripts",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 11,
+              "name": "Run ./.github/actions/a4-cleanup",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 12,
+              "name": "Run ./.github/actions/a4-finish",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 13,
+              "name": "Run actions/upload-artifact@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 25,
+              "name": "Post Run actions/setup-python@v5",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 26,
+              "name": "Post Run actions/checkout@v4",
+              "status": "completed",
+              "conclusion": "success"
+            },
+            {
+              "number": 27,
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success"
+            }
+          ]
+        },
+        {
+          "id": 125087812669,
+          "name": "authorize",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309722/job/125087812669",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        },
+        {
+          "id": 125088483741,
+          "name": "candidate-performance",
+          "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309722/job/125088483741",
+          "status": "completed",
+          "conclusion": "skipped",
+          "steps": []
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 13117856303,
+      "name": "data-queue-container-acceptance",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/artifacts/13117856303",
+      "run_id": 41386309719,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "digest": "sha256:c344a5104a46dfdfac53cf474328020d79860a64c2607a9dfff77aa3b482e726",
+      "downloaded_archive_sha256": "c344a5104a46dfdfac53cf474328020d79860a64c2607a9dfff77aa3b482e726",
+      "verification": "EXISTING_LOCAL_ARCHIVE_REHASHED_MATCHES_FRESH_GITHUB_METADATA",
+      "expired": false
+    },
+    {
+      "id": 13117617185,
+      "name": "m17-1-2-suspend-evidence",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/artifacts/13117617185",
+      "run_id": 41386309719,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "digest": "sha256:4e972dc9fecfa060d44339a128e8ef099db9608106ac1cf0facc861bca25c9b3",
+      "downloaded_archive_sha256": "4e972dc9fecfa060d44339a128e8ef099db9608106ac1cf0facc861bca25c9b3",
+      "verification": "EXISTING_LOCAL_ARCHIVE_REHASHED_MATCHES_FRESH_GITHUB_METADATA",
+      "expired": false
+    },
+    {
+      "id": 13117382572,
+      "name": "a42331-safe-ci-8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a-41386309719-1",
+      "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/artifacts/13117382572",
+      "run_id": 41386309719,
+      "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+      "digest": "sha256:13a757799ae38c66edcb3f98e9d75628bf2b38b0bd807da4829e170a6ad32c49",
+      "downloaded_archive_sha256": "13a757799ae38c66edcb3f98e9d75628bf2b38b0bd807da4829e170a6ad32c49",
+      "verification": "EXISTING_LOCAL_ARCHIVE_REHASHED_MATCHES_FRESH_GITHUB_METADATA",
+      "expired": false
+    }
+  ],
+  "log_source": {
+    "job_id": 125087811786,
+    "run_id": 41386309719,
+    "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719/job/125087811786",
+    "excerpts": [
+      "2026-11-02T05:01:40.0499431Z Required test coverage of 70% reached. Total coverage: 89.99%",
+      "2026-11-02T05:01:40.0503629Z =============== 5297 passed, 801 warnings in 2910.43s (0:48:30) ================",
+      "2026-11-02T05:02:08.3910001Z 0058_data_publication (head)",
+      "2026-11-02T05:02:08.9984649Z 0058_data_publication (head)",
+      "2026-11-02T05:02:09.2682336Z All checks passed!",
+      "2026-11-02T05:03:34.0178013Z  Test Files  23 passed (23)",
+      "2026-11-02T05:03:34.0180141Z       Tests  162 passed (162)",
+      "2026-11-02T05:03:34.0268243Z All files          |   87.27 |    80.25 |   58.96 |   87.27 |                   "
+    ]
+  },
+  "metrics": {
+    "pytest": {
+      "tests": 5297,
+      "passed": 5297,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "warnings": 801,
+      "seconds": 2910.43
+    },
+    "backend_coverage_percent": 89.99,
+    "backend_coverage_minimum_percent": 70,
+    "frontend": {
+      "test_files": 23,
+      "tests": 162,
+      "line_coverage_percent": 87.27,
+      "statement_coverage_percent": 87.27,
+      "branch_coverage_percent": 80.25,
+      "function_coverage_percent": 58.96
+    }
+  },
+  "junit": {
+    "member": "m17_1_2-full.xml",
+    "sha256": "1cf3d89ba657b33ba4688404876145e3ffb1069d5dcaf8956569d337be156401",
+    "bytes": 802770,
+    "counts": {
+      "tests": 5297,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "property_count": 0,
+    "selected_cases": [
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_quality_uses_two_bounded_candidate_batches_per_day",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_repeat_keeps_ids_first_preimages_and_readers_only_see_a",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_sector_failure_still_observes_five_prior_quality_rows",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_malformed_later_threshold_preserves_valid_prefix",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_mid_store_failure_rolls_back_b_without_touching_a",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_standalone_quality_keeps_original_six_write_order",
+        "conclusion": "passed",
+        "implementation_subject": "REJECTED_CANDIDATE_6c4096e5de77368c67ff1c2cff7ddd3285a8e56e"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_live_quality_preserves_fields_ids_preimages_and_a_visibility",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_batch",
+        "name": "test_live_sector_failure_preserves_existing_prefix",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_quality_continuity",
+        "name": "test_ten_different_real_roots_are_fifo_idempotent_and_published",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_f6d644deac46c022",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_a93282f7073d7173",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_86cf5241ca725ba7",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_5252a7e786931454",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_6e0d804e6c441be6",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_3aca2e9bf2e6cc63",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_e47058a372d65790",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_e2b582c061b7eece",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_c948cfd72a9d8720",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_batched_raw_preflight_matches_every_field_and_reduces_queries_8a770bdf396ecd4d",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_input_window_preserves_full_frame_dtypes_and_detects_source_change",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_input_window_status_overlay_tombstone_and_root_identity",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_input_window_memory_failure_closes_cursor_without_partial_frame",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_raw_preflight_rejects_unbounded_window",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_new_read_paths_are_off_by_default",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_final_source_verification_uses_original_publication_budget",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_cached_inputs_require_reverification_after_checkpoint_commit",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_opt_in_real_worker_financial_quality_and_atomic_terminal_state_4786d75822761752",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_opt_in_real_worker_financial_quality_and_atomic_terminal_state_9945b78ce5e642fd",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_opt_in_real_worker_financial_quality_and_atomic_terminal_state_d296f05a9a34b8f9",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_business_recalc_performance",
+        "name": "test_opt_in_real_worker_financial_quality_and_atomic_terminal_state_ce754030b5f203ca",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_successful_candidate_publishes_all_tables_and_stable_signal_id",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_recalculation_and_quality_publish_without_synthetic_certificate_bd7aa1fbb46ebe5e",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_recalculation_and_quality_publish_without_synthetic_certificate_2090aedfec26b516",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_recalculation_and_quality_publish_without_synthetic_certificate_ca329f3ead1b5333",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_recalculation_and_quality_publish_without_synthetic_certificate_b7afaea4cd883ab7",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_recalculation_and_quality_publish_without_synthetic_certificate_83ffdcf786eee2c4",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_signal_delete_archives_evaluation_and_terminal_evidence_is_immutable",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_failed_or_cancelled_candidate_never_replaces_a_50a0a9d436ce0baf",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_failed_or_cancelled_candidate_never_replaces_a_68a207bc000210b1",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_failed_or_cancelled_candidate_never_replaces_a_440837ff6684d336",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_old_a_does_not_validate_an_incomplete_b",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_candidate_indexes_and_public_outer_join_plan_remain_separate",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_public_read_snapshot_never_mixes_a_and_b_across_queries",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_missing_a_is_not_replaced_by_in_progress_b_and_cleanup_does_not_leak",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_legacy_null_provenance_survives_cancel",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_actual_api_latest_join_count_pagination_and_private_warmup",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_nonempty_0057_upgrade_preserves_old_rows_and_history",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_catchup_child_dirty_and_raw_refresh_wait_for_root_publication_82e41fa515db3066",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_catchup_child_dirty_and_raw_refresh_wait_for_root_publication_c1505ce0104cd6b2",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_catchup_child_dirty_and_raw_refresh_wait_for_root_publication_2828029994423579",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_approved_manual_cas_after_local_execution_exit_preserves_a_and_audit",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_real_quality_cannot_borrow_a_and_keeps_a_quality_published",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_publish_fails_closed_without_changing_a_a1db20b45f896af0",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_publish_fails_closed_without_changing_a_e4967ea7b0d4a246",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_publish_fails_closed_without_changing_a_89163e311c8609a4",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_publish_fails_closed_without_changing_a_ff5f0600441d0855",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_publish_fails_closed_without_changing_a_b555564d6e98e140",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_candidate_mutation_invalidates_its_prior_quality_certificate",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_disconnect_mid_publication_rolls_back_a_and_holds_slot",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_committed_publish_response_loss_never_rewrites_success",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_diagnostic_is_read_only_and_never_proves_remote_process_exit",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_data_publication",
+        "name": "test_cancelled_recalculation_keeps_previously_published_same_key",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_publication_cancel_v13",
+        "name": "test_cancel_reaches_candidate_batch_and_releases_slot_only_after_rollback_ed7142d755a84997",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_publication_cancel_v13",
+        "name": "test_cancel_reaches_candidate_batch_and_releases_slot_only_after_rollback_6c3562ebedf934d0",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_publication_cancel_v13",
+        "name": "test_wrong_token_detected_before_candidate_store",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.integration.test_publication_cancel_v13",
+        "name": "test_heartbeat_timeout_during_job_lock_does_not_break_business_session",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.unit.test_cross_table_quality",
+        "name": "test_cross_table_quality_escalates_severe_missing_to_error",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.unit.test_cross_table_quality",
+        "name": "test_validate_cross_table_range_commits_error_evidence",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      },
+      {
+        "classname": "tests.unit.test_cross_table_quality",
+        "name": "test_sector_cross_table_quality_persists_error_with_real_sector_sql",
+        "conclusion": "passed",
+        "implementation_subject": "CURRENT_CI_CHECKOUT_8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a"
+      }
+    ]
+  },
+  "release": {
+    "schema_version": "m17.1.2-ci-receipt-v1",
+    "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+    "run_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41386309719",
+    "alembic_current": "0058_data_publication",
+    "alembic_heads": [
+      "0058_data_publication"
+    ],
+    "postgres_version_num": "170011",
+    "created_at": "2026-11-02T05:04:22.032202+00:00",
+    "scope": "All preceding blocking steps passed; final Actions conclusion is authoritative",
+    "suspend_timing_column": {
+      "data_type": "text",
+      "character_maximum_length": null,
+      "is_nullable": "YES"
+    },
+    "targeted_junit": "m17_1_2-targeted.xml",
+    "full_junit": "m17_1_2-full.xml",
+    "production_validation": "PENDING_APPROVAL",
+    "production_job_id": null
+  },
+  "queue": {
+    "results": [
+      {
+        "workers": 1,
+        "completed": 6,
+        "max_top_level_running": 1,
+        "samples": 103,
+        "synthetic": true,
+        "atomic_publication": false
+      },
+      {
+        "workers": 2,
+        "completed": 6,
+        "max_top_level_running": 1,
+        "samples": 102,
+        "synthetic": true,
+        "atomic_publication": false
+      },
+      {
+        "workers": 2,
+        "completed": 7,
+        "max_top_level_running": 1,
+        "samples": 145,
+        "synthetic": true,
+        "atomic_publication": true
+      }
+    ],
+    "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+    "image_source_sha256": "aed054408e762996243a41c599dfd045e6997dab0a140ca50b442958a86dd11d",
+    "working_tree_dirty": false,
+    "image_id": "sha256:f54022e93fc5064575e65d02074d1ef05f6060e2145583c53f7e3a3f8be314a1"
+  },
+  "safe_failure_receipt": {
+    "schema_version": "a42331.ci-failure-evidence.v1",
+    "evidence_kind": "DIAGNOSTIC_ONLY",
+    "head_sha": "8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a",
+    "run_id": "41386309719",
+    "attempt": "1",
+    "status": "COMPLETE",
+    "evidence_complete": true,
+    "files": {
+      "v14-targeted.xml": {
+        "counts": {
+          "tests": 51,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "9e9e90c26e33d7fdd7f9b11dffe9d73c39f28bb140fd4c7a6b7d53458cfe5144",
+        "bytes": 7781
+      },
+      "a42331-targeted.xml": {
+        "counts": {
+          "tests": 143,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "06400e53b5bc5725a3ffbb9000395ed2c9e5c3c9d3f113cb263ec164db8fc1c4",
+        "bytes": 21656
+      },
+      "m17_1_2-targeted.xml": {
+        "counts": {
+          "tests": 85,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "5934088465cf543118777b94b6a81a67f36ff4e6edb20974556ee18a23835bf4",
+        "bytes": 13452
+      },
+      "data-publication-targeted.xml": {
+        "counts": {
+          "tests": 45,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "56d849efbe48673aa8e34f609ee04b9a685f0054b7726ab8e40afa19aaf8bad5",
+        "bytes": 7170
+      },
+      "cold-start-targeted.xml": {
+        "counts": {
+          "tests": 114,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "32bfe1dae06ed97d98da4a41921e87ac1132d20d9ee2e03c65a110e183bfcd09",
+        "bytes": 16672
+      },
+      "m17_1_2-full.xml": {
+        "counts": {
+          "tests": 5297,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "sha256": "1cf3d89ba657b33ba4688404876145e3ffb1069d5dcaf8956569d337be156401",
+        "bytes": 802770
+      }
+    },
+    "full_test_counts": {
+      "tests": 5297,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "first_failure_code": null,
+    "capacity_ready": false,
+    "performance_eligible": false,
+    "production_read_authorized": false,
+    "steps": {
+      "targeted": "success",
+      "full_tests": "success",
+      "data_queue": "success",
+      "browser": "success",
+      "runtime_browser": "success"
+    },
+    "upstream_status": "success"
+  },
+  "local_continuity": {
+    "roots": 10,
+    "source_worktrees": [
+      "DIRTY"
+    ],
+    "subject": "PRECOMMIT_LOCAL_NOT_EXACT_FINAL_SHA"
+  },
+  "raw_evidence_verified": {
+    "artifacts": 25,
+    "samples": 18,
+    "pairs": 9,
+    "retain_candidate": false
+  },
+  "limitations": [
+    "Safe JUnit has zero property elements; no final-CI per-root UUID/source/generation metadata is exported there.",
+    "Six new quality tests pin the rejected historical quality module; source interpretation verified at 8f4e6071, not recovered from stripped JUnit properties.",
+    "The two current-quality cases cover A-only visibility/IDs/preimages and sector-error prefix, not every rejected-candidate-specific repeat/malformed-threshold/mid-store scenario on current quality.",
+    "Parameterized test identifiers are hashed by the existing sanitizer; selected_cases retains those exact safe names.",
+    "The final-CI ten-root test passed; the separate stored ten-root local receipt remains DIRTY and cannot be upgraded to exact-final-SHA evidence.",
+    "Existing current-code publication/cancellation/unknown-commit regressions pass, but do not provide a complete same-identity ten-root/fault-matrix receipt for this task.",
+    "Historical commit-comment claims A05/A06 PASS_ENGINEERING are narrowed by this R1 review; the comment and raw receipts remain unmodified.",
+    "Engineering checks bind 8f4e6071, not the pending R1 documentation diff or any future commit.",
+    "No matrix, pytest, Docker, database or application execution was started by this review."
+  ],
+  "checklist": [
+    {
+      "item": "A01",
+      "before": "PASS",
+      "after": "PASS",
+      "basis": "Merged PR, master-only inventory, synchronized clean entry SHA"
+    },
+    {
+      "item": "A02",
+      "before": "WITHDRAWN",
+      "after": "WITHDRAWN",
+      "basis": "Matching quality Git blob; rejected candidate and withdrawal kept"
+    },
+    {
+      "item": "A03",
+      "before": "DATA_COMPLETE / RETENTION_FAILED",
+      "after": "DATA_COMPLETE / RETENTION_FAILED",
+      "basis": "18 samples, 9 matching pairs and all 25 original artifact hashes verified without rerunning"
+    },
+    {
+      "item": "A04",
+      "before": "PASS_SMALL_SCOPE",
+      "after": "PASS_SMALL_SCOPE",
+      "basis": "All six recorded pair predicates true; four-security synthetic scope only"
+    },
+    {
+      "item": "A05",
+      "before": "PARTIAL",
+      "after": "PARTIAL",
+      "basis": "Current and historical test subjects distinguished; current-quality-specific complete failure-path proof not exported"
+    },
+    {
+      "item": "A06",
+      "before": "PARTIAL",
+      "after": "PARTIAL",
+      "basis": "Native continuity case passed; local ten roots DIRTY, final per-root provenance/fault mapping not exported"
+    },
+    {
+      "item": "A07",
+      "before": "PENDING",
+      "after": "PASS_ENGINEERING_FOR_8f4e6071",
+      "basis": "Exact SHA workflow/job/step, JUnit, coverage, migration, Compose/frontend checks verified"
+    },
+    {
+      "item": "A08",
+      "before": "PASS",
+      "after": "PASS_LIMITED_SCOPE",
+      "basis": "Formal million-row matrix NOT_RUN; >=30% whole-root performance unaccepted"
+    }
+  ]
+}

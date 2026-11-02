@@ -10,6 +10,8 @@ PR #1 已合并到 master，开发分支已删除；下方 Draft/待合并描述
 小样本和普通 CI 不等于百万行性能通过，当前继续 `PERFORMANCE_OPEN`。
 隔离测量、真实计划捕获限制和回滚见 [设计](docs/acceptance/BIZ_PERF_02_design.md)、
 [操作](docs/acceptance/BIZ_PERF_02_runbook.md)、[验收](docs/acceptance/BIZ_PERF_02_closeout.md)。
+[R1 证据收口](docs/acceptance/BIZ_PERF_02_closeout.md#r1-evidence-closure) 已核实
+`8f4e6071` 的工程 CI；A05/A06 因测试对象和逐根血缘证据限制仍为 PARTIAL，不代表性能通过。
 
 ## 源码合同版本治理（2026-10-30）
 
@@ -30,8 +32,8 @@ Linux 完整测试仍须真实支持 pidfd 等原有平台能力，覆盖率阈�
 
 现有 CI 的触发条件、性能实验授权、Release Gate 和工作流字节不变；仅修正静态合同的
 版本调用关系。普通 CI 成功不能继承历史性能结论。改动、前后 CI 对照及回滚步骤见
-[源码合同治理说明](docs/acceptance/source_contract_governance_20261030.md)。PR 保持 Draft，
-待重新审阅后由项目负责人决定合并。
+[源码合同治理说明](docs/acceptance/source_contract_governance_20261030.md)。PR #1 已经负责人批准合并；
+旧验收记录中的 Draft/待合并状态仅代表当时事实，不是当前分支状态。
 
 ## BIZ-PERF-01 业务性能整改（验收未收口）
 

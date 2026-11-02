@@ -3,6 +3,22 @@
 Outcome: BUSINESS_CHANGE_WITHDRAWN. Current quality writes use the baseline six
 singleton calls. Do not deploy or replay the rejected candidate to obtain a pass.
 
+## R1 Documentation Review Only
+
+The [R1 closeout](BIZ_PERF_02_closeout.md#r1-evidence-closure) and
+[exact-SHA CI summary](biz_perf_02/ci_8f4e607_r1.json) verify existing GitHub
+receipts for 8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a. Rehash existing archives,
+parse their safe JUnit/JSON, and read job/step conclusions; do not start a
+database, service, test or performance matrix for this documentation task.
+The historical reproduction/rollback commands below remain for traceability,
+not execution authorization in R1. Do not revert withdrawal commit 8f4e6071.
+A05/A06 stay PARTIAL, and performance/capacity remain open/deferred. Validate
+only document scope, links, JSON, unchanged experiment rules and quality Git blob;
+show the full diff for owner review before committing. Do not push without
+explicit authorization, and do not automatically start another phase.
+
+## Historical Isolated Reproduction
+
 Do not load business `.env` or supply a cloud URL. Use a freshly owned dedicated
 loopback PG17 instance; record its independently obtained physical system ID and
 UUID marker. Supply TEST_DATABASE_URL, V14_TEST_INSTANCE and

@@ -102,3 +102,14 @@ rejected candidate and record that subject/SHA in JUnit. They do not route origi
 tests or claim current batching is enabled. Two additional live quality cases
 cover the restored implementation. The registered retention rule is unchanged;
 its refusal of the observed 5.34% regression has an explicit unit regression.
+
+## R1 Evidence Review
+
+Ordinary engineering CI on 8f4e6071b74ae90dd95eb56a71ade1ed3dcb1e6a has now
+been verified from jobs/steps, logs and hashed artifacts, not inferred from a
+workflow green light. See [R1 closeout](BIZ_PERF_02_closeout.md#r1-evidence-closure)
+and [structured summary](biz_perf_02/ci_8f4e607_r1.json). This confirms engineering
+checks only on that SHA; A05/A06 remain PARTIAL for the documented subject and
+per-root provenance limits. Neither this documentation diff nor any future SHA
+inherits that CI result. The registered rules, observations, withdrawal and
+PERFORMANCE_OPEN / RESOURCE_DEFERRED disposition above are unchanged.
