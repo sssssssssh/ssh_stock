@@ -25,6 +25,10 @@
 - 现有主线续项优先沿用原任务编号并增加修订号，如 BIZ-PERF-03-A-R1；这只是命名示例，不代表获批。
 - 全新业务任务只有负责人批准后才登记领域、编号和范围，避免新会话自行创造下一个 Milestone。
 - 后续单任务可用 docs/tasks/<任务编号>.md；一个规范化文件记录范围、执行及验收，外部 DOCX/MD 是需求来源。
+- 2026-11-03 已登记续项 BIZ-PERF-03-A-R1-DOC-CLOSEOUT（最终 CI 证据同步）：
+  沿用 [R1 closeout 第 6 节](../acceptance/BIZ_PERF_03_A_R1_closeout.md#6-ci-执行结果与性能验收边界最终证据同步)
+  与 [verification.json](../acceptance/biz_perf_03_a_r1/verification.json) 记录；仅文档授权，
+  16ef3062 工程回归 PASS、R1 PARTIAL，不新建重复任务书或新的索引机制。
 - 如附件存在本机绝对路径，接续记录提取仓库相对路径及必要摘要，不提交用户路径、秘密或生产数据。
 - 没有获得附件时，先查仓库记录；确实缺失才向负责人索取，不猜测未读的任务内容。
 

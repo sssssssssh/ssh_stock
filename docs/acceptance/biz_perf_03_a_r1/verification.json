@@ -29,10 +29,573 @@
   "isolated_pg_localization": "OFF_NATIVE_FAILURE_ON_SUCCESS",
   "paired_equality": "UNAVAILABLE",
   "three_pair_overhead": "NOT_RUN_STOP_CONDITION",
-  "final_sha_linux_ci": "PENDING",
+  "final_sha_linux_ci": "PASS",
   "acceptance": "PARTIAL",
   "extra_red": {
     "failed": 2
   },
-  "root_cli_unverified_target": "REJECTED_BEFORE_SETTINGS_AND_OUTPUT"
+  "root_cli_unverified_target": "REJECTED_BEFORE_SETTINGS_AND_OUTPUT",
+  "ci_evidence": {
+    "source_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+    "checked_at": "2026-11-03T11:17:30+08:00",
+    "event": "push",
+    "run_attempt": 1,
+    "workflows": [
+      {
+        "name": "Publication V1.3",
+        "run_id": 41558957367,
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957367",
+        "head_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+        "run_attempt": 1,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "contracts",
+            "job_id": 125664629853,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957367/job/125664629853",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-python@v5",
+                "4: Run python -m pip install -r requirements.lock",
+                "5: Run ./.github/actions/a421-pg",
+                "6: Run python -m alembic upgrade head",
+                "7: Run python -m alembic current",
+                "8: Run python -m alembic heads",
+                "9: Candidate equivalence, real row locks, isolation and cancellation",
+                "10: Run python -m ruff check backend tests migrations scripts",
+                "11: Run ./.github/actions/a4-cleanup",
+                "12: Run ./.github/actions/a4-finish",
+                "13: Run actions/upload-artifact@v4",
+                "25: Post Run actions/setup-python@v5",
+                "26: Post Run actions/checkout@v4",
+                "27: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "authorize",
+            "job_id": 125664631174,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957367/job/125664631174",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "candidate-performance",
+            "job_id": 125665611652,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957367/job/125665611652",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          }
+        ]
+      },
+      {
+        "name": "A4-1 read baseline diagnosis",
+        "run_id": 41558957308,
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957308",
+        "head_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+        "run_attempt": 1,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "contracts",
+            "job_id": 125664629976,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957308/job/125664629976",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-python@v5",
+                "4: Run python -m pip install -r requirements.lock",
+                "5: Run ./.github/actions/a421-pg",
+                "6: Observer regressions and frozen safety tests",
+                "7: Run ./.github/actions/a4-cleanup",
+                "8: Run ./.github/actions/a4-finish",
+                "9: Run actions/upload-artifact@v4",
+                "17: Post Run actions/setup-python@v5",
+                "18: Post Run actions/checkout@v4",
+                "19: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "authorize",
+            "job_id": 125664631314,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957308/job/125664631314",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "isolated-baseline",
+            "job_id": 125665681492,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957308/job/125665681492",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          }
+        ]
+      },
+      {
+        "name": "A4-2 isolated read experiments",
+        "run_id": 41558957295,
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957295",
+        "head_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+        "run_attempt": 1,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "contract-and-safety",
+            "job_id": 125664629771,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957295/job/125664629771",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-python@v5",
+                "4: Run python -m pip install -r requirements.lock",
+                "5: Exact legacy matrix, no omissions or duplicate assignments",
+                "6: Run ./.github/actions/a421-pg",
+                "7: Frozen sources and formal parent migration",
+                "8: Original safety, golden, Worker and new failure-closed regressions",
+                "9: Run python -m ruff check backend tests migrations scripts",
+                "10: Explicit contract status, including early failure",
+                "11: Run actions/upload-artifact@v4",
+                "12: Run ./.github/actions/a4-cleanup",
+                "13: Run ./.github/actions/a4-finish",
+                "14: Run actions/upload-artifact@v4",
+                "27: Post Run actions/setup-python@v5",
+                "28: Post Run actions/checkout@v4",
+                "29: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "authorize",
+            "job_id": 125664630668,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957295/job/125664630668",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "laboratory",
+            "job_id": 125667048074,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957295/job/125667048074",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "a42-acceptance-gate",
+            "job_id": 125667048456,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957295/job/125667048456",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          }
+        ]
+      },
+      {
+        "name": "CI",
+        "run_id": 41558957304,
+        "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304",
+        "head_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+        "run_attempt": 1,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "jobs": [
+          {
+            "name": "dependency-audit",
+            "job_id": 125664629373,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664629373",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-node@v4",
+                "4: Run npm ci",
+                "5: M17.1 dependency risk inventory (not an upgrade)",
+                "6: Run python scripts/ci_release_gate_v14_a4_2_1.py audit-status --output .codex_tmp/a421/audit",
+                "7: Run actions/upload-artifact@v4",
+                "13: Post Run actions/setup-node@v4",
+                "14: Post Run actions/checkout@v4",
+                "15: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "lookup-diagnosis",
+            "job_id": 125664629553,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664629553",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-python@v5",
+                "4: Run python -m pip install -r requirements.lock",
+                "5: Run ./.github/actions/a421-pg",
+                "6: Lookup rewrite and safety regressions before measurements",
+                "7: Fetch pinned historical evidence, never new SHA performance evidence",
+                "8: A4-2.3 P0 replay only; no approved repair, no repeated performance trial",
+                "9: Run actions/upload-artifact@v4",
+                "10: Run ./.github/actions/a4-cleanup",
+                "11: Run ./.github/actions/a4-finish",
+                "12: Run actions/upload-artifact@v4",
+                "23: Post Run actions/setup-python@v5",
+                "24: Post Run actions/checkout@v4",
+                "25: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "test",
+            "job_id": 125664629647,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664629647",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Initialize containers",
+                "3: Run actions/checkout@v4",
+                "4: Run actions/setup-python@v5",
+                "5: Run python -m pip install --upgrade pip",
+                "6: Run python -m pip install -r requirements.lock",
+                "7: V1.4 physically isolated and marked PG17",
+                "8: V1.4 calendar and overlay read regressions",
+                "9: V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)",
+                "10: Redact existing V14 JUnit before any artifact export",
+                "11: Run actions/upload-artifact@v4",
+                "12: Run python -m alembic upgrade head",
+                "13: Run python -m alembic downgrade 0019_research_source_lineage",
+                "14: Run python -m alembic upgrade head",
+                "15: M17.1.2 suspension schema and ingestion regressions",
+                "16: M17.1 targeted dirty dependency regressions",
+                "17: Data publication and schedule compensation regressions",
+                "18: Cold start engines and zero-write CLI regressions",
+                "19: Cold start baseline golden and missing-input comparison",
+                "20: M17.1.1 reference-aware retention regressions",
+                "21: M17.1 isolated PAPER continuity regressions",
+                "22: Archive identity and observer failure-path regressions before full suite",
+                "23: Run python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN --cov=backend/app --cov-report=term-missing --cov-fail-under=70 --junitxml=.codex_tmp/m17_1_2-full.xml",
+                "24: M16.6 capture capacity measurements",
+                "25: Run python -m alembic current",
+                "26: Run python -m alembic heads",
+                "27: Run python -m ruff check backend tests migrations scripts",
+                "28: Run cp .env.example .env",
+                "29: Run docker compose config",
+                "30: Run docker compose build",
+                "31: Data queue single/two Worker and atomic publication acceptance",
+                "32: Run actions/upload-artifact@v4",
+                "33: Run docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t",
+                "34: Run actions/setup-node@v4",
+                "35: Run npm ci",
+                "36: Run npm run test:coverage",
+                "37: Run npm run build",
+                "38: M16.6 browser acceptance (isolated runner tooling)",
+                "39: M17.1.1 and M17.1.2 exact HEAD and migration receipts",
+                "40: Run actions/upload-artifact@v4",
+                "41: Runtime reliability desktop and narrow-screen synthetic acceptance",
+                "42: Run actions/upload-artifact@v4",
+                "43: Mandatory safe test/failure evidence even when later stages never ran",
+                "44: Run actions/upload-artifact@v4",
+                "45: Run actions/upload-artifact@v4",
+                "46: Run actions/upload-artifact@v4",
+                "47: Core exact SHA bundle, independent of long capacity workloads",
+                "48: Run ./.github/actions/a4-cleanup",
+                "49: Run ./.github/actions/a4-finish",
+                "50: Run actions/upload-artifact@v4",
+                "51: Run actions/upload-artifact@v4",
+                "52: Run actions/upload-artifact@v4",
+                "53: Run actions/upload-artifact@v4",
+                "54: Run actions/upload-artifact@v4",
+                "55: Run actions/upload-artifact@v4",
+                "107: Post Run actions/setup-node@v4",
+                "108: Post Run actions/setup-python@v5",
+                "109: Post Run actions/checkout@v4",
+                "110: Stop containers",
+                "111: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "workflow-contracts",
+            "job_id": 125664629662,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664629662",
+            "status": "completed",
+            "conclusion": "success",
+            "steps_by_conclusion": {
+              "success": [
+                "1: Set up job",
+                "2: Run actions/checkout@v4",
+                "3: Run actions/setup-python@v5",
+                "4: Run python -m pip install -r requirements.lock",
+                "5: Run python -m pytest tests/unit/test_a4_ci_governance.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml",
+                "6: Run python -m ruff check backend tests migrations scripts .github/actions",
+                "7: Run actions/upload-artifact@v4",
+                "13: Post Run actions/setup-python@v5",
+                "14: Post Run actions/checkout@v4",
+                "15: Complete job"
+              ]
+            }
+          },
+          {
+            "name": "lookup-tail-attribution",
+            "job_id": 125664630942,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664630942",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "ui-visual-acceptance",
+            "job_id": 125664631164,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664631164",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "authorize",
+            "job_id": 125664631279,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125664631279",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "capacity",
+            "job_id": 125665089867,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125665089867",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          },
+          {
+            "name": "publication-release-gate",
+            "job_id": 125686399980,
+            "url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41558957304/job/125686399980",
+            "status": "completed",
+            "conclusion": "skipped",
+            "steps_by_conclusion": {}
+          }
+        ]
+      }
+    ],
+    "log_evidence": [
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 2670,
+        "text": "2026-11-03T02:18:43.0932930Z Required test coverage of 70% reached. Total coverage: 90.02%"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 2672,
+        "text": "2026-11-03T02:18:43.0935037Z =============== 5347 passed, 816 warnings in 2990.28s (0:49:50) ================"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 2862,
+        "text": "2026-11-03T02:19:08.9569174Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 2884,
+        "text": "2026-11-03T02:19:09.4882920Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 2906,
+        "text": "2026-11-03T02:19:09.7151644Z All checks passed!"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 3694,
+        "text": "2026-11-03T02:19:38.1690779Z #33 naming to docker.io/library/ssh-stock-frontend:local done"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 3756,
+        "text": "2026-11-03T02:19:55.9686526Z #36 naming to docker.io/library/ssh-stock-app:local done"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 3762,
+        "text": "2026-11-03T02:19:55.9705467Z #37 naming to docker.io/library/ssh-stock-app:local done"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 3768,
+        "text": "2026-11-03T02:19:55.9708303Z #38 naming to docker.io/library/ssh-stock-app:local done"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 3774,
+        "text": "2026-11-03T02:19:55.9711303Z #39 naming to docker.io/library/ssh-stock-app:local done"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 4060,
+        "text": "2026-11-03T02:20:21.3454270Z nginx: the configuration file /etc/nginx/nginx.conf syntax is ok"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 4061,
+        "text": "2026-11-03T02:20:21.3458354Z nginx: configuration file /etc/nginx/nginx.conf test is successful"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 4195,
+        "text": "2026-11-03T02:20:41.1360094Z  Test Files  23 passed (23)"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 4196,
+        "text": "2026-11-03T02:20:41.1361459Z       Tests  162 passed (162)"
+      },
+      {
+        "job_id": 125664629647,
+        "decoded_log_line": 4271,
+        "text": "2026-11-03T02:20:53.2395152Z ✓ built in 6.16s"
+      },
+      {
+        "job_id": 125664629771,
+        "decoded_log_line": 608,
+        "text": "2026-11-03T01:19:57.6097429Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629771,
+        "decoded_log_line": 609,
+        "text": "2026-11-03T01:19:57.9803623Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629771,
+        "decoded_log_line": 679,
+        "text": "2026-11-03T01:25:42.7798392Z ================ 342 passed, 217 warnings in 342.33s (0:05:42) ================="
+      },
+      {
+        "job_id": 125664629771,
+        "decoded_log_line": 700,
+        "text": "2026-11-03T01:25:47.4431397Z All checks passed!"
+      },
+      {
+        "job_id": 125664629976,
+        "decoded_log_line": 604,
+        "text": "2026-11-03T01:22:02.4655669Z ================= 49 passed, 34 warnings in 122.67s (0:02:02) =================="
+      },
+      {
+        "job_id": 125664629976,
+        "decoded_log_line": 605,
+        "text": "2026-11-03T01:22:03.7524780Z All checks passed!"
+      },
+      {
+        "job_id": 125664629853,
+        "decoded_log_line": 602,
+        "text": "2026-11-03T01:19:56.4912550Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629853,
+        "decoded_log_line": 622,
+        "text": "2026-11-03T01:19:56.9706482Z 0058_data_publication (head)"
+      },
+      {
+        "job_id": 125664629853,
+        "decoded_log_line": 673,
+        "text": "2026-11-03T01:21:50.7108474Z ================= 85 passed, 53 warnings in 109.64s (0:01:49) =================="
+      },
+      {
+        "job_id": 125664629853,
+        "decoded_log_line": 693,
+        "text": "2026-11-03T01:21:52.3916772Z All checks passed!"
+      }
+    ],
+    "scope": "EXACT_SHA_ENGINEERING_REGRESSION_ONLY_NOT_PERFORMANCE_ACCEPTANCE",
+    "tests": {
+      "python": {
+        "job_id": 125664629647,
+        "step": 23,
+        "passed": 5347,
+        "warnings": 816,
+        "coverage_percent": 90.02,
+        "coverage_minimum_percent": 70,
+        "seconds": 2990.28
+      },
+      "a42_contract_and_safety": {
+        "job_id": 125664629771,
+        "step": 8,
+        "passed": 342,
+        "warnings": 217
+      },
+      "a41_contracts": {
+        "job_id": 125664629976,
+        "step": 6,
+        "passed": 49,
+        "warnings": 34
+      },
+      "publication_contracts": {
+        "job_id": 125664629853,
+        "step": 9,
+        "passed": 85,
+        "warnings": 53
+      },
+      "ruff": {
+        "job_id": 125664629647,
+        "step": 27,
+        "conclusion": "success"
+      },
+      "frontend": {
+        "job_id": 125664629647,
+        "test_step": 36,
+        "build_step": 37,
+        "passed": 162,
+        "test_files": 23
+      }
+    },
+    "remaining_detail": {
+      "windows_off_exit_hex": "0xC0000005",
+      "windows_off_exit_code": 3221225477,
+      "native_cause": "UNKNOWN",
+      "paired_samples": "NOT_RUN_STOP_CONDITION",
+      "overhead_threshold_percent": 3,
+      "overhead_detail": "NOT_VERIFIED: no three valid OFF/ON pairs",
+      "overall_acceptance": "PARTIAL"
+    },
+    "compatibility_detail": "Existing v1 fields and types preserved; baseline_sha/worktree/full_pytest describe pre-implementation and Windows local validation. final_sha_linux_ci=PASS binds only ci_evidence.source_sha. No dedicated verification schema or code consumer found; biz_perf_03_a/schema.json applies to runtime traces, not this receipt."
+  },
+  "documentation_validation": {
+    "task_id": "BIZ-PERF-03-A-R1-DOC-CLOSEOUT",
+    "source_sha": "16ef3062dc538b0f4def0f30edb297a831c32510",
+    "json_parse": "PASS",
+    "existing_fields_types_and_historical_values": "PRESERVED_EXCEPT_FINAL_SHA_CI_STATUS",
+    "dedicated_verification_schema": "NOT_PRESENT",
+    "existing_static_governance_contracts": {
+      "passed": 19,
+      "seconds": 11.49,
+      "scope": "four explicit test nodes in tests/unit/test_source_contract_governance.py, parameterized; not the full suite",
+      "business_settings_imported": false
+    },
+    "scope": "SIX_EXISTING_DOCUMENTS_ONLY",
+    "r1_acceptance": "PARTIAL"
+  }
 }

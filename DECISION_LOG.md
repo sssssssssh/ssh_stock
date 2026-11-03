@@ -82,3 +82,18 @@ DEC-YYYYMMDD-NNN；日期/来源；原问题；讨论与证据；最终决定；
 - 实证：安装失败残留与 observer 串计数可复现；OFF 原生访问冲突、ON 成功，不能归因为仅 ON 问题。
 - 影响：当前唯一执行任务 R1，父阶段仍 PARTIAL；GOV 待最终验收不自动改 DONE。三对矩阵因缺配对停止。
 - 变更要求：触及调用点、测量口径、生产、全量负载或下一阶段仍需负责人另行批准；不删除旧失败记录。
+
+
+## DEC-20261103-002：最终工程证据与 R1 性能状态分别判定
+
+- 日期/来源：2026-11-03，负责人提供 BIZ-PERF-03-A-R1-DOC-CLOSEOUT 任务书并要求完成后推送。
+- 原问题：16ef3062 的四条 workflow success 容易被误读为 skipped 性能实验或 R1 已通过。
+- 证据与原因：精确 SHA 16ef3062dc538b0f4def0f30edb297a831c32510 的四条 push/attempt 1 均 success；
+  主 CI 41558957304 为 5347 passed、816 warnings、90.02%、Ruff 成功；A4-2 41558957295 合同为 342 passed。
+  A4-1 41558957308 isolated-baseline、A4-2 laboratory/a42-acceptance-gate、Publication 41558957367
+  candidate-performance 及各 authorize 均 skipped。完整证据见 R1 closeout 第 6 节与 verification.json。
+- 最终决定：工程回归 PASS；R1 与父阶段仍 PARTIAL，Windows OFF 0xC0000005 根因 UNKNOWN，
+  三对有效配对未完成、≤3% NOT_VERIFIED。保留原失败与本机记录，不混用 SHA/attempt 或本机统计。
+- 影响：当前执行任务仅最终 CI 证据与治理同步；后续先审阅原生异常定位、恢复有效配对，再验证开销，不能跳至 B 阶段。
+- 变更要求：仅允许文档/证据提交推送，不授予生产、数据库、业务实现、实验授权或门槛变更权限；
+  后续实施仍需负责人明确批准，GOV 继续 REVIEW_PENDING，不自动将 R1 标记完成。

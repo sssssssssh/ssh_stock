@@ -1,24 +1,31 @@
 # ssh_stock 当前状态与唯一执行指针
 
-状态版本：2026-11-03，R1 受限整改 PARTIAL；GOV-20261102-001 仍 REVIEW_PENDING。
-R1 实施前基线：32cf8f438061e95b1492fd2a5db15dd05c13e28d；本次核查时本地/远端一致。
+状态版本：2026-11-03，R1 最终 CI 证据同步；工程回归 PASS、整体验收 PARTIAL；GOV-20261102-001 仍 REVIEW_PENDING。
+R1 实施前基线：32cf8f438061e95b1492fd2a5db15dd05c13e28d；当轮核查时本地/远端一致。
 第 2 节保留 2026-11-02 治理修改前快照，不将其当作 R1 的实时 HEAD。
-核查日期使用 Asia/Shanghai；本次修改前的 master 基线核查时间为 **2026-11-02 16:29 +08:00**。
+核查日期使用 Asia/Shanghai；历史治理基线核查时间为 **2026-11-02 16:29 +08:00**；本轮时间见第 2 节。
 R1 基线 32cf8f43 的四条工程工作流已核查终结成功，完整测试 5322 passed、覆盖率 90.00%；
-修复提交的最终 CI 仍待独立验证。第 5 节中旧取样保留其时间和 SHA，不作为实时结论。
+修复提交 16ef3062 的最终 CI 已核验 PASS（5347 passed、816 warnings、90.02%）；详见第 5 节。第 5 节中旧取样保留其时间和 SHA，不作为实时结论。
 本文件记录带时间的修改前基线，不要求填写文档自身最终提交 SHA；新会话必须重新核验 Git，
 不能把该快照当实时监控，也不因后续提交而持续刷新同一轮记录。
 
 ## 1. 当前主线与下一步
 
 - 当前唯一业务主线：股票历史数据读取 → Python 转换与计算 → 候选查询与写入 → 质量核验 → 原子发布的性能问题；尚未收口。
-- 当前唯一执行任务：**BIZ-PERF-03-A-R1，诊断稳定性与开销受限整改**；负责人于 2026-11-03 确认阶段一方案。GOV-20261102-001 已交付，仍等待负责人最终验收，未标 DONE。
+- 当前唯一执行任务：**BIZ-PERF-03-A-R1-DOC-CLOSEOUT，最终 CI 证据同步**；本轮仅证据与治理文档，业务主线不变。R1 方案已于 2026-11-03 获批。GOV-20261102-001 已交付，仍等待负责人最终验收，未标 DONE。
 - 治理交付状态：**已交付、等待负责人最终验收（REVIEW_PENDING）**，不得自行标记为 DONE。五份治理文件已在 31bf700 首次提交推送；AGENTS 新会话强制读取规则与 PROJECT_STATUS、docs/tasks/README 的入口收口修改已在 276cc262 提交推送；后续状态文件修正已在 306971b3 提交推送。
-- 当前 R1 状态：PARTIAL。生命周期/归属/FETCH 最小修复已验证；有界定位 OFF 原生崩溃、ON 成功，未形成有效对照，停止完整性能矩阵。下一步仅审阅原生故障与测试环境处置方案。
+- 当前 R1 状态：PARTIAL。生命周期/归属/FETCH 最小修复已验证；有界定位 OFF 原生崩溃、ON 成功，未形成有效对照，停止完整性能矩阵。工程 CI 已通过；下一步仅审阅 Windows OFF 原生故障只读定位与环境处置方案，恢复有效配对后再做三对开销验证，不授权执行这些后续步骤。
 - **BIZ-PERF-03-A = PARTIAL**；R1 已获本次明确批准，限方案内诊断修复及隔离小型验证。原治理记录中的未授权 R1 约束为历史边界，本次授权不覆盖生产、高成本专项或业务算法改动。详见 [R1 回执](docs/acceptance/BIZ_PERF_03_A_R1_closeout.md)。
 - 未获批准不得自行进入热点优化、扩大功能或重新规划另一条开发主线。
 
 ## 2. 仓库基线
+
+### 最终 CI 证据同步修改前核查
+
+核查时间：2026-11-03T11:17:30+08:00。本地 master、HEAD、origin/master、GitHub master
+均为 **16ef3062dc538b0f4def0f30edb297a831c32510**；工作区干净，亦为本轮工程证据唯一适用 SHA。
+其为最近诊断实现提交；下列 32cf8f43/e610a928 等记录保留原时间及历史角色，
+不表示本次 HEAD。文档交付后不追填自身实时 SHA，下一会话重新核验。
 
 ### 2026-11-03 R1 修改前核查
 
@@ -85,6 +92,25 @@ R1 基线 32cf8f43 的四条工程工作流已核查终结成功，完整测试 
 
 ## 5. CI 证据与历史快照（仅工程证据）
 
+### 修复提交 16ef3062 最终工程结果
+
+2026-11-03 独立核验：精确 SHA **16ef3062dc538b0f4def0f30edb297a831c32510**，
+四条 push/attempt 1 工作流均 completed/success。主 CI 41558957304 的 test Job
+125664629647，Step 23：5347 passed、816 warnings、coverage 90.02%；Step 27 Ruff 成功。
+前端测试/构建、Docker 构建、PG17 隔离与迁移步骤均成功。
+A4-1 41558957308 contracts 成功；A4-2 41558957295 contract-and-safety 为 342 passed；
+Publication 41558957367 contracts 成功。合计 7 个 success Job、12 个 skipped。
+
+A4-1 authorize/isolated-baseline、A4-2 authorize/laboratory/a42-acceptance-gate、
+Publication authorize/candidate-performance 均 skipped，不是实验或授权通过。
+主 CI authorize/capacity/publication-release-gate 等未执行阶段也不记 PASS。
+完整 URL、Job/Step 与日志索引见 [R1 closeout 第 6 节](docs/acceptance/BIZ_PERF_03_A_R1_closeout.md#6-ci-执行结果与性能验收边界最终证据同步)
+及 [verification.json](docs/acceptance/biz_perf_03_a_r1/verification.json)。
+
+**工程 CI PASS + R1 PARTIAL + PERFORMANCE_OPEN** 同时成立；Windows OFF 原生异常
+0xC0000005 根因 UNKNOWN、三对有效配对未完成、≤3% NOT_VERIFIED。
+下文为历史取样，不能把旧 SHA 的等待状态当作 16ef3062 仍在等待。
+
 2026-11-03 R1 执行更新：32cf8f43 的主 CI 41414072689、A4-1 41414072644、
 A4-2 41414072701、Publication 41414072660 均 success；共 7 个成功 Job、12 个 skipped。
 完整 pytest 5322 passed、coverage 90.00%，Ruff 通过。该证据只对应修改前基线，
@@ -149,12 +175,15 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 ## 7. 阻塞、边界与接续
 
 1. 五份治理文件、新会话读取/接续规则及 306971b3 状态文件修正均已提交推送；GOV-20261102-001 继续 REVIEW_PENDING，等待负责人最终验收，不自行标记为 DONE。
-2. R1 修改前基线 32cf8f43 的工程 CI 已核查通过；修复最终 SHA 的 CI 待验证，诊断开销、最终根任务配对和完整插桩覆盖仍未验收。
+2. 修复提交 16ef3062 的工程 CI 已核查 PASS；诊断开销、最终根任务配对和完整插桩覆盖仍未验收，不能用工程通过关闭 R1。
 3. 正式规模代表性夹具、合格执行资源及授权尚未核实满足；不能临时缩规模或放宽门槛。
 4. 生产状态未知，现场读取/部署/数据库操作没有本轮授权。
 5. AGENTS 的强制读取规则已在 276cc262 交付；2026-11-02 治理快照仅说明当轮范围。
    2026-11-03 R1 的新增授权仅限批准方案；未修改业务算法、Schema、生产配置、CI 或旧验收事实。
 6. 本次负责人已批准 R1 方案内最小诊断整改；BIZ-PERF-03-A 与 R1 仍为 PARTIAL，未授权生产、百万行实验或下一阶段。原生失败使三对性能矩阵停止。
+
+本轮 DOC-CLOSEOUT 的交付仅同步既有工程事实；不改变业务库 UNKNOWN、GOV 的 REVIEW_PENDING
+或 R1 的 PARTIAL，不授权异常定位执行、性能实验或 B 阶段。
 
 后续更新遵守[任务规范](docs/tasks/README.md)：记录核查时间、源码 SHA、证据范围、
 唯一任务与下一步；主线变更先追加[决策](DECISION_LOG.md)，不能只改本文件的状态字段。
@@ -165,7 +194,7 @@ skipped 不表示性能通过；成功的合同工作流未执行其高成本实
 及后续实施需独立批准的规则一致。PROJECT_CHARTER、PROJECT_ROADMAP、DECISION_LOG 中
 的草案/待审及旧 SHA 描述保留原任务语境，不表示新的业务授权；docs/tasks/README 所记
 31bf700 是首次交付，其“本轮三文档收口”是 276cc262 的历史范围，不是本次修改许可。
-上述存在跨轮次措辞时效差异，本轮保留历史语境；ROADMAP 仅更新 R1 受限授权状态，
-DECISION_LOG 追加本次明确批准与停止条件，CHARTER 和任务规范不变。
+上述存在跨轮次措辞时效差异，本轮保留历史语境；ROADMAP 同步异常定位→有效配对→三对验证顺序，
+DECISION_LOG 追加工程/性能分层判定，任务规范登记 DOC-CLOSEOUT，CHARTER 保持不变。
 交付状态与唯一下一步以本文件的带时间记录及负责人最新要求为准；实时 Git 基线需由
 后续会话独立核验，不把本文件中的修改前快照视为随文档提交自动更新的 SHA。
