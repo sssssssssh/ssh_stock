@@ -1,5 +1,12 @@
 # A 股机会发现与趋势研究系统
 
+## BIZ-PERF-03-A-R1 受限诊断整改（2026-11-03）
+
+负责人已批准预注册方案。仅修复诊断事件安装/清理、根上下文归属与失败 FETCH 未知行数，
+保留默认关闭及原业务、SQL、事务、身份和发布语义。有界定位 OFF 出现原生崩溃、ON 成功，
+原因未定，三对开销与完整验收未完成，继续 PARTIAL，不声明提速或进入后续阶段。
+实现、回归与停止证据见 [R1 交付](docs/acceptance/BIZ_PERF_03_A_R1_closeout.md)。
+
 ## BIZ-PERF-03-A 可选性能诊断（2026-11-02）
 
 新增 `PERF_DIAGNOSTICS_ENABLED=false` 与 `PERF_DIAGNOSTICS_DIRECTORY`，启用并重启 Worker 后

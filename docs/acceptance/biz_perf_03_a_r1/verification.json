@@ -1,0 +1,38 @@
+{
+  "schema_version": "biz-perf-03-a-r1.verification.v1",
+  "baseline_sha": "32cf8f438061e95b1492fd2a5db15dd05c13e28d",
+  "worktree": "DIRTY_CANDIDATE",
+  "files_sha256": {
+    "backend/app/services/performance_diagnostics.py": "af36e0988732fcc2977713215afa80d906c9787c5dcfc73eddabb658819b09dc",
+    "backend/app/services/performance_sql_diagnostics.py": "2cb9aaef19f83a8e7f0bdb0bf09295e6eb298c5f7b2493827bf28647f1e58bd0",
+    "tests/unit/test_performance_diagnostics.py": "50ebece5dad1cb1cff37040c2fb8e39df9181edb9368fc3dfd4c7464da084fc2",
+    "scripts/performance_diagnostics_overhead.py": "98dbd99f94f2c784ca862bbadce43228350d72aca4f36ac4eca9110c9e763693"
+  },
+  "red": {
+    "passed": 1,
+    "failed": 3
+  },
+  "targeted": {
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 3.96
+  },
+  "full_pytest": {
+    "exit_code": 2,
+    "collection_errors": 10,
+    "seconds": 11.34,
+    "reason": "Windows missing fcntl/resource",
+    "initial_attempt_seconds": 20.4
+  },
+  "ruff": "PASS",
+  "isolated_pg_localization": "OFF_NATIVE_FAILURE_ON_SUCCESS",
+  "paired_equality": "UNAVAILABLE",
+  "three_pair_overhead": "NOT_RUN_STOP_CONDITION",
+  "final_sha_linux_ci": "PENDING",
+  "acceptance": "PARTIAL",
+  "extra_red": {
+    "failed": 2
+  },
+  "root_cli_unverified_target": "REJECTED_BEFORE_SETTINGS_AND_OUTPUT"
+}

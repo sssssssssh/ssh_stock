@@ -57,6 +57,7 @@ class Trace:
         self.fetch_calls = 0
         self.fetch_rows = 0
         self.fetch_ms = 0.0
+        self.fetch_failed = False
         self.overhead_ms = 0.0
         self.config_fingerprint = hashlib.sha256(json.dumps(
             configuration or {}, sort_keys=True).encode()).hexdigest()
@@ -106,7 +107,9 @@ class Trace:
                 execute_total_ms=sum(x["total_ms"] for x in self.sql.values()),
                 fetch_calls=self.fetch_calls, fetch_total_ms=self.fetch_ms
                     if self.fetch_calls else None,
-                fetched_rows=self.fetch_rows if self.fetch_calls else None,
+                fetched_rows=(self.fetch_rows
+                    if self.fetch_calls and not self.fetch_failed else None),
+                known_fetched_prefix_rows=self.fetch_rows if self.fetch_calls else None,
                 result_bytes=None, sql_fingerprints=list(self.sql.values()),
                 statistics_extension="unavailable_not_probed"),
             worker_resources=dict(initial=self.initial, final=final,
@@ -137,9 +140,14 @@ def span(stage):
     if trace is None:
         yield
         return
-    before, began, error = stamp(), monotonic(), None
-    identity, parent = uuid.uuid4().hex, active_span.get()
-    token = active_span.set(identity)
+    try:
+        before, began, error = stamp(), monotonic(), None
+        identity, parent = uuid.uuid4().hex, active_span.get()
+        token = active_span.set(identity)
+    except Exception:
+        trace.warnings.add("SPAN_SETUP_FAILED")
+        yield
+        return
     try:
         yield
     except BaseException as exc:
@@ -195,6 +203,15 @@ def observe_worker(function):
             observer = SQLObserver(db.get_bind().engine, trace)
             observer.install()
         except Exception:
+            try:
+                if observer is not None:
+                    observer.close()
+            except Exception:
+                logger.warning("PERFORMANCE_DIAGNOSTICS_CLEANUP_UNAVAILABLE")
+            finally:
+                if token is not None:
+                    active_trace.reset(token)
+                observer = trace = token = None
             logger.warning("PERFORMANCE_DIAGNOSTICS_SETUP_UNAVAILABLE")
         try:
             return function(db, job_id, *args, **kwargs)
@@ -240,6 +257,7 @@ def driver_fetch(seconds, rows):
             if rows is not None:
                 trace.fetch_rows += rows
             else:
+                trace.fetch_failed = True
                 trace.warnings.add("FETCH_FAILED_PARTIAL_ROWS_UNKNOWN")
         except Exception:
             trace.warnings.add("FETCH_OBSERVATION_UNAVAILABLE")

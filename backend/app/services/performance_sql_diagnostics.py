@@ -34,9 +34,10 @@ class SQLObserver:
         self.engine, self.trace = engine, trace
         self.listeners = []
         self.fingerprints = {}
+        self.active = True
 
     def before(self, conn, cursor, statement, parameters, context, many):
-        if active_trace.get() is not self.trace:
+        if not self.active or active_trace.get() is not self.trace:
             return
         try:
             opaque = hashlib.sha256(statement.encode()).digest()
@@ -48,7 +49,7 @@ class SQLObserver:
             if key not in self.trace.sql and len(self.trace.sql) >= 128:
                 key = "overflow"
                 self.trace.warnings.add("SQL_FINGERPRINT_LIMIT_REACHED")
-            context.performance_diagnostic = (key, monotonic())
+            context.performance_diagnostic = (self, key, monotonic())
         except Exception:
             self.trace.warnings.add("SQL_OBSERVATION_UNAVAILABLE")
 
@@ -61,10 +62,11 @@ class SQLObserver:
     def finish(self, context, cursor, failed):
         try:
             value = getattr(context, "performance_diagnostic", None)
-            if value is None:
+            if (not self.active or value is None or value[0] is not self
+                    or active_trace.get() is not self.trace):
                 return
             context.performance_diagnostic = None
-            key, began = value
+            _, key, began = value
             elapsed = max(0, monotonic() - began) * 1000
             item = self.trace.sql.setdefault(key, dict(sql_fingerprint=key,
                 fingerprint_kind="literal_stripped_statement_sha256",
@@ -84,13 +86,34 @@ class SQLObserver:
             self.trace.warnings.add("SQL_OBSERVATION_UNAVAILABLE")
 
     def install(self):
-        for name, handler in (("before_cursor_execute", self.before),
-                              ("after_cursor_execute", self.after), ("handle_error", self.failed)):
-            event.listen(self.engine, name, handler)
-            self.listeners.append((name, handler))
+        if self.listeners:
+            raise RuntimeError("PERFORMANCE_OBSERVER_ALREADY_INSTALLED")
+        try:
+            for name, handler in (("before_cursor_execute", self.before),
+                                  ("after_cursor_execute", self.after),
+                                  ("handle_error", self.failed)):
+                # Register intent first: an event adapter may install then raise.
+                self.listeners.append((name, handler))
+                event.listen(self.engine, name, handler)
+            self.active = True
+        except BaseException:
+            self.close()
+            raise
 
     def close(self):
+        self.active = False
+        remaining = []
         for name, handler in reversed(self.listeners):
-            event.remove(self.engine, name, handler)
-        self.listeners.clear()
+            for _ in range(2):
+                try:
+                    if event.contains(self.engine, name, handler):
+                        event.remove(self.engine, name, handler)
+                    break
+                except Exception:
+                    self.trace.warnings.add("SQL_LISTENER_REMOVE_FAILED")
+            else:
+                # Disabled handlers cannot consume any subsequent root's events.
+                remaining.append((name, handler))
+                self.trace.warnings.add("SQL_LISTENER_CLEANUP_INCOMPLETE")
+        self.listeners = list(reversed(remaining))
         self.fingerprints.clear()

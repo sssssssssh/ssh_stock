@@ -1,0 +1,61 @@
+{
+  "schema_version": "biz-perf-03-a-r1.locate.v1",
+  "evidence_kind": "BOUNDED_SYNTHETIC_LOCALIZATION_NOT_PERFORMANCE_ACCEPTANCE",
+  "baseline_sha": "32cf8f438061e95b1492fd2a5db15dd05c13e28d",
+  "runtime_patch_present_during_localization": false,
+  "worktree": "DIRTY_TEST_ADDITIONS",
+  "arms": [
+    {
+      "arm": "off",
+      "exit_code": 3221225477,
+      "receipt": null
+    },
+    {
+      "arm": "on",
+      "exit_code": 0,
+      "receipt": {
+        "enabled": true,
+        "status": "COMPLETE",
+        "job_status": "SUCCESS",
+        "publication": "PUBLISHED",
+        "root_id": "393e2779-6149-488e-b3a1-e0c0f99ad858",
+        "wall_ms": 34673.83980000159,
+        "cpu_ms": 16640.625,
+        "sql": {
+          "calls": 4945,
+          "writes": 195
+        },
+        "hashes": {
+          "stock_trade_status_daily": "f4c07312068817b2570fb4ee197cdf46214ed9bcdcf43587472bd96c7f4b55c4",
+          "stock_factor_daily": "b7f6a7ca982e5c6eb0d44371e7fbe20bf88e38e398243087fe1754f09cc3afd7",
+          "market_daily": "29e2598683cf91a44e5bef83aaa5b37c7d62a0824086b2b179726a288cad77a6",
+          "sector_factor_daily": "c3e04d79ace99c4fbfdd697ffae480bc272f03cc84c0590be73492661f233504",
+          "theme_factor_daily": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "stock_state_daily": "946a5f20a65731f4fc2dc9fff40a30d430c2657edebb2781fb19c7b6b30eba76",
+          "stock_opportunity_daily": "375a84d322b2a10aa424a236fc4ddbff39ed3ecd36d872a33b1a78b29f29a215",
+          "strategy_signal": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "signal_forward_eval": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "data_quality_daily": "d2e752f4b356bd2b981e375f36b6b2473c72c9eb8eb38d3541885299135d1045"
+        },
+        "source": {
+          "source_sha256": "b9b0b64456afdc8f90fcc4bb08206cf02dc57c33037437c17008589f92b0b9f0",
+          "commit_sha": "32cf8f438061e95b1492fd2a5db15dd05c13e28d",
+          "worktree": "DIRTY"
+        },
+        "stage": {
+          "name": "publication.data_quality_daily",
+          "phase": "complete"
+        }
+      }
+    }
+  ],
+  "conclusion": "INCOMPLETE_OFF_NATIVE_ACCESS_VIOLATION_ON_SUCCESS_CAUSE_UNKNOWN",
+  "windows_off_exit_hex": "0xC0000005",
+  "paired_output_equality": "UNAVAILABLE_OFF_RECEIPT_MISSING",
+  "three_pair_matrix": "NOT_RUN_STOP_CONDITION",
+  "overhead_acceptance": "PARTIAL",
+  "postgres_major": 17,
+  "test_marker_verified": true,
+  "test_system_identifier": "7703467696931153488",
+  "default_off_preserved": true
+}
