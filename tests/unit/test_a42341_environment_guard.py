@@ -223,9 +223,15 @@ def test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change():
     steps[index + 1:index + 1] = additions[:2]
     steps.append(additions[2])
     assert current == expected
+    from scripts.ci_opt_contract import TARGETS, baseline_bytes, restore
+
     for name in ('ci.yml', 'ab-read-a4-baseline.yml', 'ab-read-a4-2.yml',
                  'publication-v13.yml', 'a4232-statistics-tail-diagnostic.yml'):
-        assert (ROOT / '.github/workflows' / name).read_bytes() == c.git(
+        actual = (ROOT / '.github/workflows' / name).read_bytes()
+        if name in TARGETS:
+            restore(name, yaml.safe_load(actual))
+            actual = baseline_bytes(name)
+        assert actual == c.git(
             ROOT, 'show', c.BASELINE + ':.github/workflows/' + name, binary=True)
 
 

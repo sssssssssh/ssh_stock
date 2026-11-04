@@ -53,7 +53,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -r requirements.lock
-      - run: python -m pytest tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py tests/unit/test_a4233_background_observer.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml
+      - run: python -m pytest tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py tests/unit/test_a4233_background_observer.py tests/unit/test_a42341_environment_guard.py::test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change -q --junitxml=.codex_tmp/a4-ci-contracts.xml
       - run: python -m ruff check backend tests migrations scripts .github/actions
       - uses: actions/upload-artifact@v4
         if: always()

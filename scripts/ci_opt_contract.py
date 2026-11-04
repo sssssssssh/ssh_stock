@@ -111,7 +111,9 @@ def transform(name, original):
         step["run"] = step["run"].replace(
             "tests/unit/test_a4_ci_governance.py -q",
             "tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py "
-            "tests/unit/test_a4233_background_observer.py -q",
+            "tests/unit/test_a4233_background_observer.py "
+            "tests/unit/test_a42341_environment_guard.py::"
+            "test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change -q",
         )
     value["jobs"]["ci-summary"] = summary_job(name)
     return value

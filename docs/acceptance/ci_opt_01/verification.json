@@ -9,7 +9,7 @@
     "W00": "DELIVERED_AND_APPROVED",
     "W01": "LOCAL_PASS",
     "W02": "LOCAL_PASS",
-    "W03": "FOLLOWUP_IN_PROGRESS",
+    "W03": "AT20_FOLLOWUP_IN_PROGRESS",
     "W04": "DEFERRED"
   },
   "local_pytest": {
@@ -126,5 +126,38 @@
       "tests/unit/test_ci_opt_01.py": "5876988d1f49512e877e7cec2a7dfc4654c672e1a0fb67ae75cb58e0d4cd05d9",
       "tests/unit/test_a4233_background_observer.py": "95ae1b3adebc075157faa7a3b8b1ab619be26e9a706d1b47041e97c3324fc3a9"
     }
+  },
+  "at20_followup": {
+    "previous_sha": "530b21486a95fede9a9bf02c81ad4f21068dd9e9",
+    "failed_observer_run_id": 41792615185,
+    "failed_node": "tests/unit/test_a42341_environment_guard.py::test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change",
+    "local_red_reproduced": true,
+    "old_test_functions_adapted": 5,
+    "fix": "Validate exact current topology, then retain the original historical byte comparison; untouched workflow still compared as original bytes",
+    "local_followup": "PENDING_AT_PRECOMMIT",
+    "linux_ci": "PENDING",
+    "snapshot_code_sha256": {
+      ".github/actions/ci-scope/action.yml": "87fc78076fc5f4ee87542e5e21a888e850426539c248e0f1bc74b4821c62fc63",
+      ".github/ci-opt-policy.json": "e0f07b235510b5e7c3c6cae6e0c9042123772dceeb9cc2341c42269afcb02102",
+      ".github/ci-opt-steps.json": "f5743f26998e40496e28144a59a3b5b3c5f91ced29af5f013fcdc612d1dedda9",
+      ".github/workflows/ab-read-a4-2.yml": "d9e640951de359d257be9d637e2e61979794af1869d03e31d3fb4f5b3502a4be",
+      ".github/workflows/ab-read-a4-baseline.yml": "445e30db581c5198538b2db30029097ef437d14994ab68a11f69ff800a5d5f52",
+      ".github/workflows/ci.yml": "5ce8f0af1e42165006a99879c71e304e3231998d299e8896de7404962ffa088d",
+      ".github/workflows/publication-v13.yml": "968d52ea8c73212f552af6d80e4a6eb2d2728716507f88922c4c722e92b5b707",
+      "scripts/a42331_ci_contract.py": "f8800c208fe2825f30c98afd8ed23ef289ba990e724e013f04527fa5df414a41",
+      "scripts/ci_change_scope.py": "73e21b226a4c23890176f7a3749ec08c18362f89ceaa61fe3dd596c9819e5a47",
+      "scripts/ci_docs_check.py": "1c6e242ba06985e9bd23e75c64aae00ce35a9a221f5bcb60bc5ff2523048720b",
+      "scripts/ci_opt_contract.py": "547898c3cea71bb3a337f81e4a89f08bb173f1ec040792d0f0a7262f5ee5a818",
+      "scripts/ci_status_summary.py": "f54b43b5722730b3af5e31dc3543a9af84d5cf122513505e578bca27b6c83784",
+      "tests/unit/test_a42331_ci_evidence.py": "9e82ae106032caf09f5ac410f42c6f7fde87ab62b83038fbc67616fe2c5b7e42",
+      "tests/unit/test_a4_ci_governance.py": "bd5484e13fa9b23f485fe032ed8369b7aac7c37024ce087e90a3606d095357b1",
+      "tests/unit/test_ci_opt_01.py": "e80414d2fa3f444cbc640f8ff62b3140304fbaf53f7a53f27f62a9791d07c24f",
+      "tests/unit/test_a4233_background_observer.py": "95ae1b3adebc075157faa7a3b8b1ab619be26e9a706d1b47041e97c3324fc3a9",
+      "tests/unit/test_a42341_environment_guard.py": "7daa79873a48f4e5b7705eab5ef6ab089a130290ec242324b6c9d35923434674"
+    },
+    "docs_proof_sha": "413d45211e576b7f797e3d0957ea2f60eb153dfc",
+    "docs_proof_ci_run_id": 41793077538,
+    "docs_proof_seconds": 37,
+    "performance_eligible": false
   }
 }

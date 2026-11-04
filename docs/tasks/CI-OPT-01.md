@@ -56,7 +56,7 @@ JSON 证据（包括 STATUS + R1 verification 的组合）执行静态 JSON 语�
 `ci_opt_contract` 将当前四份 YAML 与 e697fc80 的确定性变换逐项比较：只增加 scope、守卫、
 原步骤 ID、路由结果、独立工件、汇总，以及追加新 CI 单测。任何原命令、coverage、Gate、
 授权或服务对象变化均拒绝。不是简单换一个新摘要。
-原测试仅四个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个、Observer冻结用例一个），
+原测试仅五个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个、Observer冻结用例一个、A42341 AT20一个），
 其余原函数 AST 保持相同，原测试节点没有删除；旧 test Job 摘要和历史对象继续校验。
 `source_contract_pytest`、安全脱敏插件与历史 manifest 不改。
 
@@ -107,12 +107,12 @@ git diff --check
 
 初轮为209通过/2失败：新大小写改名夹具已修正；旧子pytest在跨盘临时目录超时。随后隔离环境
 217项通过；最终默认插件、同盘临时目录218项通过。保留这些过程事实，不将隔离插件结果冒充最终默认结果。
-最终新增56项 CI 回归；初次本地验证仅三个编排函数适配，CI反馈后补齐第四个Observer冻结用例，AST核验其余原函数不变。四份YAML与基线的
+最终新增56项 CI 回归；初次本地验证仅三个编排函数适配，CI反馈后补齐Observer与AT20两个旧冻结用例，AST核验其余原函数不变。四份YAML与基线的
 确定性完整路径投影、步骤计划一致性及业务/迁移/授权/正式Gate空差异检查均通过。
 
 | 验收项 | 本轮结论 |
 | --- | --- |
-| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；四个编排函数为必要版本适配，历史Git/manifest不改 |
+| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；五个编排函数为必要版本适配，历史Git/manifest不改 |
 | A02 十二类触发安全场景 | 本地隔离证据通过；真实doc-only/backend/PR事件DEFERRED |
 | A03 doc-only不执行全量pytest | 隔离路由与步骤守卫通过；GitHub实测≤5分钟/P50/P95 NOT_VERIFIED |
 | A04 关键修改仍完整回归 | 分类与旧命令等价通过；当前Linux/PG17整体验证PENDING |
@@ -140,6 +140,12 @@ git diff --check
 - README真实说明提交1a4bda0f0550a8fd0b475c32a356184f1fba51b8的四条工作流全部成功：主CI41789236152用时46秒，
   A4-1为18秒、A4-2为16秒、Publication为18秒。完整pytest/迁移/Docker build确实skipped，最终汇总实际执行成功。
   这是首轮源码的文档分流证据，不是后续修复SHA的完整工程证明，也不代表P50/P95已稳定。
+- 530b214修复后，Linux轻量合同与Observer初段通过；Observer41792615185的后续A42341 AT20仍直接比较旧Workflow原字节，
+  本机精确复现后补上同一严格投影。原A4233 additions摘要、原字节比较及未修改的A4232原字节约束保留；AT20加入轻量入口。
+- 530b214本机扩大验证为316 passed/1 failed：Windows工作副本的历史清单CRLF导致字节拒绝；临时LF克隆进一步到达原POSIX文件描述符拒绝点，
+  不对Windows加跳过或放宽断言，使用原GitHub Linux环境验收。主工作区历史清单和全局Git配置未改。
+- 第二次README说明提交413d45211e576b7f797e3d0957ea2f60eb153dfc的四条工作流成功，主CI41793077538实测37秒，
+  A4-1为16秒、A4-2与Publication各18秒；仍只适用于该精确说明提交及对应代码版本。
 
 <!-- ci-opt-01:noncontract-prose:start -->
 本页按阅读顺序介绍反馈流程与记录位置。

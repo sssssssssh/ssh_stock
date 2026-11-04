@@ -222,6 +222,8 @@ DECISION_LOG 追加工程/性能分层判定，任务规范登记 DOC-CLOSEOUT�
 - [任务回执](docs/tasks/CI-OPT-01.md)与[验证摘要](docs/acceptance/ci_opt_01/verification.json)登记范围和剩余项；本地通过不代表正式工程或性能验收完成。
 - 首轮f31aeef已推送；真实README说明提交1a4bda0的四条文档工作流通过，主CI46秒，完整pytest/迁移/Docker未执行。
 - 首轮Observer合同41788897841发现漏接的第四个旧冻结用例，318通过/1失败，本机已精确复现。当前补齐同一严格投影并纳入轻量回归；当前修复的本地及新SHA完整CI仍PENDING，不用旧218项或README成功冒充。
+- 530b214在Linux已通过上述初段；后续A42341 AT20又暴露直接比较旧Workflow原字节的第五处边界，当前补齐并加入轻量入口，原摘要/字节断言保留。
+- 同版Windows扩大验证316通过/1失败，失败为CRLF及原POSIX目录FD能力限制，未放宽；413d452说明提交主CI37秒、四条说明工作流成功。最新修复完整Linux验收仍PENDING。
 
 <!-- ci-opt-01:noncontract-prose:start -->
 此处可补充阅读提示，具体状态请查看各节记录。

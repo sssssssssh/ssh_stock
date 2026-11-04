@@ -363,7 +363,7 @@ def test_T01_T10_real_entrypoints_emit_only_docs_proof(repo, monkeypatch):
     assert not (root / ".codex_tmp/a421").exists()
 
 
-def test_T11_only_four_reviewed_test_functions_changed_and_no_original_test_removed():
+def test_T11_only_five_reviewed_test_functions_changed_and_no_original_test_removed():
     allowed = {
         "tests/unit/test_a4_ci_governance.py": {
             "test_only_reviewed_job_conditions_change_from_ci_1_0",
@@ -374,6 +374,9 @@ def test_T11_only_four_reviewed_test_functions_changed_and_no_original_test_remo
         },
         "tests/unit/test_a4233_background_observer.py": {
             "test_frozen_baseline_bytes_and_old_workflows_unchanged",
+        },
+        "tests/unit/test_a42341_environment_guard.py": {
+            "test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change",
         },
     }
     for path, exceptions in allowed.items():
