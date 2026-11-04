@@ -1,0 +1,31 @@
+{
+  "schema": "ci-opt-02.rollback-proof.v1",
+  "restored_code_reference": "d5858ba0c4f5bc5f2d203022de0431fc29cced25",
+  "source_paths": [
+    ".github",
+    "scripts",
+    "tests",
+    "backend",
+    "frontend",
+    "config",
+    "migrations",
+    "pyproject.toml",
+    "requirements.lock"
+  ],
+  "byte_diff_paths": [],
+  "all_original_python_test_files": 327,
+  "all_original_test_bytes_identical": true,
+  "collected_nodes": 5407,
+  "exact_node_multiset": true,
+  "contracts_passed": 165,
+  "diff_check": "PASS",
+  "ruff": "PASS",
+  "candidate_withdrawn": true,
+  "B1_enabled": false,
+  "new_full_sha_ci": "NOT_YET_AVAILABLE_NO_FULL_PASS_CLAIM",
+  "evidence_sha256": {
+    "rollback-collect.log": "e6c061aa91bb14638ce9365851ae6e16b308654600c6e0e91e05ba0a6b3cd2c0",
+    "rollback-contracts.xml": "8e4dad1748b6b8cb0f25d8a21b11d199826900fe964461d27c38a758786eb15a",
+    "rollback-contracts.log": "8c1c1015ef0ae978af4d0f884a17d557f260c0081162fc3f091fafc9a379ea90"
+  }
+}

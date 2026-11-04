@@ -1,0 +1,961 @@
+{
+  "schema": "ci-opt-02.withdrawal.v1",
+  "date": "2026-11-04",
+  "status": "B0_WITHDRAWN_W03_PARTIAL_ORIGINAL_SERIAL_RESTORED",
+  "review_base": "d5858ba0c4f5bc5f2d203022de0431fc29cced25",
+  "implementation_sha": "44ad3d8603c5b8eeb6c5a2c672aeca035177d925",
+  "repair_sha": "be2773c4359acea21c5a53675c3fffd5d445452a",
+  "run_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41831646183",
+  "attempt": 1,
+  "shard_summary": {
+    "head_sha": "be2773c4359acea21c5a53675c3fffd5d445452a",
+    "run_id": "41831646183",
+    "attempt": "1",
+    "shard": "serial",
+    "status": "INCOMPLETE",
+    "exit_code": 1,
+    "failures": 128,
+    "errors": 0,
+    "skipped": 0,
+    "fallback": false,
+    "manifest_sha256": "71cb9f071f2afc4e9c6fde6533326350132a40d3fcfd7b3fd4530deaf0483179",
+    "coverage_sha256": "badc00b40c4db5f123d732eb4d26b12b860133ae057be5784a57885c1e71a8cf",
+    "junit_sha256": "11ea345a17922e8ea085e30fd679f0329913d8d9e7746fc2299be283c9a1073e",
+    "wall_seconds": 1814.3061240230002,
+    "process_cpu_seconds": 1139.926021218,
+    "cpu_scope": "PYTHON_PARENT_NOT_SERVER_OR_CHILD_PROCESSES",
+    "performance_eligible": false,
+    "cpu_count": 4,
+    "ram_bytes": 16760344576,
+    "peak_rss_bytes": 1235296256,
+    "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+    "physical_instance": {
+      "V14_TEST_INSTANCE": "53c623f3-f2df-446a-a2f0-2a4c74560f3b",
+      "V14_TEST_SYSTEM_IDENTIFIER": "7704296116812202029",
+      "V14_CONTAINER": "a4-ci-41831646183-1-8ca80910a6c9"
+    }
+  },
+  "pilot_passed": 8,
+  "full_union": {
+    "passed": 5297,
+    "failed": 128,
+    "errors": 0,
+    "skipped": 0,
+    "total": 5425
+  },
+  "performance_status": "NOT_QUALIFIED_FAILURES_MUST_NOT_BE_COMPARED_AS_SPEEDUP",
+  "root_cause": "NOT_PROVEN_FROM_REDACTED_CI_TRACE",
+  "confirmed_setup_difference": "B0 serial provisioned V14 but did not migrate its parent database; original ci_full_05 explicitly migrates that parent before legacy tests",
+  "hypothesis": "Missing V14 parent migration may explain legacy financial failures; preserve as hypothesis, do not infer SQLSTATE",
+  "regression_nodes": [
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_account_gateway_requires_exact_pretrade_snapshot",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.015
+    },
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_execution_start_gate_failure_writes_no_attempt_or_fill_cb37ec75dcf7fef7",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.013
+    },
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_execution_start_gate_failure_writes_no_attempt_or_fill_7ad4b99e65cdcbf4",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_rebalance_same_hash_is_idempotent_and_changed_hash_conflicts",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_0034_requires_input_hash_only_for_portfolio_v3",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m13_3_1_correctness",
+      "sanitized_name": "test_run_for_update_serializes_two_real_sessions",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_missing_pretrade_position_rows_fail_before_open_writes",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_corrupt_frozen_hash_blocks_all_write_services",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_closed_day_rejects_late_open_without_mutations_862ff808c4ec179f",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_closed_day_rejects_late_open_without_mutations_bed54e8adc349557",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_rebalance_requires_authoritative_close_and_detects_tampering",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.014
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_sealed_close_is_idempotent_and_rejects_late_fill",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_close_rebalance_and_sealed_retry_share_persisted_precision",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_two_day_target_to_nav_flow_uses_real_postgresql_ledger",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_execution_uses_frozen_config_not_runtime_yaml",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_runtime_source_identity_drift_blocks_database_writes",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m13_3_2_consistency",
+      "sanitized_name": "test_rebalance_uses_frozen_portfolio_config_not_runtime_yaml",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m13_4_backtest_runner",
+      "sanitized_name": "test_five_day_runner_and_post_commit_recovery_are_equivalent",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_concurrent_queue_creates_one_job_and_returns_same_active_job_id",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_stale_recovery_preserves_artifact_and_allows_explicit_recalculation",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_recovery_fresh_heartbeat_race_does_not_reclaim_live_worker",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_recovered_old_worker_is_fenced_and_new_worker_succeeds",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_retry_reuses_artifact_if_job_terminal_update_was_interrupted",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_queue_fails_fast_for_non_success_backtest_3de4c867349bb75c",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_queue_fails_fast_for_non_success_backtest_9f86ff6416e2fb63",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_1_performance_concurrency",
+      "sanitized_name": "test_queue_fails_fast_for_non_success_backtest_995115d53325cc14",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_postgresql_performance_artifact_is_idempotent_and_source_versioned",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_performance_report_and_daily_are_atomic_on_persistence_failure",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_performance_job_failure_leaves_no_partial_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_performance_worker_persists_artifact_and_completes_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_extreme_single_day_annualized_return_persists_3446f703fd22ea02",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.015
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_extreme_single_day_annualized_return_persists_73e6a9c833ea4696",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_extreme_single_day_annualized_return_persists_313615bbf0c506e3",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_1_performance_integration",
+      "sanitized_name": "test_database_rejects_daily_row_owned_by_different_run",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_concurrency",
+      "sanitized_name": "test_concurrent_risk_queue_creates_one_active_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_concurrency",
+      "sanitized_name": "test_stale_recovery_rechecks_fresh_heartbeat_under_lock",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_concurrency",
+      "sanitized_name": "test_recovery_fences_old_worker_then_replacement_succeeds_and_retry_reuses",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_risk_artifact_is_idempotent_and_benchmark_revision_is_versioned",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_risk_report_and_daily_are_atomic_on_persistence_failure",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_database_rejects_cross_owner_and_missing_base_date_daily_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_invalid_benchmark_source_fails_job_without_artifact_4b4a8054292362db",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_invalid_benchmark_source_fails_job_without_artifact_f944e738f14ee1ec",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_invalid_benchmark_source_fails_job_without_artifact_fa25be2efaedf983",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.016
+    },
+    {
+      "classname": "tests.integration.test_m14_2_risk_integration",
+      "sanitized_name": "test_postgresql_backed_risk_api_auth_calculate_report_and_pagination",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_concurrency",
+      "sanitized_name": "test_concurrent_trade_queue_creates_one_active_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_concurrency",
+      "sanitized_name": "test_trade_and_risk_queue_use_independent_locks",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_concurrency",
+      "sanitized_name": "test_trade_recovery_rechecks_fresh_heartbeat_under_lock",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_concurrency",
+      "sanitized_name": "test_trade_recovery_fences_old_worker_and_retry_reuses",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_postgresql_trade_e2e_reconciles_closed_open_cost_and_turnover",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_trade_identity_reuses_then_versions_valid_source_revision",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_trade_position_replay_mismatch_leaves_no_artifact_ef1f3dad256cc74c",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_trade_position_replay_mismatch_leaves_no_artifact_2f9def67d7f5955f",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_trade_daily_cost_mismatch_fails_before_persistence",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_trade_report_daily_episode_persistence_is_atomic",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_database_rejects_cross_owner_trade_daily_and_episode_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.018
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_postgresql_trade_api_calculate_report_daily_and_episode_pagination",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.016
+    },
+    {
+      "classname": "tests.integration.test_m14_3_trade_integration",
+      "sanitized_name": "test_invalid_trade_source_fails_worker_without_partial_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_series_pages_all_1200_persisted_rows_and_fails_closed_on_date_gap",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_summary_bundle_remains_pinned_after_new_risk_trade_and_period",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_explicit_bundle_ids_fail_closed_across_owners",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_period_concurrent_queue_uses_two_sessions_and_one_active_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_period_recovery_fresh_heartbeat_race_preserves_live_worker",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_1_closeout",
+      "sanitized_name": "test_period_midflight_recovery_fences_old_worker_and_replacement_succeeds",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_productization",
+      "sanitized_name": "test_period_e2e_persists_month_year_reuses_and_context_is_bounded",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m14_4_productization",
+      "sanitized_name": "test_period_date_mismatch_fails_without_partial_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_productization",
+      "sanitized_name": "test_bundle_latest_and_compare_preserve_request_order_then_fail_closed",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m14_4_productization",
+      "sanitized_name": "test_database_rejects_cross_owner_period_row",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.02
+    },
+    {
+      "classname": "tests.integration.test_m14_4_productization",
+      "sanitized_name": "test_period_active_job_recovery_and_old_worker_fencing",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_materialization_mid_failure_rolls_back_every_run_binding_and_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.008
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_phase_a_crash_retry_reuses_runs_and_dispatches_exactly_one_job_each",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_partial_dispatch_crash_retry_does_not_duplicate_existing_jobs",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_start_skips_failed_and_cancelled_children_and_only_executes_created",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.022
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_cancel_racing_dispatch_never_creates_job_after_cancel_gate",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.028
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_running_prelease_child_cancel_reuses_m13_generation_aware_cancel",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.017
+    },
+    {
+      "classname": "tests.integration.test_m15_1_1_experiment_lifecycle_closeout",
+      "sanitized_name": "test_source_drift_after_materialization_preserves_bindings_and_creates_no_job",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m15_1_experiment_foundation",
+      "sanitized_name": "test_create_start_read_filter_idempotence_and_cancel_use_authoritative_runs",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.014
+    },
+    {
+      "classname": "tests.integration.test_m15_1_experiment_foundation",
+      "sanitized_name": "test_source_drift_and_prestart_cancel_create_no_runs_or_jobs",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.013
+    },
+    {
+      "classname": "tests.integration.test_m15_1_experiment_foundation",
+      "sanitized_name": "test_concurrent_start_materializes_and_dispatches_each_trial_once",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m15_1_experiment_foundation",
+      "sanitized_name": "test_two_trial_experiment_reaches_success_through_actual_worker_path",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.013
+    },
+    {
+      "classname": "tests.integration.test_m15_1_experiment_foundation",
+      "sanitized_name": "test_m13_manual_resume_is_observed_dynamically_by_experiment",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.023
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_readiness_terminal_state_matrix",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.029
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_missing_m14_stage_matrix_3cdbd81727ca9d55",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.011
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_missing_m14_stage_matrix_4d5f923b9034b6e8",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.016
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_missing_m14_stage_matrix_2fc14a530d6c788e",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_missing_m14_stage_matrix_3cfaca8076e5c825",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_8b844ad6783d4c18",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.016
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_1cadf678f83d1bf5",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_040d139a2a5d8a79",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_e0f377471eda29f7",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_a4e2d747140ad3ae",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_22fb369add50911d",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_91c41003fc6aa76e",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_analytics_compatibility_matrix_f2d8d41d2bc64d26",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_policy_change_creates_new_immutable_evaluation_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_m14_generation_change_creates_new_evaluation_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_postgres_rejects_cross_experiment_trial_evaluation",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.008
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_postgres_rejects_invalid_excluded_and_shortlist_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.014
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_postgres_rejects_duplicate_trial_and_sensitivity_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_partial_experiment_excludes_failed_cancelled_from_selection",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_trial_parameter_identity_tampering_fails_closed_fca9252937415cc6",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_1_evaluation_integrity_closeout",
+      "sanitized_name": "test_trial_parameter_identity_tampering_fails_closed_2a302b037b083b27",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m15_2_experiment_evaluation",
+      "sanitized_name": "test_complete_evaluation_persists_reuses_and_exposes_detail_pages",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m15_2_experiment_evaluation",
+      "sanitized_name": "test_missing_analytics_and_incompatible_bundles_fail_closed",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m15_2_experiment_evaluation",
+      "sanitized_name": "test_policy_identity_active_job_conflict_and_no_feasible_success",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_2_experiment_evaluation",
+      "sanitized_name": "test_concurrent_queue_old_worker_fencing_and_replacement_success",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_m15_2_experiment_evaluation",
+      "sanitized_name": "test_recovery_rechecks_fresh_heartbeat_before_marking_failed",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_3_walk_forward_integration",
+      "sanitized_name": "test_study_freeze_and_bounded_advance_create_each_train_once",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_3_walk_forward_integration",
+      "sanitized_name": "test_window_partial_binding_is_rejected_by_postgresql",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m15_3_walk_forward_integration",
+      "sanitized_name": "test_complete_pinned_source_validation_job_persists_and_reuses_artifact",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_m16_1_1_agent_reliability",
+      "sanitized_name": "test_agent_session_is_postgresql_read_only_and_adapter_changes_no_business_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.007
+    },
+    {
+      "classname": "tests.integration.test_m16_2_2_research_integrity",
+      "sanitized_name": "test_persisted_walk_forward_lineage_and_m14_contract_are_enforced",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_m16_6_m14_capture",
+      "sanitized_name": "test_performance_tool_captures_selected_bundle_and_trade_dates_in_same_transaction",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_five_portfolio_tables_round_trip_and_cascade",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.012
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_create_backtest_definition_freezes_all_config_identities",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_portfolio_source_integrity_real_db_exact_sets_and_current_identity",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_3_accounting_rebuild_is_idempotent_and_precise",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_3_rebalance_application_is_idempotent",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_3_rebalance_market_provider_batches_close_and_profile",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.008
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_3_run_guard_rejects_created_accounting_write",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_3_plan_order_same_run_fk_and_unique_date",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_portfolio_database_check_constraints",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_fill_order_run_identity_is_enforced_by_database",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_m13_check_constraint_names_match_orm_metadata",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.01
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_execution_application_persists_attempt_and_fill_and_fails_closed",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_execution_application_preserves_three_day_attempt_history",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.015
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_attempt_and_fill_same_run_foreign_keys_reject_cross_run_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_invalid_quantity_order_does_not_rollback_valid_order",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    },
+    {
+      "classname": "tests.integration.test_portfolio_persistence",
+      "sanitized_name": "test_execution_integrity_database_checks_reject_invalid_rows",
+      "message": "A42331_TEST_FAILURE",
+      "trace": "A42331_TEST_FAILURE",
+      "seconds": 0.009
+    }
+  ],
+  "artifacts": {
+    "serial": {
+      "id": 13327945051,
+      "sha256": "334edcd78ecd7f30c9cd60e7b5c9389bba723905e1b14c65848db5db8c2152fe",
+      "junit_sha256": "11ea345a17922e8ea085e30fd679f0329913d8d9e7746fc2299be283c9a1073e"
+    },
+    "pilot": {
+      "id": 13323580118,
+      "sha256": "c2624dca376f5c33e063d2cbd0d2e87c74bb2f39a6b21e523fb14055da08c4a7"
+    }
+  },
+  "B1_enabled": false,
+  "followup": "Review original dual-parent migration/fixture lifecycle before any new candidate. Do not rerun until PASS or expand to B1."
+}

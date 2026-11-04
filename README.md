@@ -1,12 +1,5 @@
 # A 股机会发现与趋势研究系统
 
-## CI-OPT-02 实施边界
-
-CI-OPT-02当前采用B0：8项纯单测与其余测试分片，组内串行，最终合并coverage并保留70%门槛。
-测试变化需审阅后用python -m scripts.ci_test_shards manifest更新清单；清单漂移走全集串行且不签发分片通过。
-同SHA Linux稳定性/耗时尚待验收，B1禁用；详见docs/tasks/CI-OPT-02.md。
-
-
 ## CI-OPT-01 文档反馈与完整回归
 
 普通 push/PR 保留原工作流和检查名。只修改下方显式非契约说明块、且完整 Git 比较及静态校验

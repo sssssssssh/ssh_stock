@@ -31,19 +31,6 @@ def verify_job(scope, outcomes, upstream, plan, env, docs=None):
 def verify_workflow(name, needs, env):
     required = (set(TARGETS[name]) | {"workflow-contracts", "dependency-audit"}
                 if name == "ci.yml" else set(TARGETS[name]))
-    if name == "ci.yml":
-        required.update(("python-tests", "python-scope"))
-    if name == "ci.yml" and set(needs) == required:
-        routing = needs["python-scope"]
-        if (routing.get("result") != "success"
-                or routing.get("outputs", {}).get("head") != env.get("GITHUB_SHA")
-                or routing.get("outputs", {}).get("scope") not in {"docs", "full"}):
-            raise ValueError("CI_OPT_MISSING_ROUTE_PROOF")
-        if routing["outputs"]["scope"] == "docs":
-            if needs["python-tests"].get("result") != "skipped":
-                raise ValueError("CI_OPT_DOC_SHARDS_EXECUTED")
-            needs = {k: v for k, v in needs.items() if k != "python-tests"}
-            required.remove("python-tests")
     if set(needs) != required or any(j.get("result") != "success" for j in needs.values()):
         raise ValueError("CI_OPT_MANDATORY_JOB_NOT_SUCCESS")
     scopes = set()
@@ -54,8 +41,6 @@ def verify_workflow(name, needs, env):
                 or outputs.get("ci_opt_scope") not in {"docs", "full"}):
             raise ValueError("CI_OPT_MISSING_ROUTE_PROOF")
         scopes.add(outputs["ci_opt_scope"])
-    if name == "ci.yml" and scopes != {routing["outputs"]["scope"]}:
-        raise ValueError("CI_OPT_INCONSISTENT_ROUTES")
     if len(scopes) != 1:
         raise ValueError("CI_OPT_INCONSISTENT_ROUTES")
     return next(iter(scopes))

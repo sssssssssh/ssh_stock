@@ -1,52 +1,31 @@
 # CI-OPT-02 — W00 审计与待批准实施方案
 
-## 当前批准与实施接续
+## 当前结论：B0已撤回，W03 PARTIAL
 
-负责人在W00交付后回复“已确认”，批准方案B、分片并发上限2及先B0后条件B1的顺序。
-本节为当前状态；下文W00的未授权文字保留原审阅语境。
-W01集合/回执/覆盖率合同与W02 B0源码已实现，等待最终精确SHA的Linux结果。
-B0为pilot 8节点与serial其余节点，当前全集5425（新增18项CI合同测试）；不把原5407当固定应有数量。
-B1仍禁用，原两个PG分片提案没有进入执行选择器。W03同SHA串行和至少两次候选尚未完成，状态PARTIAL。
+负责人已回复“已确认”，批准方案B、并发上限2、先B0后条件B1。下文W00未批准措辞保留历史语境。
+实施提交44ad3d8，追加一次限定coverage隔离P1修复be2773c；两者和原始RED/失败证据保留，不改写历史。
+本地369项合同及8项pilot通过；最终修复后20项干净工作区检查与Ruff通过。
+实际Linux pilot为8 passed；敏感分片5289 passed /128 failed，0 errors/skip，耗时1797.09秒。
+原全集5425（原5407加本轮18项）实际均已执行，未用较短失败时长冒充提速。
+三个专项普通CI成功不代替主CI，主CI失败关闭不得签发FULL_PASS。
 
-### 实现及实际本地验证
+按任务书W03停止条件，撤回不合格B0执行改造及本轮新增的18项候选合同测试，
+恢复d5858ba的原串行工作流、脚本合同和原测试字节。原5407用例全部保留，B1未启用。
+新增18项属于撤回候选而非历史原测试，源码可在44ad3d8/be2773c或交付patch中逐字审阅。
+回滚是原任务书明确要求的失败处理，不是新增并行方案或循环状态同步提交。
 
-- `.github/ci-test-manifest.json`固定当前节点、所有tests Python文件摘要及纯单测的四个依赖源摘要。
-  `python -m scripts.ci_test_shards manifest`只收集和生成待审manifest，不执行fixture或连接数据库。
-- 新python-scope Job复用原CI-OPT-01分流；docs不启动分片matrix，原主Job与Required Check名保留。
-- python-tests使用独立GitHub VM/PG服务/V14容器，matrix最大2，fail-fast=false；各Job内串行。
-  当前只有serial分片运行PG测试；pilot禁止socket连接。没有启用PG并行或xdist。
-- 收集在子进程完成，实际pytest的导入仍被coverage测量；两个分片独立隐藏coverage文件及精确JUnit。
-  汇总校验SHA/run/attempt、每组exit0、完整节点多重集、分组所有权、JUnit真实节点/结果和文件摘要。
-  coverage真实combine后仍≥70%，再生成原full XML供原安全证据及端到端步骤使用。
-- 任何新增文件、fixture变化、收集差异进入原全集serial fallback，拒绝分片合格声明，需审阅后更新manifest。
-  汇总开始即写INCOMPLETE，失败不会留下新的FULL_PASS。已有serial/full失败和取消仍让Required Check失败。
-- 原正式迁移upgrade/downgrade/upgrade、目标回归、Docker/前端/浏览器/队列端到端等步骤保留。
-  主Job在分片完成后继续这些原步骤；B0预期没有可观整链提速，增加成本需如实评估。
-- CI-OPT-01精确投影新增CI-OPT-02层；旧生产/历史字节与授权规则不变。
-  两个旧拓扑测试的断言做精确兼容：主Job依赖必须等于python-scope/python-tests，其余Job仍无依赖；
-  原full命令由真实分片及70%组合门禁替代，其他命令逐条相等。没有删除旧测试或默认skip/xfail。
-- RED新增合同在模块不存在时真实收集失败；修复后18项通过，真实coverage两份合并100%、破坏工件拒绝。
-  扩展合同回归183项通过；本地pilot从5425项选8项通过，其他5417属于serial。
-  早期18个旧依赖断言失败及脏树guard拒绝均保留日志，不冒充最终结果。
-- 本机Docker daemon不可用，未连接/启动业务数据库；本地不执行PG大套件或高成本A4/G1/Publication实验。
-  PG资格、最终覆盖率及Linux整套结果以推送后的同SHA工件为准，不把本地18/183/8相加为完整套件。
+[withdrawal.json](../acceptance/ci_opt_02/withdrawal.json)列128失败节点、确切SHA/run/attempt、
+工件和JUnit SHA256及停止状态。已有安全插件脱敏后的trace无法还原原SQLSTATE，不伪造现场根因。
+确认的前置差异：分片只迁移service stock_db，遗漏原ci_full_05对V14父测试库的迁移。
+它是优先复核的原因候选，尚不能仅凭源码差异断言全部128失败同因。
+[implementation.json](../acceptance/ci_opt_02/implementation.json)与
+[coverage_fix.json](../acceptance/ci_opt_02/coverage_fix.json)继续作为撤回候选的历史记录，不代表当前启用。
 
-### 一次限定P1修复
-
-44ad3d8提交后复核发现：聚合Coverage默认继承外层COVERAGE_FILE，会改变分片数据文件查找基名。
-嵌套coverage回归真实复现NoDataError。修复固定聚合数据文件为当前ROOT/.coverage；
-新回归明确设置外部COVERAGE_FILE并确认原字节不变。183项通过，原RED日志摘要见
-[coverage_fix.json](../acceptance/ci_opt_02/coverage_fix.json)。仅追加这一次限定修复，
-同时更新变更测试的manifest摘要；不因CI状态或自身SHA另作提交。
-
-### 未关闭事项和回滚
-
-W03尚缺同SHA、固定Runner规格的串行基线及两次候选、queue/wall/CPU/成本报告；不得宣称20–30分钟或性能PASS。
-B1前置的双物理实例/fixture所有权和真实Linux稳定性证据尚未齐备，保持禁用。
-实际CI普通提交可自动触发，无手动高成本授权扩展；现有连接器不提供workflow dispatch写入，
-若需要额外同SHA运行，应由有权限的Runner/操作端执行已审阅方案，不以换SHA的提交替代对照。
-本轮单一实施提交可整体revert恢复W00前串行路径；不涉及业务schema/数据或金融逻辑。
-最终CI结果通过交付回执和工件给出，不为追记自身SHA生成循环状态提交。
+W01/W02候选已实现并撤回，W03不合格；本轮不继续猜测修改、刷绿或进入B1。
+结论：**当前候选不适合启用并行，保留原串行**。20–30分钟目标未达到资格要求；
+同SHA串行基线及两次有效候选未完成，未产生性能资格。后续先审阅双PG父库/fixture生命周期，
+确定可控、同机型、同源码的验证协议后再提出下一候选；不关闭BIZ-PERF-03-A-R1。
+本轮未连接业务数据库、修改业务/金融代码、降低coverage70%或扩大专项授权。
 
 
 日期：2026-11-04（Asia/Shanghai）。负责人：项目用户；方案编制：Codex。
