@@ -1,0 +1,73 @@
+{
+  "schema": "ci-opt-02.w00.v1",
+  "source_sha": "252f7559f8ab86de3420c0aaad825e819fb38a40",
+  "collected_nodes": 5407,
+  "duplicate_nodes": 0,
+  "modules": 319,
+  "groups": {
+    "pg-sensitive": {
+      "nodes": 943,
+      "baseline_testcase_seconds": 2371.0089999999987
+    },
+    "offline-process": {
+      "nodes": 100,
+      "baseline_testcase_seconds": 149.22600000000003
+    },
+    "unit-review-serial": {
+      "nodes": 4364,
+      "baseline_testcase_seconds": 412.8029999999616
+    }
+  },
+  "implementation_approved": false,
+  "performance_eligible": false,
+  "production_authorized": false,
+  "runs": [
+    {
+      "run_id": 41803501811,
+      "run_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41803501811",
+      "source_sha": "57edac4115a8f321b4d0d32889115ea54e501abd",
+      "run_attempt": 1,
+      "job_id": 126484762076,
+      "job_wall_seconds": 3731.0,
+      "runner_labels": [
+        "ubuntu-latest"
+      ],
+      "runner_name": "GitHub Actions 1000001852",
+      "cpu_ram": "NOT_EXPOSED_IN_JOBS_API; no same-machine performance comparison claimed",
+      "queue_seconds": "UNKNOWN; API job timestamps do not measure queue reliably",
+      "counts": {
+        "passed": 5407
+      },
+      "artifact_id": 13311774092,
+      "artifact_sha256": "b50d8f091369d906a8a593e9744eb9b8e7caa73555cfd66aabe55979d5a4f988",
+      "junit_sha256": "6791aecaed8eab6453efee33f50e36a4d7fdc01848e0735bc276bfdd8f68263c",
+      "junit_bytes": 818163,
+      "sum_testcase_seconds": 2933.038,
+      "current_node_matches": 5407
+    },
+    {
+      "run_id": 41795028412,
+      "run_url": "https://github.com/sssssssssh/ssh_stock/actions/runs/41795028412",
+      "source_sha": "f39f4a804969f5b72a5b6ccf0878ced167311f4c",
+      "run_attempt": 1,
+      "job_id": 126456990130,
+      "job_wall_seconds": 2900.0,
+      "runner_labels": [
+        "ubuntu-latest"
+      ],
+      "runner_name": "GitHub Actions 1000001824",
+      "cpu_ram": "NOT_EXPOSED_IN_JOBS_API; no same-machine performance comparison claimed",
+      "queue_seconds": "UNKNOWN; API job timestamps do not measure queue reliably",
+      "counts": {
+        "passed": 5402,
+        "failure": 1
+      },
+      "artifact_id": 13307377508,
+      "artifact_sha256": "c7bb8b18c9b6580dcd15654ad68fc98592d8cb6a327000ece2b44c04b9f3b0af",
+      "junit_sha256": "58364799d52d8aa1799fc4b0cfe495a32510f879d88587b27f5bc13a57184f9e",
+      "junit_bytes": 817611,
+      "sum_testcase_seconds": 2368.313,
+      "current_node_matches": 5402
+    }
+  ]
+}

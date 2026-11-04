@@ -1,0 +1,32 @@
+{
+  "schema": "ci-opt-02.w00-validation.v1",
+  "source_sha": "252f7559f8ab86de3420c0aaad825e819fb38a40",
+  "status": "W00_STATIC_AND_COLLECTION_PASS_NOT_IMPLEMENTATION_ACCEPTANCE",
+  "collect_exit_code": 0,
+  "collection_seconds": 3.47,
+  "nodes": 5407,
+  "duplicates": 0,
+  "modules": 319,
+  "B1_exact_module_multiset": true,
+  "tests_executed": 0,
+  "database_connections": 0,
+  "parallel_experiments": 0,
+  "implementation_approved": false,
+  "workflow_changed": false,
+  "comparison_status": "NOT_RUN",
+  "per_test_sha_matching": {
+    "41803501811": 5407,
+    "41795028412": 5402
+  },
+  "original_failure_preserved": true,
+  "files": {
+    "summary.json": "bba23a283a50c57f2c74e0ee8aff25cb53c55236641e2f40c2a7868330ac7232",
+    "workflow-inventory.json": "a8ab2d89fbd42a164cfebe4811352c867d0b0766ffb8e0d78cf284f55cd80cea",
+    "run-41795028412.json": "3956bdc12cd0a461a3e7928a78f8fa842c57693da139ba150d6cd1f85b2ffb07",
+    "nodeids.json": "12814770e1d26f08f633ab1a21c7ae2be80284b2cbc33f2f7f23a8edd89e3d58",
+    "run-41803501811.json": "a7045999d2b6d54dbedad74b9556564b42eaf292dcf93368e4cc9f523fbea5a3",
+    "modules.json": "8a359ee6a5616a1742cf790c405fe041438a9c7c58905ce54ab999a6bf4276e5",
+    "proposal.json": "e572c3e880d283e0a83dd9c7cece5b28415ec17d731a635f7d7a64c47801e037",
+    "top30.md": "8e48fc4e1b50aa3d380e69c6ff39c7e02321c817c914986d325c7e7acd98d8a7"
+  }
+}
