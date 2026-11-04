@@ -10,7 +10,8 @@
 范围、限制及回滚见 [CI-OPT-01](docs/tasks/CI-OPT-01.md)。
 
 <!-- ci-opt-01:noncontract-prose:start -->
-阅读本节可以了解页面说明与检查结果的对应关系。
+阅读本节可以了解说明的检查方式。
+需要排查问题时，可先查看各节记录。
 <!-- ci-opt-01:noncontract-prose:end -->
 
 ## BIZ-PERF-03-A-R1 受限诊断整改（2026-11-03）
