@@ -552,8 +552,10 @@ def test_frozen_baseline_bytes_and_old_workflows_unchanged():
             import yaml
 
             from scripts.a42331_ci_contract import normalize_test_job
+            from scripts.ci_opt_contract import restore
 
             current = yaml.safe_load((ROOT / p).read_bytes())
+            current = restore("ci.yml", current)
             current["jobs"]["test"] = normalize_test_job(current["jobs"]["test"])
             assert current == yaml.safe_load(before)  # All other jobs/gates remain frozen.
         else:

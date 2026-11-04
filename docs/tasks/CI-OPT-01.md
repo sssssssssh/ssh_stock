@@ -56,7 +56,7 @@ JSON 证据（包括 STATUS + R1 verification 的组合）执行静态 JSON 语�
 `ci_opt_contract` 将当前四份 YAML 与 e697fc80 的确定性变换逐项比较：只增加 scope、守卫、
 原步骤 ID、路由结果、独立工件、汇总，以及追加新 CI 单测。任何原命令、coverage、Gate、
 授权或服务对象变化均拒绝。不是简单换一个新摘要。
-原测试仅三个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个），
+原测试仅四个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个、Observer冻结用例一个），
 其余原函数 AST 保持相同，原测试节点没有删除；旧 test Job 摘要和历史对象继续校验。
 `source_contract_pytest`、安全脱敏插件与历史 manifest 不改。
 
@@ -107,12 +107,12 @@ git diff --check
 
 初轮为209通过/2失败：新大小写改名夹具已修正；旧子pytest在跨盘临时目录超时。随后隔离环境
 217项通过；最终默认插件、同盘临时目录218项通过。保留这些过程事实，不将隔离插件结果冒充最终默认结果。
-最终新增56项 CI 回归；原测试仅三个编排函数适配，AST核验其余原函数不变。四份YAML与基线的
+最终新增56项 CI 回归；初次本地验证仅三个编排函数适配，CI反馈后补齐第四个Observer冻结用例，AST核验其余原函数不变。四份YAML与基线的
 确定性完整路径投影、步骤计划一致性及业务/迁移/授权/正式Gate空差异检查均通过。
 
 | 验收项 | 本轮结论 |
 | --- | --- |
-| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；三个编排函数为已审阅的必要适配，历史Git/manifest不改 |
+| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；四个编排函数为必要版本适配，历史Git/manifest不改 |
 | A02 十二类触发安全场景 | 本地隔离证据通过；真实doc-only/backend/PR事件DEFERRED |
 | A03 doc-only不执行全量pytest | 隔离路由与步骤守卫通过；GitHub实测≤5分钟/P50/P95 NOT_VERIFIED |
 | A04 关键修改仍完整回归 | 分类与旧命令等价通过；当前Linux/PG17整体验证PENDING |
@@ -129,6 +129,17 @@ git diff --check
 网络接续：同日确认系统代理已改为本机7900，Git与GitHub API通过该端口均成功；实时远端master
 仍为e697fc80。负责人随后明确回复“提交并推送 master，继续 CI 验收”，本轮按该授权继续W03。
 上段UNKNOWN仅保留先前断网取样的历史语境，不是网络恢复后的当前结论。不修改全局Git代理。
+
+### 首轮真实 CI 反馈与修复
+
+- 实现提交f31aeefe6f68761662603bb054c778f8e1b531af已经推送；Observer合同41788897841为318 passed/1 failed。
+- 本机精确复现失败用例test_frozen_baseline_bytes_and_old_workflows_unchanged：旧用例只恢复test Job，
+  尚未验证/恢复整份Workflow的已批准分流变换，导致旧整文件比较失败。历史manifest/hash断言本身没有失败。
+- 最小修复：复用同一个严格restore后保留原比较和历史哈希/当前业务合同断言，并将整个Observer单元文件加入轻量合同入口。
+  AST登记仅追加这一函数，其余原测试不变；本次补丁的本地验证与新CI仍需完成，不继承初次218项或失败提交的结论。
+- README真实说明提交1a4bda0f0550a8fd0b475c32a356184f1fba51b8的四条工作流全部成功：主CI41789236152用时46秒，
+  A4-1为18秒、A4-2为16秒、Publication为18秒。完整pytest/迁移/Docker build确实skipped，最终汇总实际执行成功。
+  这是首轮源码的文档分流证据，不是后续修复SHA的完整工程证明，也不代表P50/P95已稳定。
 
 <!-- ci-opt-01:noncontract-prose:start -->
 本页按阅读顺序介绍反馈流程与记录位置。

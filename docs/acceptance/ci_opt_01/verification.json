@@ -9,7 +9,7 @@
     "W00": "DELIVERED_AND_APPROVED",
     "W01": "LOCAL_PASS",
     "W02": "LOCAL_PASS",
-    "W03": "AUTHORIZED_PENDING_CI",
+    "W03": "FOLLOWUP_IN_PROGRESS",
     "W04": "DEFERRED"
   },
   "local_pytest": {
@@ -78,5 +78,53 @@
   ],
   "remote_check_context": "2026-11-04 precommit live Git ls-remote and GitHub API, via local HTTP proxy port 7900",
   "network_status": "RECOVERED_PROXY_PORT_CHANGED",
-  "submission_authorization": "Owner explicitly approved master commit, push and ordinary CI verification on 2026-11-04"
+  "submission_authorization": "Owner explicitly approved master commit, push and ordinary CI verification on 2026-11-04",
+  "observer_followup": {
+    "initial_implementation_sha": "f31aeefe6f68761662603bb054c778f8e1b531af",
+    "failed_observer_run_id": 41788897841,
+    "failed_observer_counts": {
+      "passed": 318,
+      "failed": 1
+    },
+    "failure_node": "tests/unit/test_a4233_background_observer.py::test_frozen_baseline_bytes_and_old_workflows_unchanged",
+    "local_red_reproduced": true,
+    "fix": "Strict whole-workflow restore before the original comparison; retain historical hashes and all original assertions",
+    "lightweight_entrypoint_extended": true,
+    "old_test_functions_adapted": 4,
+    "local_followup_regression": "PENDING_AT_PRECOMMIT",
+    "followup_github_full_ci": "PENDING",
+    "docs_proof_sha": "1a4bda0f0550a8fd0b475c32a356184f1fba51b8",
+    "docs_proof_runs": {
+      "CI": 41789236152,
+      "A4_1": 41789236127,
+      "A4_2": 41789236158,
+      "Publication": 41789236130
+    },
+    "docs_proof_seconds": {
+      "CI": 46,
+      "A4_1": 18,
+      "A4_2": 16,
+      "Publication": 18
+    },
+    "docs_full_pytest_migrations_docker_build": "NOT_RUN_AS_EXPECTED",
+    "performance_eligible": false,
+    "snapshot_code_sha256": {
+      ".github/actions/ci-scope/action.yml": "87fc78076fc5f4ee87542e5e21a888e850426539c248e0f1bc74b4821c62fc63",
+      ".github/ci-opt-policy.json": "e0f07b235510b5e7c3c6cae6e0c9042123772dceeb9cc2341c42269afcb02102",
+      ".github/ci-opt-steps.json": "f5743f26998e40496e28144a59a3b5b3c5f91ced29af5f013fcdc612d1dedda9",
+      ".github/workflows/ab-read-a4-2.yml": "d9e640951de359d257be9d637e2e61979794af1869d03e31d3fb4f5b3502a4be",
+      ".github/workflows/ab-read-a4-baseline.yml": "445e30db581c5198538b2db30029097ef437d14994ab68a11f69ff800a5d5f52",
+      ".github/workflows/ci.yml": "a8e73f249aea41f06ad16caf8b1978feba641b44307f1e95d57fa089023228a5",
+      ".github/workflows/publication-v13.yml": "968d52ea8c73212f552af6d80e4a6eb2d2728716507f88922c4c722e92b5b707",
+      "scripts/a42331_ci_contract.py": "f8800c208fe2825f30c98afd8ed23ef289ba990e724e013f04527fa5df414a41",
+      "scripts/ci_change_scope.py": "73e21b226a4c23890176f7a3749ec08c18362f89ceaa61fe3dd596c9819e5a47",
+      "scripts/ci_docs_check.py": "1c6e242ba06985e9bd23e75c64aae00ce35a9a221f5bcb60bc5ff2523048720b",
+      "scripts/ci_opt_contract.py": "d6e08b0e4f0fd86ab373fbdae9139762f562437d9f852094bbb588b2af026475",
+      "scripts/ci_status_summary.py": "f54b43b5722730b3af5e31dc3543a9af84d5cf122513505e578bca27b6c83784",
+      "tests/unit/test_a42331_ci_evidence.py": "9e82ae106032caf09f5ac410f42c6f7fde87ab62b83038fbc67616fe2c5b7e42",
+      "tests/unit/test_a4_ci_governance.py": "bd5484e13fa9b23f485fe032ed8369b7aac7c37024ce087e90a3606d095357b1",
+      "tests/unit/test_ci_opt_01.py": "5876988d1f49512e877e7cec2a7dfc4654c672e1a0fb67ae75cb58e0d4cd05d9",
+      "tests/unit/test_a4233_background_observer.py": "95ae1b3adebc075157faa7a3b8b1ab619be26e9a706d1b47041e97c3324fc3a9"
+    }
+  }
 }

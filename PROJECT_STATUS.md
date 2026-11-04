@@ -220,6 +220,8 @@ DECISION_LOG 追加工程/性能分层判定，任务规范登记 DOC-CLOSEOUT�
 - 并行化 W04 暂缓；BIZ-PERF-03-A-R1 仍 PARTIAL，不执行新的性能实验或生产操作。
 - 上文第7节的 R1/DOC-CLOSEOUT 为其历史轮次边界；本轮唯一执行任务以本节及第1节为准。
 - [任务回执](docs/tasks/CI-OPT-01.md)与[验证摘要](docs/acceptance/ci_opt_01/verification.json)登记范围和剩余项；本地通过不代表正式工程或性能验收完成。
+- 首轮f31aeef已推送；真实README说明提交1a4bda0的四条文档工作流通过，主CI46秒，完整pytest/迁移/Docker未执行。
+- 首轮Observer合同41788897841发现漏接的第四个旧冻结用例，318通过/1失败，本机已精确复现。当前补齐同一严格投影并纳入轻量回归；当前修复的本地及新SHA完整CI仍PENDING，不用旧218项或README成功冒充。
 
 <!-- ci-opt-01:noncontract-prose:start -->
 此处可补充阅读提示，具体状态请查看各节记录。
