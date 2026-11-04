@@ -1,5 +1,18 @@
 # A 股机会发现与趋势研究系统
 
+## CI-OPT-01 文档反馈与完整回归
+
+普通 push/PR 保留原工作流和检查名。只修改下方显式非契约说明块、且完整 Git 比较及静态校验
+通过时，运行文档快速检查；全量 pytest、迁移、Docker 构建与浏览器步骤标记 NOT_RUN。
+主 CI 的 PostgreSQL service 初始化仍保留。代码、前端、迁移、依赖、工作流、验收 JSON、
+关键业务文档、说明块外修改及未知/重命名/删除/比较失败继续完整回归；coverage 仍为 70%。
+手动专项的授权、Environment 与正式 Gate 不变，文档收据不能提供性能或生产资格。
+范围、限制及回滚见 [CI-OPT-01](docs/tasks/CI-OPT-01.md)。
+
+<!-- ci-opt-01:noncontract-prose:start -->
+阅读本节可以了解页面说明与检查结果的对应关系。
+<!-- ci-opt-01:noncontract-prose:end -->
+
 ## BIZ-PERF-03-A-R1 受限诊断整改（2026-11-03）
 
 负责人已批准预注册方案。仅修复诊断事件安装/清理、根上下文归属与失败 FETCH 未知行数，

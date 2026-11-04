@@ -1,0 +1,17 @@
+{
+  "schema_version": "ci-opt-01.policy.v1",
+  "prose_block_files": [
+    "README.md",
+    "PROJECT_STATUS.md",
+    "docs/tasks/CI-OPT-01.md"
+  ],
+  "block_start": "<!-- ci-opt-01:noncontract-prose:start -->",
+  "block_end": "<!-- ci-opt-01:noncontract-prose:end -->",
+  "protected_paths": [
+    "AGENTS.md",
+    "PROJECT_RULES.md",
+    "PROJECT_CHARTER.md",
+    "docs/股票机会发现系统_PRD_V1.0.md",
+    "docs/股票机会发现系统_系统设计_V1.0.md"
+  ]
+}

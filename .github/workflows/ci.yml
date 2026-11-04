@@ -53,7 +53,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -r requirements.lock
-      - run: python -m pytest tests/unit/test_a4_ci_governance.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml
+      - run: python -m pytest tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py -q --junitxml=.codex_tmp/a4-ci-contracts.xml
       - run: python -m ruff check backend tests migrations scripts .github/actions
       - uses: actions/upload-artifact@v4
         if: always()
@@ -128,6 +128,9 @@ jobs:
       contents: read
       actions: read
     outputs:
+      ci_opt_verified: ${{ steps.ci_result.outputs.verified }}
+      ci_opt_scope: ${{ steps.ci_scope.outputs.scope }}
+      ci_opt_head: ${{ steps.ci_result.outputs.head_sha }}
       capacity_ready: ${{ steps.measure.outputs.capacity_ready }}
     env:
       LLM_ENABLED: "false"
@@ -136,20 +139,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Classify changes and validate registered prose
+        id: ci_scope
+        uses: ./.github/actions/ci-scope
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+        id: ci_full_01
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m pip install -r requirements.lock
+        id: ci_full_02
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: ./.github/actions/a421-pg
         with:
           resource-class: read
+        id: ci_full_03
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Lookup rewrite and safety regressions before measurements
         run: >-
           python -m pytest tests/unit/test_lookup_diagnostic_a422.py
           tests/unit/test_lookup_tail_review_a423.py
           tests/integration/test_lookup_candidates_a422.py
           --junitxml=.codex_tmp/a421/lookup/tests.xml
+        id: ci_full_04
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Fetch pinned historical evidence, never new SHA performance evidence
         env:
           GH_TOKEN: ${{ github.token }}
@@ -159,6 +173,8 @@ jobs:
           -H "Accept: application/vnd.github+json"
           "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/12429939366/zip"
           --output .codex_tmp/a423-source.zip
+        id: ci_full_05
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: A4-2.3 P0 replay only; no approved repair, no repeated performance trial
         id: measure
         run: >-
@@ -167,26 +183,45 @@ jobs:
           --expected-baseline docs/acceptance/evidence/v14_a423_tail_baseline.json
           --output .codex_tmp/a421/lookup/historical-tail-review.json
           --readiness-output .codex_tmp/a421/lookup/readiness.json
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: a421-lookup-${{ github.sha }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: .codex_tmp/a421
           if-no-files-found: error
+        id: ci_full_07
       - id: cleanup
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-cleanup
-      - if: always()
+      - if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-finish
         with:
           status: ${{ job.status }}
           cleanup: ${{ steps.cleanup.outcome }}
+        id: ci_full_09
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: a4-ci-lookup-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a4-ci
+          include-hidden-files: true
+          if-no-files-found: error
+        id: ci_full_10
+      - name: Verify the actual route and mandatory step outcomes
+        id: ci_result
+        if: always()
+        env:
+          CI_OPT_STEPS: ${{ toJSON(steps) }}
+          CI_OPT_STATUS: ${{ job.status }}
+        run: python -m scripts.ci_status_summary job --workflow ci.yml --job lookup-diagnosis
+      - name: Upload CI routing evidence, never a performance receipt
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-opt-01-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/ci-opt
           include-hidden-files: true
           if-no-files-found: error
 
@@ -280,16 +315,29 @@ jobs:
       M17_MEASUREMENT_PATH: .codex_tmp/m17_capacity.jsonl
       M17_1_1_MEASUREMENT_PATH: .codex_tmp/m17_1_1-retention.jsonl
       A42331_MIGRATION_EVIDENCE_DIR: .codex_tmp/a42331-migrations
+    outputs:
+      ci_opt_verified: ${{ steps.ci_result.outputs.verified }}
+      ci_opt_scope: ${{ steps.ci_scope.outputs.scope }}
+      ci_opt_head: ${{ steps.ci_result.outputs.head_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Classify changes and validate registered prose
+        id: ci_scope
+        uses: ./.github/actions/ci-scope
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+        id: ci_full_01
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m pip install --upgrade pip
+        id: ci_full_02
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m pip install -r requirements.lock
+        id: ci_full_03
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: V1.4 physically isolated and marked PG17
         run: |
           V14_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')
@@ -312,6 +360,8 @@ jobs:
           echo "V14_TEST_INSTANCE=$V14_INSTANCE" >> "$GITHUB_ENV"
           echo "V14_TEST_SYSTEM_IDENTIFIER=$V14_SYSTEM_ID" >> "$GITHUB_ENV"
           echo 'TEST_DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:55438/v14_test' >> "$GITHUB_ENV"
+        id: ci_full_04
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: V1.4 calendar and overlay read regressions
         # Some legacy integration tests use the explicit parent synthetic DB.
         # Migrate that parent too; all V14 cases still create their own UUID DB.
@@ -320,46 +370,67 @@ jobs:
         run: |
           python -c 'from scripts.v14_test_database import verified_test_url; verified_test_url(); from alembic import command; from alembic.config import Config; command.upgrade(Config("alembic.ini"), "head")'
           python -m pytest tests/integration/test_v14_calendar_guard.py tests/integration/test_ab_merge_read_v14.py tests/unit/test_v14_test_database.py tests/unit/test_ab_read_benchmark_v14.py -q --junitxml=.codex_tmp/v14-targeted.xml
+        id: ci_full_05
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: V1.4 frozen Q0 Q1 Q2 cursor smoke (not performance closure)
         run: >-
           python scripts/ab_read_benchmark_v14.py --variant all --readers 2
           --output .codex_tmp/v14-read-ci-smoke.json
+        id: ci_full_06
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Redact existing V14 JUnit before any artifact export
         id: safe_v14
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         run: python -m scripts.a42331_ci_evidence redact-v14
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && steps.safe_v14.outcome == 'success' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && steps.safe_v14.outcome == 'success') }}
         with:
           name: v14-read-evidence
           include-hidden-files: true
           path: .codex_tmp/v14-*
           if-no-files-found: error
+        id: ci_full_08
       - run: python -m alembic upgrade head
+        id: ci_full_09
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic downgrade 0019_research_source_lineage
+        id: ci_full_10
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic upgrade head
+        id: ci_full_11
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M17.1.2 suspension schema and ingestion regressions
         run: >-
           python -m pytest tests/unit/test_suspend_normalization.py
           tests/integration/test_suspend_timing_schema.py
           tests/integration/test_ingestion_suspend.py -q
           --junitxml=.codex_tmp/m17_1_2-targeted.xml
+        id: ci_full_12
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M17.1 targeted dirty dependency regressions
         # All retention writes/concurrency tests use disposable PG17 databases.
         run: python -m pytest tests/integration/test_m17_1_dirty_dependencies.py -q
+        id: ci_full_13
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Data publication and schedule compensation regressions
         run: >-
           python -m pytest tests/integration/test_data_publication.py
           tests/integration/test_schedule_compensation.py tests/unit/test_scheduler_capacity.py
           tests/unit/test_data_job_diagnostics.py -q
           --junitxml=.codex_tmp/data-publication-targeted.xml
+        id: ci_full_14
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Cold start engines and zero-write CLI regressions
         run: >-
           python -m pytest tests/unit/test_cold_start_v12.py
           tests/unit/test_cli_derived_safety.py tests/integration/test_cold_start_cli_v12.py -q
           --junitxml=.codex_tmp/cold-start-targeted.xml
+        id: ci_full_15
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Cold start baseline golden and missing-input comparison
         run: python scripts/cold_start_comparison.py --output .codex_tmp/cold-start-comparison.json
+        id: ci_full_16
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M17.1.1 reference-aware retention regressions
         run: >-
           python -m pytest tests/integration/test_m17_1_1_retention.py
@@ -367,12 +438,16 @@ jobs:
           tests/integration/test_m17_1_1_retention_capacity.py
           tests/integration/test_m17_1_1_retention_migration.py
           tests/integration/test_m17_1_1_retention_frozen.py -q
+        id: ci_full_17
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M17.1 isolated PAPER continuity regressions
         run: |
           python -m pytest tests/integration/test_m17_decision_sources.py -q
           python -m pytest tests/integration/test_m17_paper_daily.py -q
           python -m pytest tests/integration/test_m17_paper_jobs.py -q
           python -m pytest tests/integration/test_m17_1_paper_continuity.py -q
+        id: ci_full_18
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Archive identity and observer failure-path regressions before full suite
         id: targeted
         run: >-
@@ -382,41 +457,69 @@ jobs:
           tests/unit/test_a42331_migration_contract.py tests/unit/test_a42331_ci_evidence.py
           tests/unit/test_a4233_background_observer.py tests/integration/test_a4233_observer_pg17.py
           -q --junitxml=.codex_tmp/a42331-targeted.xml
+        if: steps.ci_scope.outputs.scope != 'docs'
       - id: full_tests
         run: >-
           python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
           --cov=backend/app --cov-report=term-missing --cov-fail-under=70
           --junitxml=.codex_tmp/m17_1_2-full.xml
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M16.6 capture capacity measurements
         run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
+        id: ci_full_21
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic current
+        id: ci_full_22
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic heads
+        id: ci_full_23
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m ruff check backend tests migrations scripts
+        id: ci_full_24
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: cp .env.example .env
+        id: ci_full_25
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: docker compose config
+        id: ci_full_26
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: docker compose build
+        id: ci_full_27
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Data queue single/two Worker and atomic publication acceptance
         id: data_queue
         run: TEST_DATABASE_URL="$DATABASE_URL" python scripts/data_queue_container_acceptance.py
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (steps.data_queue.outcome == 'success' || steps.data_queue.outcome == 'failure') }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && (steps.data_queue.outcome == 'success' || steps.data_queue.outcome == 'failure')) }}
         with:
           name: data-queue-container-acceptance
           include-hidden-files: true
           path: .codex_tmp/data-queue-containers.json
           if-no-files-found: ${{ steps.data_queue.outcome == 'success' && 'error' || 'ignore' }}
+        id: ci_full_29
       - run: docker run --rm --add-host backend:127.0.0.1 ssh-stock-frontend:local nginx -t
+        id: ci_full_30
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+        id: ci_full_31
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: npm ci
         working-directory: frontend
+        id: ci_full_32
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: npm run test:coverage
         working-directory: frontend
+        id: ci_full_33
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: npm run build
         working-directory: frontend
+        id: ci_full_34
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M16.6 browser acceptance (isolated runner tooling)
         id: browser
         run: |
@@ -424,6 +527,7 @@ jobs:
           node "$RUNNER_TEMP/m166-browser/node_modules/playwright/cli.js" install --with-deps chromium
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m16_6_browser_smoke.cjs
           PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/m17_browser_smoke.cjs
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: M17.1.1 and M17.1.2 exact HEAD and migration receipts
         run: |
           python - <<'PY'
@@ -484,24 +588,29 @@ jobs:
               stream.write(f"\n## M17.1.2\n\nHEAD: `{head}`\n\nCI: {run_url}\n\n"
                            "suspend_timing: nullable TEXT; G1 real backfill pending approval.\n")
           PY
+        id: ci_full_36
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (steps.browser.outcome == 'success' || steps.browser.outcome == 'failure') }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && (steps.browser.outcome == 'success' || steps.browser.outcome == 'failure')) }}
         with:
           name: m16-6-synthetic-browser
           path: frontend/coverage/browser
           if-no-files-found: ignore
+        id: ci_full_37
       - name: Runtime reliability desktop and narrow-screen synthetic acceptance
         id: runtime_browser
         run: PLAYWRIGHT_MODULE="$RUNNER_TEMP/m166-browser/node_modules/playwright" node scripts/runtime_reliability_browser.cjs
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (steps.runtime_browser.outcome == 'success' || steps.runtime_browser.outcome == 'failure') }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && (steps.runtime_browser.outcome == 'success' || steps.runtime_browser.outcome == 'failure')) }}
         with:
           name: runtime-reliability-synthetic-browser
           path: frontend/coverage/runtime-reliability-browser
           if-no-files-found: ${{ steps.runtime_browser.outcome == 'success' && 'error' || 'ignore' }}
+        id: ci_full_39
       - name: Mandatory safe test/failure evidence even when later stages never ran
         id: safe_evidence
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         env:
           UPSTREAM_STATUS: ${{ job.status }}
           A42331_STEP_OUTCOMES: >-
@@ -510,58 +619,64 @@ jobs:
             "runtime_browser":"${{ steps.runtime_browser.outcome }}"}
         run: python -m scripts.a42331_ci_evidence collect
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: a42331-safe-ci-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a42331-ci
           include-hidden-files: true
           if-no-files-found: error
+        id: ci_full_41
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && hashFiles('.codex_tmp/a42331-errors/*.json') != '' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && hashFiles('.codex_tmp/a42331-errors/*.json') != '') }}
         with:
           name: a42331-safe-errors-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a42331-errors
           include-hidden-files: true
           if-no-files-found: error
+        id: ci_full_42
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && hashFiles('.codex_tmp/a42331-migrations/*.json') != '' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && hashFiles('.codex_tmp/a42331-migrations/*.json') != '') }}
         with:
           name: a42331-migration-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a42331-migrations
           include-hidden-files: true
           if-no-files-found: error
+        id: ci_full_43
       - name: Core exact SHA bundle, independent of long capacity workloads
         id: core_bundle
-        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && steps.safe_evidence.outcome == 'success') }}
         env:
           UPSTREAM_STATUS: ${{ job.status }}
         run: python scripts/ci_release_gate_v14_a4_2_1.py core-status --job-id core --output .codex_tmp/a421/core
       - id: cleanup
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-cleanup
         with:
           container: ${{ env.V14_CONTAINER }}
-      - if: always()
+      - if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-finish
         with:
           status: ${{ job.status }}
           cleanup: ${{ steps.cleanup.outcome }}
+        id: ci_full_46
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: a4-ci-core-state-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .codex_tmp/a4-ci
           include-hidden-files: true
           if-no-files-found: error
+        id: ci_full_47
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && (steps.core_bundle.outcome == 'success' || steps.core_bundle.outcome == 'failure') }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && (steps.core_bundle.outcome == 'success' || steps.core_bundle.outcome == 'failure')) }}
         with:
           name: a421-core-${{ github.sha }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: .codex_tmp/a421
           if-no-files-found: error
+        id: ci_full_48
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && steps.safe_evidence.outcome == 'success') }}
         with:
           name: data-publication-reliability
           include-hidden-files: true
@@ -573,15 +688,17 @@ jobs:
             .codex_tmp/cold-start-comparison.json
             .codex_tmp/cold-start-capacity.json
           if-no-files-found: error
+        id: ci_full_49
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: m17-capacity-measurements
           include-hidden-files: true
           path: .codex_tmp/m17_capacity.jsonl
           if-no-files-found: ignore
+        id: ci_full_50
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: m17-1-1-retention-evidence
           include-hidden-files: true
@@ -589,8 +706,9 @@ jobs:
             .codex_tmp/m17_1_1-retention.jsonl
             .codex_tmp/m17_1_1-release.json
           if-no-files-found: ignore
+        id: ci_full_51
       - uses: actions/upload-artifact@v4
-        if: ${{ always() && steps.safe_evidence.outcome == 'success' }}
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always() && steps.safe_evidence.outcome == 'success') }}
         with:
           name: m17-1-2-suspend-evidence
           include-hidden-files: true
@@ -599,6 +717,22 @@ jobs:
             .codex_tmp/m17_1_2-full.xml
             .codex_tmp/m17_1_2-release.json
           if-no-files-found: ignore
+        id: ci_full_52
+      - name: Verify the actual route and mandatory step outcomes
+        id: ci_result
+        if: always()
+        env:
+          CI_OPT_STEPS: ${{ toJSON(steps) }}
+          CI_OPT_STATUS: ${{ job.status }}
+        run: python -m scripts.ci_status_summary job --workflow ci.yml --job test
+      - name: Upload CI routing evidence, never a performance receipt
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-opt-01-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/ci-opt
+          include-hidden-files: true
+          if-no-files-found: error
 
   capacity:
     needs: [authorize, lookup-diagnosis]
@@ -775,3 +909,22 @@ jobs:
           path: ${{ runner.temp }}/ui-visual
           if-no-files-found: error
           retention-days: 14
+
+  ci-summary:
+    name: ci-opt-01-ci
+    if: always()
+    needs:
+    - workflow-contracts
+    - dependency-audit
+    - lookup-diagnosis
+    - test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Reject missing, skipped, cancelled or failed mandatory checks
+      env:
+        CI_OPT_NEEDS: ${{ toJSON(needs) }}
+      run: python -m scripts.ci_status_summary workflow --workflow ci.yml

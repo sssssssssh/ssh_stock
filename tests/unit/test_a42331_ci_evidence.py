@@ -116,6 +116,9 @@ def current():
 
 def test_only_exact_reviewed_test_job_changes_and_every_gate_stays_frozen():
     value = current()
+    from scripts.ci_opt_contract import restore
+
+    value = restore('ci.yml', value)
     value['jobs']['test'] = normalize_test_job(value['jobs']['test'])
     before = yaml.safe_load(subprocess.check_output(
         ['git','show',BASELINE+':.github/workflows/ci.yml'],cwd=ROOT))
@@ -146,4 +149,7 @@ def test_skipped_optional_uploads_are_guarded_and_mandatory_evidence_not_optiona
         assert 'steps.'+phase+'.outcome' in uploads[name]['if']
         assert "'success' && 'error' || 'ignore'" in uploads[name]['with']['if-no-files-found']
     required = next(s for name,s in uploads.items() if name.startswith('a42331-safe-ci-'))
-    assert required['if'] == 'always()' and required['with']['if-no-files-found'] == 'error'
+    from scripts.ci_opt_contract import guarded
+
+    assert required['if'] == guarded('always()')
+    assert required['with']['if-no-files-found'] == 'error'

@@ -354,6 +354,10 @@ def test_only_reviewed_job_conditions_change_from_ci_1_0(name):
     before = yaml.load(frozen(".github/workflows/" + name, revision=GOVERNANCE_BASELINE),
                        Loader=WorkflowLoader)
     after = workflow(name)
+    from scripts.ci_opt_contract import TARGETS, restore
+
+    if name in TARGETS:
+        after = restore(name, after)
     if name == 'ci.yml':
         from scripts.a42331_ci_contract import normalize_test_job
 

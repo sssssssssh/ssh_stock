@@ -20,5 +20,13 @@ def normalize_test_job(job):
     encoded = json.dumps(job,sort_keys=True,separators=(',',':')).encode()
     digest = hashlib.sha256(encoded).hexdigest()
     if digest != REVIEWED_TEST_JOB:
-        raise RuntimeError('A42331_UNREVIEWED_CI_TEST_JOB')
+        from scripts.ci_opt_contract import restore_test_job
+
+        try:
+            reviewed = restore_test_job(job)
+        except ValueError as error:
+            raise RuntimeError('A42331_UNREVIEWED_CI_TEST_JOB') from error
+        encoded = json.dumps(reviewed, sort_keys=True, separators=(',', ':')).encode()
+        if hashlib.sha256(encoded).hexdigest() != REVIEWED_TEST_JOB:
+            raise RuntimeError('A42331_UNREVIEWED_CI_TEST_JOB')
     return copy.deepcopy(before)

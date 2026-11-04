@@ -1,0 +1,14 @@
+name: Conservative CI prose scope
+description: Complete Git diff and explicitly registered prose validation; no execution authority
+outputs:
+  scope:
+    description: docs only after a complete conservative comparison; otherwise full
+    value: ${{ steps.classify.outputs.scope }}
+runs:
+  using: composite
+  steps:
+    - id: classify
+      shell: bash
+      run: python -m scripts.ci_change_scope --output .codex_tmp/ci-opt/scope.json
+    - shell: bash
+      run: python -m scripts.ci_docs_check --receipt .codex_tmp/ci-opt/scope.json

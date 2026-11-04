@@ -69,21 +69,40 @@ jobs:
     timeout-minutes: 25
     env:
       LLM_ENABLED: "false"
+    outputs:
+      ci_opt_verified: ${{ steps.ci_result.outputs.verified }}
+      ci_opt_scope: ${{ steps.ci_scope.outputs.scope }}
+      ci_opt_head: ${{ steps.ci_result.outputs.head_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Classify changes and validate registered prose
+        id: ci_scope
+        uses: ./.github/actions/ci-scope
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+        id: ci_full_01
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m pip install -r requirements.lock
+        id: ci_full_02
+        if: steps.ci_scope.outputs.scope != 'docs'
       - uses: ./.github/actions/a421-pg
         with:
           database: publication_v13_test
+        id: ci_full_03
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic upgrade head
+        id: ci_full_04
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic current
+        id: ci_full_05
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m alembic heads
+        id: ci_full_06
+        if: steps.ci_scope.outputs.scope != 'docs'
       - name: Candidate equivalence, real row locks, isolation and cancellation
         run: >-
           python -m pytest tests/integration/test_publication_lookup_v13.py
@@ -94,23 +113,44 @@ jobs:
           tests/unit/test_cli_derived_safety.py
           tests/unit/test_publication_v13_receipt.py
           --junitxml=.codex_tmp/v13-targeted.xml
+        id: ci_full_07
+        if: steps.ci_scope.outputs.scope != 'docs'
       - run: python -m ruff check backend tests migrations scripts
+        id: ci_full_08
+        if: steps.ci_scope.outputs.scope != 'docs'
       - id: cleanup
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-cleanup
-      - if: always()
+      - if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         uses: ./.github/actions/a4-finish
         with:
           status: ${{ job.status }}
           cleanup: ${{ steps.cleanup.outcome }}
+        id: ci_full_10
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ (steps.ci_scope.outputs.scope != 'docs') && (always()) }}
         with:
           name: publication-v13-contract-${{ github.sha }}-attempt${{ github.run_attempt }}
           include-hidden-files: true
           path: |
             .codex_tmp/v13-targeted.xml
             .codex_tmp/a4-ci
+          if-no-files-found: error
+        id: ci_full_11
+      - name: Verify the actual route and mandatory step outcomes
+        id: ci_result
+        if: always()
+        env:
+          CI_OPT_STEPS: ${{ toJSON(steps) }}
+          CI_OPT_STATUS: ${{ job.status }}
+        run: python -m scripts.ci_status_summary job --workflow publication-v13.yml --job contracts
+      - name: Upload CI routing evidence, never a performance receipt
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-opt-01-${{ github.job }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/ci-opt
+          include-hidden-files: true
           if-no-files-found: error
 
   candidate-performance:
@@ -215,3 +255,19 @@ jobs:
           path: .codex_tmp/a4-ci
           include-hidden-files: true
           if-no-files-found: error
+
+  ci-summary:
+    name: ci-opt-01-publication-v13
+    if: always()
+    needs:
+    - contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Reject missing, skipped, cancelled or failed mandatory checks
+      env:
+        CI_OPT_NEEDS: ${{ toJSON(needs) }}
+      run: python -m scripts.ci_status_summary workflow --workflow publication-v13.yml

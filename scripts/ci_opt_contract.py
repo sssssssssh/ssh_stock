@@ -1,0 +1,151 @@
+"""Versioned CI topology projection; no capacity or execution authority."""
+
+import copy
+import json
+import subprocess
+from functools import lru_cache
+from pathlib import Path
+
+BASELINE = "e697fc80a098726f4e73f04ac71f5eb6cfb62b03"
+ROOT = Path(__file__).resolve().parents[1]
+TARGETS = {
+    "ci.yml": ("test", "lookup-diagnosis"),
+    "ab-read-a4-baseline.yml": ("contracts",),
+    "ab-read-a4-2.yml": ("contract-and-safety",),
+    "publication-v13.yml": ("contracts",),
+}
+FULL = "steps.ci_scope.outputs.scope != 'docs'"
+
+
+@lru_cache(maxsize=4)
+def baseline_bytes(name):
+    return subprocess.check_output(
+        ["git", "show", f"{BASELINE}:.github/workflows/{name}"], cwd=ROOT,
+    )
+
+
+def baseline(name):
+    import yaml
+
+    # Cache only immutable historical Git bytes, never a mutable parsed contract.
+    return yaml.safe_load(baseline_bytes(name))
+
+
+def guarded(expression=None):
+    if expression is None:
+        return FULL
+    expression = expression.removeprefix("${{").removesuffix("}}").strip()
+    return "${{ (" + FULL + ") && (" + expression + ") }}"
+
+
+def scope_step():
+    return {"name": "Classify changes and validate registered prose", "id": "ci_scope",
+            "uses": "./.github/actions/ci-scope"}
+
+
+def result_step(name, job):
+    return {
+        "name": "Verify the actual route and mandatory step outcomes", "id": "ci_result",
+        "if": "always()",
+        "env": {"CI_OPT_STEPS": "${{ toJSON(steps) }}", "CI_OPT_STATUS": "${{ job.status }}"},
+        "run": f"python -m scripts.ci_status_summary job --workflow {name} --job {job}",
+    }
+
+
+def artifact_step():
+    return {
+        "name": "Upload CI routing evidence, never a performance receipt",
+        "uses": "actions/upload-artifact@v4", "if": "always()",
+        "with": {
+            "name": ("ci-opt-01-${{ github.job }}-${{ github.sha }}-"
+                     "${{ github.run_id }}-${{ github.run_attempt }}"),
+            "path": ".codex_tmp/ci-opt", "include-hidden-files": True,
+            "if-no-files-found": "error",
+        },
+    }
+
+
+def transformed_job(name, key, original):
+    job = copy.deepcopy(original)
+    old = job["steps"]
+    if old[0].get("uses") != "actions/checkout@v4":
+        raise ValueError("CI_OPT_CHECKOUT_CONTRACT")
+    steps = [old[0], scope_step()]
+    for i, step in enumerate(old[1:], 1):
+        step.setdefault("id", f"ci_full_{i:02d}")
+        step["if"] = guarded(step.get("if"))
+        steps.append(step)
+    steps.extend((result_step(name, key), artifact_step()))
+    job["steps"] = steps
+    job.setdefault("outputs", {}).update(
+        ci_opt_verified="${{ steps.ci_result.outputs.verified }}",
+        ci_opt_scope="${{ steps.ci_scope.outputs.scope }}",
+        ci_opt_head="${{ steps.ci_result.outputs.head_sha }}",
+    )
+    return job
+
+
+def summary_job(name):
+    needs = (["workflow-contracts", "dependency-audit", "lookup-diagnosis", "test"]
+             if name == "ci.yml" else list(TARGETS[name]))
+    return {
+        "name": "ci-opt-01-" + name.removesuffix(".yml"),
+        "if": "always()", "needs": needs, "runs-on": "ubuntu-latest", "timeout-minutes": 5,
+        "steps": [
+            {"uses": "actions/checkout@v4", "with": {"fetch-depth": 0}},
+            {"name": "Reject missing, skipped, cancelled or failed mandatory checks",
+             "env": {"CI_OPT_NEEDS": "${{ toJSON(needs) }}"},
+             "run": f"python -m scripts.ci_status_summary workflow --workflow {name}"},
+        ],
+    }
+
+
+def transform(name, original):
+    value = copy.deepcopy(original)
+    if name not in TARGETS:
+        return value
+    for key in TARGETS[name]:
+        value["jobs"][key] = transformed_job(name, key, value["jobs"][key])
+    if name == "ci.yml":
+        step = value["jobs"]["workflow-contracts"]["steps"][3]
+        step["run"] = step["run"].replace(
+            "tests/unit/test_a4_ci_governance.py -q",
+            "tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py -q",
+        )
+    value["jobs"]["ci-summary"] = summary_job(name)
+    return value
+
+
+def restore(name, current):
+    """Accept only the complete reviewed transformation, not an arbitrary new digest."""
+    old = baseline(name)
+    if current != transform(name, old):
+        raise ValueError("CI_OPT_UNREVIEWED_WORKFLOW_CHANGE")
+    return old
+
+
+def restore_test_job(current):
+    old = baseline("ci.yml")["jobs"]["test"]
+    if current != transformed_job("ci.yml", "test", old):
+        raise ValueError("CI_OPT_UNREVIEWED_TEST_JOB")
+    return old
+
+
+def plans():
+    result = {}
+    for name, keys in TARGETS.items():
+        jobs = baseline(name)["jobs"]
+        result[name] = {}
+        for key in keys:
+            steps = jobs[key]["steps"][1:]
+            result[name][key] = {
+                "all": [s.get("id", f"ci_full_{i:02d}") for i, s in enumerate(steps, 1)],
+                "mandatory": [s.get("id", f"ci_full_{i:02d}")
+                              for i, s in enumerate(steps, 1)
+                              if s.get("if", "always()") == "always()"],
+            }
+    return result
+
+
+def write_plans(path):
+    Path(path).write_text(json.dumps(plans(), indent=2) + "\n", encoding="utf-8")
