@@ -56,7 +56,7 @@ JSON 证据（包括 STATUS + R1 verification 的组合）执行静态 JSON 语�
 `ci_opt_contract` 将当前四份 YAML 与 e697fc80 的确定性变换逐项比较：只增加 scope、守卫、
 原步骤 ID、路由结果、独立工件、汇总，以及追加新 CI 单测。任何原命令、coverage、Gate、
 授权或服务对象变化均拒绝。不是简单换一个新摘要。
-原测试仅五个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个、Observer冻结用例一个、A42341 AT20一个），
+原测试仅六个编排相关函数做必要适配（test_a4_ci_governance 一个、test_a42331_ci_evidence 两个、Observer冻结用例一个、A42341 AT20一个、business测试版本衔接一个），
 其余原函数 AST 保持相同，原测试节点没有删除；旧 test Job 摘要和历史对象继续校验。
 `source_contract_pytest`、安全脱敏插件与历史 manifest 不改。
 
@@ -79,8 +79,8 @@ JSON 证据（包括 STATUS + R1 verification 的组合）执行静态 JSON 语�
 
 本地最终定向测试218项通过、无失败/错误/跳过；Ruff与差异检查通过，具体命令及边界见下一节。
 完整 Linux/PG17 工程验收待当前候选 CI。
-真实 doc-only 与 backend GitHub 端到端事件尚未构造，DEFERRED；不为演示创建无意义业务修改或新分支。
-仅一次采样不能宣称 P50/P95 稳定或完整代码 CI 已降至10–20分钟。doc-only ≤5分钟仍待实测。
+真实doc-only已取得下文精确版本证据；backend与PR远端事件仍DEFERRED，不为演示创建无意义业务修改或新分支。
+现有说明样本不能宣称P50/P95稳定或完整代码CI已降至10–20分钟；当前补丁需独立核验。
 
 ## W03/W04、回滚与接续
 
@@ -107,14 +107,14 @@ git diff --check
 
 初轮为209通过/2失败：新大小写改名夹具已修正；旧子pytest在跨盘临时目录超时。随后隔离环境
 217项通过；最终默认插件、同盘临时目录218项通过。保留这些过程事实，不将隔离插件结果冒充最终默认结果。
-最终新增56项 CI 回归；初次本地验证仅三个编排函数适配，CI反馈后补齐Observer与AT20两个旧冻结用例，AST核验其余原函数不变。四份YAML与基线的
+初轮新增56项 CI 回归；初次本地验证仅三个编排函数适配，CI反馈后补齐Observer与AT20两个旧冻结用例，再增加business版本衔接和4项严格投影回归，AST核验其余原函数不变。四份YAML与基线的
 确定性完整路径投影、步骤计划一致性及业务/迁移/授权/正式Gate空差异检查均通过。
 
 | 验收项 | 本轮结论 |
 | --- | --- |
-| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；五个编排函数为必要版本适配，历史Git/manifest不改 |
-| A02 十二类触发安全场景 | 本地隔离证据通过；真实doc-only/backend/PR事件DEFERRED |
-| A03 doc-only不执行全量pytest | 隔离路由与步骤守卫通过；GitHub实测≤5分钟/P50/P95 NOT_VERIFIED |
+| A01 原测试/金融与实验门禁保留 | 静态与定向回归通过；六个编排函数为必要版本适配，历史Git/manifest不改 |
+| A02 十二类触发安全场景 | 本地隔离证据通过；真实README多版本通过，backend/PR事件DEFERRED |
+| A03 doc-only不执行全量pytest | 已有精确版本51秒等实测；当前补丁待验，稳定P50/P95 NOT_VERIFIED |
 | A04 关键修改仍完整回归 | 分类与旧命令等价通过；当前Linux/PG17整体验证PENDING |
 | A05 当前候选完整工程回归 | PENDING，不能用历史5347项或本地218项替代 |
 | A06 手动授权与正式Gate | 原对象空差异及负例通过；未启动专项实验 |
@@ -146,6 +146,24 @@ git diff --check
   不对Windows加跳过或放宽断言，使用原GitHub Linux环境验收。主工作区历史清单和全局Git配置未改。
 - 第二次README说明提交413d45211e576b7f797e3d0957ea2f60eb153dfc的四条工作流成功，主CI41793077538实测37秒，
   A4-1为16秒、A4-2与Publication各18秒；仍只适用于该精确说明提交及对应代码版本。
+
+### 完整回归反馈与最终兼容补丁
+
+- f39f4a804969f5b72a5b6ccf0878ced167311f4c 的主CI41795028412全量结果为5402 passed/1 failed、816 warnings、90.02%覆盖率。
+  pytest步骤07:58:07Z至08:38:22Z，40分15秒；完整测试集合5403项，没有删减原5347项和新增56项。
+- 唯一失败节点为test_business_source_contract.py的test_exact_function_compatibility_keeps_negative_cases_signatures_and_assertions。
+  旧business适配清单只登记同文件另一个函数，不能识别本轮AT20变换。原Windows工作副本还存在既有CRLF差异；
+  LF临时克隆逐项验证后仅该AT20边界失败，明确区分环境问题与Linux真实失败，不修改历史文件或全局Git设置。
+- 最小补丁只在普通测试中将精确登记的AT20全文变换还原到e697fc80，再调用原business验证器；
+  新投影拒绝任何额外字节修改（只兼容LF/CRLF文本换行），不扩大业务合同TEST_ADAPTATIONS、不修改生产guard或历史manifest。
+  原负例/断言/签名保留，新增真实红→绿与断言、块外、函数体篡改三个负例；该测试文件加入轻量合同入口。
+- f39f4a8的其余四条工作流通过；ab9be0f8620d8fc50f56498ca057d90047cf5c1f纯README说明实测四条通过，
+  主CI41795754600为51秒，A4-1为22秒、A4-2/Publication各18秒；未生成完整回归/容量凭证。
+  这些记录不能代替本补丁最终SHA的CI，仍待新的精确版本回归，不为追填自身SHA/CI结束再循环提交。
+- 本补丁默认插件、隔离LF工作副本定向68项通过（283.77秒），原编排兼容163项通过（175.49秒），两组不重叠合计231项；Ruff和diff检查通过。当前补丁完整Linux/PG17仍PENDING。
+- 最新只读API核查：master无Branch Protection，适用rules为空；实际没有强制Required Checks。
+  a4-expensive-measurements已有1名审批人、禁止管理员绕过、分支限master、Environment级ACK正确，
+  但Prevent self-review=false，需管理员开启。本轮未修改仓库设置或触发高成本实验。
 
 <!-- ci-opt-01:noncontract-prose:start -->
 本页按阅读顺序介绍反馈流程与记录位置。

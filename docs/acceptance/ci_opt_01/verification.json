@@ -9,7 +9,7 @@
     "W00": "DELIVERED_AND_APPROVED",
     "W01": "LOCAL_PASS",
     "W02": "LOCAL_PASS",
-    "W03": "AT20_FOLLOWUP_IN_PROGRESS",
+    "W03": "BUSINESS_TEST_COMPATIBILITY_FOLLOWUP_IN_PROGRESS",
     "W04": "DEFERRED"
   },
   "local_pytest": {
@@ -35,14 +35,14 @@
   "workflow_projection_and_step_plan": "PASS",
   "protected_business_migrations_authorization_gate_diff": "EMPTY",
   "historical_performance_evidence_reused_as_current": false,
-  "candidate_github_full_ci": "NOT_RUN_AT_PRECOMMIT_SNAPSHOT",
-  "candidate_github_docs_e2e": "DEFERRED",
+  "candidate_github_full_ci": "FAILURE_AT_F39_FINAL_PATCH_PENDING",
+  "candidate_github_docs_e2e": "PASS_AT_AB9_FINAL_PATCH_PENDING",
   "candidate_github_backend_e2e": "DEFERRED",
   "candidate_github_pr_e2e": "DEFERRED",
-  "docs_walltime_le_5min": "NOT_VERIFIED",
-  "required_checks": "UNKNOWN",
-  "environment_reviewers": "UNKNOWN",
-  "remote_master_latest": "e697fc80a098726f4e73f04ac71f5eb6cfb62b03",
+  "docs_walltime_le_5min": "51_SECONDS_AT_AB9_FINAL_PATCH_PENDING_NO_STABLE_P50_P95_CLAIM",
+  "required_checks": "READONLY_API_CONFIRMED_MASTER_UNPROTECTED_AND_NO_APPLICABLE_RULES",
+  "environment_reviewers": "ONE_REVIEWER_CONFIGURED_PREVENT_SELF_REVIEW_FALSE_ADMIN_ACTION_REQUIRED",
+  "remote_master_latest": "ab9be0f8620d8fc50f56498ca057d90047cf5c1f",
   "network_failures": [
     "GITHUB_CONNECTOR_TRANSPORT",
     "PREVIOUS_LOCAL_PROXY_UNAVAILABLE",
@@ -70,13 +70,12 @@
     "tests/unit/test_ci_opt_01.py": "69cb8d4cd6732eafe429fc7940c175eb3560dfd17c36468057ce135f28f9a303"
   },
   "remaining_work": [
-    "Commit and push after the live master comparison, then verify exact-SHA CI",
-    "Deliver the reviewed master changes without force push",
-    "Run candidate exact-SHA full Linux/PG17 regression",
-    "Obtain honest doc-only and representative code event evidence, or retain DEFERRED",
-    "Administrator verifies actual Required Checks and Environment approvals"
+    "Push the locally verified compatibility patch and verify its exact-SHA full ordinary CI",
+    "Verify exact-version README-only evidence without fabricating backend or PR modifications; those remote scenarios remain DEFERRED",
+    "Administrator enables Prevent self-review if retaining the documented approval policy",
+    "W04 remains DEFERRED; no business performance or production operations"
   ],
-  "remote_check_context": "2026-11-04 precommit live Git ls-remote and GitHub API, via local HTTP proxy port 7900",
+  "remote_check_context": "2026-11-04 before the business-test compatibility followup; live readonly API and Git comparison, earlier snapshots remain historical",
   "network_status": "RECOVERED_PROXY_PORT_CHANGED",
   "submission_authorization": "Owner explicitly approved master commit, push and ordinary CI verification on 2026-11-04",
   "observer_followup": {
@@ -159,5 +158,68 @@
     "docs_proof_ci_run_id": 41793077538,
     "docs_proof_seconds": 37,
     "performance_eligible": false
+  },
+  "business_test_contract_followup": {
+    "previous_code_sha": "f39f4a804969f5b72a5b6ccf0878ced167311f4c",
+    "failed_main_ci_run_id": 41795028412,
+    "full_pytest": {
+      "passed": 5402,
+      "failed": 1,
+      "warnings": 816,
+      "coverage_percent": 90.02,
+      "step_wall_seconds": 2415
+    },
+    "failed_node": "tests/unit/test_business_source_contract.py::test_exact_function_compatibility_keeps_negative_cases_signatures_and_assertions",
+    "canonical_lf_red_reproduced": true,
+    "fix": "Exact original-to-reviewed AT20 whole-file projection before the unchanged business verifier; no TEST_ADAPTATIONS or production guard changes",
+    "old_test_functions_adapted": 6,
+    "additional_negative_and_regression_cases": 4,
+    "lightweight_entrypoint_extended": true,
+    "local_followup": {
+      "result": "PASS",
+      "tests": 68,
+      "reported_seconds": 283.77,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "environment": "Windows default pytest plugins, isolated LF checkout, master only",
+      "command": "python -m pytest tests/unit/test_ci_opt_01.py tests/unit/test_business_source_contract.py -q --tb=short --basetemp=.codex_tmp/ci-opt-business-adapter-tests --junitxml=.codex_tmp/ci-opt-business-adapter.xml"
+    },
+    "linux_full_ci": "PENDING_AT_PRECOMMIT",
+    "docs_proof_sha": "ab9be0f8620d8fc50f56498ca057d90047cf5c1f",
+    "docs_proof_main_ci_run_id": 41795754600,
+    "docs_proof_main_ci_seconds": 51,
+    "performance_eligible": false,
+    "snapshot_code_sha256": {
+      ".github/actions/ci-scope/action.yml": "87fc78076fc5f4ee87542e5e21a888e850426539c248e0f1bc74b4821c62fc63",
+      ".github/ci-opt-policy.json": "e0f07b235510b5e7c3c6cae6e0c9042123772dceeb9cc2341c42269afcb02102",
+      ".github/ci-opt-steps.json": "f5743f26998e40496e28144a59a3b5b3c5f91ced29af5f013fcdc612d1dedda9",
+      ".github/workflows/ab-read-a4-2.yml": "d9e640951de359d257be9d637e2e61979794af1869d03e31d3fb4f5b3502a4be",
+      ".github/workflows/ab-read-a4-baseline.yml": "445e30db581c5198538b2db30029097ef437d14994ab68a11f69ff800a5d5f52",
+      ".github/workflows/ci.yml": "1c631a30a4fab3f04355675e45f6be8188eb025d12aa872b6f08d78ecea9ad95",
+      ".github/workflows/publication-v13.yml": "968d52ea8c73212f552af6d80e4a6eb2d2728716507f88922c4c722e92b5b707",
+      "scripts/a42331_ci_contract.py": "f8800c208fe2825f30c98afd8ed23ef289ba990e724e013f04527fa5df414a41",
+      "scripts/ci_change_scope.py": "73e21b226a4c23890176f7a3749ec08c18362f89ceaa61fe3dd596c9819e5a47",
+      "scripts/ci_docs_check.py": "1c6e242ba06985e9bd23e75c64aae00ce35a9a221f5bcb60bc5ff2523048720b",
+      "scripts/ci_opt_contract.py": "97b518e62f90bc07aaebda9870958705710535398dffc0637bcde0a8c0d178f3",
+      "scripts/ci_status_summary.py": "f54b43b5722730b3af5e31dc3543a9af84d5cf122513505e578bca27b6c83784",
+      "tests/unit/test_a42331_ci_evidence.py": "9e82ae106032caf09f5ac410f42c6f7fde87ab62b83038fbc67616fe2c5b7e42",
+      "tests/unit/test_a4_ci_governance.py": "bd5484e13fa9b23f485fe032ed8369b7aac7c37024ce087e90a3606d095357b1",
+      "tests/unit/test_ci_opt_01.py": "cd007dda9b2aba829e4b86d231410f5474efe14aa7c3b573e2a3bd6bf0d14344",
+      "tests/unit/test_a4233_background_observer.py": "95ae1b3adebc075157faa7a3b8b1ab619be26e9a706d1b47041e97c3324fc3a9",
+      "tests/unit/test_a42341_environment_guard.py": "7daa79873a48f4e5b7705eab5ef6ab089a130290ec242324b6c9d35923434674",
+      "tests/unit/test_business_source_contract.py": "95f85431950ecf08d373f3acb0fbf2779c3d1aae0ecba58351023ef71b6f58e8"
+    },
+    "local_legacy_compatibility": {
+      "result": "PASS",
+      "tests": 163,
+      "reported_seconds": 175.49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "environment": "Windows default pytest plugins, isolated LF checkout, master only",
+      "command": "python -m pytest tests/unit/test_a4_ci_governance.py tests/unit/test_a42331_ci_evidence.py tests/unit/test_a421_artifacts_and_cli.py tests/unit/test_v14_workflow_evidence.py tests/unit/test_a42341_environment_guard.py::test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change -q --tb=short --basetemp=.codex_tmp/ci-opt-business-adapter-legacy-tests --junitxml=.codex_tmp/ci-opt-business-adapter-legacy.xml"
+    },
+    "combined_disjoint_targeted_tests": 231
   }
 }

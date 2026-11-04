@@ -29,9 +29,13 @@ def test_old_a4_hash_is_preserved_and_current_source_has_a_different_version():
 
 
 def test_exact_function_compatibility_keeps_negative_cases_signatures_and_assertions():
+    from scripts.ci_opt_contract import restore_environment_guard_test
+
     for path, names in contract.TEST_ADAPTATIONS.items():
         old = subprocess.check_output(["git", "show", contract.BASELINE + ":" + path], cwd=ROOT)
         current = (ROOT / path).read_bytes()
+        if path == "tests/unit/test_a42341_environment_guard.py":
+            current = restore_environment_guard_test(current)
         contract.verify_test_adaptation(old, current, names)
         assert {n.name for n in ast.parse(old).body if isinstance(n, ast.FunctionDef)} == {
             n.name for n in ast.parse(current).body if isinstance(n, ast.FunctionDef)

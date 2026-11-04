@@ -113,7 +113,8 @@ def transform(name, original):
             "tests/unit/test_a4_ci_governance.py tests/unit/test_ci_opt_01.py "
             "tests/unit/test_a4233_background_observer.py "
             "tests/unit/test_a42341_environment_guard.py::"
-            "test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change -q",
+            "test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change "
+            "tests/unit/test_business_source_contract.py -q",
         )
     value["jobs"]["ci-summary"] = summary_job(name)
     return value
@@ -132,6 +133,41 @@ def restore_test_job(current):
     if current != transformed_job("ci.yml", "test", old):
         raise ValueError("CI_OPT_UNREVIEWED_TEST_JOB")
     return old
+
+
+@lru_cache(maxsize=1)
+def environment_guard_test_baseline():
+    return subprocess.check_output(
+        ["git", "show", f"{BASELINE}:tests/unit/test_a42341_environment_guard.py"],
+        cwd=ROOT,
+    )
+
+
+def restore_environment_guard_test(current):
+    """Project only the exact CI-OPT AT20 edit for the older test-body contract.
+
+    This is static test compatibility, never a source identity or execution grant.
+    The original business verifier and its negative cases remain unchanged.
+    """
+    before = environment_guard_test_baseline()
+    old = (
+        b"    for name in ('ci.yml', 'ab-read-a4-baseline.yml', 'ab-read-a4-2.yml',\n"
+        b"                 'publication-v13.yml', 'a4232-statistics-tail-diagnostic.yml'):\n"
+        b"        assert (ROOT / '.github/workflows' / name).read_bytes() == c.git(\n"
+    )
+    new = (
+        b"    from scripts.ci_opt_contract import TARGETS, baseline_bytes, restore\n\n"
+        b"    for name in ('ci.yml', 'ab-read-a4-baseline.yml', 'ab-read-a4-2.yml',\n"
+        b"                 'publication-v13.yml', 'a4232-statistics-tail-diagnostic.yml'):\n"
+        b"        actual = (ROOT / '.github/workflows' / name).read_bytes()\n"
+        b"        if name in TARGETS:\n"
+        b"            restore(name, yaml.safe_load(actual))\n"
+        b"            actual = baseline_bytes(name)\n"
+        b"        assert actual == c.git(\n"
+    )
+    if before.count(old) != 1 or current.replace(b"\r\n", b"\n") != before.replace(old, new, 1):
+        raise ValueError("CI_OPT_UNREVIEWED_TEST_SOURCE_CHANGE")
+    return before
 
 
 def plans():

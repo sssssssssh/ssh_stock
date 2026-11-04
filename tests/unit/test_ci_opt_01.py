@@ -363,7 +363,7 @@ def test_T01_T10_real_entrypoints_emit_only_docs_proof(repo, monkeypatch):
     assert not (root / ".codex_tmp/a421").exists()
 
 
-def test_T11_only_five_reviewed_test_functions_changed_and_no_original_test_removed():
+def test_T11_only_reviewed_test_functions_changed_and_no_original_test_removed():
     allowed = {
         "tests/unit/test_a4_ci_governance.py": {
             "test_only_reviewed_job_conditions_change_from_ci_1_0",
@@ -378,6 +378,9 @@ def test_T11_only_five_reviewed_test_functions_changed_and_no_original_test_remo
         "tests/unit/test_a42341_environment_guard.py": {
             "test_AT20_exact_ci_additions_no_other_workflow_or_old_step_change",
         },
+        "tests/unit/test_business_source_contract.py": {
+            "test_exact_function_compatibility_keeps_negative_cases_signatures_and_assertions",
+        },
     }
     for path, exceptions in allowed.items():
         original = ast.parse(git(ROOT, "show", f"{BASELINE}:{path}").decode("utf-8"))
@@ -386,6 +389,38 @@ def test_T11_only_five_reviewed_test_functions_changed_and_no_original_test_remo
         new = {n.name: ast.dump(n) for n in current.body if isinstance(n, ast.FunctionDef)}
         assert old.keys() == new.keys()
         assert {n for n in old if old[n] != new[n]} == exceptions
+
+
+def test_T11_legacy_test_projection_preserves_the_original_business_verifier():
+    from scripts.business_source_contract import BASELINE as business_baseline
+    from scripts.business_source_contract import TEST_ADAPTATIONS, verify_test_adaptation
+    from scripts.ci_opt_contract import restore_environment_guard_test
+
+    path = "tests/unit/test_a42341_environment_guard.py"
+    raw = (ROOT / path).read_bytes()
+    old = git(ROOT, "show", f"{business_baseline}:{path}")
+    with pytest.raises(ValueError, match="BUSINESS_UNREVIEWED_TEST_CHANGE"):
+        verify_test_adaptation(old, raw, TEST_ADAPTATIONS[path])
+    restored = restore_environment_guard_test(raw)
+    assert restored == git(ROOT, "show", f"{BASELINE}:{path}")
+    verify_test_adaptation(old, restored, TEST_ADAPTATIONS[path])
+
+
+@pytest.mark.parametrize("damage", ["assertion", "outside", "unregistered_body"])
+def test_T11_legacy_test_projection_refuses_any_extra_edit(damage):
+    from scripts.ci_opt_contract import restore_environment_guard_test
+
+    raw = (ROOT / "tests/unit/test_a42341_environment_guard.py").read_bytes()
+    if damage == "assertion":
+        raw = raw.replace(b"assert actual == c.git(", b"assert True or actual == c.git(", 1)
+    elif damage == "outside":
+        raw += b"\n# not a registered change\n"
+    else:
+        raw = raw.replace(
+            b"            restore(name, yaml.safe_load(actual))", b"            pass", 1,
+        )
+    with pytest.raises(ValueError, match="CI_OPT_UNREVIEWED_TEST_SOURCE_CHANGE"):
+        restore_environment_guard_test(raw)
 
 
 def test_T12_baseline_evidence_not_candidate_performance_and_single_revert_documented():
