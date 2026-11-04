@@ -5615,7 +5615,7 @@
     "tests/unit/test_capacity_progress.py": "6b7192c9f99033535e22441d7415feaf60d1b3d7d3822a2fa6bcf2878f5c9dc4",
     "tests/unit/test_catchup_scheduler.py": "1123d641dc63ef2f6d457d62416df7714792a576a284d4f665a3003ee63d34b0",
     "tests/unit/test_ci_opt_01.py": "b4f3edded2796633d4b39e11a626711db8e770e35bd7f42858fc0a385bb0404d",
-    "tests/unit/test_ci_opt_02.py": "33bd6c4a98f2f515dc802b6800266b2ed8928c3c3c79062ef16a5e98ddf34866",
+    "tests/unit/test_ci_opt_02.py": "448c09c7d06dbb0344edf51a0cfb57b3cb81ff1bdc35fa48900c7206ea73785b",
     "tests/unit/test_cli_derived_safety.py": "18ffbe3d12367f15550658e35649c31ff0a80f42c53025d3d2211e2760b46176",
     "tests/unit/test_cli_validate_data.py": "90eee8c3350a8b63ce79699ef372c98e827a93e170b62b8c11559b9e6b596ef2",
     "tests/unit/test_cold_start_v12.py": "6aa79ed1b8c13f1d8ba99673a7aee263b0e2bf5ea33c0a65f92d95f3593462eb",

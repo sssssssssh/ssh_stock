@@ -277,7 +277,7 @@ def aggregate(directory, minimum):
     # data files; no percentage averaging or last-shard overwrite.
     import coverage
 
-    cov = coverage.Coverage(source=["backend/app"])
+    cov = coverage.Coverage(source=["backend/app"], data_file=str(ROOT / ".coverage"))
     cov.combine(data_paths=[str(p) for p in paths], strict=True, keep=True)
     cov.save()
     percent = cov.report()

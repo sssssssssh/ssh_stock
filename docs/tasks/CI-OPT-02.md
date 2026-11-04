@@ -31,6 +31,14 @@ B1仍禁用，原两个PG分片提案没有进入执行选择器。W03同SHA串�
 - 本机Docker daemon不可用，未连接/启动业务数据库；本地不执行PG大套件或高成本A4/G1/Publication实验。
   PG资格、最终覆盖率及Linux整套结果以推送后的同SHA工件为准，不把本地18/183/8相加为完整套件。
 
+### 一次限定P1修复
+
+44ad3d8提交后复核发现：聚合Coverage默认继承外层COVERAGE_FILE，会改变分片数据文件查找基名。
+嵌套coverage回归真实复现NoDataError。修复固定聚合数据文件为当前ROOT/.coverage；
+新回归明确设置外部COVERAGE_FILE并确认原字节不变。183项通过，原RED日志摘要见
+[coverage_fix.json](../acceptance/ci_opt_02/coverage_fix.json)。仅追加这一次限定修复，
+同时更新变更测试的manifest摘要；不因CI状态或自身SHA另作提交。
+
 ### 未关闭事项和回滚
 
 W03尚缺同SHA、固定Runner规格的串行基线及两次候选、queue/wall/CPU/成本报告；不得宣称20–30分钟或性能PASS。

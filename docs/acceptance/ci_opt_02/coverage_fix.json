@@ -1,0 +1,16 @@
+{
+  "schema": "ci-opt-02.coverage-isolation-fix.v1",
+  "implementation_sha": "44ad3d8603c5b8eeb6c5a2c672aeca035177d925",
+  "severity": "P1",
+  "reproduction": "COVERAGE_FILE from outer pytest changes the aggregate data-file basename; coverage combine raises NoDataError before validating artifacts",
+  "fix": "Explicit ROOT/.coverage aggregate output; unit sets a foreign COVERAGE_FILE and verifies it remains byte-identical",
+  "red_exit_code": 1,
+  "green": "183 passed, 18 new-contract nodes included",
+  "additional_repair_commits": 1,
+  "full_linux": "PENDING_FINAL_SHA",
+  "sha256": {
+    "coverage-isolation-green.xml": "13c8ec915f18959bc1620bbdb45b3ab6ef945cdacc8c8418f62a7cc33a1a02ba",
+    "coverage-isolation-red.log": "5456e89a660970c27b02f2320dbe312f3e167471d12bfa4c2685b0176c426e53",
+    "coverage-isolation-green.log": "1f19845085f5f2ea2959e7abe64f9ae933684ab85ea99438e6b736b1d5e821f1"
+  }
+}

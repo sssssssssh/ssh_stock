@@ -142,6 +142,9 @@ def test_real_coverage_combine_requires_both_artifacts(tmp_path, monkeypatch):
     from scripts import ci_test_shards as shards
 
     monkeypatch.chdir(tmp_path)
+    outside = tmp_path / "outer.coverage"
+    outside.write_bytes(b"outer-coverage-must-stay-unchanged")
+    monkeypatch.setenv("COVERAGE_FILE", str(outside))
     source = tmp_path / "backend/app/tiny.py"
     source.parent.mkdir(parents=True)
     source.write_text("def f(flag):\n    if flag:\n        return 1\n    return 2\n")
@@ -199,6 +202,7 @@ def test_real_coverage_combine_requires_both_artifacts(tmp_path, monkeypatch):
     shards.aggregate(incoming, 70)
     result = json.loads((tmp_path / ".codex_tmp/ci-shards/combined.json").read_text())
     assert result["status"] == "FULL_PASS" and result["coverage_percent"] == 100
+    assert outside.read_bytes() == b"outer-coverage-must-stay-unchanged"
     assert len(list(ET.parse(tmp_path / ".codex_tmp/m17_1_2-full.xml").iter("testcase"))) == 2
     (incoming / "pilot/.coverage.pilot").write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="DIGEST"):
