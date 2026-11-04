@@ -53,7 +53,8 @@
         "ci_full_49",
         "ci_full_50",
         "ci_full_51",
-        "ci_full_52"
+        "ci_full_52",
+        "python_artifacts"
       ],
       "mandatory": [
         "ci_full_01",
@@ -97,7 +98,8 @@
         "ci_full_46",
         "ci_full_47",
         "ci_full_50",
-        "ci_full_51"
+        "ci_full_51",
+        "python_artifacts"
       ]
     },
     "lookup-diagnosis": {

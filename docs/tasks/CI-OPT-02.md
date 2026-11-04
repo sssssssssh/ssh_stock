@@ -1,5 +1,46 @@
 # CI-OPT-02 — W00 审计与待批准实施方案
 
+## 当前批准与实施接续
+
+负责人在W00交付后回复“已确认”，批准方案B、分片并发上限2及先B0后条件B1的顺序。
+本节为当前状态；下文W00的未授权文字保留原审阅语境。
+W01集合/回执/覆盖率合同与W02 B0源码已实现，等待最终精确SHA的Linux结果。
+B0为pilot 8节点与serial其余节点，当前全集5425（新增18项CI合同测试）；不把原5407当固定应有数量。
+B1仍禁用，原两个PG分片提案没有进入执行选择器。W03同SHA串行和至少两次候选尚未完成，状态PARTIAL。
+
+### 实现及实际本地验证
+
+- `.github/ci-test-manifest.json`固定当前节点、所有tests Python文件摘要及纯单测的四个依赖源摘要。
+  `python -m scripts.ci_test_shards manifest`只收集和生成待审manifest，不执行fixture或连接数据库。
+- 新python-scope Job复用原CI-OPT-01分流；docs不启动分片matrix，原主Job与Required Check名保留。
+- python-tests使用独立GitHub VM/PG服务/V14容器，matrix最大2，fail-fast=false；各Job内串行。
+  当前只有serial分片运行PG测试；pilot禁止socket连接。没有启用PG并行或xdist。
+- 收集在子进程完成，实际pytest的导入仍被coverage测量；两个分片独立隐藏coverage文件及精确JUnit。
+  汇总校验SHA/run/attempt、每组exit0、完整节点多重集、分组所有权、JUnit真实节点/结果和文件摘要。
+  coverage真实combine后仍≥70%，再生成原full XML供原安全证据及端到端步骤使用。
+- 任何新增文件、fixture变化、收集差异进入原全集serial fallback，拒绝分片合格声明，需审阅后更新manifest。
+  汇总开始即写INCOMPLETE，失败不会留下新的FULL_PASS。已有serial/full失败和取消仍让Required Check失败。
+- 原正式迁移upgrade/downgrade/upgrade、目标回归、Docker/前端/浏览器/队列端到端等步骤保留。
+  主Job在分片完成后继续这些原步骤；B0预期没有可观整链提速，增加成本需如实评估。
+- CI-OPT-01精确投影新增CI-OPT-02层；旧生产/历史字节与授权规则不变。
+  两个旧拓扑测试的断言做精确兼容：主Job依赖必须等于python-scope/python-tests，其余Job仍无依赖；
+  原full命令由真实分片及70%组合门禁替代，其他命令逐条相等。没有删除旧测试或默认skip/xfail。
+- RED新增合同在模块不存在时真实收集失败；修复后18项通过，真实coverage两份合并100%、破坏工件拒绝。
+  扩展合同回归183项通过；本地pilot从5425项选8项通过，其他5417属于serial。
+  早期18个旧依赖断言失败及脏树guard拒绝均保留日志，不冒充最终结果。
+- 本机Docker daemon不可用，未连接/启动业务数据库；本地不执行PG大套件或高成本A4/G1/Publication实验。
+  PG资格、最终覆盖率及Linux整套结果以推送后的同SHA工件为准，不把本地18/183/8相加为完整套件。
+
+### 未关闭事项和回滚
+
+W03尚缺同SHA、固定Runner规格的串行基线及两次候选、queue/wall/CPU/成本报告；不得宣称20–30分钟或性能PASS。
+B1前置的双物理实例/fixture所有权和真实Linux稳定性证据尚未齐备，保持禁用。
+实际CI普通提交可自动触发，无手动高成本授权扩展；现有连接器不提供workflow dispatch写入，
+若需要额外同SHA运行，应由有权限的Runner/操作端执行已审阅方案，不以换SHA的提交替代对照。
+本轮单一实施提交可整体revert恢复W00前串行路径；不涉及业务schema/数据或金融逻辑。
+最终CI结果通过交付回执和工件给出，不为追记自身SHA生成循环状态提交。
+
+
 日期：2026-11-04（Asia/Shanghai）。负责人：项目用户；方案编制：Codex。
 状态：**REVIEW_PENDING / W01–W03 NOT_AUTHORIZED**。
 需求来源：CI-OPT-02 完整 pytest 拆分与安全并行化开发修改任务书。

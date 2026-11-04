@@ -1,0 +1,83 @@
+{
+  "schema": "ci-opt-02.implementation-precommit.v1",
+  "base_sha": "d5858ba0c4f5bc5f2d203022de0431fc29cced25",
+  "approval": "User confirmed W00 proposal B; max test shard jobs 2; B1 conditional",
+  "stage": "B0_IMPLEMENTED_B1_DISABLED_W03_PARTIAL",
+  "manifest_nodes": 5425,
+  "counts": {
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "passed": 183
+  },
+  "pilot": {
+    "head_sha": "d5858ba0c4f5bc5f2d203022de0431fc29cced25",
+    "run_id": "local",
+    "attempt": "1",
+    "shard": "pilot",
+    "status": "PASS",
+    "exit_code": 0,
+    "nodes": [
+      "tests/unit/test_m15_1_experiment_grid.py::test_cross_field_invalid_trial_rejects_whole_definition[grid0]",
+      "tests/unit/test_m15_1_experiment_grid.py::test_cross_field_invalid_trial_rejects_whole_definition[grid1]",
+      "tests/unit/test_m15_1_experiment_grid.py::test_duplicate_or_empty_value_list_is_rejected[values0]",
+      "tests/unit/test_m15_1_experiment_grid.py::test_duplicate_or_empty_value_list_is_rejected[values1]",
+      "tests/unit/test_m15_1_experiment_grid.py::test_grid_is_numeric_sorted_deterministic_and_rightmost_changes_fastest",
+      "tests/unit/test_m15_1_experiment_grid.py::test_per_parameter_and_total_trial_limits_fail_closed",
+      "tests/unit/test_m15_1_experiment_grid.py::test_unknown_parameter_is_rejected",
+      "tests/unit/test_m15_1_experiment_grid.py::test_unspecified_parameters_inherit_complete_base_values"
+    ],
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "fallback": false,
+    "manifest_sha256": "6cb4898b093999e0ef8c49b4859a0dd6ac19b7d9437ad8622512c87c25133249",
+    "coverage_sha256": "fa1c7fa536381448cc19d761dc4afb2c323b39f767e6c593c2fb2adc26ada5f3",
+    "junit_sha256": "a7cd2d2797292afc1bc0feed6ff7cdbf36d324a40594f2f65a0035e562bee62c",
+    "wall_seconds": 7.046697125000264,
+    "process_cpu_seconds": 4.052322,
+    "cpu_scope": "PYTHON_PARENT_NOT_SERVER_OR_CHILD_PROCESSES",
+    "performance_eligible": false,
+    "cpu_count": 8,
+    "ram_bytes": 8589934592,
+    "peak_rss_bytes": 252362752,
+    "platform": "macOS-15.7.7-arm64-arm-64bit",
+    "physical_instance": {
+      "V14_TEST_INSTANCE": null,
+      "V14_TEST_SYSTEM_IDENTIFIER": null,
+      "V14_CONTAINER": null
+    }
+  },
+  "full_linux": "PENDING_SAME_IMPLEMENTATION_SHA_CI",
+  "same_sha_serial_baseline": "NOT_RUN",
+  "two_valid_candidates": "NOT_RUN",
+  "docker_daemon": "UNAVAILABLE_LOCAL",
+  "pg_business_access": false,
+  "hashes": {
+    "final-narrow.log": "0c73a738b90b20463f4f6d04492710a489b9ea69b16b02d7a726265ca7dc8ce5",
+    "precommit.log": "881ef76fd37dff530706f7cfd173c5bdcb775968e315984f8f194676d3116c64",
+    "contracts.log": "1532a724820073ae4f61a6a1303df3acfc6b31fb17cfe0f7655f9318e341ff9d",
+    "red.log": "e56d804c6ad2e39a04dd04da94fcc3f6243332edce74da7398bcf38fa4b28854",
+    "contracts2.log": "891c9c0b2c7ca2b534dca501f2c1938040795aba74b396b318df9f8467d15652",
+    "contracts3.log": "2eb533873af6fa6cee24ca491c777d0be643fe7179524105bf319d68cee1e425",
+    "green.log": "a4ba6a0b833ef7026d4d291578c1a66aa7b84a732bb259d96dc88bdb89ae3418",
+    "contracts4.log": "be271061e0446281646a7521acb3837a9284ae196ad1b83f77d05f37d4e99771",
+    "freeze.log": "63e8fe7afec5bade9c79fe4f6aabbf12caf5f27fb5e00e18d44788410066e42f",
+    "contracts3.xml": "e7f32c31f72e6e1391f5b41fa196546e693d5f3e439c7b49714befea3824f2e0",
+    "first-failure.log": "ab847040ccea70ef707b27abb113efd0844cda2d80f7699f434a5d3720401e81",
+    "contracts4.xml": "3acf590f35c2784ae571b104f505bcdc5fa2fe9678a18468ccddafc98fde3534",
+    "ruff.log": "b9f3429b0eed9cfafa44ab4c3500fe434ef6cd3a780d0d9ea71468ed9c314a89",
+    "pilot-final.log": "3bdc612e8aa86202210eee1b2d3fbd3877c460bce7a6955c0c59d7e4640db3c6",
+    "pilot.log": "8c9f9b8c9ff1d7f5df3afa9398853a4bcd6e8f20b4df7bc90379739278f75555",
+    "ruff-final.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "precommit.xml": "006eff26ee283c5c19201ac74ee595bd8f7df494dc1d8a8d0bfd7cf16c3a4071",
+    "contracts.xml": "11d9b6f7c21d94ee18872efe6bf13aea06dbc5d5e5f8d2845360d6b8b3c36243",
+    "collect.log": "0057e4fc8f0ac9b578054a236274715bf9fc8bb982348e4db5b3b4966f6fa6c1",
+    "ruff2.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+  },
+  "warnings": [
+    "Precommit counts are not final-SHA full results",
+    "Earlier topology/dirty-tree failures retained in local raw logs",
+    "No speedup or full completion claim"
+  ]
+}

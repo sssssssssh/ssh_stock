@@ -293,6 +293,8 @@ jobs:
           if-no-files-found: error
 
   test:
+    needs: [python-scope, python-tests]
+    if: always()
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -458,11 +460,15 @@ jobs:
           tests/unit/test_a4233_background_observer.py tests/integration/test_a4233_observer_pg17.py
           -q --junitxml=.codex_tmp/a42331-targeted.xml
         if: steps.ci_scope.outputs.scope != 'docs'
+      - name: Download exact-run Python shard evidence
+        id: python_artifacts
+        if: steps.ci_scope.outputs.scope != 'docs'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ci-opt-02-*-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .codex_tmp/shard-input
       - id: full_tests
-        run: >-
-          python -m pytest -p scripts.a42331_pytest_safety --tb=no --show-capture=no -rN
-          --cov=backend/app --cov-report=term-missing --cov-fail-under=70
-          --junitxml=.codex_tmp/m17_1_2-full.xml
+        run: python -m scripts.ci_test_shards aggregate --cov-fail-under=70 -p scripts.a42331_pytest_safety
         if: steps.ci_scope.outputs.scope != 'docs'
       - name: M16.6 capture capacity measurements
         run: python -m pytest tests/integration/test_m16_6_window_end_to_end.py -k maximum -s -q
@@ -918,6 +924,8 @@ jobs:
     - dependency-audit
     - lookup-diagnosis
     - test
+    - python-scope
+    - python-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -928,3 +936,94 @@ jobs:
       env:
         CI_OPT_NEEDS: ${{ toJSON(needs) }}
       run: python -m scripts.ci_status_summary workflow --workflow ci.yml
+
+  python-tests:
+    needs:
+    - python-scope
+    if: needs.python-scope.outputs.scope != 'docs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard:
+        - pilot
+        - serial
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: stock_db
+          POSTGRES_USER: stock
+          POSTGRES_PASSWORD: stock
+        ports:
+        - 5432:5432
+        options: --health-cmd "pg_isready -U stock -d stock_db" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg://stock:stock@127.0.0.1:5432/stock_db
+      DOCKER_DATABASE_URL: postgresql+psycopg://stock:stock@postgres:5432/stock_db
+      TUSHARE_TOKEN: test-token
+      M17_MEASUREMENT_PATH: .codex_tmp/m17_capacity.jsonl
+      M17_1_1_MEASUREMENT_PATH: .codex_tmp/m17_1_1-retention.jsonl
+      A42331_MIGRATION_EVIDENCE_DIR: .codex_tmp/a42331-migrations
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Classify changes and validate registered prose
+      id: ci_scope
+      uses: ./.github/actions/ci-scope
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: pip
+      id: ci_full_01
+      if: steps.ci_scope.outputs.scope != 'docs'
+    - run: python -m pip install --upgrade pip
+      id: ci_full_02
+      if: steps.ci_scope.outputs.scope != 'docs'
+    - run: python -m pip install -r requirements.lock
+      id: ci_full_03
+      if: steps.ci_scope.outputs.scope != 'docs'
+    - name: V1.4 physically isolated and marked PG17
+      run: "V14_INSTANCE=$(python -c 'import uuid; print(uuid.uuid4())')\nV14_CONTAINER=\"a4-ci-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$(python -c 'import uuid; print(uuid.uuid4().hex[:12])')\"\necho \"V14_CONTAINER=$V14_CONTAINER\"\
+        \ >> \"$GITHUB_ENV\"\ndocker run -d --name \"$V14_CONTAINER\" --label purpose=ssh-stock-a4-physical-test \\\n  --label \"ssh-stock.run-id=$GITHUB_RUN_ID\" --label \"ssh-stock.attempt=$GITHUB_RUN_ATTEMPT\"\
+        \ \\\n  --label \"ssh-stock.job=$GITHUB_JOB\" --cpus=2 --memory=3g \\\n  -e POSTGRES_DB=v14_test -e POSTGRES_USER=stock -e POSTGRES_PASSWORD=stock \\\n  -p 127.0.0.1:55438:5432 postgres:17 -c \"v14.test_instance=$V14_INSTANCE\"\
+        \ \\\n  -c shared_preload_libraries=pg_stat_statements -c track_io_timing=on \\\n  -c pg_stat_statements.track=all\nfor attempt in $(seq 1 30); do\n  docker exec \"$V14_CONTAINER\" pg_isready -h 127.0.0.1\
+        \ -U stock -d v14_test && break\n  sleep 1\ndone\ndocker exec \"$V14_CONTAINER\" pg_isready -h 127.0.0.1 -U stock -d v14_test\nV14_SYSTEM_ID=$(docker exec -e PGPASSWORD=stock \"$V14_CONTAINER\" psql\
+        \ -h 127.0.0.1 -U stock -d v14_test -Atc \\\n  'SELECT system_identifier FROM pg_control_system()')\necho \"V14_TEST_INSTANCE=$V14_INSTANCE\" >> \"$GITHUB_ENV\"\necho \"V14_TEST_SYSTEM_IDENTIFIER=$V14_SYSTEM_ID\"\
+        \ >> \"$GITHUB_ENV\"\necho 'TEST_DATABASE_URL=postgresql+psycopg://stock:stock@127.0.0.1:55438/v14_test' >> \"$GITHUB_ENV\"\n"
+      id: ci_full_04
+      if: steps.ci_scope.outputs.scope != 'docs'
+    - name: Formal parent schema for sensitive shard
+      if: steps.ci_scope.outputs.scope != 'docs' && matrix.shard == 'serial'
+      run: python -m alembic upgrade head
+    - name: Execute exact shard with safety and independent coverage
+      if: steps.ci_scope.outputs.scope != 'docs'
+      run: python -m scripts.ci_test_shards run --shard "${{ matrix.shard }}"
+    - name: Preserve shard evidence even on failure
+      if: ${{ always() && (steps.ci_scope.outputs.scope != 'docs') }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-opt-02-${{ matrix.shard }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        path: .codex_tmp/ci-shards/${{ matrix.shard }}
+        include-hidden-files: true
+        if-no-files-found: error
+    - id: cleanup
+      if: ${{ always() && (steps.ci_scope.outputs.scope != 'docs') }}
+      uses: ./.github/actions/a4-cleanup
+      with:
+        container: ${{ env.V14_CONTAINER }}
+  python-scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.classify.outputs.scope }}
+      head: ${{ github.sha }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - id: classify
+      uses: ./.github/actions/ci-scope

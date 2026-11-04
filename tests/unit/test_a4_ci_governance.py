@@ -279,7 +279,9 @@ def test_ci_l0_authorization_and_formal_gate_trigger_matrix(event, selected, con
     assert condition(jobs["authorize"]["if"], ctx) is (manual and selected != "none")
     for job in ("test", "dependency-audit", "lookup-diagnosis", "workflow-contracts"):
         assert condition(jobs[job].get("if", "true"), ctx), job
-        assert not jobs[job].get("needs"), job
+        assert jobs[job].get("needs", []) == (
+            ["python-scope", "python-tests"] if job == "test" else []
+        ), job
     for job, suite in EXPENSIVE["ci.yml"].items():
         assert condition(jobs[job]["if"], ctx) is (manual and confirmed and selected == suite)
     assert condition(jobs["publication-release-gate"]["if"], ctx) is (

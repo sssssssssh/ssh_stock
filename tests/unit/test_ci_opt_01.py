@@ -258,10 +258,17 @@ def test_T11_exact_workflow_projection_preserves_every_old_command_and_authoriza
     for key in TARGETS[name]:
         old_steps = original["jobs"][key]["steps"]
         new_steps = current["jobs"][key]["steps"]
+        if name == "ci.yml" and key == "test":
+            from scripts.ci_opt_02_topology import AGGREGATE
+            assert next(s for s in new_steps if s.get("id") == "full_tests")["run"] == AGGREGATE
+            new_steps = [s for s in new_steps if s.get("id") != "python_artifacts"]
         assert len(new_steps) == len(old_steps) + 3
         for old, new in zip(old_steps[1:], new_steps[2:-2], strict=True):
             assert new["if"] == guarded(old.get("if"))
-            assert old.get("run") == new.get("run")
+            if name == "ci.yml" and key == "test" and old.get("id") == "full_tests":
+                assert new["run"] == AGGREGATE
+            else:
+                assert old.get("run") == new.get("run")
         assert current["jobs"][key].get("services") == original["jobs"][key].get("services")
     assert current["on"] == original["on"]
     assert current["concurrency"] == original["concurrency"]
@@ -367,6 +374,7 @@ def test_T11_only_reviewed_test_functions_changed_and_no_original_test_removed()
     allowed = {
         "tests/unit/test_a4_ci_governance.py": {
             "test_only_reviewed_job_conditions_change_from_ci_1_0",
+            "test_ci_l0_authorization_and_formal_gate_trigger_matrix",
         },
         "tests/unit/test_a42331_ci_evidence.py": {
             "test_only_exact_reviewed_test_job_changes_and_every_gate_stays_frozen",

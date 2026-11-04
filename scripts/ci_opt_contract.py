@@ -117,6 +117,9 @@ def transform(name, original):
             "tests/unit/test_business_source_contract.py -q",
         )
     value["jobs"]["ci-summary"] = summary_job(name)
+    if name == "ci.yml":
+        from scripts.ci_opt_02_topology import project
+        value = project(value)
     return value
 
 
@@ -130,7 +133,8 @@ def restore(name, current):
 
 def restore_test_job(current):
     old = baseline("ci.yml")["jobs"]["test"]
-    if current != transformed_job("ci.yml", "test", old):
+    from scripts.ci_opt_02_topology import project_test
+    if current != project_test(transformed_job("ci.yml", "test", old)):
         raise ValueError("CI_OPT_UNREVIEWED_TEST_JOB")
     return old
 
@@ -183,6 +187,8 @@ def plans():
                               for i, s in enumerate(steps, 1)
                               if s.get("if", "always()") == "always()"],
             }
+    result["ci.yml"]["test"]["all"].append("python_artifacts")
+    result["ci.yml"]["test"]["mandatory"].append("python_artifacts")
     return result
 
 
