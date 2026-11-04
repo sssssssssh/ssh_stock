@@ -10,7 +10,7 @@
 范围、限制及回滚见 [CI-OPT-01](docs/tasks/CI-OPT-01.md)。
 
 <!-- ci-opt-01:noncontract-prose:start -->
-阅读本节可以了解说明的检查方式。
+阅读本节可以了解普通说明的检查方式。
 需要了解检查情况时，可先阅读对应小节，再核对相关记录。
 <!-- ci-opt-01:noncontract-prose:end -->
 
