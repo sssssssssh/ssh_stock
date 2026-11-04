@@ -1,0 +1,58 @@
+{
+  "schema": "biz-perf-03-b.actions-offline-verification.v1",
+  "client_date": "2026-11-05",
+  "baseline_sha": "b27fa109530002f2cddbb1a4c28b356bad11b398",
+  "subject": "WORKTREE_ADAPTATION_BEFORE_COMMIT_NOT_PERFORMANCE_EVIDENCE",
+  "file_sha256": {
+    ".github/workflows/biz-perf-03-b-once.yml": "a12b0ff00edce4982840cdd4e0f148d68a9782809e392b3e6abcdcbd268d6b1c",
+    "scripts/biz_perf_03_b_once.py": "2966ac69ce090d4056f92fcf3247b8769a678af55a6d807cd6b13834eac3ca27",
+    "scripts/business_recalc_measure.py": "4c3e27fa81d628587020e189ce88b754d9b283c28b58630b95a59a54c05115a3",
+    "docs/acceptance/biz_perf_03_b_actions_once_protocol.json": "56e81fcbfe23071dde631d1eab9eb7b5d74e4011f0f27b6b98e2b8f845a92d17",
+    "tests/unit/test_biz_perf_03_b_once.py": "762cb7ed7acf417980513718799388c652449b1d4985904f501856e0c837aeb8",
+    "tests/unit/test_a4_ci_governance.py": "34a71c4301d9eb236a2249782dbbd8e454f70da727864de9a0cb2c8ec0a9034e",
+    "tests/unit/test_ci_opt_01.py": "ea4883077a8c805dff60b320c5f1ba4a13f916756423162b652f419f2d12091a"
+  },
+  "receipts": {
+    "offline_contracts": {
+      "sha256": "f200729b1ca0c29ec9604b2dd065226baf1fb6c475801e692f7c9b4e44aa5760",
+      "tests": 255,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "expanded_history_contracts": {
+      "sha256": "78cf49105baf54b5bda28371ef158fdabf9f564bc38eb055851cf7da592bd359",
+      "tests": 216,
+      "failures": 3,
+      "errors": 0,
+      "skipped": 0
+    },
+    "process_group_red": {
+      "sha256": "8b3a636ab728f7f40a8dafa59a964472b9dcb574e8e9118fe0f6ae9eb1366f42",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    },
+    "failure_prefix_red": {
+      "sha256": "29c43ef034293d336f366916dc0545d7601f035e93d7caa1dff35c5cdd75ab00",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0
+    }
+  },
+  "expanded_history_failures": "Three existing clean-tree gates refused uncommitted source with A4235_DIRTY_TREE; recheck only these after commit, without changing their assertions.",
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "old_six_workflows_and_business_diff": "EMPTY",
+  "root_task_attempts": 0,
+  "containers_created": 0,
+  "databases_created": 0,
+  "environment_writes": 0,
+  "actions_dispatches": 0,
+  "performance_eligible": false,
+  "capacity_ready": false,
+  "production_read_authorized": false,
+  "live_namespace_and_pg17": "NOT_RUN_NOT_AUTHORIZED"
+}

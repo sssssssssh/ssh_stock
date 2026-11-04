@@ -1,0 +1,97 @@
+name: BIZ-PERF-03-B one-shot evidence
+
+"on":
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Reviewed complete infrastructure commit SHA (not a business optimization)
+        required: true
+        type: string
+      protocol_id:
+        description: biz-perf-03-b.actions-once.v1 only
+        required: true
+        type: string
+      protocol_sha256:
+        description: Reviewed SHA256 of the committed single-run protocol
+        required: true
+        type: string
+      confirm_once:
+        description: Exactly one synthetic diagnostic, no W02 or production authorization
+        required: true
+        type: boolean
+        default: false
+      run_reason:
+        description: Reviewed reason, without secrets
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ssh-stock-a4-expensive
+  cancel-in-progress: false
+
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    environment: biz-perf-03-b-once
+    env:
+      LLM_ENABLED: "false"
+      FACTOR_INPUT_REUSE_ENABLED: "false"
+      RAW_PREFLIGHT_BATCH_ENABLED: "false"
+      FACTOR_CPU_OPTIMIZATION_ENABLED: "false"
+      AB_MERGE_READ_ENABLED: "false"
+      PERF_DIAGNOSTICS_ENABLED: "false"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Start absolute execution budget and incomplete public prefix
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, time
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('BIZ03_T0_NS=' + str(time.monotonic_ns()) + '\n')
+          directory = pathlib.Path(os.environ['RUNNER_TEMP']) / 'biz-perf-03-b' / os.environ['GITHUB_RUN_ID'] / os.environ['GITHUB_RUN_ATTEMPT'] / 'public'
+          directory.mkdir(parents=True, exist_ok=False)
+          (directory / 'receipt.json').write_text(json.dumps(dict(status='INCOMPLETE', root_attempts=0,
+              head_sha=os.environ['GITHUB_SHA'], run_id=os.environ['GITHUB_RUN_ID'],
+              attempt=os.environ['GITHUB_RUN_ATTEMPT'], production_read_authorized=False,
+              capacity_ready=False, performance_eligible=False)))
+          PY
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.14"
+      - name: Preserve the pre-execution prefix (no database created)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: biz-perf-03-b-prefix-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/biz-perf-03-b/${{ github.run_id }}/${{ github.run_attempt }}/public/receipt.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Guard, provision and supervise exactly one synthetic root
+        env:
+          BIZ03_ALLOWED_RUN_ID: ${{ vars.BIZ03_ALLOWED_RUN_ID }}
+          BIZ03_ALLOWED_SHA: ${{ vars.BIZ03_ALLOWED_SHA }}
+          BIZ03_PROTOCOL_SHA256: ${{ vars.BIZ03_PROTOCOL_SHA256 }}
+        run: python -m scripts.biz_perf_03_b_once
+      - name: Verify the export allowlist, hashes and total size
+        id: export
+        if: always()
+        run: python3 -m scripts.biz_perf_03_b_once --check-export
+      - name: Preserve only bounded sanitized diagnostic evidence
+        if: ${{ always() && steps.export.outputs.artifact_dir != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: biz-perf-03-b-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.export.outputs.artifact_dir }}/*.json
+          if-no-files-found: error
+          retention-days: 7

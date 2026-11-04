@@ -1,5 +1,14 @@
 # A4-CI 工作流盘点
 
+## 2026-11-05 BIZ-PERF-03-B 独立手动入口（环境适配，未运行）
+
+负责人批准精确登记第七个 `biz-perf-03-b-once.yml`：仅workflow_dispatch、单evidence Job、
+ubuntu-24.04 x64、7分钟、独立biz-perf-03-b-once Environment与唯一allowed_run_id，
+共享ssh-stock-a4-expensive非取消mutex。原六份Workflow/命令/策略/正式Gate不变，未知第八个拒绝。
+此入口不是CI-OPT-02分片、不提供W02/生产/性能资格；创建设置和真实dispatch尚未授权。
+协议与手动审批/隔离/清理/回滚见 [独立操作说明](BIZ_PERF_03_B_actions_runbook.md)。
+以下条目保留各历史阶段时间，不以历史“五个/六个”字样代替上述精确登记。
+
 ## A42341 增量：精确白名单，不增加测量入口
 
 基线f5c0fe4，仅a4233-observer-contracts.yml追加三个路径监听和三步：新三文件unit、always去敏计数、

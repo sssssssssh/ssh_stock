@@ -1,5 +1,10 @@
 # 开发任务管理与新会话接续规范
 
+2026-11-05当前接续：BIZ-PERF-03-B环境适配已获开发/离线验证/master交付授权，
+真实性能Workflow、Environment设置和W02未批准。先读PROJECT_STATUS顶部和
+[独立操作说明](../acceptance/BIZ_PERF_03_B_actions_runbook.md)，完成交付后停止等待审阅。
+下方CI-OPT-02历史指针不授权恢复B0、修改observer或追加性能实验。
+
 2026-11-04 当前任务入口：[CI-OPT-02](CI-OPT-02.md)。负责人已确认方案B；本轮B0因Linux128失败已撤回，
 恢复原串行，W03 PARTIAL、B1禁用。先审阅失败与双PG前置差异，不追加无限试跑。下方CI-OPT-01文字为前轮记录，不能复用批准。
 

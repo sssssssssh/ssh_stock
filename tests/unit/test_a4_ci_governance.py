@@ -164,8 +164,10 @@ def test_yaml_loader_preserves_unquoted_on_and_typed_booleans():
 
 def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
     contracts_only = {"a4233-observer-contracts.yml"}
+    # Approved seventh entry; an eighth unknown workflow remains refused.
+    single_diagnostic = {"biz-perf-03-b-once.yml"}
     assert {p.name for p in (ROOT / ".github/workflows").glob("*.yml")} == (
-        set(EXPENSIVE) | contracts_only
+        set(EXPENSIVE) | contracts_only | single_diagnostic
     )
     inventory = (ROOT / "docs/acceptance/a4_ci_workflow_inventory.md").read_text(encoding="utf-8")
     for name in EXPENSIVE:
@@ -184,6 +186,18 @@ def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
         assert value["jobs"]["contracts"]["timeout-minutes"] <= 12
         assert not any(key in value["on"] for key in
                        ("workflow_dispatch", "workflow_run", "repository_dispatch", "schedule"))
+    for name in single_diagnostic:
+        value = workflow(name)
+        assert name in inventory
+        assert set(value["on"]) == {"workflow_dispatch"}
+        assert set(value["jobs"]) == {"evidence"}
+        assert value["jobs"]["evidence"]["runs-on"] == "ubuntu-24.04"
+        assert value["jobs"]["evidence"]["timeout-minutes"] == 7
+        assert value["jobs"]["evidence"]["environment"] == "biz-perf-03-b-once"
+        assert "services" not in value["jobs"]["evidence"]
+        assert "strategy" not in value["jobs"]["evidence"]
+        assert value["concurrency"] == {
+            "group": "ssh-stock-a4-expensive", "cancel-in-progress": False}
 
 
 @pytest.mark.parametrize("event", ["push", "pull_request"])

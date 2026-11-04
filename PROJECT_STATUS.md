@@ -1,5 +1,22 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## BIZ-PERF-03-B 当前接续（2026-11-05，环境适配）
+
+负责人已审阅通过W00/W01，批准Actions环境适配代码、离线合同及master提交推送；
+未批准真实性能dispatch、Environment/reviewer/Secrets/Variables操作或W02业务优化。
+修改前HEAD/origin/master/实时远端一致为b27fa109530002f2cddbb1a4c28b356bad11b398，clean。
+新增第七个独立手动Workflow与最小controller，保留原六份Workflow和业务源码。
+当前唯一执行任务为本适配交付，ADAPTATION_IMPLEMENTED / REVIEW_PENDING / LIVE_NOT_RUN。
+离线255项通过；Ruff与diff检查通过。扩展历史合同213通过，另3项严格clean-tree门禁在未提交
+工作区报A4235_DIRTY_TREE；提交后只复核这三项，不修改其断言，结果以交付回执及同SHA CI为准。
+两项有界进程/失败前缀缺陷均先RED再修复；原始回执摘要见
+[离线验证](docs/acceptance/biz_perf_03_b_actions_offline_verification.json)。普通CI不等于本实验通过。
+真实根任务尝试0，PG/容器创建0，新实验NOT_RUN。下一步交付后仅等待负责人审阅，禁止自动dispatch。
+CI-OPT-02 B0继续WITHDRAWN、原test串行；b27fa109 observer失败根因UNKNOWN，未修改该模块。
+R1/业务性能仍PARTIAL/PERFORMANCE_OPEN；本阶段不关闭它们。
+范围/协议/后续人工设置见 [Actions操作说明](docs/acceptance/BIZ_PERF_03_B_actions_runbook.md)。
+下方CI-OPT-02等段落保留历史接续事实，不能解释为本轮恢复CI并行或修observer的授权。
+
 ## CI-OPT-02 当前接续指针（2026-11-04）
 
 当前唯一执行任务为CI-OPT-02失败收尾，状态W03 PARTIAL / B0 WITHDRAWN。

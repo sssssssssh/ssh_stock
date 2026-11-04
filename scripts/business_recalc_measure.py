@@ -29,7 +29,20 @@ def main():
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--candidate-diagnostics", action="store_true")
     parser.add_argument("--implementation-sha")
+    parser.add_argument("--biz03-once", action="store_true")
+    parser.add_argument("--phase-file", type=Path)
     args = parser.parse_args()
+    channel = None
+    if args.biz03_once:
+        from scripts.biz_perf_03_b_once import Channel, require, validate_single_mode
+
+        validate_single_mode(args, os.environ)
+        channel = Channel(args.phase_file)
+        require(str(Path("/proc/self/ns/net").stat().st_ino)
+                == os.environ.get("BIZ03_EXPECTED_NET_INODE"), "NETWORK_ISOLATION")
+        channel.emit("initializing")
+    elif args.phase_file is not None:
+        parser.error("phase-file requires the separate single-run mode")
     if not 1 <= args.stocks <= 5000:
         parser.error("stocks must be between 1 and 5000")
     from scripts.v14_test_database import verified_test_url
@@ -64,6 +77,9 @@ def main():
 
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     dirty = bool(subprocess.check_output(["git", "diff", "--name-only"], text=True).strip())
+    if channel:
+        require(head == args.implementation_sha == os.environ.get("BIZ03_TARGET_SHA")
+                and not dirty, "SOURCE_IDENTITY")
     report = {"schema": "biz-perf-01.v1", "head_sha": head, "dirty_tree": dirty,
               "optimized": args.optimized, "stocks": args.stocks, "months": args.months,
               "environment": platform.platform(), "status": "PERFORMANCE_OPEN",
@@ -110,6 +126,11 @@ def main():
             # Heartbeat and checkpoint must use the SAME newly-owned test DB.
             monkeypatch.setattr("app.services.job_worker.SessionLocal", factory)
             settings = get_settings()
+            if channel:
+                require(all(getattr(settings, key.lower()) is False for key in (
+                    "FACTOR_INPUT_REUSE_ENABLED", "RAW_PREFLIGHT_BATCH_ENABLED",
+                    "FACTOR_CPU_OPTIMIZATION_ENABLED", "AB_MERGE_READ_ENABLED",
+                    "PERF_DIAGNOSTICS_ENABLED")), "FLAGS_MUST_BE_FALSE")
             if settings.ab_merge_read_enabled:
                 raise RuntimeError("BUSINESS_MEASUREMENT_AB_MUST_REMAIN_OFF")
             from app.services.job_guard import data_queue_identity
@@ -164,6 +185,9 @@ def main():
                         db.commit()
                 db.commit()
                 report["server_version"] = db.scalar(text("SHOW server_version"))
+                if channel:
+                    report["alembic_revision"] = db.scalar(text(
+                        "SELECT version_num FROM alembic_version"))
             report["raw_daily_rows"] = len(opens) * len(codes)
             report["dataset_protocol"] = "constant-price-frozen-audit-v2"
             report["raw_snapshot"] = {}
@@ -184,6 +208,11 @@ def main():
                           'UTF8')),'hex') digest FROM public.\"{name}\" a GROUP BY {day}) q"""
                     )).one()
                     report["raw_snapshot"][name] = dict(rows=int(value[0]), sha256=value[1])
+            if channel:
+                actual = report["raw_snapshot"]["stock_daily"]["rows"]
+                require(actual == report["raw_daily_rows"] == 2660 and actual <= 5000,
+                        "RAW_ROWS")
+                require(report["raw_snapshot"]["stock_basic"]["rows"] == 4, "STOCK_COUNT")
             from app.services.recalculation import _factor_warmup_start, _month_chunks
 
             with factory() as db:
@@ -258,6 +287,8 @@ def main():
                 if phase == "complete":
                     stages[step.name] += monotonic() - step.started
                     delivered_rows[step.name] += kwargs.get("completed_rows", 0)
+                    if channel and channel.root_started is not None:
+                        channel.emit("root", stage_seconds=dict(stages), sql_counts=dict(counts))
                     if step.kind == "publish":
                         stages["publish_inclusive"] += monotonic() - step.started
                 if phase == "store" and step.kind == "publish" \
@@ -328,13 +359,21 @@ def main():
             profile = cProfile.Profile()
             if args.profile:
                 profile.enable()
+            if channel:
+                channel.begin_root()
             with factory() as db:
                 job = create_recalculation_job(db, start=start, end=end,
                     evaluate_signals=False, mode="manual")
+                if channel:
+                    report["root_job_id"] = str(job.id)
                 identity = claim_next_job(db, "biz-perf-isolated")
                 db.refresh(job)
+                if channel:
+                    require(identity == job.id, "CLAIM_IDENTITY")
+                execution_started = monotonic() if channel else None
                 execute_claimed_job(db, identity, expected_worker=job.worker_id,
                                     expected_token=job.execution_token)
+                execution_seconds = monotonic() - execution_started if channel else None
                 db.expire_all()
                 result = db.get(JobRun, job.id)
                 ledger = db.get(DataPublication, job.id)
@@ -350,6 +389,9 @@ def main():
                 report["runs"][-1].update(sql_by_stage=dict(sql_by_stage),
                     sql_driver_seconds_by_stage=dict(seconds_by_stage),
                     sql_digests=dict(sql_digests), sql_failures=sql_failures.copy())
+                if channel:
+                    report["runs"][-1]["execute_claimed_job_seconds"] = execution_seconds
+                    report["runs"][-1].pop("error", None)
                 report["fetches"] = fetches.copy()
                 report["peak_process_rss_bytes"] = rss_bytes()
                 report["peak_retained_input_bytes"] = cache_peak["bytes"]
@@ -375,7 +417,7 @@ def main():
                 report["candidate_source_mismatches"] = db.scalar(text("""SELECT count(*)
                     FROM public.data_publication_row WHERE publication_id=:root
                     AND source_id IS DISTINCT FROM :root"""), {"root": job.id})
-            if plan_input:
+            if plan_input and not channel:
                 # Untimed: only the original SELECT from our disposable synthetic DB.
                 with engine.connect() as connection:
                     raw_plan = connection.exec_driver_sql(
@@ -396,17 +438,44 @@ def main():
                 report["untimed_candidate_lookup_plan"] = sanitized_plan(raw_plan)
     except Exception as exc:
         report["failure_class"] = type(exc).__name__
+        if channel:
+            from scripts.biz_perf_03_b_once import clean_error
+
+            channel.fail(clean_error(exc))
         raise
     finally:
-        if candidate_observer is not None:
-            report["candidate_diagnostics"] = candidate_observer.close()
-        monkeypatch.undo()
-        args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(json.dumps({"output": str(args.output), "runs": report["runs"]}))
+        if channel:
+            from scripts.biz_perf_03_b_once import write_json
+
+            try:
+                if candidate_observer is not None:
+                    report["candidate_diagnostics"] = candidate_observer.close()
+            except BaseException:
+                channel.fail("BIZ03_OBSERVER_CLEANUP_INCOMPLETE")
+            finally:
+                monkeypatch.undo()
+                write_json(args.output, report)
+        else:
+            if candidate_observer is not None:
+                report["candidate_diagnostics"] = candidate_observer.close()
+            monkeypatch.undo()
+            args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    if channel:
+        channel.emit("result")
+    else:
+        print(json.dumps({"output": str(args.output), "runs": report["runs"]}))
     if any(r["job_status"] != "SUCCESS" or r["publication_state"] != "PUBLISHED"
            for r in report["runs"]):
         raise SystemExit(1)
 
 
 if __name__ == "__main__":
-    main()
+    if "--biz03-once" in sys.argv:
+        try:
+            main()
+        except BaseException:
+            # Do not expose arbitrary SQLAlchemy/driver traceback in public logs.
+            print("BIZ03_MEASUREMENT_INCOMPLETE")
+            raise SystemExit(1) from None
+    else:
+        main()
