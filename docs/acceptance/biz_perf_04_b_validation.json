@@ -1,0 +1,23 @@
+{
+  "schema": "biz04-b.offline-validation.v1",
+  "baseline_sha": "9df4cfed0d0153b09b0f4038882fa8423fe732e1",
+  "python": "3.9.6",
+  "platform": "macOS-15.7.7-arm64-arm-64bit",
+  "junit": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "413",
+    "time": "7.876",
+    "timestamp": "2026-11-06T01:17:36.074444+08:00",
+    "sha256": "9fd39e0f307c7e05d900210cb7b6526777f89aeefec85173a8f57bcbab1a908b"
+  },
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "generator_sha256": "7db694628ff83fdc9504ba6190ea088cc7d036a12938007c9655505e6c6fe361",
+  "large_generation_in_default_ci": false,
+  "worker_roots": 0,
+  "database_connections": 0,
+  "workflow_dispatches": 0
+}

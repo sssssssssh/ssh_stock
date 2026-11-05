@@ -1,0 +1,401 @@
+{
+  "schema": "biz04-b.offline-generation.v1",
+  "baseline_sha": "9df4cfed0d0153b09b0f4038882fa8423fe732e1",
+  "workload": "FILE_GENERATION_VALIDATION_ONLY",
+  "worker_roots": 0,
+  "database_connections": 0,
+  "runs": [
+    {
+      "scale": "S1",
+      "config": {
+        "calendar_version": "synthetic-weekdays.v1",
+        "dataset_id": "biz04-constant-s1",
+        "expected_raw_rows": 2660,
+        "generator_version": "biz-perf-04-b.generator.v1",
+        "history_calendar_days": 900,
+        "lookback_calendar_days": 430,
+        "requested_end": "2025-01-31",
+        "requested_start": "2025-01-01",
+        "scale": "S1",
+        "schema_version": "biz04.dataset.v1",
+        "seed": 0,
+        "stocks": 4,
+        "trading_days": 665,
+        "warmup_trading_days": 250
+      },
+      "tables": {
+        "data_quality_daily": {
+          "bytes": 186865,
+          "rows": 1330,
+          "sha256": "b760ef805f371d14dd8385b3d72517836afea049facdd7c26cefb4bee6ea1b5d"
+        },
+        "index_daily": {
+          "bytes": 301245,
+          "rows": 1995,
+          "sha256": "b3991bd2e9a7931194f40c5e0ea3441ec25d569161fe5e73f31fee173819091c"
+        },
+        "sector": {
+          "bytes": 84,
+          "rows": 1,
+          "sha256": "272473233aedd231f2b76adc67f3ed0021d1b8e9a247a933543ea4622ecb7700"
+        },
+        "sector_member": {
+          "bytes": 264,
+          "rows": 4,
+          "sha256": "1570a16c3c199c848fae242e8bb1fd26de9bea88c7cd7de2ec9415c1fbdd5a97"
+        },
+        "stock_adj_factor": {
+          "bytes": 172900,
+          "rows": 2660,
+          "sha256": "a69ff7c62193736371c314791bc6519a0a863d3b8664669fa70857f4da8a31a0"
+        },
+        "stock_basic": {
+          "bytes": 580,
+          "rows": 4,
+          "sha256": "569c0c41470d0f95a9d0ce36b5764150431a9f9d19afbff9646782203945720d"
+        },
+        "stock_daily": {
+          "bytes": 529340,
+          "rows": 2660,
+          "sha256": "9913e515b7886c93a500e96a6f1f638d1892d681c26e9121e1150d61825ea455"
+        },
+        "stock_daily_basic": {
+          "bytes": 260680,
+          "rows": 2660,
+          "sha256": "d8ab321ecab97fe1326e795ae1abe3d3d47fb58bc6386a0fd35fcf1226d5ee23"
+        },
+        "stock_limit_daily": {
+          "bytes": 470820,
+          "rows": 2660,
+          "sha256": "e1bc7480ef8580a563fdb5a027bb741b93687db9c00c21618e4d53e8929ceb10"
+        },
+        "stock_st_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stock_suspend_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "trade_calendar": {
+          "bytes": 54264,
+          "rows": 931,
+          "sha256": "c550d0dedacd1f847fc92533682d3b070529fec617e168a29484e7264a3aad46"
+        }
+      },
+      "dataset_sha256": "b0cab4d18c2748c99425644b40af291251c9159bbf62d96d6382c794acd705e9",
+      "total_rows": 14905,
+      "total_bytes": 1977042,
+      "generation_256": {
+        "chunk_size": 256,
+        "cpu_seconds": 0.048936999999999994,
+        "peak_process_rss_bytes": 17596416,
+        "wall_seconds": 0.06656112500058953
+      },
+      "generation_4096": {
+        "chunk_size": 4096,
+        "cpu_seconds": 0.048306999999999996,
+        "peak_process_rss_bytes": 20758528,
+        "wall_seconds": 0.04845795900109806
+      },
+      "repeat_generation_validation_seconds": 0.13956429199999998,
+      "equal": true
+    },
+    {
+      "scale": "S2",
+      "config": {
+        "calendar_version": "synthetic-weekdays.v1",
+        "dataset_id": "biz04-constant-s2",
+        "expected_raw_rows": 99750,
+        "generator_version": "biz-perf-04-b.generator.v1",
+        "history_calendar_days": 900,
+        "lookback_calendar_days": 430,
+        "requested_end": "2025-01-31",
+        "requested_start": "2025-01-01",
+        "scale": "S2",
+        "schema_version": "biz04.dataset.v1",
+        "seed": 0,
+        "stocks": 150,
+        "trading_days": 665,
+        "warmup_trading_days": 250
+      },
+      "tables": {
+        "data_quality_daily": {
+          "bytes": 186865,
+          "rows": 1330,
+          "sha256": "b760ef805f371d14dd8385b3d72517836afea049facdd7c26cefb4bee6ea1b5d"
+        },
+        "index_daily": {
+          "bytes": 301245,
+          "rows": 1995,
+          "sha256": "b3991bd2e9a7931194f40c5e0ea3441ec25d569161fe5e73f31fee173819091c"
+        },
+        "sector": {
+          "bytes": 84,
+          "rows": 1,
+          "sha256": "272473233aedd231f2b76adc67f3ed0021d1b8e9a247a933543ea4622ecb7700"
+        },
+        "sector_member": {
+          "bytes": 9900,
+          "rows": 150,
+          "sha256": "91e1dd8b830d79301f8d31e15fa077001c2745eff5b6a5ceac37a27218806099"
+        },
+        "stock_adj_factor": {
+          "bytes": 6483750,
+          "rows": 99750,
+          "sha256": "bc25bff5eb9f828bcc22e9cd458e410e2cde0bd993b1b7e64b7869c9789b344e"
+        },
+        "stock_basic": {
+          "bytes": 21750,
+          "rows": 150,
+          "sha256": "d23ef496af2a8853eb2fd442d2591853a32f8c197d55bf9d1b632539834753f4"
+        },
+        "stock_daily": {
+          "bytes": 19850250,
+          "rows": 99750,
+          "sha256": "a3bcde16a57b9b3689eb644ebce8401f8a7df0516e391379e21288d4bfe71ebd"
+        },
+        "stock_daily_basic": {
+          "bytes": 9775500,
+          "rows": 99750,
+          "sha256": "95a2090ce2483f7c4695901adf151aca5bbd386a74a834f2384a4e1e5eb0aa43"
+        },
+        "stock_limit_daily": {
+          "bytes": 17655750,
+          "rows": 99750,
+          "sha256": "a0718ac5898e49966b3b93f8e642ea783167930b6ce5ef3a883ff4f589c11695"
+        },
+        "stock_st_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stock_suspend_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "trade_calendar": {
+          "bytes": 54264,
+          "rows": 931,
+          "sha256": "c550d0dedacd1f847fc92533682d3b070529fec617e168a29484e7264a3aad46"
+        }
+      },
+      "dataset_sha256": "39563cdc90f8609c00ce0a26a9426df6b3663c633c00a160bf30191e9fc9c897",
+      "total_rows": 403557,
+      "total_bytes": 54339358,
+      "generation_256": {
+        "chunk_size": 256,
+        "cpu_seconds": 1.207861,
+        "peak_process_rss_bytes": 17547264,
+        "wall_seconds": 1.2960405420017196
+      },
+      "generation_4096": {
+        "chunk_size": 4096,
+        "cpu_seconds": 1.2264769999999998,
+        "peak_process_rss_bytes": 23068672,
+        "wall_seconds": 1.2281213749993185
+      },
+      "repeat_generation_validation_seconds": 2.505689834,
+      "equal": true
+    },
+    {
+      "scale": "S3",
+      "config": {
+        "calendar_version": "synthetic-weekdays.v1",
+        "dataset_id": "biz04-constant-s3",
+        "expected_raw_rows": 500080,
+        "generator_version": "biz-perf-04-b.generator.v1",
+        "history_calendar_days": 900,
+        "lookback_calendar_days": 430,
+        "requested_end": "2025-01-31",
+        "requested_start": "2025-01-01",
+        "scale": "S3",
+        "schema_version": "biz04.dataset.v1",
+        "seed": 0,
+        "stocks": 752,
+        "trading_days": 665,
+        "warmup_trading_days": 250
+      },
+      "tables": {
+        "data_quality_daily": {
+          "bytes": 186865,
+          "rows": 1330,
+          "sha256": "b760ef805f371d14dd8385b3d72517836afea049facdd7c26cefb4bee6ea1b5d"
+        },
+        "index_daily": {
+          "bytes": 301245,
+          "rows": 1995,
+          "sha256": "b3991bd2e9a7931194f40c5e0ea3441ec25d569161fe5e73f31fee173819091c"
+        },
+        "sector": {
+          "bytes": 84,
+          "rows": 1,
+          "sha256": "272473233aedd231f2b76adc67f3ed0021d1b8e9a247a933543ea4622ecb7700"
+        },
+        "sector_member": {
+          "bytes": 49632,
+          "rows": 752,
+          "sha256": "da168815a3e2fa6b391cb0952661878f51074b3d18d024eb1641eaed7d2bd0d6"
+        },
+        "stock_adj_factor": {
+          "bytes": 32505200,
+          "rows": 500080,
+          "sha256": "23853e3fc5be0aa5a730c18a598ec53668f2d20f48c522a3f37f156ce0102652"
+        },
+        "stock_basic": {
+          "bytes": 109040,
+          "rows": 752,
+          "sha256": "519301a547095fb878b51e5eb180f86c4306e9bf3e78d1b219923b44512c7584"
+        },
+        "stock_daily": {
+          "bytes": 99515920,
+          "rows": 500080,
+          "sha256": "a7a504bdcfcd675a4180768a6c5262a4f62d619342b69da87505a600e44e94e4"
+        },
+        "stock_daily_basic": {
+          "bytes": 49007840,
+          "rows": 500080,
+          "sha256": "7a0bb3ceac6cf16293d078fcb1ac66c4852d9d8b904c950e188b3632962f5a45"
+        },
+        "stock_limit_daily": {
+          "bytes": 88514160,
+          "rows": 500080,
+          "sha256": "240d78d46b367cef86647b066e7ee7bb3c11bb5d51fac842237c058c8fda38b6"
+        },
+        "stock_st_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stock_suspend_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "trade_calendar": {
+          "bytes": 54264,
+          "rows": 931,
+          "sha256": "c550d0dedacd1f847fc92533682d3b070529fec617e168a29484e7264a3aad46"
+        }
+      },
+      "dataset_sha256": "292e87cb817c43dca9bf899f881c857a3f57fdfc9d74b9521ab920f641ac2975",
+      "total_rows": 2006081,
+      "total_bytes": 270244250,
+      "generation_256": {
+        "chunk_size": 256,
+        "cpu_seconds": 6.051195,
+        "peak_process_rss_bytes": 17760256,
+        "wall_seconds": 6.560864540999319
+      },
+      "generation_4096": {
+        "chunk_size": 4096,
+        "cpu_seconds": 6.3050310000000005,
+        "peak_process_rss_bytes": 23035904,
+        "wall_seconds": 6.334217833002185
+      },
+      "repeat_generation_validation_seconds": 12.300016541000002,
+      "equal": true
+    },
+    {
+      "scale": "S4",
+      "config": {
+        "calendar_version": "synthetic-weekdays.v1",
+        "dataset_id": "biz04-constant-s4",
+        "expected_raw_rows": 1439725,
+        "generator_version": "biz-perf-04-b.generator.v1",
+        "history_calendar_days": 900,
+        "lookback_calendar_days": 430,
+        "requested_end": "2025-01-31",
+        "requested_start": "2025-01-01",
+        "scale": "S4",
+        "schema_version": "biz04.dataset.v1",
+        "seed": 0,
+        "stocks": 2165,
+        "trading_days": 665,
+        "warmup_trading_days": 250
+      },
+      "tables": {
+        "data_quality_daily": {
+          "bytes": 186865,
+          "rows": 1330,
+          "sha256": "b760ef805f371d14dd8385b3d72517836afea049facdd7c26cefb4bee6ea1b5d"
+        },
+        "index_daily": {
+          "bytes": 301245,
+          "rows": 1995,
+          "sha256": "b3991bd2e9a7931194f40c5e0ea3441ec25d569161fe5e73f31fee173819091c"
+        },
+        "sector": {
+          "bytes": 84,
+          "rows": 1,
+          "sha256": "272473233aedd231f2b76adc67f3ed0021d1b8e9a247a933543ea4622ecb7700"
+        },
+        "sector_member": {
+          "bytes": 142890,
+          "rows": 2165,
+          "sha256": "df5a5e9d98f0ae92559d6fe54905af66202083db44e82c6edfd494c46548b2b3"
+        },
+        "stock_adj_factor": {
+          "bytes": 93582125,
+          "rows": 1439725,
+          "sha256": "0caa58dac3dbbed560f244effa774008c451818a1f3958b25f09b64abb5bfee1"
+        },
+        "stock_basic": {
+          "bytes": 313925,
+          "rows": 2165,
+          "sha256": "635761a8d05b5bad6f623cd892291e5d0679fe112447ef9911192ab4a33b33e5"
+        },
+        "stock_daily": {
+          "bytes": 286505275,
+          "rows": 1439725,
+          "sha256": "e8cdc620f921d4010cb4874b343a62a959036060ec260b5581b9ad11be726171"
+        },
+        "stock_daily_basic": {
+          "bytes": 141093050,
+          "rows": 1439725,
+          "sha256": "25d9a6307cda58ddd046e3ea9e7160037da7bdcda1707be321bf906e052a28bd"
+        },
+        "stock_limit_daily": {
+          "bytes": 254831325,
+          "rows": 1439725,
+          "sha256": "d4b12770e346ef647762d34fff49f54e18162b4a5615274ae540f08ec18a454f"
+        },
+        "stock_st_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "stock_suspend_daily": {
+          "bytes": 0,
+          "rows": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "trade_calendar": {
+          "bytes": 54264,
+          "rows": 931,
+          "sha256": "c550d0dedacd1f847fc92533682d3b070529fec617e168a29484e7264a3aad46"
+        }
+      },
+      "dataset_sha256": "75e576511afac54f2ab3295aacef9cc949558387019ae6dbda6be45563d7ea23",
+      "total_rows": 5767487,
+      "total_bytes": 777011048,
+      "generation_256": {
+        "chunk_size": 256,
+        "cpu_seconds": 17.268409,
+        "peak_process_rss_bytes": 17842176,
+        "wall_seconds": 18.17769429100008
+      },
+      "generation_4096": {
+        "chunk_size": 4096,
+        "cpu_seconds": 16.907183999999997,
+        "peak_process_rss_bytes": 23019520,
+        "wall_seconds": 16.977842582997255
+      },
+      "repeat_generation_validation_seconds": 33.970176667,
+      "equal": true
+    }
+  ]
+}
