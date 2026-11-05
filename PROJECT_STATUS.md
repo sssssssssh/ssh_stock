@@ -1,5 +1,12 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## BIZ-PERF-04-C 当前接续（2026-11-06）
+
+04-B精确SHA decaaba86535575e307edd676221ec066517caf6的主CI42073561595及三条配套均success，
+按负责人条件正式关闭。其主test 5651 passed /90.02%；随后仅实施04-C独立版本化状态合同。
+五类状态/证据分别验证，未检查NOT_ASSESSED；不授予容量、性能或生产许可。
+交付后REVIEW_PENDING，04-D～F未授权，详见[04-C](docs/acceptance/BIZ_PERF_04_C.md)。
+
 ## BIZ-PERF-04-B 当前接续（2026-11-06）
 
 负责人已验收关闭04-A（9df4cfed），不追加其修复。当前仅04-B确定性离线生成器，

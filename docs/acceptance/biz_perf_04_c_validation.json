@@ -1,0 +1,26 @@
+{
+  "schema": "biz04-c.offline-validation.v1",
+  "baseline_sha": "decaaba86535575e307edd676221ec066517caf6",
+  "precondition_ci": {
+    "run": 42073561595,
+    "status": "completed",
+    "conclusion": "success",
+    "test_job": 127407664698,
+    "passed": 5651,
+    "coverage_percent": "90.02"
+  },
+  "tests": {
+    "tests": "442",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "7.635"
+  },
+  "junit_sha256": "516ee4278e9e04f268cfc4f2829bf94223b7a9399cce5456c5c5bdb4684aa30b",
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "worker_roots": 0,
+  "database_connections": 0,
+  "capacity_experiments": 0,
+  "workflow_dispatches": 0
+}
