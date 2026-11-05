@@ -1,5 +1,44 @@
 # BIZ-PERF-03-B Actions 环境适配：等待审阅，不执行实验
 
+## 2026-11-05 最小修正：Action 固定与归档期限
+
+本次修改前已核实 master/HEAD/origin/master/实时远端一致为
+`de7081a77567081a8c31a41a8960455cbd2d874e`，clean。
+仅固定第七 Workflow 的外部 Action，并修复 controller 的清理→归档切换及导出期限。
+不恢复 B0，不修改原六份 Workflow、业务/SQL/模型/迁移、冻结实验协议、数据或五个开关。
+Environment/reviewer/Variables/Secrets 未操作；真实性能 dispatch、容器/数据库及根任务均未执行。
+
+下列 SHA 于 2026-11-05 使用官方仓库的 `git ls-remote refs/tags/...` 取得，并逐一核实官方 commit 页面。
+标签仅记录核查来源；Workflow 实际使用完整 40 位 commit，不再跟随标签漂移。
+
+| Action | 核查标签 | 固定 commit / 官方来源 |
+| --- | --- | --- |
+| actions/checkout | v4 | [11d5960a326750d5838078e36cf38b85af677262](https://github.com/actions/checkout/commit/11d5960a326750d5838078e36cf38b85af677262) |
+| actions/setup-python | v5 | [a26af69be951a213d495a4c3e4e4022e16d87065](https://github.com/actions/setup-python/commit/a26af69be951a213d495a4c3e4e4022e16d87065) |
+| actions/upload-artifact（两处） | v4 | [ea165f8d65b6e75b540449e92b4886f43607fa02](https://github.com/actions/upload-artifact/commit/ea165f8d65b6e75b540449e92b4886f43607fa02) |
+
+预算数字及协议文件不变：初始化≤T0+180，根截止=min(root_started+180,T0+330)，
+清理≤60秒且≤T0+390；归档截止=min(cleanup_finished+30,T0+420)，达到归档截止即停止。
+清理记录实际完成时间后，在最终证据I/O前立即替换 watchdog；旧阶段已排队的alarm按当前
+有效deadline复核，不得提前中断归档。清理和归档不扣旧的3秒提前量。
+初始化/根阶段原有3秒终止余量保留，重复归档检查不能续期。`--check-export` 复用收据中的
+相同截止点，不能获得第二个30秒窗口；超时不继续写新工件、不公布可用的完整导出结果。
+最终上传额外要求 export 步骤 outcome=success，阻断“输出已写出但步骤随后超时”的路径。
+平台7分钟兜底、原始提前上传的INCOMPLETE前缀仍保留；Runner丢失/平台硬取消和实际网络上传
+未实机验证，不能用离线通过宣称最终工件一定可用或真实性能验收完成。
+
+新增 `tests/unit/test_biz_perf_03_b_archive.py`：27项通过，包括官方pin/负例、389/390清理、
+419归档、420拒绝、提前清理仅30秒、重复进入不续期、清理失败、归档中途/输出后超时及
+controller收尾和延迟送达的旧alarm。此前先RED复现9项缺口；原测试未改断言、未跳过，70%门槛不变。
+另一次原治理合同和当时20项新用例合计117通过；新文件最终27项单独通过，不能把重叠用例相加。
+本机Windows一次合跑（当时19项新例+95项旧BIZ）105通过/9项POSIX接口缺失（getuid/getpgid/killpg/getitimer）；
+不放宽这些旧测试，使用普通Linux CI验收。Ruff全范围与diff检查通过，最终SHA普通CI在推送后核验。
+基线de7081a7的主CI41888520120及A4-1/A4-2/Publication均success，仅为修改前工程证据。
+此处是提交前快照，不为追填自身最终SHA或CI状态循环提交；新版本结果以实际同SHA Actions为准。
+本次交付后停止等待负责人审阅，不dispatch、不自动重试实验。
+
+## 第一阶段历史记录（以下保留原证据语境）
+
 2026-11-05。实施前 master 为 `b27fa109530002f2cddbb1a4c28b356bad11b398`，clean。
 负责人批准第一阶段环境适配、离线合同、master 提交推送与普通 CI；没有批准
 创建/修改 GitHub Environment、reviewer、Secrets、Variables，也没有批准 dispatch。
@@ -33,7 +72,8 @@ Python固定3.12.14，requirements.lock不修改。记录完整解析版本；22
 
 绝对T0在Job第一个受控步骤记录，checkout、setup-python、prefix上传、依赖安装、PG准备、
 迁移/种子均计入初始化180秒。根任务≤180秒且绝对不晚于T0+330，清理≤60秒且不晚于T0+390；
-最后保留30秒小工件上传，总计≤420秒。父进程提前3秒进入终止，避免平台强取消才开始清理。
+最后保留最多30秒证据归档，总计≤420秒。初始化/根阶段父进程提前3秒进入终止，
+清理与归档按上方最小修正的独立deadline切换，避免旧定时器提前终止归档。
 若准备花满180秒，剩余根预算更短；不因此缩小数据或追加试验。平台硬取消/Runner丢失时
 最终工件无法保证存在，只能保留先前prefix并判INCOMPLETE，不能用always宣称证据完整。
 

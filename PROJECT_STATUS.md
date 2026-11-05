@@ -1,5 +1,21 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## BIZ-PERF-03-B 最小修正接续（2026-11-05，当前唯一任务）
+
+负责人本次仅授权修复第七Workflow外部Action完整SHA固定与420秒内的清理/归档阶段切换，
+允许master提交推送并等待普通CI；未授权真实性能dispatch或任何GitHub设置/数据库操作。
+修改前HEAD/origin/master/实时远端均为de7081a77567081a8c31a41a8960455cbd2d874e，clean，已快进拉取。
+官方Action SHA已从官方Git refs和commit页双核；新增27项离线边界/失败路径测试通过，
+原治理合同与当时20项新用例合计117通过，Ruff通过。旧BIZ测试在Windows合跑105通过/9项POSIX
+接口缺失，未改原断言或跳过，交由普通Linux CI核验；不可将本地结果冒充最终完整回归。
+清理完成立即替换watchdog；归档截止=min(cleanup_finished+30,T0+420)，419可归档、420停止，
+重复进入不续期；超时export失败不能触发最终上传。原提前INCOMPLETE前缀保留。
+范围及官方来源见[修正记录](docs/acceptance/BIZ_PERF_03_B_actions_runbook.md)。
+状态为PATCH_IMPLEMENTED / REVIEW_PENDING / LIVE_NOT_RUN；最终提交普通CI在推送后核验，
+此处不追填自身SHA。交付后停止等待负责人审阅，不自动dispatch。
+B0仍WITHDRAWN，原六份Workflow及原串行完整回归、70%覆盖率、实验协议/数据/开关不变；
+业务性能继续PARTIAL/PERFORMANCE_OPEN。下方各段均为其原轮次历史事实，不授权扩大范围。
+
 ## BIZ-PERF-03-B 当前接续（2026-11-05，环境适配）
 
 负责人已审阅通过W00/W01，批准Actions环境适配代码、离线合同及master提交推送；

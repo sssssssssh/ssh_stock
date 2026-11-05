@@ -61,17 +61,17 @@ jobs:
               attempt=os.environ['GITHUB_RUN_ATTEMPT'], production_read_authorized=False,
               capacity_ready=False, performance_eligible=False)))
           PY
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # official v4
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # official v5
         with:
           python-version: "3.12.14"
       - name: Preserve the pre-execution prefix (no database created)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # official v4
         with:
           name: biz-perf-03-b-prefix-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/biz-perf-03-b/${{ github.run_id }}/${{ github.run_attempt }}/public/receipt.json
@@ -88,8 +88,8 @@ jobs:
         if: always()
         run: python3 -m scripts.biz_perf_03_b_once --check-export
       - name: Preserve only bounded sanitized diagnostic evidence
-        if: ${{ always() && steps.export.outputs.artifact_dir != '' }}
-        uses: actions/upload-artifact@v4
+        if: ${{ always() && steps.export.outcome == 'success' && steps.export.outputs.artifact_dir != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # official v4
         with:
           name: biz-perf-03-b-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ steps.export.outputs.artifact_dir }}/*.json

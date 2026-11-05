@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WATCHDOG_ACTIVE = False
+WATCHDOG_DEADLINE = None
 PROTOCOL = ROOT / "docs/acceptance/biz_perf_03_b_actions_once_protocol.json"
 ENVIRONMENT = "biz-perf-03-b-once"
 ORIGINAL_WORKFLOWS = (
@@ -53,16 +54,25 @@ class Refused(RuntimeError):
     pass
 
 
-def arm_deadline(deadline):
+def arm_deadline(deadline, *, reserve=3):
+    global WATCHDOG_DEADLINE
+
     if WATCHDOG_ACTIVE:
-        signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic() - 3))
+        WATCHDOG_DEADLINE = deadline - reserve
+        signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic() - reserve))
 
 
 @contextmanager
-def watchdog(t0):
-    global WATCHDOG_ACTIVE
+def watchdog(t0, *, deadline=None):
+    global WATCHDOG_ACTIVE, WATCHDOG_DEADLINE
 
     def expired(signum, frame):
+        if not WATCHDOG_ACTIVE:
+            return
+        # An alarm already queued by the old phase can arrive after the timer switch.
+        if WATCHDOG_DEADLINE is not None and time.monotonic() < WATCHDOG_DEADLINE:
+            arm_deadline(WATCHDOG_DEADLINE, reserve=0)
+            return
         raise Refused("BIZ03_ABSOLUTE_DEADLINE")
 
     previous = signal.getsignal(signal.SIGALRM)
@@ -70,12 +80,14 @@ def watchdog(t0):
     require(previous_timer == (0.0, 0.0), "EXISTING_WATCHDOG_REFUSED")
     signal.signal(signal.SIGALRM, expired)
     WATCHDOG_ACTIVE = True
-    arm_deadline(t0 + 180)
+    arm_deadline(t0 + 180 if deadline is None else min(deadline, t0 + 420),
+                 reserve=3 if deadline is None else 0)
     try:
         yield
     finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
         WATCHDOG_ACTIVE = False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        WATCHDOG_DEADLINE = None
         signal.signal(signal.SIGALRM, previous)
 
 
@@ -184,11 +196,18 @@ def clean_error(error):
     return code if re.fullmatch(r"BIZ03_[A-Z_]+", code) else "BIZ03_EXECUTION_FAILED"
 
 
-def completion_status(receipt, wall):
+def completion_status(receipt, wall, *, archive_limit=390):
+    cleanup_finished = receipt.get("cleanup_finished_seconds", 0)
     return "COMPLETE_DIAGNOSTIC_ONLY" if (
         receipt["status"] == "MEASURED_CLEANUP_PENDING" and receipt["root_attempts"] == 1
         and receipt["cleanup"] == "COMPLETE" and not receipt["first_failure"]
-        and type(wall) in (int, float) and math.isfinite(wall) and 0 <= wall <= 390
+        and type(cleanup_finished) in (int, float) and math.isfinite(cleanup_finished)
+        and 0 <= cleanup_finished <= 390
+        and type(archive_limit) in (int, float) and math.isfinite(archive_limit)
+        and 0 < archive_limit <= 420
+        and type(wall) in (int, float) and math.isfinite(wall)
+        and cleanup_finished <= wall <= archive_limit and wall < 420
+        and ("cleanup_finished_seconds" not in receipt or wall < cleanup_finished + 30)
     ) else "INCOMPLETE"
 
 
@@ -381,6 +400,7 @@ class Lab:
         self.volume = self.container + "-pgdata"
         self.marker = str(uuid.uuid4())
         self.cleanup_deadline = None
+        self.archive_deadline = None
         self.volume_intended = self.container_intended = False
         self.identity = None
         self.receipt = dict(status="INCOMPLETE", root_attempts=0, first_failure=None,
@@ -570,7 +590,7 @@ class Lab:
 
     def cleanup(self):
         deadline = min(self.clock() + 60, self.t0 + 390)
-        arm_deadline(deadline)
+        arm_deadline(deadline, reserve=0)
         self.cleanup_deadline = deadline
         self.receipt["cleanup"] = "INCOMPLETE"
         try:
@@ -594,8 +614,50 @@ class Lab:
                 self.docker("rm", "-f", name, deadline=deadline)
             else:
                 self.docker("volume", "rm", name, deadline=deadline)
+        finished = self.clock()
+        require(finished <= deadline and finished <= self.t0 + 390, "CLEANUP_TIMEOUT")
         self.receipt["cleanup"] = "COMPLETE"
+        self.receipt["cleanup_finished_seconds"] = finished - self.t0
+        self.begin_archive()  # Replace the cleanup timer before any final evidence I/O.
         self.save()
+
+    def begin_archive(self):
+        now = self.clock()
+        if self.archive_deadline is None:
+            finished = self.receipt.get("cleanup_finished_seconds", now - self.t0)
+            limit = min(finished + 30, 420)
+            self.archive_deadline = self.t0 + limit
+            self.receipt["archive_deadline_seconds"] = limit
+        require(now < self.archive_deadline and now < self.t0 + 420, "ARCHIVE_TIMEOUT")
+        arm_deadline(self.archive_deadline, reserve=0)
+
+    def finish_archive(self, identity):
+        try:
+            self.begin_archive()
+            self.receipt["controlled_wall_seconds"] = self.clock() - self.t0
+            self.receipt["status"] = completion_status(self.receipt,
+                self.receipt["controlled_wall_seconds"],
+                archive_limit=self.receipt["archive_deadline_seconds"])
+            self.save()
+            self.begin_archive()
+            public = self.directory / "public"
+            files = {p.name: {"sha256": digest(p.read_bytes()), "bytes": p.stat().st_size}
+                     for p in public.glob("*.json") if p.name != "manifest.json"}
+            require(sum(v["bytes"] for v in files.values()) <= self.spec["maximum_artifact_bytes"],
+                    "ARTIFACT_LIMIT")
+            write_json(public / "manifest.json", {
+                **identity, "files": files,
+                "status": self.receipt["status"], "evidence_kind": "DIAGNOSTIC_ONLY"})
+            self.begin_archive()
+        except BaseException:
+            self.receipt["first_failure"] = (
+                self.receipt["first_failure"] or "BIZ03_ARCHIVE_INCOMPLETE")
+            self.receipt["status"] = "INCOMPLETE"
+            # Never start more evidence I/O after the archive/absolute cutoff.
+            if self.archive_deadline is not None and self.clock() < self.archive_deadline:
+                self.save()
+            return False
+        return self.receipt["status"] == "COMPLETE_DIAGNOSTIC_ONLY"
 
 
 def phase_deadline(t0, phase):
@@ -717,23 +779,22 @@ def execute(env):
         try:
             lab.cleanup()
         except BaseException:
-            lab.fail("BIZ03_CLEANUP_INCOMPLETE")
-        lab.receipt["controlled_wall_seconds"] = lab.clock() - lab.t0
-        lab.receipt["status"] = completion_status(lab.receipt,
-                                                  lab.receipt["controlled_wall_seconds"])
-        lab.save()
-        public = directory / "public"
-        files = {p.name: {"sha256": digest(p.read_bytes()), "bytes": p.stat().st_size}
-                 for p in public.glob("*.json") if p.name != "manifest.json"}
-        require(sum(v["bytes"] for v in files.values()) <= spec["maximum_artifact_bytes"],
-                "ARTIFACT_LIMIT")
-        write_json(public / "manifest.json", {**identity, "files": files,
-            "status": lab.receipt["status"], "evidence_kind": "DIAGNOSTIC_ONLY"})
-    return lab.receipt["status"] == "COMPLETE_DIAGNOSTIC_ONLY"
+            lab.receipt["cleanup"] = "INCOMPLETE"
+            lab.receipt["status"] = "INCOMPLETE"
+            lab.receipt["first_failure"] = (
+                lab.receipt["first_failure"] or "BIZ03_CLEANUP_INCOMPLETE")
+    return lab.finish_archive(identity)
 
 
-def prepare_export(env, spec):
+def prepare_export(env, spec, *, deadline=None, clock=None):
     """Publish only a verified bounded snapshot, never a wildcard of raw outputs."""
+    clock = clock or time.monotonic
+
+    def check_time():
+        if deadline is not None:
+            require(clock() < deadline, "ARCHIVE_TIMEOUT")
+
+    check_time()
     require(re.fullmatch(r"[1-9][0-9]*", env.get("GITHUB_RUN_ID", ""))
             and re.fullmatch(r"[1-9][0-9]*", env.get("GITHUB_RUN_ATTEMPT", "")), "EXPORT_ID")
     directory = Path(env["RUNNER_TEMP"]) / "biz-perf-03-b" / env["GITHUB_RUN_ID"] / env[
@@ -754,6 +815,7 @@ def prepare_export(env, spec):
         data = {p.name: p.read_bytes() for p in entries}
         require("receipt.json" in data, "RECEIPT_REQUIRED")
         for path in entries:
+            check_time()
             validate_document(path.name, read_json(path))
         receipt = read_json(public / "receipt.json")
         require(receipt.get("head_sha") == env["GITHUB_SHA"]
@@ -774,10 +836,13 @@ def prepare_export(env, spec):
         if receipt.get("status") == "COMPLETE_DIAGNOSTIC_ONLY":
             require(set(data) == allowed, "COMPLETE_ARTIFACTS_REQUIRED")
         for name, raw in data.items():
+            check_time()
             with (exported / name).open("xb") as stream:
                 stream.write(raw)
+        check_time()
         ok = True
     except BaseException:
+        check_time()  # On timeout preserve the earlier INCOMPLETE prefix, not a new export.
         # Preserve originals privately, export only the fixed failure receipt.
         for path in exported.iterdir():
             path.unlink()
@@ -785,9 +850,11 @@ def prepare_export(env, spec):
             first_failure="BIZ03_EXPORT_CONTRACT_FAILED", head_sha=env["GITHUB_SHA"],
             run_id=env["GITHUB_RUN_ID"], attempt=env["GITHUB_RUN_ATTEMPT"],
             performance_eligible=False, production_read_authorized=False, capacity_ready=False))
+    check_time()
     if env.get("GITHUB_OUTPUT"):
         with Path(env["GITHUB_OUTPUT"]).open("a") as stream:
             stream.write("artifact_dir=" + str(exported) + "\n")
+    check_time()
     return ok
 
 
@@ -795,7 +862,8 @@ def validate_document(name, value):
     keys = {
         "receipt.json": {"status", "root_attempts", "first_failure", "cleanup", "head_sha",
             "run_id", "attempt", "protocol_sha256", "production_read_authorized", "capacity_ready",
-            "performance_eligible", "last_phase", "process_cleanup", "controlled_wall_seconds"},
+            "performance_eligible", "last_phase", "process_cleanup", "controlled_wall_seconds",
+            "cleanup_finished_seconds", "archive_deadline_seconds"},
         "source.json": {"head_sha", "run_id", "attempt", "protocol_sha256",
                         "run_reason_sha256", "tree_sha"},
         "resources.json": {"cpu_count", "available_memory_bytes", "free_disk_bytes"},
@@ -842,7 +910,24 @@ def main():
     args = parser.parse_args()  # No budget, resource, repeat or optimization overrides.
     try:
         if args.check_export:
-            ok = prepare_export(os.environ, protocol())
+            t0 = int(os.environ.get("BIZ03_T0_NS", "0")) / 1e9
+            require(0 <= time.monotonic() - t0 < 420, "ARCHIVE_TIMEOUT")
+            with watchdog(t0, deadline=t0 + 420):
+                directory = Path(os.environ["RUNNER_TEMP"]) / "biz-perf-03-b" / os.environ[
+                    "GITHUB_RUN_ID"] / os.environ["GITHUB_RUN_ATTEMPT"] / "public"
+                receipt = read_json(directory / "receipt.json")
+                limit = receipt.get("archive_deadline_seconds", 420)
+                require(type(limit) in (int, float) and math.isfinite(limit)
+                        and 0 < limit <= 420, "ARCHIVE_TIMEOUT")
+                if receipt.get("status") == "COMPLETE_DIAGNOSTIC_ONLY":
+                    finished = receipt.get("cleanup_finished_seconds")
+                    require(type(finished) in (int, float) and math.isfinite(finished)
+                            and 0 <= finished <= 390 and limit == min(finished + 30, 420),
+                            "ARCHIVE_TIMEOUT")
+                deadline = t0 + limit
+                require(time.monotonic() < deadline, "ARCHIVE_TIMEOUT")
+                arm_deadline(deadline, reserve=0)
+                ok = prepare_export(os.environ, protocol(), deadline=deadline)
         else:
             t0 = int(os.environ.get("BIZ03_T0_NS", "0")) / 1e9
             require(0 <= time.monotonic() - t0 < 180, "INITIALIZATION_TIMEOUT")
