@@ -351,7 +351,7 @@ def test_workflow_is_dispatch_only_single_job_and_does_not_inherit_production_se
     assert set(value["on"]) == {"workflow_dispatch"}
     assert set(value["jobs"]) == {"evidence"}
     job = value["jobs"]["evidence"]
-    assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == 7
+    assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == 8
     assert "strategy" not in job and "services" not in job
     assert all(job["env"][k] == "false" for k in b.protocol()["flags"])
     assert "secrets." not in json.dumps(value)

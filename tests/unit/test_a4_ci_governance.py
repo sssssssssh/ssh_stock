@@ -192,7 +192,7 @@ def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
         assert set(value["on"]) == {"workflow_dispatch"}
         assert set(value["jobs"]) == {"evidence"}
         assert value["jobs"]["evidence"]["runs-on"] == "ubuntu-24.04"
-        assert value["jobs"]["evidence"]["timeout-minutes"] == 7
+        assert value["jobs"]["evidence"]["timeout-minutes"] == 8
         assert value["jobs"]["evidence"]["environment"] == "biz-perf-03-b-once"
         assert "services" not in value["jobs"]["evidence"]
         assert "strategy" not in value["jobs"]["evidence"]
