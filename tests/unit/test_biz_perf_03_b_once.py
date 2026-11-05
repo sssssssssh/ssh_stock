@@ -33,10 +33,16 @@ def authorization(spec, tmp_path):
     return env, inputs
 
 
+def repository():
+    # Synthetic API identity, never a hardcoded real GitHub user ID.
+    return dict(full_name="sssssssssh/ssh_stock", private=False,
+                owner=dict(id=101, login="sssssssssh", type="User"))
+
+
 def environment():
     return dict(name=b.ENVIRONMENT, can_admins_bypass=False,
-        protection_rules=[dict(type="required_reviewers", prevent_self_review=True,
-                               reviewers=[{"reviewer": {"id": 1}}])],
+        protection_rules=[dict(type="required_reviewers", prevent_self_review=False,
+                               reviewers=[dict(type="User", reviewer=repository()["owner"])])],
         deployment_branch_policy=dict(protected_branches=False, custom_branch_policies=True))
 
 
@@ -131,9 +137,9 @@ def test_bad_inputs_or_unregistered_overrides_refused(authorization, spec, key, 
 @pytest.mark.parametrize("mutation", ["self", "reviewer", "bypass", "branch", "environment"])
 def test_environment_live_configuration_must_be_protected(mutation):
     e, rules = environment(), branches()
-    b.check_environment(e, rules)
+    b.check_environment(e, rules, repository())
     if mutation == "self":
-        e["protection_rules"][0]["prevent_self_review"] = False
+        e["protection_rules"][0]["prevent_self_review"] = True
     elif mutation == "reviewer":
         e["protection_rules"][0]["reviewers"] = []
     elif mutation == "bypass":
@@ -143,7 +149,144 @@ def test_environment_live_configuration_must_be_protected(mutation):
     else:
         e["name"] = "a4-expensive-measurements"
     with pytest.raises(b.Refused):
-        b.check_environment(e, rules)
+        b.check_environment(e, rules, repository())
+
+
+@pytest.mark.parametrize("owner_id", [101, 202])
+def test_single_owner_environment_uses_the_live_repository_owner_id(owner_id):
+    repo, e = repository(), environment()
+    repo["owner"]["id"] = owner_id
+    e["protection_rules"][0]["reviewers"][0]["reviewer"]["id"] = owner_id
+    b.check_environment(e, branches(), repo)
+
+
+@pytest.mark.parametrize("mutation", [
+    "other-user", "team", "two-reviewers", "missing-id", "missing-reviewer",
+    "duplicate-review-rule", "tag", "wrong-owner-login", "organization-owner",
+])
+def test_single_owner_environment_refuses_any_other_approval_identity(mutation):
+    repo, e, rules = repository(), environment(), branches()
+    review = e["protection_rules"][0]
+    reviewer = review["reviewers"][0]
+    if mutation == "other-user":
+        reviewer["reviewer"]["id"] = 999
+    elif mutation == "team":
+        reviewer["type"] = reviewer["reviewer"]["type"] = "Team"
+    elif mutation == "two-reviewers":
+        review["reviewers"].append(copy.deepcopy(reviewer))
+    elif mutation == "missing-id":
+        del reviewer["reviewer"]["id"]
+    elif mutation == "missing-reviewer":
+        del reviewer["reviewer"]
+    elif mutation == "duplicate-review-rule":
+        e["protection_rules"].append(copy.deepcopy(review))
+    elif mutation == "tag":
+        rules["branch_policies"][0]["type"] = "tag"
+    elif mutation == "wrong-owner-login":
+        repo["owner"]["login"] = reviewer["reviewer"]["login"] = "another-owner"
+    else:
+        repo["owner"]["type"] = reviewer["reviewer"]["type"] = "Organization"
+    with pytest.raises(b.Refused):
+        b.check_environment(e, rules, repo)
+
+
+@pytest.mark.parametrize("path,value", [
+    (("environment",), None), (("environment",), []),
+    (("environment", "protection_rules"), None),
+    (("environment", "protection_rules"), {}),
+    (("environment", "protection_rules"), []),
+    (("environment", "protection_rules", 0), None),
+    (("environment", "protection_rules", 0, "type"), None),
+    (("environment", "protection_rules", 0, "prevent_self_review"), None),
+    (("environment", "protection_rules", 0, "prevent_self_review"), 0),
+    (("environment", "protection_rules", 0, "reviewers"), None),
+    (("environment", "protection_rules", 0, "reviewers"), {}),
+    (("environment", "protection_rules", 0, "reviewers", 0), None),
+    (("environment", "protection_rules", 0, "reviewers", 0, "type"), None),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer"), []),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer", "id"), "101"),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer", "id"), 101.0),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer", "id"), True),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer", "login"), None),
+    (("environment", "protection_rules", 0, "reviewers", 0, "reviewer", "type"), None),
+    (("environment", "can_admins_bypass"), None),
+    (("environment", "can_admins_bypass"), 0),
+    (("environment", "deployment_branch_policy"), None),
+    (("environment", "deployment_branch_policy", "protected_branches"), 0),
+    (("environment", "deployment_branch_policy", "custom_branch_policies"), 1),
+    (("branches",), None), (("branches",), []),
+    (("branches", "total_count"), True), (("branches", "total_count"), "1"),
+    (("branches", "branch_policies"), None), (("branches", "branch_policies"), {}),
+    (("branches", "branch_policies", 0), None),
+    (("repository",), None), (("repository",), []),
+    (("repository", "owner"), None), (("repository", "owner"), []),
+    (("repository", "owner", "id"), None), (("repository", "owner", "id"), "101"),
+    (("repository", "owner", "id"), 101.0), (("repository", "owner", "id"), True),
+    (("repository", "owner", "id"), 0), (("repository", "owner", "id"), -1),
+    (("repository", "owner", "login"), None),
+    (("repository", "owner", "type"), None),
+    (("repository", "full_name"), "another/repository"),
+])
+def test_single_owner_environment_fails_closed_on_malformed_api_fields(path, value):
+    values = dict(environment=environment(), branches=branches(), repository=repository())
+    parent = values
+    for key in path[:-1]:
+        parent = parent[key]
+    parent[path[-1]] = value
+    with pytest.raises(b.Refused):
+        b.check_environment(values["environment"], values["branches"], values["repository"])
+
+
+@pytest.mark.parametrize("failure", [None, "owner", "self", "api"])
+def test_execute_checks_public_owner_before_any_lab_or_resource_side_effect(
+        authorization, spec, monkeypatch, failure):
+    env, inputs = authorization
+    env["GITHUB_EVENT_PATH"] = "unused-mocked-event.json"
+    repo, e = repository(), environment()
+    if failure == "owner":
+        e["protection_rules"][0]["reviewers"][0]["reviewer"]["id"] = 999
+    elif failure == "self":
+        e["protection_rules"][0]["prevent_self_review"] = True
+    prefix = "repos/" + spec["repository"]
+    replies = {
+        prefix: repo,
+        prefix + "/branches/master": {"commit": {"sha": inputs["target_sha"]}},
+        prefix + "/environments/" + b.ENVIRONMENT: e,
+        prefix + "/environments/" + b.ENVIRONMENT + "/deployment-branch-policies": branches(),
+    }
+    calls = []
+
+    def api(path):
+        calls.append(path)
+        if failure == "api":
+            raise OSError("mocked public API unavailable")
+        return replies[path]
+
+    class AuthorizedBeforeResources(Exception):
+        pass
+
+    def lab(*args):
+        assert failure is None
+        raise AuthorizedBeforeResources
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("offline authorization must never access processes, databases or the network")
+
+    monkeypatch.setattr(b, "protocol", lambda: spec)
+    monkeypatch.setattr(b, "read_json", lambda path: {"inputs": inputs})
+    monkeypatch.setattr(b, "source_check", lambda *args: None)
+    monkeypatch.setattr(b, "api", api)
+    monkeypatch.setattr(b, "Lab", lab)
+    monkeypatch.setattr(b, "resource_check", forbidden)
+    monkeypatch.setattr(b.subprocess, "Popen", forbidden)
+    monkeypatch.setattr(b.urllib.request, "urlopen", forbidden)
+    expected = (AuthorizedBeforeResources if failure is None else
+                OSError if failure == "api" else b.Refused)
+    with pytest.raises(expected):
+        b.execute(env)
+    assert calls.count(prefix) == 1
+    if failure != "api":
+        assert calls == list(replies)
 
 
 def test_child_environment_has_no_parent_secrets_and_no_network_escape(

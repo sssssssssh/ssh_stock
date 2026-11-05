@@ -176,17 +176,41 @@ def authorize(env, inputs, spec):
                 protocol_sha256=actual, run_reason_sha256=digest(inputs["run_reason"].encode()))
 
 
-def check_environment(value, branches):
-    reviews = [r for r in value.get("protection_rules", [])
-               if r.get("type") == "required_reviewers"]
-    require(value.get("name") == ENVIRONMENT and value.get("can_admins_bypass") is False,
+def check_environment(value, branches, repository):
+    require(isinstance(repository, dict), "REPOSITORY_OWNER_REQUIRED")
+    owner = repository.get("owner")
+    require(repository.get("full_name") == "sssssssssh/ssh_stock"
+            and isinstance(owner, dict) and owner.get("type") == "User"
+            and owner.get("login") == "sssssssssh"
+            and type(owner.get("id")) is int and owner["id"] > 0,
+            "REPOSITORY_OWNER_REQUIRED")
+    require(isinstance(value, dict) and value.get("name") == ENVIRONMENT
+            and value.get("can_admins_bypass") is False,
             "ENVIRONMENT_PROTECTION")
-    require(len(reviews) == 1 and reviews[0].get("prevent_self_review") is True
-            and bool(reviews[0].get("reviewers")), "INDEPENDENT_REVIEW_REQUIRED")
-    require(value.get("deployment_branch_policy") == {
-        "protected_branches": False, "custom_branch_policies": True}, "ENVIRONMENT_BRANCH_POLICY")
-    rules = branches.get("branch_policies", [])
-    require(branches.get("total_count") == 1 and len(rules) == 1
+    protections = value.get("protection_rules")
+    require(isinstance(protections, list) and all(isinstance(r, dict)
+            and r.get("type") in ("required_reviewers", "branch_policy", "wait_timer")
+            for r in protections), "ENVIRONMENT_PROTECTION")
+    reviews = [r for r in protections if r["type"] == "required_reviewers"]
+    require(len(reviews) == 1 and reviews[0].get("prevent_self_review") is False,
+            "SINGLE_OWNER_REVIEW_REQUIRED")
+    reviewers = reviews[0].get("reviewers")
+    require(isinstance(reviewers, list) and len(reviewers) == 1
+            and isinstance(reviewers[0], dict) and reviewers[0].get("type") == "User",
+            "SINGLE_OWNER_REVIEW_REQUIRED")
+    reviewer = reviewers[0].get("reviewer")
+    require(isinstance(reviewer, dict) and reviewer.get("type") == "User"
+            and type(reviewer.get("id")) is int and reviewer["id"] == owner["id"]
+            and reviewer.get("login") == owner["login"], "SINGLE_OWNER_REVIEW_REQUIRED")
+    policy = value.get("deployment_branch_policy")
+    require(isinstance(policy, dict)
+            and set(policy) == {"protected_branches", "custom_branch_policies"}
+            and policy["protected_branches"] is False
+            and policy["custom_branch_policies"] is True, "ENVIRONMENT_BRANCH_POLICY")
+    require(isinstance(branches, dict) and type(branches.get("total_count")) is int
+            and branches["total_count"] == 1, "ENVIRONMENT_MASTER_ONLY")
+    rules = branches.get("branch_policies")
+    require(isinstance(rules, list) and len(rules) == 1 and isinstance(rules[0], dict)
             and rules[0].get("name") == "master" and rules[0].get("type") == "branch",
             "ENVIRONMENT_MASTER_ONLY")
 
@@ -747,10 +771,13 @@ def execute(env):
     identity = authorize(env, inputs, spec)
     source_check(spec, identity["head_sha"])
     repo = "repos/" + spec["repository"]
-    require(api(repo).get("private") is False, "PUBLIC_STANDARD_RUNNER_REQUIRED")
+    repository = api(repo)
+    require(isinstance(repository, dict) and repository.get("private") is False,
+            "PUBLIC_STANDARD_RUNNER_REQUIRED")
     require(api(repo + "/branches/master")["commit"]["sha"] == identity["head_sha"], "MASTER_MOVED")
     check_environment(api(repo + "/environments/" + ENVIRONMENT),
-                      api(repo + "/environments/" + ENVIRONMENT + "/deployment-branch-policies"))
+                      api(repo + "/environments/" + ENVIRONMENT + "/deployment-branch-policies"),
+                      repository)
     directory = Path(env["RUNNER_TEMP"]) / "biz-perf-03-b" / env["GITHUB_RUN_ID"] / "1"
     lab = Lab(env, spec, directory)
     try:
