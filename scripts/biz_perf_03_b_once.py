@@ -338,6 +338,11 @@ def export_measurement(raw):
     for f in fetches:
         result["fetch"]["rows"] += number(f["rows"])
         result["fetch"]["seconds"] += number(f["seconds"])
+    if "sql_snapshot" in raw:
+        from scripts.business_sql_snapshot import validate
+
+        validate(raw["sql_snapshot"])
+        result["sql_snapshot"] = raw["sql_snapshot"]
     return result
 
 
@@ -362,6 +367,14 @@ class Channel:
         self.observations.update({key: metric_map(values[key])
             for key in ("stage_seconds", "sql_counts") if key in values})
         safe = dict(self.observations)
+        if "sql_snapshot" in values:
+            from scripts.business_sql_snapshot import validate
+
+            validate(values["sql_snapshot"])
+            require(phase == "result" and self.failure is None
+                    and safe.get("sql_counts") == values["sql_snapshot"]["counts"],
+                    "SQL_SNAPSHOT_PHASE")
+            safe["sql_snapshot"] = values["sql_snapshot"]
         require(phase != "root" or self.root_started is not None, "ROOT_NOT_STARTED")
         safe.update(phase=phase, pid=os.getpid(), root_started=self.root_started,
                     root_attempts=self.attempts, failure_code=self.failure,
@@ -606,6 +619,9 @@ class Lab:
         raw = read_json(self.directory / "internal.json")
         require(raw.get("head_sha") == self.env["GITHUB_SHA"], "RESULT_SHA")
         result = export_measurement(raw)
+        from scripts.business_sql_snapshot import validate_pair
+
+        validate_pair(phase, result, expected_head=self.env["GITHUB_SHA"])
         write_json(self.directory / "public/measurement.json", result)
         require(process.returncode == 0 and result["root"]["job_status"] == "SUCCESS"
                 and result["root"]["publication_state"] == "PUBLISHED"
@@ -658,6 +674,12 @@ class Lab:
     def finish_archive(self, identity):
         try:
             self.begin_archive()
+            if self.receipt["status"] == "MEASURED_CLEANUP_PENDING":
+                from scripts.business_sql_snapshot import validate_pair
+
+                validate_pair(self.receipt.get("last_phase", {}),
+                              read_json(self.directory / "public/measurement.json"),
+                              expected_head=self.receipt["head_sha"])
             self.receipt["controlled_wall_seconds"] = self.clock() - self.t0
             self.receipt["status"] = completion_status(self.receipt,
                 self.receipt["controlled_wall_seconds"],
@@ -700,7 +722,7 @@ def network_inode():
 def validate_phase(value):
     require(isinstance(value, dict) and set(value) <= {
         "phase", "pid", "root_started", "root_attempts", "failure_code", "network_inode",
-        "stage_seconds", "sql_counts"}, "PHASE_SCHEMA")
+        "stage_seconds", "sql_counts", "sql_snapshot"}, "PHASE_SCHEMA")
     require(value.get("phase") in {"initializing", "root", "result", "failure"}
             and type(value.get("pid")) is int and value["pid"] > 0
             and type(value.get("network_inode")) is int and value["network_inode"] > 0
@@ -711,6 +733,13 @@ def validate_phase(value):
     for key in ("stage_seconds", "sql_counts"):
         if key in value:
             metric_map(value[key])
+    if "sql_snapshot" in value:
+        from scripts.business_sql_snapshot import validate
+
+        validate(value["sql_snapshot"])
+        require(value["phase"] == "result" and value["failure_code"] is None
+                and value.get("sql_counts") == value["sql_snapshot"]["counts"],
+                "SQL_SNAPSHOT_PHASE")
     return value
 
 
@@ -862,6 +891,10 @@ def prepare_export(env, spec, *, deadline=None, clock=None):
                     "MANIFEST_REQUIRED")
         if receipt.get("status") == "COMPLETE_DIAGNOSTIC_ONLY":
             require(set(data) == allowed, "COMPLETE_ARTIFACTS_REQUIRED")
+            from scripts.business_sql_snapshot import validate_pair
+
+            validate_pair(receipt.get("last_phase", {}), read_json(public / "measurement.json"),
+                          expected_head=env["GITHUB_SHA"])
         for name, raw in data.items():
             check_time()
             with (exported / name).open("xb") as stream:
@@ -902,7 +935,7 @@ def validate_document(name, value):
             "dataset_sha256", "implementation_sha256", "harness_sha256", "tables", "root",
             "root_job_id", "financial_identity_sha256", "root_row_counts", "alembic_revision",
             "peak_process_rss_bytes", "candidate_stages", "plans", "observer_control_sql_calls",
-            "fetch"},
+            "fetch", "sql_snapshot"},
         "manifest.json": {"head_sha", "run_id", "attempt", "protocol_sha256",
                           "run_reason_sha256", "files", "status", "evidence_kind"},
     }
@@ -922,6 +955,10 @@ def validate_document(name, value):
                     and re.fullmatch(r"[0-9][A-Za-z0-9_.!+_-]{0,79}", v)
                     for k, v in value["versions"].items()), "DEPENDENCY_METADATA")
     elif name == "measurement.json":
+        if "sql_snapshot" in value:
+            from scripts.business_sql_snapshot import validate
+
+            validate(value["sql_snapshot"])
         require(set(value["root"]) <= {
             "overall", "cpu", "execute_claimed_job_seconds", "sql_counts",
             "sql_driver_seconds", "stage_seconds", "sql_by_stage", "sql_driver_seconds_by_stage",

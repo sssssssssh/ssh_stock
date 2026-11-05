@@ -1,5 +1,8 @@
 # 开发任务管理与新会话接续规范
 
+2026-11-05 当前接续：仅 BIZ-PERF-04-A SQL 终态计数一致性修复，交付后停止。
+详见 [04-A 合同](../acceptance/BIZ_PERF_04_A.md)，不进入 04-B～F，不重跑 BIZ03。
+
 2026-11-05当前接续：BIZ-PERF-03-B环境适配已获开发/离线验证/master交付授权，
 真实性能Workflow、Environment设置和W02未批准。先读PROJECT_STATUS顶部和
 [独立操作说明](../acceptance/BIZ_PERF_03_B_actions_runbook.md)，完成交付后停止等待审阅。

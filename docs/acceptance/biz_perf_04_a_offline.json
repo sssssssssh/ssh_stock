@@ -1,0 +1,32 @@
+{
+  "schema": "biz-perf-04-a.offline.v1",
+  "baseline_sha": "057dfe861f940a5284b594db9ef45c2257cec688",
+  "runs": [
+    {
+      "label": "red",
+      "tests": 1,
+      "failures": 1,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.063,
+      "junit_sha256": "4519abb022edc2999da8eca5fb5052ed0c0135e63ceb67aac0bfa4fa299c768f"
+    },
+    {
+      "label": "final",
+      "tests": 384,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 6.08,
+      "junit_sha256": "b4059dd55c614d44089904f0a7f38d1e19c08c13aa0cee73b6086b9207d75021"
+    }
+  ],
+  "performance_runs": 0,
+  "database_connections": 0,
+  "workflow_dispatches": 0,
+  "github_configuration_writes": 0,
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "historical_select_update_attribution": "UNKNOWN",
+  "next_stage": "REVIEW_PENDING"
+}

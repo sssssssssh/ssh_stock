@@ -407,8 +407,14 @@ def test_synthetic_process_is_invoked_once_and_checked(authorization, spec, tmp_
     env, _ = authorization
     lab = b.Lab(env, spec, tmp_path, clock=lambda: 120)
     lab.identity, lab.net_inode, lab.pg_pid = "123", 99, 300
-    b.write_json(tmp_path / "internal.json", measurement())
-    b.write_json(tmp_path / "phase.json", phase())
+    from scripts.business_sql_snapshot import build
+
+    raw = measurement()
+    snap = build(raw["runs"][0]["sql_counts"], head_sha=raw["head_sha"],
+                 root_job_id=raw["root_job_id"], started=110, ended=119)
+    raw["sql_snapshot"] = snap
+    b.write_json(tmp_path / "internal.json", raw)
+    b.write_json(tmp_path / "phase.json", phase(sql_counts=snap["counts"], sql_snapshot=snap))
     calls = []
 
     def popen(*args, **kwargs):

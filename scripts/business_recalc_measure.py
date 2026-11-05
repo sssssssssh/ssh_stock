@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--phase-file", type=Path)
     args = parser.parse_args()
     channel = None
+    sql_snapshot = None
     if args.biz03_once:
         from scripts.biz_perf_03_b_once import Channel, require, validate_single_mode
 
@@ -224,7 +225,9 @@ def main():
             report["dataset_sha256"] = hashlib.sha256(json.dumps(
                 report["raw_snapshot"], sort_keys=True,
             ).encode()).hexdigest()
-            counts = Counter()
+            from scripts.business_sql_snapshot import RootCounts, build
+
+            counts = RootCounts() if channel else Counter()
             seconds = Counter()
             stages = Counter()
             delivered_rows = Counter()
@@ -288,7 +291,7 @@ def main():
                     stages[step.name] += monotonic() - step.started
                     delivered_rows[step.name] += kwargs.get("completed_rows", 0)
                     if channel and channel.root_started is not None:
-                        channel.emit("root", stage_seconds=dict(stages), sql_counts=dict(counts))
+                        channel.emit("root", stage_seconds=dict(stages), sql_counts=counts.copy())
                     if step.kind == "publish":
                         stages["publish_inclusive"] += monotonic() - step.started
                 if phase == "store" and step.kind == "publish" \
@@ -330,7 +333,12 @@ def main():
                 context.biz_stage = context.execution_options.get(
                     "calculation_query_name", recent_stage["name"])
                 operation = statement.lstrip().split(None, 1)[0].upper()
-                counts[operation] += 1
+                if channel:
+                    context.biz_counted = counts.begin(operation)
+                    if not context.biz_counted:
+                        return
+                else:
+                    counts[operation] += 1
                 sql_by_stage[context.biz_stage] += 1
                 sql_digests[hashlib.sha256(statement.encode()).hexdigest()] += 1
                 if (capture_plan["lookup"] and not plan_input
@@ -338,12 +346,21 @@ def main():
                     plan_input.update(statement=statement, parameters=parameters)
 
             def after(conn, cursor, statement, parameters, context, many):
+                if channel:
+                    if not context.biz_counted:
+                        return
+                    counts.end()
+                    context.biz_counted = False
                 # Only fixed SQL operation labels, never SQL or bind values.
                 operation = statement.lstrip().split(None, 1)[0].upper()
                 seconds[operation] += monotonic() - context.biz_started
                 seconds_by_stage[context.biz_stage] += monotonic() - context.biz_started
 
             def failed(context):
+                execution = context.execution_context
+                if channel and getattr(execution, "biz_counted", False):
+                    counts.end()
+                    execution.biz_counted = False
                 sql_failures.append(dict(error_class=type(context.original_exception).__name__,
                     sqlstate=getattr(context.original_exception, "sqlstate", None),
                     stage=getattr(context.execution_context, "biz_stage", None)))
@@ -374,16 +391,26 @@ def main():
                 execute_claimed_job(db, identity, expected_worker=job.worker_id,
                                     expected_token=job.execution_token)
                 execution_seconds = monotonic() - execution_started if channel else None
+                # execute includes the Worker finally/temporary-view cleanup. Freeze
+                # before independent terminal reads, hashes and test-database destruction.
+                if channel:
+                    terminal_counts = counts.freeze()
+                    root_ended = monotonic()
                 db.expire_all()
                 result = db.get(JobRun, job.id)
                 ledger = db.get(DataPublication, job.id)
+                if channel and result.status == "SUCCESS" and ledger is not None \
+                        and ledger.state == "PUBLISHED":
+                    sql_snapshot = build(terminal_counts, head_sha=head,
+                        root_job_id=report["root_job_id"], started=started, ended=root_ended)
+                    report["sql_snapshot"] = sql_snapshot
                 profile.disable()
                 if args.profile:
                     profile.dump_stats(str(args.output.with_suffix(".prof")))
                 report["runs"].append(dict(overall=monotonic() - started,
                     cpu=process_time() - cpu, job_status=result.status,
                     publication_state=ledger.state if ledger else None,
-                    error=result.error_message, sql_counts=dict(counts),
+                    error=result.error_message, sql_counts=counts.copy(),
                     sql_driver_seconds=dict(seconds), stage=result.step,
                     stage_seconds=dict(stages), delivered_rows=dict(delivered_rows)))
                 report["runs"][-1].update(sql_by_stage=dict(sql_by_stage),
@@ -461,7 +488,10 @@ def main():
             monkeypatch.undo()
             args.output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     if channel:
-        channel.emit("result")
+        if sql_snapshot is None or channel.failure is not None:
+            channel.fail("BIZ03_SQL_TERMINAL_INCOMPLETE")
+            raise SystemExit(1)
+        channel.emit("result", sql_counts=sql_snapshot["counts"], sql_snapshot=sql_snapshot)
     else:
         print(json.dumps({"output": str(args.output), "runs": report["runs"]}))
     if any(r["job_status"] != "SUCCESS" or r["publication_state"] != "PUBLISHED"

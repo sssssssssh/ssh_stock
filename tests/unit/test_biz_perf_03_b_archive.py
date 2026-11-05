@@ -56,7 +56,16 @@ def harness(tmp_path, monkeypatch):
     env = dict(BIZ03_T0_NS="100000000000", GITHUB_SHA="a" * 40,
                GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1", GITHUB_JOB="evidence")
     lab = b.Lab(env, b.protocol(), tmp_path, clock=lambda: now[0])
-    lab.receipt.update(status="MEASURED_CLEANUP_PENDING", root_attempts=1)
+    from scripts.business_sql_snapshot import build
+
+    snap = build({"SELECT": 1}, head_sha=env["GITHUB_SHA"],
+                 root_job_id="00000000-0000-0000-0000-000000000001", started=110, ended=119)
+    lab.receipt.update(status="MEASURED_CLEANUP_PENDING", root_attempts=1,
+        last_phase=dict(phase="result", failure_code=None,
+                        sql_counts=snap["counts"], sql_snapshot=snap))
+    b.write_json(tmp_path / "public/measurement.json", dict(sql_snapshot=snap,
+        head_sha=snap["head_sha"], root_job_id=snap["root_job_id"], root=dict(
+            sql_counts=snap["counts"], job_status="SUCCESS", publication_state="PUBLISHED")))
     return lab, now, timers, env
 
 
@@ -342,7 +351,10 @@ def test_controller_uses_archive_phase_after_cleanup_without_live_effects(
 
         def root():
             root_calls.append(1)
-            lab.receipt.update(status="MEASURED_CLEANUP_PENDING", root_attempts=1)
+            lab.receipt.update(status="MEASURED_CLEANUP_PENDING", root_attempts=1,
+                               last_phase=original_lab.receipt["last_phase"])
+            b.write_json(directory / "public/measurement.json",
+                         b.read_json(original_lab.directory / "public/measurement.json"))
 
         cleanup, finish = lab.cleanup, lab.finish_archive
 
