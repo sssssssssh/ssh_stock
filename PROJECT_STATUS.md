@@ -1,5 +1,12 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## BIZ-PERF-04-D 当前接续（2026-11-06）
+
+04-C已由负责人验收关闭（c397821d），不追加其非阻断修改。本轮仅独立Linux完整锁及验证器。
+67包=22直接+45传递，历史版本不变，目标wheel哈希校验通过；本机Linux安装NOT_VERIFIED，
+transitive_lock_complete仍false，不把普通CI当新锁验收。旧入口/协议/授权不变。
+交付后REVIEW_PENDING，04-E/F未授权，详见[04-D](docs/acceptance/BIZ_PERF_04_D.md)。
+
 ## BIZ-PERF-04-C 当前接续（2026-11-06）
 
 04-B精确SHA decaaba86535575e307edd676221ec066517caf6的主CI42073561595及三条配套均success，

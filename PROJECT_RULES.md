@@ -1,5 +1,11 @@
 # 项目开发规则
 
+## BIZ-PERF-04-D 实验依赖锁（2026-11-06）
+
+新增独立Linux x86_64/CPython3.12.14完整wheel哈希锁，原根锁和部署入口保持原样。
+目标wheel闭包已验证，Linux实际安装NOT_VERIFIED；普通CI不提供该验收或实验/生产权限。
+来源、工具链区分、验证命令和限制见 docs/acceptance/BIZ_PERF_04_D.md。
+
 ## BIZ-PERF-04-C 状态解耦（2026-11-06）
 
 独立离线状态合同明确资源、数据集、容量、性能资格和生产授权；未检查为NOT_ASSESSED。

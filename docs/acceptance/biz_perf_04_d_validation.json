@@ -1,0 +1,60 @@
+{
+  "schema": "biz04-d.offline-validation.v1",
+  "baseline_sha": "c397821d45c755473bf627a40392d392bd1eab2b",
+  "target": {
+    "implementation_name": "cpython",
+    "implementation_version": "3.12.14",
+    "os_name": "posix",
+    "platform_machine": "x86_64",
+    "platform_python_implementation": "CPython",
+    "platform_system": "Linux",
+    "python_full_version": "3.12.14",
+    "python_version": "3.12",
+    "sys_platform": "linux"
+  },
+  "generator": {
+    "host_machine": "arm64",
+    "host_system": "Darwin",
+    "packaging": "26.3",
+    "pip": "25.0.1",
+    "python": "3.12.14"
+  },
+  "root_sha256": "aa8d7f344bc70c749cb91375950ad0620a551add2933329b82520c35bd7c59b5",
+  "lock_sha256": "88549dce3164364430e20970fa10eb2125b60ff05f456d7bef4474876a98dcfc",
+  "direct_count": 22,
+  "transitive_count": 45,
+  "business_closure_count": 67,
+  "historical_versions_unchanged": true,
+  "target_wheel_hash_check": {
+    "exit_code": 0,
+    "wheels": 67,
+    "method": "pip download --require-hashes --no-index --only-binary=:all: with target tags"
+  },
+  "negative_hash_checks": {
+    "wrong_hash": {
+      "exit_code": 1,
+      "rejected": true
+    },
+    "missing_hash": {
+      "exit_code": 1,
+      "rejected": true
+    }
+  },
+  "target_installation": "NOT_VERIFIED",
+  "transitive_lock_complete": false,
+  "reason": "macOS ARM; Docker daemon unavailable; no authorized Linux verification Runner",
+  "tests": {
+    "tests": "464",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "7.670"
+  },
+  "junit_sha256": "52c6cedcfb9e563d516350cff1c991321f9a43062a15a012a7560b0dc1bcab7d",
+  "ruff": "PASS",
+  "diff_check": "PASS",
+  "database_connections": 0,
+  "worker_roots": 0,
+  "experimental_dispatches": 0,
+  "github_configuration_writes": 0
+}
