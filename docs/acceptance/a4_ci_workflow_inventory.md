@@ -140,3 +140,22 @@ a4233-observer-contracts仍是单一12分钟contracts，补迁移与失败证据
 安全主CI工件a42331-safe-ci-SHA-run-attempt必需；迁移/固定错误码工件仅存在时上传；
 后续容器/浏览器从未运行时跳过，运行成功仍要求必备产物，运行失败可保留部分文件。
 完整状态与剩余边界见[a4233_1_ci_remediation.md](a4233_1_ci_remediation.md)。
+
+## 2026-11-06 BIZ-PERF-04-D-LINUX-INSTALL-V1（代码交付，真实安装未运行）
+
+精确新增第八份入口 `.github/workflows/biz-perf-04-d-linux-install.yml`，分类
+`linux_install_only`；不加入 EXPENSIVE。仅 workflow_dispatch、单安装 Job、ubuntu-24.04、
+CPython 3.12.14 x64、20分钟、contents:read，无Environment/services/matrix/Secrets。
+独立并发组 biz-perf-04-d-linux-install，cancel-in-progress=false；Action均固定官方完整SHA。
+先预检再checkout，67包批准Wheel精确文件/hash下载后，仅在新venv用离线hash参数安装。
+指定两份离线合同测试，不运行数据库测试、Worker、BIZ03或性能/容量实验。
+仅四份脱敏JSON、最多5MiB、保留7天；失败/取消/缺证据均不构成成功。
+
+原七份Workflow逐字节保留，历史“七份/未知第八份”段落保留历史语境；当前精确八份清单
+继续拒绝未知第九份。负责人另行允许 test_biz_perf_03_b_once.py 的精确AST投影适配；
+只剥离本次登记增量后比较原历史断言，保留未知Workflow拒绝负例，不开放任意新增入口。
+
+本轮只实现、离线测试和经负责人明确授权提交推送；不调用Actions API、不dispatch/rerun、
+不配置GitHub Environment，不安装真实67包，不启动容器/数据库/业务服务。
+正式04-D transitive_lock_complete仍false、target_installation仍NOT_VERIFIED；普通CI不替代
+真实目标平台安装。新入口未来执行必须另行批准；本次无容量、性能、生产或04-E/F授权。

@@ -520,7 +520,8 @@ def test_inventory_still_refuses_an_eighth_workflow(tmp_path, monkeypatch):
 
     workflows = tmp_path / ".github/workflows"
     workflows.mkdir(parents=True)
-    for name in (*b.ORIGINAL_WORKFLOWS, "biz-perf-03-b-once.yml", "unknown.yml"):
+    for name in (*b.ORIGINAL_WORKFLOWS, "biz-perf-03-b-once.yml",
+                 "biz-perf-04-d-linux-install.yml", "unknown.yml"):
         (workflows / name).write_text("")
     monkeypatch.setattr(legacy, "ROOT", tmp_path)
     with pytest.raises(AssertionError):
@@ -674,6 +675,19 @@ def test_approved_seventh_entry_preserves_all_original_inventory_checks():
                                if isinstance(n, ast.FunctionDef) and n.name == name))
     addition = after.body.pop(1)
     assert ast.unparse(addition) == "single_diagnostic = {'biz-perf-03-b-once.yml'}"
+    linux_addition = after.body.pop(1)
+    assert ast.unparse(linux_addition) == (
+        "linux_install_only = {'biz-perf-04-d-linux-install.yml'}")
+    comparison = after.body[1].test.comparators[0]
+    assert isinstance(comparison, ast.BinOp) and comparison.right.id == "linux_install_only"
+    after.body[1].test.comparators[0] = comparison.left
+    linux_loop = after.body.pop()
+    assert isinstance(linux_loop, ast.For) and linux_loop.iter.id == "linux_install_only"
+    assert ast.unparse(linux_loop) == (
+        "for name in linux_install_only:\n"
+        "    from tests.unit.test_biz_perf_04_d_linux_install import workflow_contract\n"
+        "    assert name in inventory and name not in EXPENSIVE\n"
+        "    workflow_contract(workflow(name))")
     comparison = after.body[1].test.comparators[0]
     assert isinstance(comparison, ast.BinOp) and comparison.right.id == "single_diagnostic"
     after.body[1].test.comparators[0] = comparison.left

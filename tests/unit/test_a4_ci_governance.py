@@ -166,8 +166,9 @@ def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
     contracts_only = {"a4233-observer-contracts.yml"}
     # Approved seventh entry; an eighth unknown workflow remains refused.
     single_diagnostic = {"biz-perf-03-b-once.yml"}
+    linux_install_only = {"biz-perf-04-d-linux-install.yml"}
     assert {p.name for p in (ROOT / ".github/workflows").glob("*.yml")} == (
-        set(EXPENSIVE) | contracts_only | single_diagnostic
+        set(EXPENSIVE) | contracts_only | single_diagnostic | linux_install_only
     )
     inventory = (ROOT / "docs/acceptance/a4_ci_workflow_inventory.md").read_text(encoding="utf-8")
     for name in EXPENSIVE:
@@ -198,6 +199,11 @@ def test_inventory_covers_every_workflow_and_no_hidden_trigger_chain():
         assert "strategy" not in value["jobs"]["evidence"]
         assert value["concurrency"] == {
             "group": "ssh-stock-a4-expensive", "cancel-in-progress": False}
+    for name in linux_install_only:
+        from tests.unit.test_biz_perf_04_d_linux_install import workflow_contract
+
+        assert name in inventory and name not in EXPENSIVE
+        workflow_contract(workflow(name))
 
 
 @pytest.mark.parametrize("event", ["push", "pull_request"])

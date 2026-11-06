@@ -1,0 +1,156 @@
+name: BIZ-PERF-04-D Linux installation only
+
+"on":
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Reviewed complete installation-channel commit SHA
+        required: true
+        type: string
+      expected_lock_sha256:
+        description: Reviewed SHA256 of the committed Linux wheel lock
+        required: true
+        type: string
+      confirm_installation:
+        description: Dependency installation only; no database or performance authorization
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: biz-perf-04-d-linux-install
+  cancel-in-progress: false
+
+jobs:
+  installation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Initialize incomplete evidence and validate before checkout
+        id: guard
+        env:
+          BIZ04_INPUTS: ${{ toJSON(inputs) }}
+        shell: bash
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json, os, pathlib, re
+          e = os.environ
+          assert all(re.fullmatch('[1-9][0-9]*', e[k]) for k in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'))
+          base = pathlib.Path(e['RUNNER_TEMP']).absolute() / 'biz-perf-04-d' / (e['GITHUB_RUN_ID'] + '-' + e['GITHUB_RUN_ATTEMPT'])
+          assert all(not p.is_symlink() for p in (base, *base.parents))
+          base.parent.mkdir(parents=True, exist_ok=True)
+          base.mkdir(exist_ok=False)
+          public = base / 'public'
+          public.mkdir()
+          def write(name, value):
+              pending = public / (name + '.pending')
+              with pending.open('x') as f:
+                  json.dump(value, f, allow_nan=False)
+              pending.replace(public / name)
+          receipt = dict(status='INCOMPLETE', transitive_lock_complete=False,
+              target_installation='NOT_VERIFIED', failure_code='INVALID_DISPATCH_CONTEXT',
+              run_id=e['GITHUB_RUN_ID'], attempt=e['GITHUB_RUN_ATTEMPT'], exit_code=1, stages={})
+          write('receipt.json', receipt)
+          for name in ('runtime.json', 'dependency-verification.json', 'tests.json'):
+              write(name, dict(status='NOT_VERIFIED'))
+          with open(e['GITHUB_ENV'], 'a') as f:
+              f.write('BIZ04_PUBLIC=' + str(public) + '\n')
+          try:
+              inputs = json.loads(e['BIZ04_INPUTS'])
+              assert e['GITHUB_EVENT_NAME'] == 'workflow_dispatch' and e['GITHUB_REF'] == 'refs/heads/master'
+              assert e['GITHUB_REPOSITORY'] == 'sssssssssh/ssh_stock'
+              assert set(inputs) == {'target_sha', 'expected_lock_sha256', 'confirm_installation'}
+              assert inputs['confirm_installation'] is True
+              receipt['failure_code'] = 'TARGET_SHA_MISMATCH'
+              assert re.fullmatch('[0-9a-f]{40}', inputs['target_sha']) and inputs['target_sha'] == e['GITHUB_SHA']
+              receipt['target_sha'] = inputs['target_sha']
+              receipt['failure_code'] = 'LOCK_SHA256_MISMATCH'
+              assert re.fullmatch('[0-9a-f]{64}', inputs['expected_lock_sha256'])
+              receipt['failure_code'] = None
+              receipt['stages']['preflight'] = 'PASS'
+          except Exception:
+              write('receipt.json', receipt)
+              raise SystemExit(1)
+          write('receipt.json', receipt)
+          PY
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        id: checkout
+        with:
+          ref: ${{ inputs.target_sha }}
+          persist-credentials: false
+      - name: Bind checkout and lock digests before interpreter provisioning
+        id: binding
+        env:
+          BIZ04_INPUTS: ${{ toJSON(inputs) }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: /usr/bin/python3 -m scripts.business_dependency_linux_install --bind-only
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        id: python
+        with:
+          python-version: '3.12.14'
+          architecture: x64
+          check-latest: false
+      - name: Verify the approved wheels and install in a fresh private venv
+        id: install
+        env:
+          BIZ04_INPUTS: ${{ toJSON(inputs) }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python -m scripts.business_dependency_linux_install
+      - name: Fail closed and check the public evidence allowlist
+        id: export
+        if: always()
+        env:
+          BIZ04_STEPS: ${{ toJSON(steps) }}
+        shell: bash
+        run: |
+          /usr/bin/python3 - <<'PY'
+          import json, os, pathlib
+          p = pathlib.Path(os.environ['BIZ04_PUBLIC'])
+          assert p.is_relative_to(pathlib.Path(os.environ['RUNNER_TEMP']))
+          assert all(not v.is_symlink() for v in (p, *p.parents))
+          names = {'receipt.json', 'runtime.json', 'dependency-verification.json', 'tests.json'}
+          assert {v.name for v in p.iterdir()} == names
+          assert all(v.is_file() and not v.is_symlink() for v in p.iterdir())
+          assert sum(v.stat().st_size for v in p.iterdir()) <= 5 * 1024**2
+          steps = json.loads(os.environ['BIZ04_STEPS'])
+          receipt = json.loads((p / 'receipt.json').read_bytes())
+          good = all(steps.get(k, {}).get('outcome') == 'success' for k in ('guard', 'checkout', 'binding', 'python', 'install'))
+          if not good:
+              receipt.update(status='INCOMPLETE', transitive_lock_complete=False,
+                  target_installation='NOT_VERIFIED', exit_code=1)
+              if not receipt.get('failure_code'):
+                  receipt['failure_code'] = ('PYTHON_TARGET_UNAVAILABLE' if steps.get('python', {}).get('outcome') == 'failure' else 'ARTIFACT_EVIDENCE_INVALID')
+              pending = p / 'receipt.pending'
+              with pending.open('x') as f:
+                  json.dump(receipt, f, allow_nan=False)
+              pending.replace(p / 'receipt.json')
+          # Only a verified export directory is exposed to the unconditional uploader.
+          if steps.get('checkout', {}).get('outcome') == 'success':
+              from scripts.business_dependency_linux_install import validate_export
+              validate_export(p)
+          else:
+              assert all(json.loads((p / n).read_bytes()).get('status') in ('INCOMPLETE', 'NOT_VERIFIED') for n in names)
+          exported = p.parent / 'export'
+          exported.mkdir(exist_ok=False)
+          for name in sorted(names):
+              raw = (p / name).read_bytes()
+              with (exported / name).open('xb') as f:
+                  f.write(raw)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write('artifact_dir=' + str(exported) + '\n')
+          assert good and receipt['status'] == 'COMPLETE' and receipt['transitive_lock_complete'] is True
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: biz-perf-04-d-install-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.export.outputs.artifact_dir || format('{0}/biz04-no-evidence-{1}-{2}', runner.temp, github.run_id, github.run_attempt) }}/receipt.json
+            ${{ steps.export.outputs.artifact_dir || format('{0}/biz04-no-evidence-{1}-{2}', runner.temp, github.run_id, github.run_attempt) }}/runtime.json
+            ${{ steps.export.outputs.artifact_dir || format('{0}/biz04-no-evidence-{1}-{2}', runner.temp, github.run_id, github.run_attempt) }}/dependency-verification.json
+            ${{ steps.export.outputs.artifact_dir || format('{0}/biz04-no-evidence-{1}-{2}', runner.temp, github.run_id, github.run_attempt) }}/tests.json
+          if-no-files-found: error
+          retention-days: 7
