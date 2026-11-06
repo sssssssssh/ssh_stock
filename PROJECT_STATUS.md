@@ -16,9 +16,25 @@ ab5e29df5aa230076069dd587557720c2db382dc已核实VERIFIED，67包、pip check、
 04-E新增标准库只读校验器、12项固定A～D证据包和确定性完整性报告；
 本机LF原字节副本新增108项通过，可执行A/C/D/E合计319项通过；
 全A～E因Windows缺resource在旧04-B收集时中止，未改旧断言或跳过。
-当前实现IMPLEMENTED / REVIEW_PENDING，新提交普通Linux CI结果PENDING，
-精确交付及检查见[04-E任务回执](docs/tasks/BIZ-PERF-04-E.md)。
-下一项仅为核查本次精确提交的普通CI及负责人审阅，不启动04-F。
+04-E工程交付、已执行CI验收及文档收尾CLOSED，关闭范围由负责人04-E-CLOSEOUT任务书确认。
+本轮文档核查基线master/HEAD/origin/master/GitHub master均为交付提交
+`63cbc04bc257e62080df34561f7865a5f18941f4`，工作区CLEAN。
+[GitHub CI Run #241 / 42172026323](https://github.com/sssssssssh/ssh_stock/actions/runs/42172026323)
+已复核为同SHA、push、attempt 1、completed/success；test Job127741836728：
+5936 passed、0 failed/errors、816 warnings，3338.22秒；覆盖率90.02%。
+最大窗口专项1 passed、1 deselected（另有2 warnings）；迁移及Compose构建等工程检查成功。
+关联检查23项：11 success、12 skipped，不能写成23项全部通过。
+A4-1隔离基线、A4-2 Laboratory/Acceptance Gate、Publication Candidate Performance、
+Capacity及Publication Release Gate均skipped/未执行，不是正式实验或发布验收通过。
+
+BIZ-PERF-04总体仍未完成；正式容量验收PENDING，生产读性能授权NOT_AUTHORIZED：
+capacity_ready=false、formal_capacity_complete=false、production_read_authorized=false、
+read_performance_pass=NOT_CLAIMED。合成测试不证明业务数据库、Worker或生产并发容量。
+04-A UNKNOWN、04-C NOT_ASSESSED及上述04-D VERIFIED/最终验收待确认分别保留，
+不改写A～D原始证据、Manifest或历史validation。
+本次仅回填两份文档，没有本地重跑测试、数据库/Worker/安装/性能操作；
+精确证据和关闭边界见[04-E最终验收结论](docs/tasks/BIZ-PERF-04-E.md#最终验收结论)。
+交付后停止等待负责人审阅，04-F为NOT_STARTED，不创建或启动下一阶段任务。
 
 业务主线仍为历史读取→转换计算→候选查询写入→质量核验→原子发布的性能问题，
 03-A/R1继续PARTIAL、BIZ-PERF-02及B0撤回结论不变。

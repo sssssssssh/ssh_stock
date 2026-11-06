@@ -534,7 +534,7 @@ CI42156606243、A4-2 42156606260、Publication42156606217、A4-1 42156606225。
 | 确定性报告 | integrity=VALID；同manifest两次校验/归档报告逐字节一致 |
 | Ruff | 新模块与新测试PASS，exit 0 |
 | Diff/范围检查 | 工作区及暂存Diff检查PASS，exit 0；精确16文件，保护文件不变，四原件暂存Git blob摘要一致 |
-| 新提交Linux普通CI | PENDING；推送后仅查询自动运行的精确SHA结果，未完成前不借用基线成功 |
+| 交付提交Linux普通CI | SUCCESS；63cbc04bc257e62080df34561f7865a5f18941f4 / Run #241（42172026323），5936 passed、816 warnings；最终核验见末尾收尾记录 |
 
 本机第一次E回归97 passed/3 failed，原因为Git archive受到本机core.autocrlf影响，
 历史证据字节变成CRLF。随后仅在忽略目录重新物化Git原始blob，并逐项确认与git show相同；
@@ -549,15 +549,92 @@ Windows symlink能力使用显式mock验证拒绝；Linux分支实际创建symli
 
 ### 交付状态、风险与回滚
 
-IMPLEMENTED / REVIEW_PENDING；仅证据完整性VALID，不设置性能、容量或生产准入字段。
-最终完整Linux回归必须绑定本次提交；未核实时保留PENDING，不标04-E DONE。
+原始交付时为IMPLEMENTED / REVIEW_PENDING；现已完成同一交付SHA的Linux工程回归核验，
+由负责人04-E-CLOSEOUT任务书确认工程交付与文档验收关闭，当前为CLOSED。
+仅证据完整性VALID，不设置性能、容量或生产准入字段；关闭范围见末尾最终验收结论。
 不为追填本文件自身SHA连续追加提交；提交SHA、普通CI链接和实时结果随最终交付说明提供。
 Windows CRLF checkout应失败关闭，使用Git原字节LF checkout；不静默换行归一化。
 GitHub工件有到期日，但原始四JSON及索引已经按字节长期归档；未归档的私有pip report
 和04-B原JSONL仍不作重建或额外事实声明。
 正常revert本轮独立提交可撤回新增校验入口；不重写历史或改写原件，保留Git可审计历史。
-下一项仅精确提交普通CI和负责人审阅，不进入04-F或新实验。
+精确提交普通CI核验已完成；本轮文档收尾交付后停止等待负责人审阅，不进入04-F或新实验。
 
 本轮没有数据库访问/迁移、PG/Worker/Scheduler/容器启动、S1～S4大文件重生成、
 重复67包安装、容量/性能/生产操作、Environment/Secrets/Variables/审批设置或dispatch/rerun。
 BIZ-PERF-03-A/R1继续PARTIAL，B0 WITHDRAWN与金融/PIT/发布/授权边界不变。
+
+## BIZ-PERF-04-E-CLOSEOUT 最终CI证据回填（2026-11-06）
+
+本轮是文档收尾，不是新功能或性能优化。负责人任务书确认04-E代码交付与工程CI已达到
+关闭条件，并授权按本任务范围提交推送；只修改PROJECT_STATUS.md及本任务回执。
+核查时master、HEAD、fetch后的origin/master及实时GitHub master均为
+`63cbc04bc257e62080df34561f7865a5f18941f4`，工作区CLEAN，目标提交身份一致。
+本记录适用下列代码提交，不要求追填本回执自身最终提交SHA。
+
+### GitHub实证与执行环境
+
+GitHub连接器传输失败，改用只读官方API复核Run、Job、关联check-runs和原测试日志；
+没有dispatch、rerun或修改任何GitHub配置。核查结果如下：
+
+| 项目 | 实际结果 |
+| --- | --- |
+| 交付Commit | 63cbc04bc257e62080df34561f7865a5f18941f4 |
+| 主CI | [Run #241 / 42172026323](https://github.com/sssssssssh/ssh_stock/actions/runs/42172026323)，completed / success |
+| Run身份 | master、push、attempt 1；head_sha与交付Commit相同 |
+| 主test Job | 127741836728，success |
+| 全量pytest原日志 | 5936 passed, 816 warnings in 3338.22s (0:55:38)；0 failed、0 errors |
+| 覆盖率 | 90.02%；原70%门槛保留 |
+| 最大窗口专项 | 1 passed, 1 deselected, 2 warnings in 9.03s；deselected不是passed |
+| 工程步骤 | CI隔离环境中Alembic升级/降级回升、current/heads、Ruff、docker compose config/build及前端build均success |
+| 精确SHA关联检查 | 23项，11 success、12 skipped；无failure，无仍在执行项 |
+| 原本机专项 | Windows / Git LF原字节副本108 passed，0 failures/errors/skipped；不是本轮重跑或Linux执行 |
+| 原本机A/C/D/E子集 | 319 passed（包含108项专项，不能相加），0 failures/errors/skipped |
+| 原本机完整A～E | Windows缺Linux resource模块，在旧04-B收集阶段中止；原记录保留，未改断言、skip或替代模块 |
+
+5936项是该SHA在GitHub Linux CI的全量结果；108/319项是此前本机交付结果，两种环境
+分别记录。816 warnings为非阻断警告，未改写为0，也未为消除警告修改代码。
+CI执行迁移和构建是既有自动工程回归事实；本次文档任务没有在本机执行这些命令、
+连接生产数据库、操作Worker或把其解释为生产部署/容量验证。
+
+### 关联检查的真实状态
+
+同一交付SHA的23项check-runs中，11项success为：
+主CI的workflow-contracts、dependency-audit、lookup-diagnosis、test、ci-opt-01-ci；
+A4-1的contracts、ci-opt-01-ab-read-a4-baseline；
+A4-2的contract-and-safety、ci-opt-01-ab-read-a4-2；
+Publication的contracts、ci-opt-01-publication-v13。
+
+12项skipped为：四条Workflow各自的authorize（共4项），
+主CI的lookup-tail-attribution、ui-visual-acceptance、capacity、publication-release-gate（4项），
+A4-1 isolated-baseline（1项），A4-2 laboratory/a42-acceptance-gate（2项），
+Publication candidate-performance（1项）。skipped表示未执行，不记作success或实验通过。
+
+其中正式性能实验/发布门禁：A4-1隔离基线、A4-2 Laboratory、A4-2 Acceptance Gate、
+Publication Candidate Performance、Capacity Job、Publication Release Gate均未执行。
+保留治理边界capacity_ready=false、formal_capacity_complete=false、
+production_read_authorized=false、read_performance_pass=NOT_CLAIMED；本次不改写这些证据。
+队列工程样本为synthetic=true合成测试，不证明生产并发或真实业务负载容量。
+
+### 保护项及文档自检
+
+本次仅两份Markdown回填，不修改Python/SQL/前端/测试、CI/Workflow、依赖/部署配置、
+Manifest、校验摘要、历史validation或A～D原始证据。不重跑pytest、安装、迁移、
+数据库/Worker/Scheduler/容器、原始数据拉取、因子重算、候选发布或容量/性能实验。
+不访问生产数据、不修改密钥/环境/审批或网络配置；不创建分支、reset/rebase/强推。
+提交前执行文档Diff与范围一致性检查，提交后核对本地/远端及工作区；
+本轮文档提交的新CI与上述代码SHA证据分开，不能把Run #241冒充新文档SHA的CI。
+
+04-A历史UNKNOWN、04-C NOT_ASSESSED、04-D VERIFIED及负责人最终验收REVIEW_PENDING
+分别保留；03-A/R1继续PARTIAL，BIZ-PERF-02/B0撤回结论保留。
+不清除其他阶段/历史Run的PENDING，不启动04-F，不新增下一阶段任务。
+
+## 最终验收结论
+
+工程交付、已执行CI验收及文档收尾完成，**BIZ-PERF-04-E：CLOSED**。
+关闭对应Commit为63cbc04bc257e62080df34561f7865a5f18941f4及Run #241（42172026323），
+不宣称关联23项全部成功，不将证据包integrity=VALID升级为性能资格。
+
+**BIZ-PERF-04总体尚未完成；正式容量验收PENDING，生产读性能授权NOT_AUTHORIZED，
+Publication Release Gate未执行，04-F为NOT_STARTED。**
+本结论不代表正式容量实验、生产读性能、生产授权或发布门禁通过，
+不能据此进入生产读性能发布。本次文档提交推送后停止等待项目负责人审阅。
