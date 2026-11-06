@@ -120,3 +120,83 @@ UNEXPECTED_INTERNAL_ERROR，原异常只写私有目录。失败时完整安装�
 - 当前软件交付REVIEW_PENDING；原04-D验收文件仍transitive_lock_complete=false、target_installation=NOT_VERIFIED。推送可能自动触发原普通CI，本轮不调用Actions API查询，也不将其当作新锁真实安装验收。
 
 UTF-8专项复核实际为1 passed /1 failed（exit 1）：编码用例通过，另一个仍为Windows/POSIX路径分隔符差异。没有将其标成全绿。
+
+## BIZ04-CLOSEOUT-01 最终代码交付核验（2026-11-06）
+
+核查对象为代码提交 `ab5e29df5aa230076069dd587557720c2db382dc`，不是本文后续
+归档提交的性能或安装资格。负责人已追认本次8文件范围，包括旧BIZ03精确AST投影适配。
+本轮没有发现需要修复的代码缺陷；仅追加本节，不重设计、不改安装代码或测试断言。
+技术门禁全部通过；负责人已授权仅在master本地提交本回执、不推送。
+本文归档并完成最终CLEAN复核后，BIZ04-CLOSEOUT-01代码交付核验为COMPLETE；
+该状态不代表04-D真实安装验收通过，也不授权后续执行。
+
+### 既有CI与Linux权威证据
+
+[CI #239 / Run 42146685681](https://github.com/sssssssssh/ssh_stock/actions/runs/42146685681)
+为上述精确SHA、push、attempt 1，最终completed / success。
+workflow-contracts、dependency-audit、lookup-diagnosis、test、ci-opt-01-ci全部success；
+主test Job为127659749641，完整pytest及后续构建、验收、清理/上传与汇总均无失败。
+authorize、capacity、lookup-tail-attribution、ui-visual-acceptance、publication-release-gate
+为skipped / NOT_REQUESTED，不计作性能、容量、生产或发布验收通过。
+
+完整pytest为5828 passed、816 warnings，0 failed/errors/skipped，覆盖率90.02%，
+原70%门槛保留。全量步骤实际耗时3166.45秒；不将其与整个Run耗时混用。
+运行环境为既有GitHub Hosted Ubuntu干净checkout；治理测试中的当前源码verify()门禁
+在该Linux上下文实际通过，不使用Windows路径替换、skip、xfail或删除测试。
+
+按任务书复用该次完整CI，不新建或重复执行Linux治理Workflow。
+原始JUnit来自该Run的data-publication-reliability工件ID `13473202507`，
+已核对GitHub提供的归档SHA256：
+`05716db4daeb3ff0db199aed0cf2ec5b798ec8e0cac3fb3c2e7cb04545965c8e`。
+其中m17_1_2-full.xml的SHA256为
+`67407931eb0f019e1653f7be658b7d98bcc55f289e906f6e6224f166dd9a59cc`。
+实际解析testcase而非只看绿色状态，结果如下：
+
+| 项目 | 实际结果 |
+| --- | --- |
+| test_a4_ci_governance.py | 97 passed，0 failed/errors/skipped |
+| test_a4234_ci_governance.py | 4 passed，0 failed/errors/skipped |
+| Linux治理合计 | 101 passed，0 failed/errors/skipped |
+| test_biz_perf_04_d.py | 22 passed，0 failed/errors/skipped |
+| test_biz_perf_04_d_linux_install.py | 126 passed，0 failed/errors/skipped |
+| 安装合同合计 | 148 passed，0 failed/errors/skipped |
+| 原8项补充检查 | 8 passed，0 failed/errors/skipped；4项Wheel METADATA/平台负例与148项重叠，不累加独立测试数 |
+
+CI安全插件对参数用例名称作固定SHA256脱敏；8项补充检查按原safe_identifier算法
+核对了4个参数名及其余4个完整用例身份，没有将同名前缀或缺项当作通过。
+上述结果是离线合同及Linux治理证据，不是真实67包离线安装证据。
+
+### actionlint、代码质量与范围
+
+从[rhysd/actionlint官方v1.7.12](https://github.com/rhysd/actionlint/releases/tag/v1.7.12)
+取得独立Windows amd64工具，下载ZIP同时核对官方API digest和checksums，SHA256为
+`6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9`。
+工具仅存放本机忽略目录，不进入依赖锁或仓库提交。
+
+| 检查 | 命令与结果 |
+| --- | --- |
+| actionlint | `actionlint .github/workflows/biz-perf-04-d-linux-install.yml`：PASS，1.7.12，exit 0，stdout/stderr为空；未使用禁用检查的命令行选项 |
+| Ruff | `python -m ruff check scripts/business_dependency_linux_install.py tests/unit/test_biz_perf_04_d_linux_install.py tests/unit/test_a4_ci_governance.py tests/unit/test_biz_perf_03_b_once.py`：PASS，exit 0 |
+| 工作区Diff检查 | `git diff --check`：PASS，exit 0 |
+| 原代码提交Diff检查 | `git diff --check 4fe37aee77570b3377fb5ff41b85ab9e49fbbcef ab5e29df5aa230076069dd587557720c2db382dc`：PASS，exit 0 |
+| AST与未知第九份负例 | 本轮再次运行旧精确AST投影、旧未知Workflow拒绝、新未知第九份拒绝三项：3 passed，exit 0；与CI已有结果重叠 |
+| 原七份Workflow | 与开发基线4fe37aee的Git blob逐字节相同；仍只有精确8份清单，无第九份 |
+| 五份受保护文件 | 根锁、Linux锁、manifest、validation、原验证器逐字节不变 |
+| 调试/凭据 | 复核允许8文件，未发现新增调试执行路径或实际凭据；凭据模式扫描0命中 |
+| 工作区 | 追加本节前master/HEAD/origin/master/实时远端均为代码SHA，CLEAN；本轮仅文档归档改动，最终归档后须复核CLEAN，不追填本文自身SHA |
+
+此前Windows的DIRTY_TREE、路径分隔符、GBK以及严格POSIX全树校验限制仍保留原失败记录；
+现在由相同代码SHA在Linux的101项真实通过补齐验证，不把本机失败改写成通过。
+当前没有待修复的本轮代码问题；本回执按负责人授权本地归档，提交后复核工作区CLEAN。
+该文档提交不推送，不额外触发CI；其自身提交SHA由Git记录，不追填正文。
+
+### 授权边界和真实安装状态
+
+本轮只读查询原CI、下载其已有日志/JUnit工件，未dispatch、rerun或手动执行新04-D入口。
+未真实下载/安装67包，未启动PostgreSQL、Docker、Worker或执行迁移、容量、性能、生产实验；
+未修改Environment、Secrets、分支保护或审批。原push CI的隔离测试设施是已有自动运行，
+没有为收尾额外触发一轮CI。
+
+**真实Linux离线安装仍为NOT_RUN；正式transitive_lock_complete仍false，
+target_installation仍NOT_VERIFIED。** 本轮可关闭的仅是代码交付审阅，不能关闭04-D
+真实安装验收，也不进入04-E。后续真实安装必须另行明确授权并取得完整可信工件。
