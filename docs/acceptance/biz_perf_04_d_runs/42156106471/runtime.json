@@ -1,0 +1,1 @@
+{"bits": 64, "implementation": "cpython", "libc": ["glibc", "2.39"], "machine": "x86_64", "python": "3.12.14", "releaselevel": "final", "runner": "github-hosted", "runner_arch": "X64", "runner_os": "Linux", "system": "Linux", "toolchain": {"pip": "25.0.1"}}

@@ -1,5 +1,16 @@
 # 项目开发规则
 
+## BIZ-PERF-04-E 只读证据包（2026-11-06）
+
+负责人授权独立标准库A～D证据索引、离线校验及master提交推送。
+integrity=VALID只证明固定12项原始字节、结构及身份/阶段语义一致，不授予任何执行资格。
+原件append-only，A历史SQL归属UNKNOWN、B合成元数据边界、C未评估状态分别保留；
+D真实安装Run42156106471已核验VERIFIED，不覆盖旧离线NOT_VERIFIED快照。
+字段/schema、规范JSON摘要、固定历史来源、输入上限、原子报告和非声明项见
+[04-E合同](docs/acceptance/BIZ_PERF_04_E.md)。不接入应用或旧控制器，不改现有8份Workflow。
+旧源码/锁/manifest/测试断言、金融/SQL/PIT/发布和授权机制不变，03-A/R1仍PARTIAL。
+04-F、数据库、Worker、资源探针、容量/性能实验、生产和部署均须另行授权。
+
 ## BIZ-PERF-04-D 实验依赖锁（2026-11-06）
 
 新增独立Linux x86_64/CPython3.12.14完整wheel哈希锁，原根锁和部署入口保持原样。

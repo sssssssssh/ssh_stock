@@ -1,5 +1,30 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## BIZ-PERF-04-E 当前唯一接续（2026-11-06）
+
+负责人明确要求“根据任务书进行修改，推代码”，仅授权04-E离线统一证据合同及master交付。
+修改前master/HEAD/origin/master/GitHub master一致为
+`946db5679a9cb2b7c12d9bd8ca035fe0f26f4bd8`，CLEAN。
+同SHA前置CI42156606243、A4-2 42156606260、Publication42156606217、A4-1 42156606225
+均completed/success后才实施，不借用旧SHA通过结果。
+
+04-D代码交付核验COMPLETE；真实Linux安装Run42156106471/attempt1、target
+ab5e29df5aa230076069dd587557720c2db382dc已核实VERIFIED，67包、pip check、148项合同通过。
+四份原始JSON及工件索引追加归档；旧离线validation的false/NOT_VERIFIED保留其历史语境。
+04-D负责人最终验收REVIEW_PENDING，不自动DONE。
+
+04-E新增标准库只读校验器、12项固定A～D证据包和确定性完整性报告；
+本机LF原字节副本新增108项通过，可执行A/C/D/E合计319项通过；
+全A～E因Windows缺resource在旧04-B收集时中止，未改旧断言或跳过。
+当前实现IMPLEMENTED / REVIEW_PENDING，新提交普通Linux CI结果PENDING，
+精确交付及检查见[04-E任务回执](docs/tasks/BIZ-PERF-04-E.md)。
+下一项仅为核查本次精确提交的普通CI及负责人审阅，不启动04-F。
+
+业务主线仍为历史读取→转换计算→候选查询写入→质量核验→原子发布的性能问题，
+03-A/R1继续PARTIAL、BIZ-PERF-02及B0撤回结论不变。
+本轮没有业务库、PG/Worker/容器、原始大数据生成、容量、性能、生产、部署或新安装授权。
+下方04-D及更早指针均保留当时历史语境，不重新授予执行权限。
+
 ## BIZ-PERF-04-D 当前接续（2026-11-06）
 
 04-C已由负责人验收关闭（c397821d），不追加其非阻断修改。本轮仅独立Linux完整锁及验证器。

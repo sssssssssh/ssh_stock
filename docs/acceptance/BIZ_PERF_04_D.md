@@ -85,3 +85,22 @@ pip report必须包含本轮全部67安装项，不能用“already satisfied”
 开发/默认部署、前端、迁移入口不变；无生产DB/凭据、PG/Worker、容量或性能操作。
 04-D代码与离线合同交付REVIEW_PENDING，Linux真实安装验收NOT_VERIFIED；不进入04-E/F。
 没有关闭历史transitive_lock_complete=false，也没有授予正式容量/性能/生产资格。
+
+## 2026-11-06 真实Linux安装追加记录（04-E前置归档）
+
+上述NOT_VERIFIED/false是安装前离线快照，不再作为当前真实安装结论。
+实际安装[Run 42156106471](https://github.com/sssssssssh/ssh_stock/actions/runs/42156106471)
+为master/workflow_dispatch/attempt 1，target SHA
+`ab5e29df5aa230076069dd587557720c2db382dc`，installation Job 127690531459，success。
+Artifact 13474492280的5605字节ZIP摘要及四份JSON逐文件摘要已与任务书和GitHub原件核对。
+原件见[biz_perf_04_d_runs/42156106471/artifact-index.json](biz_perf_04_d_runs/42156106471/artifact-index.json)。
+
+原始receipt为COMPLETE、exit_code=0、七阶段PASS、target_installation=VERIFIED、
+transitive_lock_complete=true；CPython3.12.14/Linux x86_64/64bit/glibc2.39、67包完整集合、
+pip check、原验证器及148项合同均通过。pip25.0.1独立记录，不计入67包。
+四份原JSON逐字节归档，不补造Run字段、不归档私有pip report或wheel/venv。
+旧biz_perf_04_d_validation.json保留原字节和当时NOT_VERIFIED，未覆盖历史。
+
+代码交付核验COMPLETE、真实安装VERIFIED、负责人最终验收REVIEW_PENDING三者分开，
+不擅自标记04-D DONE，不授予PG/Worker/业务整链、容量、性能、生产或04-F资格。
+本轮仅归档既有运行，没有重复下载67包、安装、dispatch或rerun。

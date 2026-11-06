@@ -200,3 +200,23 @@ CI安全插件对参数用例名称作固定SHA256脱敏；8项补充检查按�
 **真实Linux离线安装仍为NOT_RUN；正式transitive_lock_complete仍false，
 target_installation仍NOT_VERIFIED。** 本轮可关闭的仅是代码交付审阅，不能关闭04-D
 真实安装验收，也不进入04-E。后续真实安装必须另行明确授权并取得完整可信工件。
+
+## 2026-11-06 真实安装证据追加归档（04-E任务授权）
+
+前述NOT_RUN/NOT_VERIFIED为代码审阅时的历史事实；随后真实安装已由负责人另行运行。
+本轮实际只读核查[Run 42156106471](https://github.com/sssssssssh/ssh_stock/actions/runs/42156106471)，
+master、workflow_dispatch、attempt 1、target SHA
+`ab5e29df5aa230076069dd587557720c2db382dc`，installation Job 127690531459，completed/success。
+
+原始Artifact 13474492280，名称biz-perf-04-d-install-ab5e29df5aa230076069dd587557720c2db382dc-42156106471-1，
+5605 bytes，ZIP SHA256为735addf5df05b36eba923ac4d8cbb257c8fafceb05a069c687ffba1fa67b0a13。
+原件四份JSON已下载并逐字节核对任务书摘要，归档于
+[artifact-index.json](biz_perf_04_d_runs/42156106471/artifact-index.json)同目录。
+receipt COMPLETE/VERIFIED/true、七阶段PASS；真实CPython3.12.14/Linux x86_64/64bit/glibc2.39、
+expected/actual=67、完整发行包集合验证、pip check与148项合同均通过。
+
+因此当前真实安装为VERIFIED，不继续引用本节之前的NOT_RUN作为最终结论。
+旧离线validation.json的transitive_lock_complete=false/NOT_VERIFIED仍是原始安装前快照，
+保留原样；当前安装true仅来自本Run原始receipt，不回写历史验收文件。
+代码交付核验COMPLETE，负责人最终验收REVIEW_PENDING，不自动将04-D标记DONE。
+本轮归档不重复安装、dispatch、rerun或创建容器/数据库/Worker，不提供性能或生产资格。
