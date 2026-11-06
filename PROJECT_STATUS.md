@@ -1,5 +1,36 @@
 # ssh_stock 当前状态与唯一执行指针
 
+## G0 治理文件收口当前接续（2026-11-06）
+
+G0-W00 只读事实核查及补充报告已完成独立技术审阅，事实核查通过；这不等于负责人
+已完成全部治理验收。本轮 G0 / GOV-20261102-001 文档收口及 master 提交推送已获负责人
+明确批准，当前唯一执行步骤为最终文档提交和本次精确 SHA 的普通 CI 核验。
+普通 CI 完成前保持 REVIEW_PENDING / CI_PENDING，不预填尚未发生的成功结果。
+全部交付验证满足后仅提出 G0_CLOSEOUT_VERIFIED / OWNER_FINAL_CONFIRMATION_PENDING，
+由负责人最终确认后才可将 G0 正式标记 DONE，不凭技术审阅或 Codex 自检自动关闭。
+原始核查基准 master、HEAD、origin/master、实时远端均为
+`cac3a1c38b23167d0f30fac99994def12d84a8b2`；本轮开始时仅有三份已批准的治理文档修改。
+最终 SHA、Run ID、Job/Step 和验收结果以本次 GitHub 实际返回及最终交付报告为准；
+不为追填文档自身 SHA 再次提交，不以旧 SHA 成功或 skipped 代替本次工程验证。
+交付后下一项仍为申请 P0-W01 独立授权，不自动执行 P0-W01/W02。
+
+- 业务主线不变：历史读取 → 转换与因子计算 → 候选查询/写入 → 质量核验 → 原子发布。
+- 04-E：CLOSED；04-F：NOT_STARTED。关闭边界见[04-E 最终验收结论](docs/tasks/BIZ-PERF-04-E.md#最终验收结论)。
+- 03-A-R1：PARTIAL；Windows OFF `0xC0000005` 根因 UNKNOWN，有效 OFF/ON 配对 UNAVAILABLE，
+  三对额外开销 ≤3% 仍 NOT_VERIFIED；[原失败与验收记录](docs/acceptance/BIZ_PERF_03_A_R1_closeout.md)保留。
+- 03-B：已有环境适配、单次控制器及测量/安全合同实现；历史
+  [Run 41991816127](https://github.com/sssssssssh/ssh_stock/actions/runs/41991816127)
+  为 completed/success、attempt 1，目标 SHA `057dfe861f940a5284b594db9ef45c2257cec688`，
+  日志记录 `BIZ03_COMPLETE_DIAGNOSTIC_ONLY`。这只证明一次小规模合成诊断完成，
+  不代表正式性能、容量或生产资格通过，也不替代 R1 配对及开销验收。
+- 03-B 后续运行审批引用尚未完整登记；既不推测历史运行违规，也不推导当前运行授权。
+  初始适配批准、历史运行事实及未来运行许可分开；旧 NOT_RUN 等记录保留其当时语境。
+- 正式容量验收：PENDING；生产读性能授权：NOT_AUTHORIZED。
+
+本轮授权及重复决策编号消歧见 [DEC-20261106-001](DECISION_LOG.md)。不修改历史证据，
+不启动 04-F、P0、P1/P2/P3、PG17、OFF/ON 或三对测量，不操作 GitHub Environment、
+业务数据库或部署。下方旧“当前”指针均为历史快照，不构成本轮执行或提交推送许可。
+
 ## BIZ-PERF-04-E 当前唯一接续（2026-11-06）
 
 负责人明确要求“根据任务书进行修改，推代码”，仅授权04-E离线统一证据合同及master交付。

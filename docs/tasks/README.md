@@ -1,5 +1,23 @@
 # 开发任务管理与新会话接续规范
 
+## G0 治理收口最新接续（2026-11-06）
+
+04-E 已 CLOSED；G0-W00 只读事实核查及补充报告已完成独立技术审阅，事实核查通过，
+不等于负责人已完成全部治理验收。本轮 G0 / GOV-20261102-001 文档收口及 master 提交推送
+已获负责人明确批准，当前步骤为最终文档提交和普通 CI 核验。
+CI 完成前保持 REVIEW_PENDING / CI_PENDING；最终 SHA、Run ID 及结果须以本次 GitHub
+真实返回为准，不预填成功，不反复提交追填文档自身 SHA。验证满足后仅建议
+G0_CLOSEOUT_VERIFIED / OWNER_FINAL_CONFIRMATION_PENDING，负责人最终确认后才能标 DONE。
+完成后仅申请 P0-W01 独立授权；P0-W01/W02 仍须另批，不自动启动下一阶段。
+03-A-R1 保持 PARTIAL，Windows OFF 根因 UNKNOWN，三对 ≤3% 未验证。
+03-B 已有环境适配；历史 Run 41991816127 已完成一次合成诊断，其 completed/success
+及 `BIZ03_COMPLETE_DIAGNOSTIC_ONLY` 不等于正式性能、容量或生产许可。
+03-B 后续运行审批引用未完整登记；不推测历史违规，不复用旧身份或推导当前运行授权。
+04-F 为 NOT_STARTED，正式容量 PENDING，生产读性能授权 NOT_AUTHORIZED。
+基线、来源及完整状态见 [PROJECT_STATUS](../../PROJECT_STATUS.md)，本轮授权及旧重复编号
+消歧见 [DEC-20261106-001](../../DECISION_LOG.md)。下方旧接续指针和原任务编号完整保留，
+仅代表各自历史阶段，不重新授予执行或提交推送许可。
+
 2026-11-06最新接续：[BIZ-PERF-04-E](BIZ-PERF-04-E.md)，负责人已明确授权离线证据包
 开发及master提交推送。基线946db567的四条CI成功后实施；04-D真实安装原件另行追加归档。
 04-E交付仍须精确提交普通CI和负责人审阅；完整性不等于性能/容量/生产资格，不进入04-F。

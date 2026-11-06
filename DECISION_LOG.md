@@ -1,5 +1,38 @@
 # ssh_stock 重要决策日志
 
+## DEC-20261106-001：G0 事实技术审阅通过与治理文档最终交付授权
+
+- 来源：前轮 G0-W00 只读事实核查及补充报告已完成独立技术审阅，事实核查通过；
+  不将 ChatGPT 技术审阅表述为负责人已完成全部治理验收。原始核查基准为 master /
+  `cac3a1c38b23167d0f30fac99994def12d84a8b2`。
+- 授权接续：前轮仅批准本地治理文档修改和 Diff 审阅；负责人本轮“G0 / GOV-20261102-001
+  治理收口最终交付”新增明确批准两处文字完善、Diff 审查、三份文档提交推送 master 及
+  推送后精确 SHA 普通 CI 核验。仅限 PROJECT_STATUS.md、docs/tasks/README.md、
+  DECISION_LOG.md；PROJECT_ROADMAP.md 和阶段顺序不变。
+- 完成判定：CI 完成前保持 REVIEW_PENDING / CI_PENDING；真实 SHA、Run/Job/Step 和结果
+  以本次 GitHub 返回为准。全部验证通过后仅提出
+  G0_CLOSEOUT_VERIFIED / OWNER_FINAL_CONFIRMATION_PENDING，负责人最终确认后才能 DONE。
+  不在提交前预填成功，不用旧 SHA、skipped 或自检代替验收，不为追填自身 SHA 连续提交。
+- 保留验收边界：04-E CLOSED、04-F NOT_STARTED；03-A-R1 PARTIAL，Windows OFF
+  `0xC0000005` 根因 UNKNOWN，三对额外开销 ≤3% NOT_VERIFIED；正式容量 PENDING，
+  生产读性能授权 NOT_AUTHORIZED。既有工程成功不提升这些资格。
+- 03-B：保留已有环境适配及初始 DEC-20261105-001 的适配授权边界。负责人本轮确认历史
+  [Run 41991816127](https://github.com/sssssssssh/ssh_stock/actions/runs/41991816127)
+  completed/success、attempt 1、SHA `057dfe861f940a5284b594db9ef45c2257cec688`，
+  日志为 `BIZ03_COMPLETE_DIAGNOSTIC_ONLY`；历史证据索引见
+  [04-A 历史事实](docs/acceptance/BIZ_PERF_04_A.md#历史事实与根因)。后续运行审批引用尚未
+  完整登记，不推测历史违规，不补造审批，不从运行成功推导当前运行授权或正式性能通过。
+- 未授权：P0-W01/W02、PG17、OFF/ON、三对性能测量、GitHub Environment/Secrets/Variables/
+  Reviewers、03-B W02 优化、正式实验、生产、部署及 04-F/P1/P2/P3。本机不运行测试、
+  安装、数据库、Worker 或容器，不读取业务凭据；仅允许本次 push 自动产生的普通 CI，
+  不手动 dispatch 或重跑工作流。
+- 编号消歧：历史 `DEC-20261104-001` 有两个同号条目，分别为“CI-OPT-01 提交推送与普通 CI
+  授权”和“CI-OPT-02 先审计再批准并行”。引用时必须同时注明标题及原任务来源；
+  本次不重编号、不覆盖历史文本，也不把任一旧授权扩大为当前许可。
+- 下一步：完成本次文档交付及工程核验后等待负责人最终确认，随后申请 P0-W01 独立授权；P0-W02 的机器、
+  命令、预算、证据位置及后续隔离环境须分别明确批准。本条不启动 P0，不调整
+  G0 → P0（03-A-R1）→ P1 → P2 → P3 顺序。
+
 ## DEC-20261105-001：批准BIZ-PERF-03-B环境适配，不批准真实实验
 
 - 来源：负责人已接受W00/W01审计与Actions可行性报告，明确批准第一阶段适配开发及master交付。
