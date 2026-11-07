@@ -516,3 +516,127 @@ def test_rev1_synchronous_blocking_call_is_not_hard_preempted(tmp_path, monkeypa
     assert observed == ['entered', 'returned']
     assert r['phase'] != 'COMPLETE_MOCK'
     assert r['first_failure'] in {'MOCK_START_TIMEOUT', 'MOCK_PHASE_TIMEOUT'}
+
+
+@pytest.mark.parametrize('entry', ['batch', 'cli', 'duplicate_final'])
+@pytest.mark.parametrize('injection', ['before_read', 'after_open'])
+def test_repair03_pending_phase_link_window_preserves_original_assertions(
+        tmp_path, monkeypatch, capsys, entry, injection):
+    """Hold the actual emit link/unlink intermediate inode state for one poll."""
+    original = s.OwnedDirectory.check
+    original_supervise = s.supervise
+    held, released = {}, []
+    children = []
+    directories = {}
+    original_open = s.os.open
+
+    def open_file(name, *args, **kwargs):
+        descriptor = original_open(name, *args, **kwargs)
+        path = directories.get(kwargs.get('dir_fd'))
+        if injection == 'after_open' and name == '0.json' and path is not None and path not in held:
+            s.os.link(path/'0.json', path/'pending_0.json')
+            held[path] = True
+        return descriptor
+
+    def spawn(*args, **kwargs):
+        child = subprocess.Popen(*args, **kwargs)
+        children.append(child)
+        # Remove scheduler luck from the injection: still a real, independently
+        # launched fixed mock child, within the unchanged one-second setup limit.
+        child.wait(timeout=.5)
+        return child
+
+    def supervise(*args, **kwargs):
+        return original_supervise(*args, **kwargs, popen=spawn)
+
+    def check(self):
+        original(self)
+        # Only the outer supervisor poll; never inject during archive validation.
+        caller = sys._getframe(1)
+        while caller is not None and caller.f_code.co_name == 'check':
+            caller = caller.f_back
+        if caller is None or caller.f_code.co_name != '_supervise_registered':
+            return
+        directories[self.fd] = self.path
+        phase = self.path/'0.json'
+        pending = self.path/'pending_0.json'
+        key = self.path
+        if key in held:
+            if held[key]:
+                s.os.unlink(pending)
+                held[key] = False
+                released.append(key.name)
+            return
+        if injection == 'before_read' and phase.exists() and not pending.exists():
+            s.os.link(phase, pending)
+            held[key] = True
+            assert phase.stat().st_nlink == 2
+
+    monkeypatch.setattr(s.OwnedDirectory, 'check', check)
+    monkeypatch.setattr(s, 'supervise', supervise)
+    monkeypatch.setattr(s.os, 'open', open_file)
+    try:
+        if entry == 'batch':
+            test_six_independent_children_in_frozen_order(tmp_path)
+        elif entry == 'cli':
+            test_explicit_mock_cli_has_no_real_execution_claim(capsys)
+        else:
+            test_rev1_publication_failure_requires_independent_confirmation(
+                tmp_path, monkeypatch, 'duplicate_final')
+        assert len(released) == (1 if entry == 'duplicate_final' else 6)
+        assert len(children) == len(released)
+        assert all(child.poll() == 0 for child in children)
+    finally:
+        for path, active in held.items():
+            if active:
+                (path/'pending_0.json').unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize('alias', ['pending_0.json', 'unrelated_alias'])
+def test_repair03_unfinished_or_unrelated_links_never_pass(tmp_path, monkeypatch, alias):
+    original_check = s.OwnedDirectory.check
+    now, held, children = [0], [], []
+
+    def spawn(*args, **kwargs):
+        child = subprocess.Popen(*args, **kwargs)
+        children.append(child)
+        child.wait(timeout=.5)
+        return child
+
+    def check(self):
+        original_check(self)
+        if sys._getframe(1).f_code.co_name == '_supervise_registered':
+            now[0] += .25
+            if not held:
+                s.os.link(self.path/'0.json', self.path/alias)
+                held.append(self.path/alias)
+
+    monkeypatch.setattr(s.OwnedDirectory, 'check', check)
+    try:
+        r = s.supervise(tmp_path.resolve(), 'SYNTHETIC_PENDING', clock=lambda: now[0], popen=spawn)
+        assert r['phase'] == ('TIMED_OUT' if alias == 'pending_0.json' else 'FAILED')
+        assert r['first_failure'] == ('MOCK_PHASE_TIMEOUT' if alias == 'pending_0.json'
+                                      else 'MOCK_CONTRACT_REJECTED')
+        assert r['supervision']['phases'] == []
+        assert r['supervision']['mock_deadlines_seconds'] == [1, 1, 1]
+        assert r['supervision']['timeline'][0]['deadline'] == '1.000000000'
+        assert len(children) == 1 and children[0].poll() == 0
+        c.validate_receipt(r)
+    finally:
+        for path in held:
+            path.unlink(missing_ok=True)
+
+
+def test_repair03_cli_failure_is_nonzero_without_retry(monkeypatch, capsys):
+    original = s.batch
+    seen = []
+
+    def failed_batch(*args, **kwargs):
+        r = original(*args, **kwargs, scenarios=['nonzero'] + ['success'] * 5)
+        seen.extend(r)
+        return r
+
+    monkeypatch.setattr(s, 'batch', failed_batch)
+    assert s.main(['--mock']) == 2
+    assert capsys.readouterr().out == 'MOCK_INCOMPLETE_NOT_REAL_MEASUREMENT\n'
+    assert len(seen) == 1 and seen[0]['first_failure'] == 'MOCK_CHILD_EXIT'

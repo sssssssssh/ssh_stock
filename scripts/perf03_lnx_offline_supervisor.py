@@ -100,6 +100,21 @@ class OwnedDirectory:
         self.check()
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=self.fd)
         with os.fdopen(descriptor, 'rb') as handle:
+            if name in {'0.json', '1.json', '2.json'}:
+                # Pin the event FD BEFORE checking its producer's pending link.
+                # A pre-open check races link(); an unrelated alias must still
+                # fail the original strict single-link/inode checks below.
+                try:
+                    pending = os.stat('pending_' + name, dir_fd=self.fd,
+                                      follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    opened = os.fstat(handle.fileno())
+                    c.require(stat.S_ISREG(pending.st_mode) and
+                              (pending.st_dev, pending.st_ino) ==
+                              (opened.st_dev, opened.st_ino))
+                    raise BlockingIOError('MOCK_EVENT_NOT_READY')
             info = os.fstat(handle.fileno())
             c.require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                       and info.st_nlink == 1 and info.st_size <= c.MAX_BYTES)
@@ -185,6 +200,11 @@ def _supervise_registered(parent, run_id, arm='OFF1', *, scenario='success', lim
                 if phase < 3:
                     try:
                         event = directory.read(str(phase) + '.json')
+                    except BlockingIOError:
+                        # Pending publication is not an accepted event. The same
+                        # phase/batch deadline remains in force; no child retry.
+                        time.sleep(.002)
+                        continue
                     except FileNotFoundError:
                         event = None
                     if event is not None:

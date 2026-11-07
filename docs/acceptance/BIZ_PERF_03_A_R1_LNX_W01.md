@@ -281,3 +281,72 @@ untracked列表精确等于白名单，并对新增文件执行no-index空白检
 
 当前下一步只请求负责人Diff审阅；通过后另外批准一次master提交推送与普通CI。
 后续真实Linux适配、资源准备、单对、独立结果审阅及三对验收仍分别获批，不自动接续。
+
+## CI-REPAIR-03：阶段事件发布窗口与条件式交付（2026-11-07）
+
+负责人授权本任务书 W00～W03，仅在原白名单内离线定位、修复及条件式一次 master 交付。
+修改前 HEAD/origin/master/实时远端均为 `1d002be03f8453604723e0c20928ed586814b502`。
+CI-FIX-01 已审阅测试补丁（+177/-23）保持原字节；两份 ZIP 和审阅 Patch 未改、不提交。
+下述是本轮新增事实，不覆盖上文原 177/233 项结果及旧 CI 失败。
+
+### 观测与因果边界
+
+上次三文件运行 266 passed/3 failed；本轮三个原节点各一次有界观测为 3 passed/0 failed，
+这不能证明偶现问题不存在。Python 3.12.14、Darwin，保留默认安全插件；没有加载业务设置。
+外部脱敏 triage 回执逐节点记录 wall 起止、退出码、全部 arm/phase/首错/原因、child exit、
+阶段时间线、observed_elapsed、cleanup/archive/process_cleanup。F1/F2 本次各六臂成功，
+F3 本次首错为预期 MOCK_EVIDENCE_UNAVAILABLE。原 F2 失败调用的内部回执已不可得，
+其历史内部首错和精确 syscall 时序保持 NOT_CAPTURED，不用本次成功或 F1 回执补造。
+
+只读检查时找回的原失败归档显示：F1 的 ON1 已完成 SETUP，在 ROOT 事件读取前后报
+MOCK_CONTRACT_REJECTED；F3 在 CLEANUP 事件读取前后报同码，早于 final 发布。
+两者约26毫秒且均远早于1秒 deadline，不支持“提高1秒/10秒预算”的处置。
+历史回执没有 syscall 级跟踪，不能声称已恢复历史失败的每条 syscall。
+后续 pytest 临时目录保留机制已淘汰旧 fixture；保存的是先前只读检查的字段摘录，
+不是原始文件副本，原字节 SHA256 为 NOT_CAPTURED。当前诊断和 RED/GREEN 日志另行完整保留。
+
+确定性因果验证分别调用三个原测试，保持其全部原断言：真实固定 mock 子进程退出后，
+在父读取前人为保持同 inode 的 `pending_0.json` 与 `0.json` 两个链接，复现
+mock_child.emit 的 link→unlink 中间状态。未修复源码得到 3 failed：F1 提前止步、F2 退出2、
+F3 首错为 MOCK_CONTRACT_REJECTED（先于 duplicate_final）。这是独立的可复核缺陷证明，
+不是反复抽样择取通过结果；历史精确调度仍 UNKNOWN。
+
+根因机制 PROVEN：emit 先硬链接事件、再解除 pending 链接，read 原本立即要求 nlink==1。
+合法发布窗口被当成合同破坏，导致 batch 失败即停、CLI 非零；F3 的早期首错粘性保留，
+所以后续 final 注入不能覆盖它。三个入口均由各自确定性 RED/GREEN 验证，未拼接成单次运行。
+
+### 最小修复与安全保留
+
+仅调整 supervisor 的阶段事件读取：先打开并钉住事件 FD，再检查 pending 名称；存在时
+必须是同一 regular inode，报告内部 NOT_READY，在原阶段及批次 deadline 内继续轮询。
+先打开 FD 避免“先查 pending 不存在、随后 child 才 link”的检查窗口。
+等 pending 解除后，原单链接、owner、inode、大小和摘要检查仍全部执行；不接受部分事件。
+只适用于 0/1/2.json，不改变 prefix/final/3.json、原子发布、独立确认票据或首错语义。
+未增加子任务重启、补样或失败重试，未提高 limits=(1,1,1)、window=10 或任何正式门槛。
+
+第一处候选修复先在读取前检查 pending，3项 GREEN；复核发现检查/打开之间仍有窗口，
+第二处最小修正将检查移至已打开的 FD 内。最多两轮源码修复，未扩大到 child 或合同源码。
+最终新增9节点：三个原入口×读取前/打开FD后两种注入共6项；pending不解除和无关硬链接
+各1项；真实首臂 nonzero 后 CLI 非零且不重试1项。成功入口仍为真实六个独立固定子进程，
+没有伪造成功回执；受控等待和注入均计入未改变的1秒期限，pending永不解除必须超时。
+
+### 实际本地验收
+
+- 最终三文件完整合跑：278 passed，0 failed/errors/skipped，5.42秒；原269节点加9新节点。
+- 因果/边界定向验证：9 passed，1.81秒；初版发布窗口三入口 RED：3 failed，0.24秒。
+- 六文件定向 Ruff 和 git diff --check 通过；没有执行完整/集成 pytest。
+- 原30个 supervisor、4个 parity 测试函数（含装饰器、参数与断言）AST 与 HEAD 一致；
+  CI-FIX-01 文件与已审阅 Patch 对应源码 SHA256 一致。没有 skip/xfail 或减少原节点。
+- 四份历史 JSON SHA256 保持 HISTORICAL_HASHES 原值；原 child/contract/parity 源码未改。
+- 三个原节点单次观测、原失败回执已观测字段摘录、RED/GREEN/边界/完整日志及摘要清单保存于项目外
+  受控临时目录；不提交日志、私有路径、ZIP 或 Patch。
+
+证据摘要：triage.json SHA256
+`17e134c7572bd9dd7c7fb5394e17068912f477352d36a6e64cd3ea164e4e14f1`；
+上述摘要须以交付前实际清单核对为准，不以普通 CI 代替真实诊断/性能资格。
+Git 和自动 CI 的最终 SHA/Run/Job 以本轮聊天交付报告的真实返回为准，不为追填自身 SHA
+再次提交。CI 未结束则 CI_PENDING，失败则停止；不自行第二次 push 或 rerun/dispatch。
+
+原 AC-05 HARD_BLOCKING_IO_NOT_COVERED 仍 PARTIAL；R1 PARTIAL、Windows 原生崩溃
+UNKNOWN、Linux REAL_NOT_RUN、P1/P2/P3 和生产 NOT_AUTHORIZED。普通 CI 仅工程验证，
+不构成真实六臂、≤3% 开销、容量、生产或部署验收。

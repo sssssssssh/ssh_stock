@@ -3,6 +3,7 @@
 import ast
 import copy
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
 
@@ -147,34 +148,99 @@ def test_untrusted_json_refused(raw):
         c.load(raw)
 
 
-def test_modules_are_standard_library_and_have_no_real_adapter():
-    forbidden = ('app', 'sqlalchemy', 'psycopg', 'scripts.v14_test_database',
-                 'scripts.performance_diagnostics_overhead')
-    assert not any(name == prefix or name.startswith(prefix + '.')
-                   for name in sys.modules for prefix in forbidden)
-    root = Path(__file__).resolve().parents[2]
+FORBIDDEN_IMPORTS = ('app', 'sqlalchemy', 'psycopg', 'scripts.v14_test_database',
+                     'scripts.performance_diagnostics_overhead')
+OFFLINE_MODULES = ('scripts.perf03_lnx_offline_contract',
+                   'scripts.perf03_lnx_offline_supervisor', 'scripts.perf03_lnx_mock_child')
+
+
+def check_offline_source(tree, *, mock_child=False):
+    """The original static whitelist, also checking child dynamic-execution calls."""
     allowed = {'argparse', 'copy', 'hashlib', 'json', 're', 'statistics', 'uuid', 'datetime',
                'decimal', 'os', 'stat', 'subprocess', 'sys', 'tempfile', 'time', 'pathlib',
                'scripts'}
-    for name in ('contract', 'supervisor'):
-        path = root / f'scripts/perf03_lnx_offline_{name}.py'
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                assert all(n.name in allowed for n in node.names)
-            if isinstance(node, ast.ImportFrom):
-                assert node.module in allowed
-                if node.module == 'scripts':
-                    assert [n.name for n in node.names] == ['perf03_lnx_offline_contract']
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-                assert node.func.id not in {'eval', 'exec', '__import__'}
-    child = ast.parse((root / 'scripts/perf03_lnx_mock_child.py').read_text())
-    for node in ast.walk(child):
+    if mock_child:
+        allowed = {'argparse', 'os', 'time', 'scripts'}
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(n.name in {'argparse', 'os', 'time'} for n in node.names)
+            direct = allowed - {'scripts'} if mock_child else allowed
+            assert all(n.name in direct for n in node.names)
         if isinstance(node, ast.ImportFrom):
-            assert node.module == 'scripts'
-            assert [n.name for n in node.names] == ['perf03_lnx_offline_contract']
+            if mock_child:
+                assert node.module == 'scripts'
+            else:
+                assert node.module in allowed
+            if node.module == 'scripts':
+                assert [n.name for n in node.names] == ['perf03_lnx_offline_contract']
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id not in {'eval', 'exec', '__import__'}
+
+
+IMPORT_GUARD_PROGRAM = '''
+import sys
+sys.dont_write_bytecode = True
+import importlib
+import subprocess
+
+def no_workload(*args, **kwargs):
+    raise RuntimeError('OFFLINE_IMPORT_WORKLOAD_REFUSED')
+
+subprocess.Popen = no_workload
+sys.path.insert(0, sys.argv[1])
+for name in ('scripts.perf03_lnx_offline_contract',
+             'scripts.perf03_lnx_offline_supervisor', 'scripts.perf03_lnx_mock_child'):
+    importlib.import_module(name)
+if len(sys.argv) == 3:
+    sys.modules[sys.argv[2]] = object()  # Controlled sentinel, never a real app import.
+forbidden = ('app', 'sqlalchemy', 'psycopg', 'scripts.v14_test_database',
+             'scripts.performance_diagnostics_overhead')
+if any(name == prefix or name.startswith(prefix + '.')
+       for name in sys.modules for prefix in forbidden):
+    raise SystemExit(31)
+print('OFFLINE_IMPORT_GUARD_OK')
+'''
+
+
+def check_runtime_imports(root, *, runner=subprocess.run, contamination=None):
+    """Fresh -I/-S interpreter, imports only; fixed errors never echo child output."""
+    expected_root = Path(__file__).resolve().parents[2]
+    try:
+        approved = Path(root).resolve(strict=True)
+        available = approved == expected_root and all(
+            (approved / (name.replace('.', '/') + '.py')).is_file()
+            and not (approved / (name.replace('.', '/') + '.py')).is_symlink()
+            for name in OFFLINE_MODULES)
+    except (OSError, ValueError, TypeError):
+        available = False
+    if not available:
+        raise AssertionError('OFFLINE_IMPORT_SOURCE_UNAVAILABLE')
+    probes = set(FORBIDDEN_IMPORTS) | {name + '.ci_fix_sentinel' for name in FORBIDDEN_IMPORTS}
+    if contamination is not None and contamination not in probes:
+        raise AssertionError('OFFLINE_IMPORT_PROBE_REFUSED')
+    args = [sys.executable, '-I', '-S', '-c', IMPORT_GUARD_PROGRAM, str(approved)]
+    if contamination is not None:
+        args.append(contamination)
+    try:
+        result = runner(args, shell=False, cwd=approved, env={}, stdin=subprocess.DEVNULL,
+                        capture_output=True, text=True, timeout=5, check=False)
+    except subprocess.TimeoutExpired:
+        raise AssertionError('OFFLINE_IMPORT_TIMEOUT') from None
+    except OSError:
+        raise AssertionError('OFFLINE_IMPORT_LAUNCH_FAILED') from None
+    if result.returncode != 0:
+        raise AssertionError('OFFLINE_IMPORT_NONZERO')
+    if result.stdout != 'OFFLINE_IMPORT_GUARD_OK\n':
+        raise AssertionError('OFFLINE_IMPORT_STDOUT_INVALID')
+    if result.stderr:
+        raise AssertionError('OFFLINE_IMPORT_STDERR_PRESENT')
+
+
+def test_modules_are_standard_library_and_have_no_real_adapter():
+    root = Path(__file__).resolve().parents[2]
+    for name in OFFLINE_MODULES:
+        tree = ast.parse((root / (name.replace('.', '/') + '.py')).read_text())
+        check_offline_source(tree, mock_child=name == 'scripts.perf03_lnx_mock_child')
+    check_runtime_imports(root)
 
 
 def test_old_evidence_bytes_unchanged():
@@ -319,3 +385,91 @@ def test_rev1_legitimate_failure_evidence_roundtrips(state, reason):
     elif state == 'CLEANUP_UNCERTAIN':
         r['cleanup_state'] = 'INCOMPLETE'
     assert c.unseal(c.seal(r)) == r
+
+
+def test_ci_fix_01_parent_preload_then_original_guard(monkeypatch):
+    names = ('app', 'app.synthetic', 'sqlalchemy', 'sqlalchemy.synthetic',
+             'psycopg', 'psycopg.synthetic', 'scripts.v14_test_database',
+             'scripts.performance_diagnostics_overhead')
+    missing = object()
+    original = {name: sys.modules.get(name, missing) for name in names}
+    parent_path = list(sys.path)
+    with monkeypatch.context() as patch:
+        sentinels = {name: object() if value is missing else value
+                     for name, value in original.items()}
+        for name, sentinel in sentinels.items():
+            if original[name] is missing:
+                patch.setitem(sys.modules, name, sentinel)
+        # Same pytest process: preload case first, then invoke the original guard.
+        test_modules_are_standard_library_and_have_no_real_adapter()
+        assert all(sys.modules[name] is sentinel for name, sentinel in sentinels.items())
+        assert sys.path == parent_path
+    assert all(sys.modules.get(name, missing) is value for name, value in original.items())
+
+
+@pytest.mark.parametrize('source', [
+    'import sqlalchemy', 'from app.services import job_worker', 'import psycopg',
+    'from scripts.v14_test_database import verified_test_url',
+    'from scripts import performance_diagnostics_overhead',
+    'eval("0")', 'exec("pass")', '__import__("app")',
+])
+@pytest.mark.parametrize('mock_child', [False, True])
+def test_ci_fix_01_static_guard_rejects_real_imports_and_execution(source, mock_child):
+    with pytest.raises(AssertionError):
+        check_offline_source(ast.parse(source), mock_child=mock_child)
+
+
+@pytest.mark.parametrize('mock_child', [False, True])
+def test_ci_fix_01_static_guard_accepts_only_approved_sources(mock_child):
+    check_offline_source(ast.parse(
+        'import os\nfrom scripts import perf03_lnx_offline_contract'), mock_child=mock_child)
+
+
+@pytest.mark.parametrize('prefix', FORBIDDEN_IMPORTS)
+@pytest.mark.parametrize('descendant', [False, True])
+def test_ci_fix_01_fresh_child_rejects_synthetic_forbidden_module(prefix, descendant):
+    name = prefix + '.ci_fix_sentinel' if descendant else prefix
+    root = Path(__file__).resolve().parents[2]
+    with pytest.raises(AssertionError, match='^OFFLINE_IMPORT_NONZERO$'):
+        check_runtime_imports(root, contamination=name)
+
+
+@pytest.mark.parametrize('failure,expected', [
+    ('nonzero', 'OFFLINE_IMPORT_NONZERO'), ('timeout', 'OFFLINE_IMPORT_TIMEOUT'),
+    ('launch', 'OFFLINE_IMPORT_LAUNCH_FAILED'), ('stdout', 'OFFLINE_IMPORT_STDOUT_INVALID'),
+    ('stderr', 'OFFLINE_IMPORT_STDERR_PRESENT'),
+])
+def test_ci_fix_01_child_failures_never_pass_or_disclose_output(failure, expected):
+    def runner(args, **kwargs):
+        assert kwargs['shell'] is False
+        assert kwargs['timeout'] == 5 and kwargs['check'] is False
+        assert kwargs['env'] == {} and kwargs['stdin'] == subprocess.DEVNULL
+        assert kwargs['capture_output'] is True and kwargs['text'] is True
+        assert args[:4] == [sys.executable, '-I', '-S', '-c']
+        assert args[4] == IMPORT_GUARD_PROGRAM
+        if failure == 'timeout':
+            raise subprocess.TimeoutExpired(args, 5, output='PRIVATE', stderr='PRIVATE')
+        if failure == 'launch':
+            raise OSError('PRIVATE')
+        return subprocess.CompletedProcess(args, 1 if failure == 'nonzero' else 0,
+            stdout='PRIVATE' if failure == 'stdout' else 'OFFLINE_IMPORT_GUARD_OK\n',
+            stderr='PRIVATE' if failure in {'stderr', 'nonzero'} else '')
+
+    with pytest.raises(AssertionError) as caught:
+        check_runtime_imports(Path(__file__).resolve().parents[2], runner=runner)
+    assert str(caught.value) == expected
+    assert 'PRIVATE' not in str(caught.value)
+    assert caught.value.__suppress_context__ or caught.value.__context__ is None
+
+
+def test_ci_fix_01_bad_source_refuses_before_process_start(tmp_path):
+    with pytest.raises(AssertionError, match='^OFFLINE_IMPORT_SOURCE_UNAVAILABLE$'):
+        check_runtime_imports(tmp_path/'missing', runner=lambda *a, **kw: pytest.fail('spawned'))
+    with pytest.raises(AssertionError, match='^OFFLINE_IMPORT_SOURCE_UNAVAILABLE$'):
+        check_runtime_imports(tmp_path, runner=lambda *a, **kw: pytest.fail('spawned'))
+
+
+def test_ci_fix_01_unapproved_probe_refuses_before_process_start():
+    with pytest.raises(AssertionError, match='^OFFLINE_IMPORT_PROBE_REFUSED$'):
+        check_runtime_imports(Path(__file__).resolve().parents[2], contamination='arbitrary.module',
+                              runner=lambda *a, **kw: pytest.fail('spawned'))
