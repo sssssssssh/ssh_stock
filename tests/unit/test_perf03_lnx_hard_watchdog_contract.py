@@ -633,3 +633,110 @@ def test_race01_child_cleanup_error_preserves_prior_deadline():
     assert r['failure_reason'] == ['HARD_MOCK_DEADLINE', 'HARD_MOCK_ACTOR_TERM',
                                   'HARD_MOCK_CHILD_CLEANUP']
     w.validate_receipt(r, spec)
+
+
+def fix02_injected_drive(monkeypatch, *, fragmented=False, stubborn=False,
+                        unknown_child=False, exit_code=0):
+    """A cooperative actor is still alive after sending TERM; never a real PID."""
+    class Process:
+        pid = 123
+        returncode = None
+        exited = False
+        code = exit_code
+
+        def wait(self, timeout):
+            if not self.exited:
+                raise w.subprocess.TimeoutExpired('FIXED_MOCK', timeout)
+            self.returncode = self.code
+            return self.code
+
+    process = Process()
+    spec = w.request('child_term_before_spawn', timeout_ms=500)
+    result = w.empty_receipt(spec)
+    result.update(actor_pid=123, actor_pgid=123)
+    stream, progress, signals, ticks = [], [0], [], [0]
+
+    def drain(fd, messages):
+        if process.code == -15:  # A redundant group TERM interrupts orderly interpreter exit.
+            return
+        if not stream:
+            events = ['READY'] if unknown_child else ['READY', 'TERM_REQUESTED']
+            if not fragmented and not unknown_child:
+                events += ['CHILD_NOT_STARTED', 'DONE']
+            for event in events:
+                messages.feed(w.canonical(message(spec, event)) + b'\n')
+            stream.append('FIRST')
+            if unknown_child:
+                value = message(spec, 'CHILD_UNCONFIRMED')
+                value.update(child_failure='HARD_MOCK_CHILD_START_UNKNOWN',
+                             cleanup_errors=['HARD_MOCK_CHILD_START_UNKNOWN'])
+                messages.feed(w.canonical(value) + b'\n')
+        elif fragmented and progress[0] and len(stream) == 1:
+            for event in ('CHILD_NOT_STARTED', 'DONE'):
+                messages.feed(w.canonical(message(spec, event)) + b'\n')
+            stream.append('FINAL')
+
+    def poll(reads, writes, errors, timeout):
+        assert 0 < timeout <= .01
+        progress[0] += 1
+        if not stubborn:
+            process.exited = True  # Normal close after its already queued protocol bytes.
+        return [], [], []
+
+    def signal_group(pid, signum):
+        assert pid == 123 and signum == w.signal.SIGTERM
+        signals.append('TERM')
+        process.code, process.exited = -15, True
+
+    def clock():
+        ticks[0] += 1
+        return ticks[0] / 100
+
+    monkeypatch.setattr(w, '_bound', lambda p: None)
+    monkeypatch.setattr(w, '_owned', lambda p: None)
+    monkeypatch.setattr(w, '_drain', drain)
+    monkeypatch.setattr(w, '_exited', lambda p: p.exited)
+    monkeypatch.setattr(w, '_group_gone', lambda pid: True)
+    monkeypatch.setattr(w.os, 'killpg', signal_group)
+    monkeypatch.setattr(w.select, 'select', poll)
+    result = w._drive(process, 0, spec, result, 0., clock=clock)
+    return result, spec, signals, progress[0]
+
+
+@pytest.mark.parametrize('fragmented', [False, True])
+def test_fix02_cooperative_term_does_not_interrupt_actor_exit(monkeypatch, fragmented):
+    r, spec, signals, polls = fix02_injected_drive(monkeypatch, fragmented=fragmented)
+    assert r['actor_exit_code'] == 0
+    assert signals == [] and polls > 0
+    assert r['phase'] == 'MOCK_FAILED' and r['first_failure'] == 'HARD_MOCK_ACTOR_TERM'
+    assert r['actor_term_requested'] and r['child_creation'] == 'NOT_STARTED'
+    assert not r['child_seen'] and not r['child_reaped']
+    assert r['termination'] == 'TERMINATION_CONFIRMED' and not r['deadline_observed']
+    w.validate_receipt(r, spec)
+
+
+def test_fix02_cooperative_claim_cannot_extend_deadline_or_replace_first_failure(monkeypatch):
+    r, spec, signals, polls = fix02_injected_drive(monkeypatch, stubborn=True)
+    assert r['deadline_observed'] and r['root_elapsed_seconds'] >= .5
+    assert signals == ['TERM'] and polls > 0
+    assert r['phase'] == 'MOCK_FAILED' and r['first_failure'] == 'HARD_MOCK_ACTOR_TERM'
+    assert 'HARD_MOCK_DEADLINE' in r['failure_reason']
+    assert r['actor_exit_code'] == -15 and r['termination'] == 'TERMINATION_CONFIRMED'
+    w.validate_receipt(r, spec)
+
+
+def test_fix02_actual_nonzero_exit_is_never_rewritten_to_zero(monkeypatch):
+    r, spec, signals, _ = fix02_injected_drive(monkeypatch, exit_code=7)
+    assert r['actor_exit_code'] == 7 and signals == []
+    assert r['phase'] == 'MOCK_FAILED' and r['first_failure'] == 'HARD_MOCK_ACTOR_TERM'
+    assert 'HARD_MOCK_EXIT' in r['failure_reason']
+    w.validate_receipt(r, spec)
+
+
+def test_fix02_unknown_child_does_not_gain_cooperative_wait_or_success(monkeypatch):
+    r, spec, signals, polls = fix02_injected_drive(monkeypatch, unknown_child=True)
+    assert polls == 0 and signals == ['TERM']
+    assert r['phase'] == 'CLEANUP_UNCERTAIN'
+    assert r['first_failure'] == 'HARD_MOCK_CHILD_START_UNKNOWN'
+    assert r['termination'] == 'NOT_CONFIRMED'
+    w.validate_receipt(r, spec)

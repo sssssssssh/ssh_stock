@@ -96,8 +96,10 @@ def fail(receipt, code, state='MOCK_FAILED'):
     if code not in receipt['failure_reason']:
         receipt['failure_reason'].append(code)
     receipt['first_failure'] = receipt['failure_reason'][0]
-    receipt['phase'] = ('MOCK_TIMED_OUT' if receipt['deadline_observed']
-                        and state == 'MOCK_FAILED' else state)
+    receipt['phase'] = state
+    if receipt['deadline_observed'] and state in {'MOCK_FAILED', 'MOCK_TIMED_OUT'}:
+        receipt['phase'] = ('MOCK_TIMED_OUT' if receipt['first_failure'] == 'HARD_MOCK_DEADLINE'
+                            else 'MOCK_FAILED')
 
 
 def validate_receipt(value, spec):
@@ -363,10 +365,13 @@ def _drive(process, fd, spec, receipt, started, *, clock=time.monotonic):
                 break
             _drain(fd, messages)
             _claims(receipt, messages)
-            if receipt['actor_term_requested'] or receipt['child_creation'] == \
-                    'OWNERSHIP_UNCONFIRMED':
+            if receipt['child_creation'] == 'OWNERSHIP_UNCONFIRMED':
                 break
-            if messages.child_pid is not None and not receipt['child_reaped']:
+            # A cooperative TERM claim is not an OS exit. Let the actor finish
+            # under the ORIGINAL deadline, without an extra group TERM racing
+            # interpreter shutdown. Unknown ownership still fails immediately.
+            if messages.child_pid is not None and not receipt['child_reaped'] \
+                    and not receipt['actor_term_requested']:
                 require(os.getpgid(messages.child_pid) == process.pid, 'HARD_MOCK_OWNERSHIP')
             if spec['scenario'] == 'block_fifo_open' and 'READY' in messages.events:
                 # Exact owned PID only, no process scan; this control read is NOT_PROVEN hard I/O.
@@ -387,7 +392,7 @@ def _drive(process, fd, spec, receipt, started, *, clock=time.monotonic):
             fail(receipt, 'HARD_MOCK_CLOCK')
         else:
             receipt['root_elapsed_seconds'] = max(0., finished - started)
-            if finished >= deadline and receipt['first_failure'] is None:
+            if finished >= deadline:
                 receipt['deadline_observed'] = True
                 fail(receipt, 'HARD_MOCK_DEADLINE', 'MOCK_TIMED_OUT')
         _cleanup(process, receipt, fd, messages)

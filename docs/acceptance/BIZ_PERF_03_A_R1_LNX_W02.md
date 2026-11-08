@@ -269,3 +269,84 @@ MOCK_FAILED或原MOCK_TIMED_OUT，不允许MOCK_COMPLETE，已有deadline首错�
 持久可信回执和恶意同UID行为仍NOT_PROVEN。单进程内run_id消费不等于持久授权。
 真实Linux结果未取得前不能记W02工程通过；独立审阅前不能记CLOSED。
 AC05/R1始终PARTIAL，Windows原生根因UNKNOWN，PG17、Worker、真实R1、容量与部署均未授权。
+
+## P0-LNX-W02-LINUX-CI-FIX-02：本地最小修复候选（2026-11-08）
+
+状态：LOCAL_REVIEW_PENDING / ASSERTION_UNKNOWN / LINUX_VERIFICATION_PENDING。
+负责人要求按本任务书修复；仅执行本地诊断、修复和定向回归。任务书第5节要求本修复轮
+另行明确授予Git交付权限，当前没有该新增许可，因此不commit/push或触发/重跑CI。
+基线HEAD/origin/master/实时远端均为da15e71c9dbc206167f0551234f8b597d4bab3d6。
+
+### 原CI真实证据与置信边界
+
+Main Run42440269139、test Job128607800877，push/attempt1，completed/failure；
+完整JUnit实际6326项：6325通过、1失败、0 errors/skipped，日志2414.06秒，覆盖率90.02%。
+GitHub Linux Python3.12.16；本地macOS Python3.12.14，版本差异不是已证明的失败原因。
+A4-1 Run42440269274、A4-2 Run42440269153、Publication Run42440269069均success。
+主ci-opt-01-ci失败是test失败的下游门禁，不算独立第二缺陷。各Job完整状态另存项目外。
+
+下载原上传工件：safe-ci artifact13602851882，ZIP SHA256
+`b7d70db5a31b3d6127e3bc2cd43c4b5315446d3612504a39521b4ff9a1075de1`；
+其中m17_1_2-full.xml SHA256
+`6b88e85fab8df394bb02a56f41ff04d1fd79f6fe188a1c184746e1dc5acf3c2e`。
+safe-errors artifact13602214080，ZIP SHA256
+`c4b6feaa72fb1ee307dfbf346477924aefbd92824fa73ecde38370af07598aa9`。
+按原safe_identifier的文件stem哈希映射，完整套件错误文件为
+redacted_7b4d6b18d829895a.json，call阶段error_type=AssertionError，
+failure_code=A42331_TEST_FAILURE。不能把包内其他嵌套测试回执当作完整套件第二错误。
+
+Linux文件18个真实节点：17 passed、1 failed、0 skipped/errors。失败脱敏节点后缀
+b96f901ee0b27f98；对原节点名做相同SHA256映射可精确确认其为：
+`test_linux_race01_term_windows_never_claim_work_success_or_leave_child[child_term_before_spawn-False]`。
+这个身份映射有哈希证据，不只依赖参数顺序。实际失败于invoke或该节点哪条断言仍为
+ASSERTION_UNKNOWN；JUnit正文只有A42331_TEST_FAILURE，没有可恢复的原断言/traceback。
+不修改A42331、show-capture、tb、原工作流或旧失败工件。
+
+### 确定性模型证据与最小改动
+
+已证明的代码路径：actor发送TERM_REQUESTED后，旧_drive立即break，_cleanup看到
+actor仍活即再次向已确认的组发TERM。纯注入模型让已完成协议、正在正常关闭的actor
+被此额外TERM中断，覆盖整包与分包两种到达方式。修复前2 failed/0.09秒，
+退出码断言均为-15 != 0；另外“卡住的协作actor不得扩展期限”和“异常退出码7不得
+改写”两节点修复前2 failed/0.10秒。没有使用真实PID、进程扫描或实际发信号。
+
+该模型证明冗余TERM路径会改变模型中的退出结果；**历史Linux是否确实在解释器退出
+窗口遭该额外TERM，以及是否失败于actor_exit_code==0，仍UNKNOWN**。不能把模型RED
+写成原CI实际断言已恢复，也不能据此宣称本次Linux已验收。实际Linux因果同一性须
+后续获准的新SHA验证，当前只交付有确定性证据的最小修复候选。
+
+修复仅修改watchdog：TERM意图不再触发提前组杀停，继续在原root绝对deadline内读取
+消息、观察实际退出；未知child归属仍立即失败关闭。协作阶段不重新查询可能已回收
+child的PID，保持旧代码在TERM_REQUESTED后不进入该查询的行为；此前活child的实际
+PGID核对、actor身份、最终组消失和独立清理确认均保留。没有新增宽限、重试或sleep。
+
+若协作actor不退出，原deadline仍触发TERM/KILL；收尾预算没有变。超期标志始终记录，
+首错在TERM意图之前/之后均不可覆盖：仅当首错本身为HARD_MOCK_DEADLINE才使用
+MOCK_TIMED_OUT，否则保留MOCK_FAILED并记录deadline_observed。成功断言和校验器
+没有放宽，真实异常退出码保留原值；actor自报DONE绝不是MOCK_COMPLETE资格。
+
+### 本地结果与不变量
+
+五个新增参数化节点覆盖整包/分包正常退出、同一原期限内不退出、真实非零退出码保留、
+未知child立即清理拒绝。修复后5 passed/0.04秒。
+最终同一Python源码三组W01+W02合同+Linux文件合跑：377 passed、18 skipped，5.65秒，
+退出0；99项W02合同+278项W01离线回归通过。18个Linux专项在macOS明确skip，均PENDING。
+新旧共10份相关Python文件Ruff通过；git diff --check、AST、旧四JSON哈希、原七W01文件、
+三份用户审阅工件核验通过。没有运行完整pytest、Linux/PG/Worker/性能/容量/部署。
+
+只改watchdog、同一合同测试文件及本文三文件，处于原五文件白名单。
+actor与Linux测试文件原字节不变；28个原合同test函数及6个Linux test函数（含参数与断言）
+AST与HEAD完全一致。新增测试不代替原第一个Linux case的任何断言。
+完整Diff、原JUnit、脱敏错误映射、RED/GREEN与本地回归记录均保存在项目外证据目录。
+
+本地精确命令：
+
+```bash
+.venv/bin/python -m pytest tests/unit/test_perf03_lnx_hard_watchdog_contract.py tests/integration_offline/test_perf03_lnx_hard_watchdog_linux.py tests/unit/test_perf03_lnx_offline_contract.py tests/unit/test_perf03_lnx_offline_supervisor.py tests/unit/test_perf03_lnx_offline_parity.py -q --tb=short
+.venv/bin/python -m ruff check scripts/perf03_lnx_hard_watchdog.py scripts/perf03_lnx_hard_mock_actor.py tests/unit/test_perf03_lnx_hard_watchdog_contract.py tests/integration_offline/test_perf03_lnx_hard_watchdog_linux.py scripts/perf03_lnx_offline_contract.py scripts/perf03_lnx_offline_supervisor.py scripts/perf03_lnx_mock_child.py tests/unit/test_perf03_lnx_offline_contract.py tests/unit/test_perf03_lnx_offline_supervisor.py tests/unit/test_perf03_lnx_offline_parity.py
+```
+
+新提交SHA/新CI均NOT_RUN；原da15e71的17/18通过不能作为本地候选的Linux结果。
+FIRST_SPAWN、WATCHDOG_SYSCALLS、UNINTERRUPTIBLE_D_STATE、DURABLE_TRUST继续NOT_PROVEN，
+AC05/R1仍PARTIAL，生产、PG17、Worker、真实OFF/ON、容量和部署均未授权。
+交付后停止等待独立审阅及本修复轮新的明确Git交付批准，不复用上轮已使用的推送许可。
