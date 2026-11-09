@@ -61,6 +61,51 @@ def export(db=None, **kwargs):
 
 
 class ExportTests(unittest.TestCase):
+    def test_ack_observes_exporter_already_closed(self):
+        db = ExportDB()
+        db.autocommit = True
+        subject = e.PgTypedExporter(guard(), target(), evidence_kind="FAKE")
+        observed = []
+
+        def ack(_):
+            observed.append((db.closed, db.rolled_back, all(c.closed for c in db.cursors)))
+            return {}
+
+        with self.assertRaisesRegex(Refused, "EXPORT_INDEPENDENT_ACK_UNKNOWN"):
+            subject.export(lambda _: db, root_id=db.fixture["root_id"], independent_evidence=ack)
+        self.assertEqual(observed, [(True, True, True)])
+
+    def test_transaction_switch_during_export_rejected(self):
+        class Switched(ExportCursor):
+            def fetchmany(self, size=128):
+                rows = super().fetchmany(size)
+                if self.description:
+                    self.connection.readonly = "off"
+                return rows
+
+        db = ExportDB()
+        def cursor(**_):
+            cur = Switched(db)
+            db.cursors.append(cur)
+            return cur
+        db.cursor = cursor
+        with self.assertRaisesRegex(Refused, "PG_TRANSACTION_UNSAFE"):
+            export(db)
+        self.assertTrue(db.closed)
+
+    def test_rollback_failure_attempts_close_without_ack(self):
+        class Broken(ExportDB):
+            def rollback(self):
+                raise OSError("PRIVATE")
+        db, called = Broken(), []
+        db.autocommit = True
+        with self.assertRaisesRegex(Refused, "EXPORT_CLEANUP_UNCERTAIN"):
+            e.PgTypedExporter(guard(), target(), evidence_kind="FAKE").export(
+                lambda _: db, root_id=db.fixture["root_id"],
+                independent_evidence=lambda _: called.append(True))
+        self.assertTrue(db.closed)
+        self.assertEqual(called, [])
+
     def test_AC13_all_37_520_catalog_native_and_negative(self):
         db = ExportDB()
         packet = export(db)
@@ -74,6 +119,9 @@ class ExportTests(unittest.TestCase):
                     with self.assertRaises(Refused):
                         e.decode_native(object(), rule)
         self.assertTrue(db.closed and all(c.closed for c in db.cursors))
+        self.assertTrue(packet.safe_summary()["worker_connections_closed"])
+        self.assertTrue(packet.safe_summary()["exporter_connection_closed"])
+        self.assertEqual(packet.safe_summary()["legacy_connections_closed_scope"], "WORKER_ONLY")
 
     def test_AC14_readonly_repeatable_catalog_drift(self):
         db = ExportDB()

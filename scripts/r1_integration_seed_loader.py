@@ -6,9 +6,20 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from scripts.r1_business_snapshot_contract import frame, load_schema
-from scripts.r1_integration_evidence import deny_real, label, sha, source_identity
+from scripts.r1_integration_evidence import (
+    deny_real,
+    label,
+    sha,
+    source_identity,
+    verify_business_sources,
+)
 from scripts.r1_real_root_protocol import require
-from scripts.r1_seed_snapshot_recipe import expected_counts, recipe_template, snapshot_input_rows
+from scripts.r1_seed_snapshot_recipe import (
+    FROZEN_COLUMNS,
+    expected_counts,
+    recipe_template,
+    snapshot_input_rows,
+)
 
 FROZEN_TIME = datetime(2025, 1, 1, microsecond=1, tzinfo=UTC)
 
@@ -71,6 +82,117 @@ def entity_digest(entity):
     return sha(canonical)
 
 
+def original_fixture_oracle():
+    """Independently interpret pinned seed keyword AST and mapped-column defaults.
+
+    Only this fixture's finite expression vocabulary is supported: no exec/eval,
+    ORM import, Settings, connection or Seed invocation. Unknown syntax refuses.
+    The fixed 420-day/weekday call layout is separately pinned by source hashes.
+    Every populated field carries its origin; only five listed times are frozen.
+    """
+    verify_business_sources()
+    root, schema = Path(__file__).resolve().parents[1], load_schema()
+    fixture = "tests/integration/test_business_recalc_performance.py"
+    tree = ast.parse((root / fixture).read_text("utf8"))
+    seed = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "seed")
+    days = [date(2025, 1, 1) + timedelta(days=i) for i in range(420)]
+
+    def expression(node, env):
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name) and node.id in env:
+            return env[node.id]
+        if isinstance(node, ast.Subscript):
+            return expression(node.value, env)[expression(node.slice, env)]
+        if isinstance(node, ast.Attribute) and node.attr == "weekday":
+            return expression(node.value, env).weekday
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "d.weekday":
+            return env["d"].weekday()
+        if isinstance(node, ast.Compare) and len(node.ops) == 1 and isinstance(node.ops[0], ast.Lt):
+            return expression(node.left, env) < expression(node.comparators[0], env)
+        require(False, "SEED_ORACLE_EXPRESSION_UNKNOWN")
+
+    templates = {}
+    stock_rows = calendar = None
+    for node in ast.walk(seed):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+            if node.func.value.id == "m":
+                require(node.func.attr not in templates, "SEED_ORACLE_TEMPLATE_DUPLICATE")
+                templates[node.func.attr] = node
+            if ast.unparse(node.func) == "db.execute":
+                if ast.unparse(node.args[0]) == "insert(m.StockBasic)":
+                    stock_rows = node.args[1]
+                elif ast.unparse(node.args[0]) == "insert(m.TradeCalendar)":
+                    calendar = node.args[1].elt
+    require(isinstance(stock_rows, ast.List) and len(stock_rows.elts) == 2
+            and isinstance(calendar, ast.Call), "SEED_ORACLE_LAYOUT_UNKNOWN")
+    tables, origins, sequences = {}, {}, {}
+    for table in expected_counts():
+        spec = schema["tables"][table]
+        model_path = next(iter(spec["columns"].values()))["source"]["path"]
+        cls = next(n for n in ast.parse((root / model_path).read_text("utf8")).body
+                   if isinstance(n, ast.ClassDef) and n.name == spec["source_class"])
+        declarations = {n.target.id: n.value for n in cls.body if isinstance(n, ast.AnnAssign)}
+        rows, row_origins = [], []
+        if table == "stock_basic":
+            calls = [(n, {"days": days}) for n in stock_rows.elts]
+        elif table == "trade_calendar":
+            calls = [(calendar, {"d": day}) for day in days]
+        elif spec["source_class"] not in templates:
+            calls = []
+        else:
+            node = templates[spec["source_class"]]
+            if table in ("sector", "sector_member"):
+                calls = [(node, {"days": days})]
+            else:
+                codes = (("000300.SH", "000001.SH") if table == "index_daily" else
+                         ("stock_st", "suspend_d") if table == "data_quality_daily" else
+                         ("000001.SZ", "000002.SZ"))
+                calls = [(node, {"day": day, "code": code, "dataset": code})
+                         for day in days if day.weekday() < 5 for code in codes]
+        serial_count = 0
+        for call, env in calls:
+            explicit = {kw.arg: expression(kw.value, env) for kw in call.keywords}
+            require(set(explicit) <= set(spec["columns"]), "SEED_ORACLE_FIELD_UNKNOWN")
+            row, provenance = {}, {}
+            for column, rule in spec["columns"].items():
+                decl = declarations[column]
+                options = {kw.arg: kw.value for kw in decl.keywords}
+                if column in explicit:
+                    value, origin = explicit[column], "explicit_seed"
+                elif "default" in options:
+                    value, origin = ast.literal_eval(options["default"]), "orm_default"
+                elif "server_default" in options:
+                    require(table + "." + column in FROZEN_COLUMNS
+                            and ast.unparse(options["server_default"]) == "func.now()",
+                            "SEED_ORACLE_SERVER_DEFAULT_UNKNOWN")
+                    value, origin = FROZEN_TIME, "frozen_timestamp"
+                elif "autoincrement" in options and ast.literal_eval(options["autoincrement"]):
+                    serial_count += 1
+                    value, origin = serial_count, "serial_state"
+                else:
+                    require(rule["nullable"], "SEED_ORACLE_REQUIRED_FIELD_ABSENT")
+                    value, origin = None, "nullable_absent"
+                if value is not None and rule["type"] == "float":
+                    value = float(value)
+                row[column], provenance[column] = value, origin
+            rows.append(row)
+            row_origins.append(provenance)
+        for column, decl in declarations.items():
+            if isinstance(decl, ast.Call) and any(
+                kw.arg == "autoincrement" and ast.literal_eval(kw.value) for kw in decl.keywords
+            ):
+                sequences[table + "." + column] = {
+                    "last_value": serial_count or 1, "is_called": serial_count > 0, "increment": 1}
+        tables[table], origins[table] = rows, row_origins
+    require({t: len(r) for t, r in tables.items()} == expected_counts(), "SEED_ORACLE_ROWS")
+    return {"tables": tables, "sequences": sequences,
+            "fixture_sha": schema["sources"][fixture]["sha256"],
+            "catalog": input_catalog(schema)}, origins
+
+
 def generate_original_input():
     """Standalone deterministic generator matching original seed's supplied fields.
 
@@ -109,7 +231,8 @@ def generate_original_input():
             exchange="SZSE",
             list_status="D" if closed else "L",
         )
-    add("sector", sector_id=101, source="SW", source_code="BIZ", name="synthetic", level="L1")
+    add("sector", sector_id=101, source="SW", source_code="BIZ", name="synthetic", level="L1",
+        is_active=True)
     add("sector_member", id=1, sector_id=101, ts_code="000001.SZ", valid_from=start, is_latest=True)
     quality = 0
     for i in range(420):
@@ -184,7 +307,7 @@ class FrozenSeed:
             and set(entity) == {"tables", "sequences", "fixture_sha", "catalog"},
             "SEED_ENTITY_REQUIRED",
         )
-        reference = generate_original_input()
+        reference, _ = original_fixture_oracle()
         require(entity["fixture_sha"] == reference["fixture_sha"], "SEED_OLD_SOURCE")
         require(entity["catalog"] == reference["catalog"], "SEED_CATALOG_DRIFT")
         manifest = snapshot_input_rows(recipe_template(), entity["tables"], entity["sequences"])

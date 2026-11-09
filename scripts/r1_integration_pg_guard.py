@@ -14,6 +14,57 @@ from scripts.r1_integration_evidence import label, sha
 from scripts.r1_real_root_protocol import Refused, require
 
 BEGIN_SQL = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+
+
+def transaction_state(connection):
+    """libpq IDLE=0 / INTRANS=2; unknown or busy connections are not reusable."""
+    state = connection.info.transaction_status
+    require(isinstance(state, int) and not isinstance(state, bool), "PG_TRANSACTION_UNKNOWN")
+    return int(state)
+
+
+def verify_transaction(connection):
+    require(transaction_state(connection) == 2, "PG_TRANSACTION_NOT_ACTIVE")
+    cur = connection.cursor()
+    try:
+        for sql, expected in (("SHOW transaction_isolation", "repeatable read"),
+                              ("SHOW transaction_read_only", "on")):
+            cur.execute(sql)
+            row = cur.fetchone()
+            require(type(row) in (tuple, list) and len(row) == 1
+                    and type(row[0]) is str and row[0] == expected,
+                    "PG_TRANSACTION_UNSAFE")
+        require(transaction_state(connection) == 2, "PG_TRANSACTION_NOT_ACTIVE")
+    finally:
+        cur.close()
+
+
+def begin_readonly(connection):
+    """Own a fresh IDLE connection. Disable driver auto-BEGIN, then explicit RR."""
+    require(transaction_state(connection) == 0 and type(connection.autocommit) is bool,
+            "PG_FRESH_CONNECTION_REQUIRED")
+    connection.autocommit = True
+    require(connection.autocommit is True and transaction_state(connection) == 0,
+            "PG_TRANSACTION_UNKNOWN")
+    cur = connection.cursor()
+    try:
+        cur.execute(BEGIN_SQL)
+    finally:
+        cur.close()
+    verify_transaction(connection)
+
+
+def close_readonly(connection, cursors=(), *, code="PG_CLEANUP_UNCERTAIN"):
+    """Attempt every cleanup operation even if an earlier one fails. No ACK retry."""
+    uncertain = False
+    for operation in [*(cur.close for cur in cursors), connection.rollback, connection.close]:
+        try:
+            operation()
+        except Exception:
+            uncertain = True
+    require(not uncertain, code)
+
+
 IDENTITY_SQL = """SELECT current_setting('server_version_num')::integer,
  (SELECT system_identifier::text FROM pg_control_system()),
  current_setting('r1.lab_marker', true),
@@ -99,6 +150,7 @@ class Pg17ResourceGuard:
     def check_connection(self, connection, target):
         """Caller owns the transaction. Each new connection must be checked."""
         self.preconnect(target)
+        verify_transaction(connection)
         cur = connection.cursor()
         try:
             cur.execute(IDENTITY_SQL)
@@ -125,6 +177,7 @@ class Pg17ResourceGuard:
             require(type(row[0]) is int and row[0] // 10000 == 17, "PG_IDENTITY_MISMATCH")
             for actual, want in zip(row[1:], expected[1:], strict=True):
                 require(type(actual) is type(want) and actual == want, "PG_IDENTITY_MISMATCH")
+            verify_transaction(connection)
             return sha(tuple(row))
         finally:
             cur.close()
@@ -135,11 +188,7 @@ class Pg17ResourceGuard:
         connection = None
         try:
             connection = connector(expected_identity.config_ref)
-            cur = connection.cursor()
-            try:
-                cur.execute(BEGIN_SQL)
-            finally:
-                cur.close()
+            begin_readonly(connection)
             observed = self.check_connection(connection, expected_identity)
             result = GuardReceipt(
                 review_binding(expected_identity),
@@ -155,8 +204,8 @@ class Pg17ResourceGuard:
                 self.evidence_kind,
             )
             # A receipt is issued only after all close/rollback acknowledgements.
-            connection.rollback()
-            connection.close()
+            closing, connection = connection, None
+            close_readonly(closing)
             connection = None
             self.issued.append(result)
             return result
@@ -166,11 +215,7 @@ class Pg17ResourceGuard:
             raise Refused("PG_INSPECTION_INCOMPLETE") from None
         finally:
             if connection is not None:
-                try:
-                    connection.rollback()
-                    connection.close()
-                except Exception:
-                    raise Refused("PG_CLEANUP_UNCERTAIN") from None
+                close_readonly(connection)
 
     def require_ready(self, receipt, owner_scope):
         require(

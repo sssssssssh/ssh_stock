@@ -49,6 +49,19 @@ class DurableOwner:
         self.chain, self.count, self.poisoned = "0" * 64, 0, False
         self.lock = threading.Lock()
         self.started = self.deadline = None
+        self.first_error = None
+        self.ever_fenced = self.expired = self.cleaned = False
+
+    def _facts(self):
+        return {"first_error": self.first_error, "ever_fenced": self.ever_fenced,
+                "expired": self.expired, "cleaned": self.cleaned}
+
+    def _observe_expiry(self):
+        if self.deadline is not None and finite_time(self.clock()) >= self.deadline:
+            if not self.expired:
+                self.expired = True
+                self.first_error = self.first_error or "OWNER_LEASE_EXPIRED"
+                self._append("EXPIRED", self._facts())
 
     def _write(self, path, payload):
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -84,6 +97,7 @@ class DurableOwner:
             self.chain, self.count = digest, self.count + 1
         except Exception:
             self.poisoned = True
+            self.first_error = self.first_error or "OWNER_DURABILITY_UNKNOWN"
             raise Refused("OWNER_DURABILITY_UNKNOWN") from None
 
     def read_events(self):
@@ -159,6 +173,7 @@ class DurableOwner:
                 return "LOCAL_RESERVED"
             except Exception:
                 self.poisoned = True
+                self.first_error = self.first_error or "OWNER_RESERVATION_UNKNOWN"
                 raise Refused("OWNER_RESERVATION_UNKNOWN") from None
 
     def confirm(self, binding):
@@ -168,8 +183,15 @@ class DurableOwner:
             and self.state in ("RESERVED", "INTENT", "BOUND"),
             "OWNER_UNCONFIRMED",
         )
-        self._validate_disk()
-        require(finite_time(self.clock()) < self.deadline, "OWNER_LEASE_EXPIRED")
+        try:
+            self._validate_disk()
+        except Exception:
+            self.poisoned = True
+            self.first_error = self.first_error or "OWNER_JOURNAL_INVALID"
+            raise Refused("OWNER_JOURNAL_INVALID") from None
+        self._observe_expiry()
+        require(not self.expired, "OWNER_LEASE_EXPIRED")
+        require(not self.ever_fenced and not self.cleaned, "OWNER_UNCONFIRMED")
         return "CONFIRMED"
 
     def record_intent_before_first_spawn(self, binding):
@@ -201,25 +223,33 @@ class DurableOwner:
 
     def fence(self, binding, reason):
         label(reason)
-        self._stop(binding, "FENCED")
+        self._stop(binding, "FENCED", reason)
 
-    def _stop(self, binding, state):
+    def _stop(self, binding, state, reason=None):
         with self.lock:
-            require(not self.poisoned and self.binding == binding, "OWNER_UNCONFIRMED")
-            self._append(state)
+            require(not self.poisoned and self.binding == binding and not self.cleaned
+                    and not self.ever_fenced, "OWNER_UNCONFIRMED")
+            self._observe_expiry()
+            self.first_error = self.first_error or reason or "OWNER_SUSPENDED"
+            self.ever_fenced = state == "FENCED"
+            self._append(state, self._facts())
             self.state = state
 
     def cleanup_ack(self, binding, facts, *, exited, teardown):
         with self.lock:
             require(
                 not self.poisoned
+                and not self.cleaned
+                and self.handle is not None
                 and binding == self.binding
                 and self.handle == sha(facts)
                 and exited is True
                 and teardown is True,
                 "OWNER_CLEANUP_UNKNOWN",
             )
-            self._append("CLEANUP_ACK", {"handle_digest": self.handle})
+            self._observe_expiry()
+            self.cleaned = True
+            self._append("CLEANUP_ACK", {"handle_digest": self.handle, **self._facts()})
             # Cleanup does not resurrect an expired/fenced lease or permit ON.
             self.state = "CLEANED"
             return "LOCAL_CLEANUP_ACK"

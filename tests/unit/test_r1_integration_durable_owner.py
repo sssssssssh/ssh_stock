@@ -18,10 +18,60 @@ def owner(path, clock=None):
 
 
 class OwnerTests(unittest.TestCase):
+    def bound(self, clock=None):
+        subject = owner(self.path, clock=clock)
+        subject.reserve("binding")
+        subject.record_intent_before_first_spawn("binding")
+        subject.bind_handle("binding", {"pid": 1})
+        return subject
+
+    def test_expiry_is_irreversible_even_if_clock_returns_before_deadline(self):
+        now = [0.0]
+        subject = self.bound(lambda: now[0])
+        now[0] = 391.0
+        with self.assertRaises(Refused):
+            subject.confirm("binding")
+        now[0] = 1.0
+        with self.assertRaises(Refused):
+            subject.confirm("binding")
+        subject.cleanup_ack("binding", {"pid": 1}, exited=True, teardown=True)
+        self.assertTrue(subject.expired)
+        self.assertEqual(subject.first_error, "OWNER_LEASE_EXPIRED")
+        with self.assertRaises(Refused):
+            subject.record_intent_before_first_spawn("binding")
+
+    def test_fence_cleanup_keeps_reason_and_duplicate_ack_rejected(self):
+        subject = self.bound()
+        subject.fence("binding", "FIRST_FAULT")
+        subject.cleanup_ack("binding", {"pid": 1}, exited=True, teardown=True)
+        self.assertTrue(subject.ever_fenced)
+        self.assertEqual(subject.first_error, "FIRST_FAULT")
+        with self.assertRaises(Refused):
+            subject.cleanup_ack("binding", {"pid": 1}, exited=True, teardown=True)
+        with self.assertRaises(Refused):
+            subject.fence("binding", "LATER_FAULT")
+        self.assertEqual(subject.first_error, "FIRST_FAULT")
+        events = owner(self.path).read_events()
+        self.assertEqual(events[-1]["details"]["first_error"], "FIRST_FAULT")
+        self.assertTrue(events[-1]["details"]["ever_fenced"])
+        self.assertTrue((self.path / "reservation").exists())
+
+    def test_expired_cleanup_without_confirm_and_unknown_teardown(self):
+        now = [0.0]
+        subject = self.bound(lambda: now[0])
+        now[0] = 391.0
+        with self.assertRaises(Refused):
+            subject.cleanup_ack("binding", {"pid": 1}, exited=None, teardown=True)
+        subject.cleanup_ack("binding", {"pid": 1}, exited=True, teardown=True)
+        self.assertTrue(subject.expired)
+        self.assertEqual(subject.first_error, "OWNER_LEASE_EXPIRED")
+        self.assertFalse(subject.external_fencing_proven)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.path = Path(self.temp.name)
+        # macOS /var is a symlink: use the actual private directory, not a link.
+        self.path = Path(self.temp.name).resolve()
 
     def test_AC20_atomic_reserve_and_no_restart_reuse(self):
         first = owner(self.path)

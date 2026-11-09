@@ -22,7 +22,14 @@ from scripts.r1_business_snapshot_contract import (
     typed,
 )
 from scripts.r1_integration_evidence import sha, source_identity
-from scripts.r1_integration_pg_guard import BEGIN_SQL
+from scripts.r1_integration_pg_guard import (
+    BEGIN_SQL as BEGIN_SQL,
+)
+from scripts.r1_integration_pg_guard import (
+    begin_readonly,
+    close_readonly,
+    verify_transaction,
+)
 from scripts.r1_real_root_protocol import Refused, require
 
 CATALOG_SQL = """SELECT c.relname, a.attname, format_type(a.atttypid,a.atttypmod),
@@ -228,14 +235,20 @@ class ExportResult:
     cleanup_ack: bool
     row_count: int
     _seal: str = field(repr=False)
+    worker_connections_closed: bool = False
+    exporter_connection_closed: bool = False
 
     def safe_summary(self):
         return {
+            "schema_version": "r1.export-summary.v2",
             "evidence_kind": self.evidence_kind,
             "binding": self.binding,
             "snapshot_digest": self.snapshot_digest,
             "row_count": self.row_count,
             "cleanup_ack": self.cleanup_ack,
+            "worker_connections_closed": self.worker_connections_closed,
+            "exporter_connection_closed": self.exporter_connection_closed,
+            "legacy_connections_closed_scope": "WORKER_ONLY",
             "real_pg_export_verified": False,
         }
 
@@ -291,8 +304,8 @@ class PgTypedExporter:
         try:
             check()
             connection = connector(self.target.config_ref)
+            begin_readonly(connection)
             control = cursor()
-            control.execute(BEGIN_SQL)
             control.execute(TIMEOUT_SQL, (str(max(1, int(self.seconds * 1000))) + "ms",))
             self.guard.check_connection(connection, self.target)
             control.execute(SNAPSHOT_SQL)
@@ -310,6 +323,7 @@ class PgTypedExporter:
             require(sorted(catalog) == expected_catalog(), "SCHEMA_DRIFT")
             for table, spec in schema["tables"].items():
                 check()
+                verify_transaction(connection)
                 columns = list(spec["columns"])
                 # Identifiers come only from the pinned schema, never CLI/JSON.
                 require(
@@ -331,6 +345,7 @@ class PgTypedExporter:
                 rows, seen, natural_seen = [], set(), set()
                 while batch := cur.fetchmany(64):
                     check()
+                    verify_transaction(connection)
                     for values in batch:
                         check()
                         require(len(values) == len(columns), "SCHEMA_DRIFT")
@@ -358,6 +373,10 @@ class PgTypedExporter:
             # Re-observe physical identity on the same connection before closing.
             identity = self.guard.check_connection(connection, self.target)
             binding = sha((identity, snapshot[0], root_id, sha(tables), source_identity()))
+            # Exporter ACK is local and precedes the external Worker-only ACK.
+            closing, connection = connection, None
+            close_readonly(closing, cursors, code="EXPORT_CLEANUP_UNCERTAIN")
+            check()
             evidence = independent_evidence(binding)
             require(
                 type(evidence) is dict
@@ -369,18 +388,13 @@ class PgTypedExporter:
                     "token": job["execution_token"],
                     "commit_ack": "KNOWN",
                     "lease": "CONFIRMED",
-                    "connections_closed": True,
+                    "connections_closed": True,  # Legacy v1: Worker connections ONLY.
                     "cleanup_ack": "CONFIRMED",
                     "os_exit": "CONFIRMED",
                 },
                 "EXPORT_INDEPENDENT_ACK_UNKNOWN",
             )
             check()
-            for cur in cursors:
-                cur.close()
-            connection.rollback()
-            connection.close()
-            connection = None
             return ExportResult(
                 tables,
                 self.kind,
@@ -390,6 +404,8 @@ class PgTypedExporter:
                 True,
                 row_count,
                 sha(tables),
+                worker_connections_closed=True,
+                exporter_connection_closed=True,
             )
         except Refused:
             raise
@@ -397,13 +413,7 @@ class PgTypedExporter:
             raise Refused("EXPORT_INCOMPLETE") from None
         finally:
             if connection is not None:
-                try:
-                    for cur in cursors:
-                        cur.close()
-                    connection.rollback()
-                    connection.close()
-                except Exception:
-                    raise Refused("EXPORT_CLEANUP_UNCERTAIN") from None
+                close_readonly(connection, cursors, code="EXPORT_CLEANUP_UNCERTAIN")
 
 
 def compare_fake_exports(left, right, left_fixture, right_fixture, mappings):

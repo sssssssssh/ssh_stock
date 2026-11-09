@@ -8,6 +8,46 @@ from scripts.r1_real_root_protocol import Refused
 
 
 class SeedLoaderTests(unittest.TestCase):
+    def test_independent_oracle_catches_orm_default_not_generator_self_comparison(self):
+        entity, origins = s.original_fixture_oracle()
+        self.assertTrue(entity["tables"]["sector"][0]["is_active"])
+        self.assertEqual(origins["sector"][0]["is_active"], "orm_default")
+        self.assertEqual(s.entity_digest(entity), s.entity_digest(s.generate_original_input()))
+        self.assertEqual([r["exchange"] for r in entity["tables"]["stock_basic"]],
+                         ["SZSE", "SZSE"])
+        wrong = copy.deepcopy(entity)
+        wrong["tables"]["stock_basic"][1]["exchange"] = None
+        # The original recipe's explicit-value guard rejects this before hashing.
+        with self.assertRaisesRegex(Refused, "^R1_SEED_VALUE$"):
+            s.FrozenSeed(wrong)
+        for table, rows in entity["tables"].items():
+            for i, row in enumerate(rows):
+                self.assertEqual(set(row), set(origins[table][i]))
+
+    def test_capture_does_not_trust_replaced_generator(self):
+        from unittest.mock import patch
+
+        bad = copy.deepcopy(self.source)
+        bad["tables"]["sector"][0]["is_active"] = False
+        with patch.object(s, "generate_original_input", return_value=bad):
+            with self.assertRaisesRegex(Refused, "SEED_ENTITY_MISMATCH"):
+                s.FrozenSeed(bad)
+
+    def test_all_frozen_timestamps_and_absent_nulls_have_explicit_origins(self):
+        from scripts.r1_seed_snapshot_recipe import FROZEN_COLUMNS
+
+        entity, origins = s.original_fixture_oracle()
+        seen = set()
+        for table, rows in entity["tables"].items():
+            for index, row in enumerate(rows):
+                for col, value in row.items():
+                    if origins[table][index][col] == "frozen_timestamp":
+                        seen.add(table + "." + col)
+                        self.assertEqual(value, s.FROZEN_TIME)
+                    if origins[table][index][col] == "nullable_absent":
+                        self.assertIsNone(value)
+        self.assertEqual(seen, FROZEN_COLUMNS)
+
     @classmethod
     def setUpClass(cls):
         cls.source = s.generate_original_input()
