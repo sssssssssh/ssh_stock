@@ -66,6 +66,99 @@ PROTECTED = {
 # END PROTECTED WORKTREE HASHES
 
 
+PROTECTION_BASELINE = "8443b7cd524a6964b24cecd60df5be5b6c46783b"
+# SHA256 of each Git Blob at first W04-A tracking, and its full LF->CRLF form.
+# Fixed reviewed anchors; never derived from HEAD or the worktree at runtime.
+FROZEN_CONTENT = {
+    "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W03_PREFLIGHT.md": (
+        "21e9f0acc048d1724be985b13667a2cd71572992096abea9d8fbd57699455c9d",
+        "8f2c90e4f8b56a246e8835476da7b69c11152d388440d40720b7016049acee3d",
+    ),
+    "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md": (
+        "09ac6d54828cdc085e134c5a54f91e3a1efa8933d42dea1e9bc7ae3967370f0d",
+        "39fd9206c63287106220e61f349dfabe659f0804ed6c728d09bc03e060b6bb6c",
+    ),
+    "AGENTS.md": (
+        "6ab8120da451af72d09aebbc3ccaa512841804b98aac292f94df3e5050111b37",
+        "56fc204c15a6885649ff6dc65d470e9237c0ccb1e49dd14e4f69b58907054ba5",
+    ),
+    "PROJECT_CHARTER.md": (
+        "adb7899d0b4c475e16da61cb70fb019e8aa310769eb6c35610b1f304cbc7e19f",
+        "a346a0fbe06d8146222b8cb5825fd4fab06b571ea4bcbf0325792f19cb37e210",
+    ),
+    "PROJECT_STATUS.md": (
+        "68616b6f2d6450dda8f6646b3ae4ab66598db63ae4747296f0214603111e1790",
+        "0387567183f3480d2c2205244fedd081f7b9cc43566b4b0e1c262b3d82fe3029",
+    ),
+    "PROJECT_ROADMAP.md": (
+        "378f9a911ac2dac0b93c8c0e633694bcfe91b93170aa13ea42bf45e13842e0b8",
+        "e3dce0289ea90ce2424c6a172969f64aa8d6f6396781e05f1ada5abced1295c5",
+    ),
+    "DECISION_LOG.md": (
+        "87b4861d05b67ecb5f03ca6de44f860fa33236d3434c9a109f07b30674da481b",
+        "a4ea4f4d6fa997821b5155cfa2af75ad6537c80cd6898c560491ab27c29094d1",
+    ),
+    "docs/tasks/README.md": (
+        "6c633a682f8fda47dfd867c22f79b4f5a054964374e5ff7dc009bea04ee72307",
+        "fe5e71a7a73055859b8d21efbbf60fd86a5176674ee495a94a26941e22b9eed9",
+    ),
+    "backend/app/models/market_data.py": (
+        "c0207d196fb9777bfd5c83284ca9d36f5b2cbf9ea5191ca149fbce9afcee9261",
+        "d798f2486ca8880e5128ba3383effa72e8d950b24f34ee543add71914955bc77",
+    ),
+    "backend/app/models/job.py": (
+        "fc795d1d4fb92ff3b8a10d41e19898e392e236ca84c661e78dfa2b02519ecc11",
+        "dc213147ea1516797b6cae2b944cc771668263df81333ed023478669df68e950",
+    ),
+    "backend/app/models/data_publication.py": (
+        "c9163a6e8386404d3b9faf9eaa1bf064d4a476b986e8fcc452ba9ce382aca63c",
+        "79e8df3a75f32c0468a427e2dd78fc66162186dc27579f41d8aee421d13d129f",
+    ),
+    "backend/app/models/data_schedule.py": (
+        "1c02583b6d8b455be81a3fc7f34c7aa93c167a6e516395e6688c24939fdf48c2",
+        "b6c18834bf1dbc3bca50288b99889712639747d68055aee2fed0b69d8ff0ecb3",
+    ),
+    "tests/integration/test_business_recalc_performance.py": (
+        "c6cc8cf4145d3dbefd259417e08c06ac7470a39adeca654ce9fe2f5483f2ba27",
+        "2014d6ea07f4de77cd1f75ac9e0d41fb3e49056ecbc6f4ed80f7628b51f389f1",
+    ),
+    "tests/integration/test_perf03_root_diagnostics.py": (
+        "7f9a5a16e19d64e7215466e8593f9fad3e1ab630a23cd036d087fba81fb9683a",
+        "5f6ac7c5c063a60cf06ac6edfbd739e548bea58c58b000f1657b43e4a5f81a4f",
+    ),
+    "scripts/business_recalc_measure.py": (
+        "edbd4b0d290fdf41ace88f2d8b15fb395c86eed2a7ae99daad5814975d114108",
+        "49a10219c68a19406bd0cf4720400c99d82277e9db20bde411dd7bddafae2475",
+    ),
+    "config/strategy.yaml": (
+        "2ac50c63f3b522ae84e97dad2c9eb2eabd2206c224cea25f83d8d049e7d2864b",
+        "bb824f8a3ef90442eafc8d0dae7796bc3d9992f671c6d06733975c7f877ce28b",
+    ),
+    "requirements-biz-perf-linux-py312-v1.lock": (
+        "88549dce3164364430e20970fa10eb2125b60ff05f456d7bef4474876a98dcfc",
+        "b87f3582f3d20814dd42146fde807709526764ff0d8b6713683e5645c72b7fc5",
+    ),
+    "scripts/perf03_lnx_hard_watchdog.py": (
+        "02d8c6f939c694410c04fb7bc449f030e0e2c8708c1c801b08e5a2eba5940454",
+        "7216e1475612f3ef688790b65d684d0a6fd15eb6ba02bed5f0d9960f78537e6d",
+    ),
+}
+
+
+def assert_frozen_file(root, relative):
+    """Accept only the two exact frozen byte representations, never normalization."""
+    path = Path(root) / relative
+    if relative not in FROZEN_CONTENT:
+        raise AssertionError("W04A_UNREGISTERED_FROZEN_PATH")
+    mode = path.lstat().st_mode
+    if not stat.S_ISREG(mode) or path.is_symlink():
+        raise AssertionError("W04A_FROZEN_REGULAR_FILE_REQUIRED")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest not in FROZEN_CONTENT[relative]:
+        raise AssertionError("W04A_FROZEN_CONTENT_MISMATCH")
+    return digest
+
+
 def cell(tag, value):
     return {"type": tag, "value": value}
 
@@ -588,7 +681,9 @@ class W04AContracts(unittest.TestCase):
         for relative in NEW_FILES:
             self.assertTrue((ROOT / relative).is_file())
         for relative, expected in {**REPORTS, **PROTECTED}.items():
-            self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
+            self.assertIn(expected, FROZEN_CONTENT[relative])  # Retain historical byte identity.
+            self.assertIn(assert_frozen_file(ROOT, relative), FROZEN_CONTENT[relative])
+        self.assertEqual(set(FROZEN_CONTENT), set(REPORTS) | set(PROTECTED))
         raw = (ROOT / c.CONTRACT_PATH).read_bytes()
         value = c.parse_json(raw)
         c.validate_contract(value)
