@@ -1,6 +1,9 @@
 """Exact LF/CRLF frozen bytes, including all 18 reports and protected paths."""
 
 import hashlib
+import stat
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,8 +13,12 @@ PATHS = tuple(w.FROZEN_CONTENT)
 
 
 def original(relative):
+    # Validate real checkout bytes before any test-fixture transformation.
+    w.assert_frozen_file(w.ROOT, relative)
     raw = (w.ROOT / relative).read_bytes()
-    assert b"\r" not in raw
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest == w.FROZEN_CONTENT[relative][1]:
+        raw = raw.replace(b"\r\n", b"\n")  # Validated fixture construction ONLY.
     assert hashlib.sha256(raw).hexdigest() == w.FROZEN_CONTENT[relative][0]
     return raw
 
@@ -68,14 +75,48 @@ def test_A03_A07_any_noncanonical_bytes_rejected_for_all_18(tmp_path, mutation):
             w.assert_frozen_file(tmp_path, relative)
 
 
-def test_A08_symlinks_rejected_even_when_target_bytes_match(tmp_path):
+def test_A08_symlinks_rejected_even_when_target_bytes_match(tmp_path, monkeypatch, record_property):
     for index, relative in enumerate(PATHS):
         target = write(tmp_path, "target-" + str(index), original(relative))
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.symlink_to(target)
-        with pytest.raises(AssertionError, match="^W04A_FROZEN_REGULAR_FILE_REQUIRED$"):
-            w.assert_frozen_file(tmp_path, relative)
+        with monkeypatch.context() as context:
+            try:
+                path.symlink_to(target)
+            except OSError as error:
+                if getattr(error, "winerror", None) != 1314:
+                    raise
+                record_property("w04a_symlink_os_capability", "UNAVAILABLE_WINDOWS_PRIVILEGE")
+                # Exercise the same rejection branch without requiring OS privilege.
+                original_stat = Path.lstat
+                context.setattr(Path, "lstat", lambda self, target=path, reader=original_stat, **kw:
+                    SimpleNamespace(st_mode=stat.S_IFLNK) if self == target
+                    else reader(self, **kw))
+            with pytest.raises(AssertionError, match="^W04A_FROZEN_REGULAR_FILE_REQUIRED$"):
+                w.assert_frozen_file(tmp_path, relative)
+
+
+@pytest.mark.parametrize("crlf", [False, True])
+def test_original_helper_works_for_all_18_checkout_representations(tmp_path, monkeypatch, crlf):
+    baselines = {relative: original(relative) for relative in PATHS}
+    for relative, raw in baselines.items():
+        write(tmp_path, relative, raw.replace(b"\n", b"\r\n") if crlf else raw)
+    monkeypatch.setattr(w, "ROOT", tmp_path)
+    for relative, raw in baselines.items():
+        assert original(relative) == raw
+
+
+def test_symlink_privilege_failure_still_executes_all_rejection_assertions(tmp_path, monkeypatch):
+    def denied(*a, **k):
+        error = PermissionError("SIMULATED_WINDOWS_PRIVILEGE")
+        error.winerror = 1314
+        raise error
+    monkeypatch.setattr(Path, "symlink_to", denied)
+    observations = []
+    test_A08_symlinks_rejected_even_when_target_bytes_match(
+        tmp_path, monkeypatch, lambda k, v: observations.append((k, v)))
+    assert len(observations) == 18
+    assert all(v == "UNAVAILABLE_WINDOWS_PRIVILEGE" for _, v in observations)
 
 
 def test_missing_directory_unknown_path_fail_closed(tmp_path):

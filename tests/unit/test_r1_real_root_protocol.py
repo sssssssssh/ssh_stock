@@ -4,6 +4,7 @@ import ast
 import copy
 import hashlib
 import io
+import stat
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -33,6 +34,80 @@ ORIGINALS = {
         "25bffe509c2f78473221bbb39c61bac95eec6db5e0930828205072ea46e66b20"
     ),
 }
+
+CURRENT_APPROVED_SOURCE_VERSION = "60dacb8f96013439ebb8490b78eaffd6a3cfbcbd"
+# Historical ORIGINALS stays immutable evidence; only this reviewed version is current.
+CURRENT_APPROVED_SOURCE_HASHES = {
+    "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W03_PREFLIGHT.md": (
+        "21e9f0acc048d1724be985b13667a2cd71572992096abea9d8fbd57699455c9d",
+        "8f2c90e4f8b56a246e8835476da7b69c11152d388440d40720b7016049acee3d",
+    ),
+    "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md": (
+        "09ac6d54828cdc085e134c5a54f91e3a1efa8933d42dea1e9bc7ae3967370f0d",
+        "39fd9206c63287106220e61f349dfabe659f0804ed6c728d09bc03e060b6bb6c",
+    ),
+    "docs/acceptance/biz_perf_03_a_r1_lnx_w04a_contract.json": (
+        "0f464a6acc4efc651fdea798fac1b0b4b3b61069147515115afa5b9f2d91d2f8",
+        "023f36644e2c498ee70f0c5f52b6b930164fa2b58f6d23991ffbeffb97016cd5",
+    ),
+    "scripts/perf03_lnx_w04a_offline_contract.py": (
+        "b11a4a2b8e6da6224ab8c503130073bef5ace9ec701dbf43649e116c0be6c5a0",
+        "17a09bc86be0bdbdd0b2b0e60897210ac9c31de94e0fdde16fce9ec368245add",
+    ),
+    "tests/unit/test_perf03_lnx_w04a_offline_contract.py": (
+        "c5dd882ad80cf753a1423aba1aea7c474742886d9a20bac31807641531fb9a38",
+        "ad6fb96689c8d25569cdb1eecd2dcf007e7e2f1cbabcaf69342ad4431a510c41",
+    ),
+    "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04A.md": (
+        "25bffe509c2f78473221bbb39c61bac95eec6db5e0930828205072ea46e66b20",
+        "4baac2a22ac14f6f659698dcafc77b93896a60bc1f9ecb3b8a6f324004b59133",
+    ),
+}
+
+
+def verify_approved_sources(root, paths=None, *, approved_version=None):
+    """Validate exactly six current sources; no Git, env, network or normalization."""
+    p.require(CURRENT_APPROVED_SOURCE_VERSION == "60dacb8f96013439ebb8490b78eaffd6a3cfbcbd"
+              and approved_version in (None, CURRENT_APPROVED_SOURCE_VERSION),
+              "R1_APPROVED_SOURCE_VERSION")
+    mapping = CURRENT_APPROVED_SOURCE_HASHES
+    p.require(type(mapping) is dict and set(mapping) == set(ORIGINALS) and len(mapping) == 6,
+              "R1_APPROVED_SOURCE_MANIFEST")
+    p.require(all(type(v) is tuple and len(v) == 2
+                  and all(type(h) is str and len(h) == 64
+                          and all(ch in "0123456789abcdef" for ch in h) for h in v)
+                  for v in mapping.values()),
+              "R1_APPROVED_SOURCE_MANIFEST")
+    identity = "\n".join([CURRENT_APPROVED_SOURCE_VERSION,
+                           *(f"{name}:{mapping[name][0]}:{mapping[name][1]}"
+                             for name in sorted(mapping))])
+    p.require(hashlib.sha256(identity.encode("ascii")).hexdigest()
+              == "d155355ab8807b5ee5d9dde44be8c02ef80fb6f5870978b8f09a9c8749e788a5",
+              "R1_APPROVED_SOURCE_MANIFEST")
+    paths = tuple(ORIGINALS) if paths is None else paths
+    p.require(type(paths) in (list, tuple) and len(paths) == 6
+              and all(type(name) is str for name in paths) and set(paths) == set(mapping),
+              "R1_APPROVED_SOURCE_PATH_SET")
+    root, observed = Path(root).absolute(), {}
+    for name in paths:
+        try:
+            parent = root
+            for part in (None, *Path(name).parts[:-1]):
+                parent = parent if part is None else parent / part
+                p.require(stat.S_ISDIR(parent.lstat().st_mode)
+                          and not parent.is_symlink() and not parent.is_junction(),
+                          "R1_APPROVED_SOURCE_PATH")
+            file = root / name
+            p.require(stat.S_ISREG(file.lstat().st_mode)
+                      and not file.is_symlink() and not file.is_junction(),
+                      "R1_APPROVED_SOURCE_PATH")
+            observed[name] = hashlib.sha256(file.read_bytes()).hexdigest()
+        except OSError:
+            raise p.Refused("R1_APPROVED_SOURCE_PATH") from None
+        p.require(observed[name] in mapping[name], "R1_APPROVED_SOURCE_HASH")
+    return observed
+
+
 MODULES = [
     "r1_real_root_protocol",
     "r1_real_root_adapter",
@@ -52,8 +127,7 @@ def request(arm="OFF1"):
 
 class ProtocolTests(unittest.TestCase):
     def test_AC01_original_six_and_baseline_preserved(self):
-        for path, sha in ORIGINALS.items():
-            self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), sha)
+        self.assertEqual(set(verify_approved_sources(ROOT)), set(ORIGINALS))
         self.assertEqual(load_schema()["target_sha"], p.BASELINE)
         paths = [f"scripts/{n}.py" for n in MODULES]
         paths += [f"tests/unit/test_{n}.py" for n in MODULES]

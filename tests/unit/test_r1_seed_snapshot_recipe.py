@@ -143,12 +143,9 @@ class SeedTests(unittest.TestCase):
 
     def test_AC29_environment_tools_and_w04a_suite_not_modified(self):
         # Byte assertions supplement separately recorded pytest/unittest/lint/compile commands.
-        import hashlib
+        from test_r1_real_root_protocol import ORIGINALS, ROOT, verify_approved_sources
 
-        from test_r1_real_root_protocol import ORIGINALS, ROOT
-
-        for path, sha in ORIGINALS.items():
-            self.assertEqual(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), sha)
+        self.assertEqual(set(verify_approved_sources(ROOT)), set(ORIGINALS))
         self.assertEqual(r.validate_recipe(r.recipe_template())["decision"], "DECISION_REQUIRED")
 
     def test_full_typed_original_input_snapshot_and_independent_consumers(self):
