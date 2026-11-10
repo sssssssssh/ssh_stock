@@ -136,7 +136,7 @@ def test_bad_or_forged_xml_still_fails_closed(tmp_path, raw):
 def test_skip_real_plugin_to_real_collect_cli_authenticated_handoff(tmp_path, approved):
     # A private synthetic package supplies the exact full-suite ID. Both safety
     # plugins stay enabled; no business conftest, lab permit, OS domain or DB.
-    from tests.unit.test_a42331_ci_evidence import APPROVED_REASON, skip_fixture
+    from tests.unit.test_a42331_skip_policy import APPROVED_REASON, skip_fixture
 
     lab = tmp_path/'lab'
     source = lab/'tests/integration/test_r1_integration_linux_mock_domain.py'
