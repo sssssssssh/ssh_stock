@@ -136,6 +136,75 @@ def row(packet, table):
 
 
 class ReviewedEvidenceTests(unittest.TestCase):
+    def declaration_rejected(self, field, value):
+        packets, oracle, original, provenance = material()
+        contract = json.loads(original)
+        contract[field] = value
+        raw = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        provenance["contract_sha256"] = hashlib.sha256(raw).hexdigest()
+        for packet in packets:
+            packet["source_context"] = copy.deepcopy(provenance)
+            self.assertEqual(
+                packet["source_context"]["contract_sha256"], hashlib.sha256(raw).hexdigest()
+            )
+        result = module().review_pair(*packets, oracle, raw, provenance)
+        self.assertEqual(result["status"], "INCOMPLETE")
+        self.assertEqual(result["decision"], "NO_GO")
+        self.assertEqual(result["errors"], [{"code": "V2_CONTRACT"}])
+        for key in (
+            "oracle_match",
+            "real_pg_input_equal",
+            "real_worker_output_equal",
+            "performance_pass",
+            "production_authorized",
+        ):
+            self.assertFalse(result[key])
+
+    def array_declaration_rejected(self, field):
+        original = json.loads(material()[2])[field]
+        variants = {
+            "missing_member": original[1:],
+            "unknown_member": [*original, "UNSUPPORTED_DECLARATION"],
+            "reordered": list(reversed(original)),
+            "duplicate": [*original, original[0]],
+            "object": {"members": original},
+            "string": "UNSUPPORTED_DECLARATION",
+            "null": None,
+            "wrong_member_type": [True, *original[1:]],
+        }
+        for name, value in variants.items():
+            with self.subTest(field=field, mutation=name):
+                self.declaration_rejected(field, value)
+
+    def test_contract_cell_types_rebound_mutations(self):
+        self.array_declaration_rejected("cell_types")
+
+    def test_contract_statuses_rebound_mutations(self):
+        self.array_declaration_rejected("statuses")
+
+    def test_contract_failure_codes_rebound_mutations(self):
+        self.array_declaration_rejected("failure_codes")
+
+    def test_contract_cell_shapes_rebound_mutations(self):
+        original = json.loads(material()[2])["cell_shapes"]
+        variants = {
+            "missing_key": {k: v for k, v in original.items() if k != "float"},
+            "extra_key": {**original, "unknown": "UNSUPPORTED_DECLARATION"},
+            "changed_rule": {**original, "float": "UNSUPPORTED_DECLARATION"},
+            "wrong_rule_type": {**original, "float": [original["float"]]},
+            "wrong_fields_type": {**original, "mapped": "type,domain,value"},
+            "missing_field": {**original, "mapped": ["type", "value"]},
+            "extra_field": {**original, "mapped": ["type", "domain", "value", "unknown"]},
+            "reordered_fields": {**original, "mapped": ["value", "domain", "type"]},
+            "duplicate_field": {**original, "mapped": ["type", "domain", "value", "type"]},
+            "wrong_field_type": {**original, "mapped": ["type", True, "value"]},
+            "array": list(original),
+            "null": None,
+        }
+        for name, value in variants.items():
+            with self.subTest(mutation=name):
+                self.declaration_rejected("cell_shapes", value)
+
     def rejected(self, mutate, code=None, *, case_id="C01"):
         result = review(case_id, mutate)
         self.assertIn(result["status"], ("UNEQUAL", "INCOMPLETE"))

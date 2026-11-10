@@ -26,6 +26,71 @@ CASES = tuple(f"C{n:02}" for n in range(1, 17))
 DOMAINS = ("RAW_INPUT", "TYPED_OUTPUT", "BUSINESS_EXPECTATION", "TELEMETRY")
 PREFIXES = (b"R1-V2-RAW\0", b"R1-V2-TYPED\0", b"R1-V2-BUSINESS\0", b"R1-V2-TELEMETRY\0")
 IDENTITIES = ("job", "token", "scope", "worker", "event")
+# Ordered protocol declarations, fixed independently of caller-supplied bytes.
+# Changes require an explicit protocol revision and independent review.
+CELL_TYPES = (
+    "sql_null",
+    "json_null",
+    "missing",
+    "bool",
+    "int",
+    "text",
+    "bytes",
+    "decimal",
+    "float",
+    "date",
+    "datetime",
+    "uuid",
+    "worker",
+    "event",
+    "array",
+    "object",
+)
+STATUSES = ("OFFLINE_ORACLE_MATCH", "UNEQUAL", "INCOMPLETE", "PENDING_OWNER_DECISION")
+FAILURE_CODES = (
+    "V2_FIELDS",
+    "V2_LIMIT",
+    "V2_TYPE",
+    "V2_JSON",
+    "V2_DUPLICATE_KEY",
+    "V2_SOURCE",
+    "V2_IDENTITY",
+    "V2_REFERENCE",
+    "V2_TIME",
+    "V2_TIME_MAPPING",
+    "V2_SCHEMA",
+    "V2_DUPLICATE_ROW",
+    "V2_CONTRACT",
+    "V2_GOLDEN",
+    "V2_PROTOCOL",
+    "V2_AUTHORIZATION",
+    "V2_PHYSICAL_CLAIM",
+    "V2_CASE",
+    "V2_LIFECYCLE",
+    "V2_SENTINEL_UNKNOWN",
+    "V2_OUTSIDE_CHANGED",
+    "V2_ACK_UNKNOWN",
+    "V2_HEARTBEAT_UNKNOWN",
+    "V2_CLEANUP_UNKNOWN",
+    "V2_RELATION",
+    "V2_PREIMAGE",
+    "V2_CANDIDATE",
+    "V2_SCOPE",
+    "V2_ORACLE_MISMATCH",
+    "V2_PENDING_D04",
+    "V2_INVALID_INPUT",
+)
+CELL_SHAPES = {
+    "nulls": ("type",),
+    "scalars": ("type", "value"),
+    "mapped": ("type", "domain", "value"),
+    "array": "recursive_cells_in_order",
+    "object": "string_keys_to_recursive_cells",
+    "float": "finite_canonical_binary64_hex",
+    "decimal": "exact_plain_decimal_scale",
+    "datetime": "UTC_microseconds_Z",
+    "missing": "semantic_probe_only",
+}
 SOURCE_FIELDS = frozenset(
     (
         "reviewed_head_sha",
@@ -370,6 +435,12 @@ def _rows(rows, contract, identities, *, expected=False):
     return sorted(result, key=lambda r: (r["table"], r["key"], r["ordinal"]))
 
 
+def _declaration_list(value, expected):
+    require(type(value) is list, "V2_CONTRACT")
+    require(all(type(item) is str for item in value), "V2_CONTRACT")
+    require(len(set(value)) == len(value) and tuple(value) == expected, "V2_CONTRACT")
+
+
 def _contract(raw, provenance):
     require(type(raw) is bytes, "V2_CONTRACT")
     require(hashlib.sha256(raw).hexdigest() == provenance["contract_sha256"], "V2_SOURCE")
@@ -397,6 +468,19 @@ def _contract(raw, provenance):
         ),
         "V2_CONTRACT",
     )
+    for name, expected in (
+        ("cell_types", CELL_TYPES),
+        ("statuses", STATUSES),
+        ("failure_codes", FAILURE_CODES),
+    ):
+        _declaration_list(contract[name], expected)
+    shapes = contract["cell_shapes"]
+    fields(shapes, CELL_SHAPES, "V2_CONTRACT")
+    for name, expected in CELL_SHAPES.items():
+        if type(expected) is tuple:
+            _declaration_list(shapes[name], expected)
+        else:
+            require(type(shapes[name]) is str and shapes[name] == expected, "V2_CONTRACT")
     require(
         contract["schema_version"] == PROTOCOL
         and contract["scope"] == "OFFLINE_GOLDEN_CONTRACT_ONLY"
