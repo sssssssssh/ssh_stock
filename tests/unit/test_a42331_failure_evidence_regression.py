@@ -35,7 +35,7 @@ def child(tmp_path, source, *, corrupt=False):
          *extra,
          "--noconftest", "--override-ini=addopts=", "--tb=no", "--show-capture=no", "-rN",
          str(test), "--junitxml=" + str(xml)], cwd=ROOT,
-        env=environment, capture_output=True, text=True, timeout=30)
+        env=environment, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
     return result, xml
 
 
@@ -130,3 +130,51 @@ def test_bad_or_forged_xml_still_fails_closed(tmp_path, raw):
     xml.write_bytes(raw)
     with pytest.raises(RuntimeError, match="A42331_JUNIT_"):
         sanitize_junit(xml)
+
+
+@pytest.mark.parametrize('approved', [True, False])
+def test_skip_real_plugin_to_real_collect_cli_authenticated_handoff(tmp_path, approved):
+    # A private synthetic package supplies the exact full-suite ID. Both safety
+    # plugins stay enabled; no business conftest, lab permit, OS domain or DB.
+    from tests.unit.test_a42331_ci_evidence import APPROVED_REASON, skip_fixture
+
+    lab = tmp_path/'lab'
+    source = lab/'tests/integration/test_r1_integration_linux_mock_domain.py'
+    source.parent.mkdir(parents=True)
+    (lab/'tests/__init__.py').write_text('')
+    (lab/'tests/integration/__init__.py').write_text('')
+    reason = APPROVED_REASON if approved else SECRET
+    source.write_text('import unittest\nclass LinuxLabTests(unittest.TestCase):\n'
+        ' def test_linux_success_term_kill_owned_child(self):\n'
+        '  self.skipTest('+repr(reason)+')\n')
+    xml = lab/'.codex_tmp/m17_1_2-full.xml'
+    xml.parent.mkdir()
+    env = {k:v for k,v in os.environ.items() if not any(word in k.upper() for word in
+        ('DATABASE_URL', 'TOKEN', 'SECRET', 'PASSWORD', 'PGHOST', 'PGPORT', 'PGUSER', 'PGPASS'))}
+    env.update(PYTHONPATH=str(ROOT), GIT_DIR=str(ROOT/'.git'), GIT_WORK_TREE=str(ROOT),
+               PYTHONDONTWRITEBYTECODE='1')
+    args = [sys.executable, '-B', '-m', 'pytest', '-p', 'scripts.source_contract_pytest',
+            '-p', 'scripts.a42331_pytest_safety', '--noconftest', '--tb=no', '--show-capture=no',
+            '-rN', '-q', str(source), '--junitxml='+str(xml)]
+    child_result = subprocess.run(args, cwd=lab, env=env, stdin=subprocess.DEVNULL,
+                                  capture_output=True, text=True, timeout=30)
+    assert child_result.returncode == 0
+    assert len(ET.parse(xml).findall('.//skipped')) == 1
+    assert reason not in xml.read_text()
+    skip_fixture(lab/'.codex_tmp/a42331-targeted.xml', [('tests.safe', 'test_ok', None)])
+    env.update(A42331_STEP_OUTCOMES=json.dumps(dict.fromkeys(PHASES, 'success')),
+               UPSTREAM_STATUS='success')
+    result = subprocess.run([sys.executable, '-B', '-m', 'scripts.a42331_ci_evidence', 'collect'],
+        cwd=lab, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    assert result.returncode == (0 if approved else 1)
+    value = json.loads((lab/'.codex_tmp/a42331-ci/failure.json').read_text())
+    assert value['evidence_complete'] is True
+    assert value['status'] == ('COMPLETE' if approved else 'INCOMPLETE')
+    assert value['skip_policy_status'] == ('PASS' if approved else 'REJECT')
+    assert value['full_test_counts'] == dict(tests=1, failures=0, errors=0, skipped=1)
+    assert value['approved_skip_count'] == int(approved)
+    assert value['full_skip_proof_source'] == 'AUTHENTICATED_PRIOR_SANITIZER'
+    assert not any(value[k] for k in ('capacity_ready', 'performance_eligible',
+                                     'production_read_authorized'))
+    assert SECRET not in child_result.stdout+child_result.stderr+result.stdout+result.stderr
+    assert SECRET not in ''.join(p.read_text() for p in (lab/'.codex_tmp/a42331-ci').iterdir())

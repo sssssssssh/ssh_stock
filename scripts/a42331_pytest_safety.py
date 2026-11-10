@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from scripts.a42_artifacts import atomic
-from scripts.a42331_ci_evidence import safe_identifier, sanitize_junit
+from scripts.a42331_ci_evidence import safe_identifier, sanitize_junit_for_pytest
 
 ERRORS = []
 
@@ -91,7 +91,7 @@ def pytest_unconfigure(config):
     sanitized = False
     try:
         if path:
-            sanitize_junit(Path(path))
+            sanitize_junit_for_pytest(Path(path), root=Path.cwd())
             sanitized = True
     finally:
         # The bounded first-error evidence survives even if XML validation fails.

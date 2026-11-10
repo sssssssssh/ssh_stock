@@ -1,8 +1,12 @@
 # P0_A42331_JUNIT_SKIP_POLICY_FIX_01
 
-日期：2026-11-10，Asia/Shanghai。状态：**BLOCKED / SCOPE_REVIEW_REQUIRED**。
+日期：2026-11-10，Asia/Shanghai。当前状态：**LOCAL_GREEN / NEW_SHA_CI_PENDING / REVIEW_PENDING**。
 
-本轮完成最新代码拉取、基线与历史 CI 核验、旧逻辑 RED、实际 pytest 插件链路复现和阻断论证。
+负责人已批准“最小接线和可信回执”。**当前实现与交付以第8节为准**。
+第1～7节保留首次范围停点的历史证据，描述的是提交 `35143411e696549d5aba02a8dc0658b69675cfbf`
+之前的状态，不能解读为本次批准后仍未实施。最终新提交的完整 Main CI 和独立审阅尚未完成，任务不关闭。
+
+首次交付完成最新代码拉取、基线与历史 CI 核验、旧逻辑 RED、实际 pytest 插件链路复现和阻断论证。
 **未实施 Skip 放行补丁，未完成 AC02/AC14，也未取得修复后 Main CI success；本任务不能关闭。**
 只新增本报告，不修改收集器、插件、既有测试、Workflow、冻结文件或业务代码。
 
@@ -225,3 +229,140 @@ PERFORMANCE_ACCEPTANCE=NOT_MEASURED
 ```
 
 本次停止于原始 Skip 证明链的范围审阅，不关闭任务，不进入真实 readiness、OFF/ON或性能阶段。
+
+## 8. 获批后的最小接线与可信回执交付
+
+### 8.1 接续授权和源码范围
+
+负责人对第5节接续问题明确答复“批准最小接线和可信回执”。本次据此修改安全插件的
+原始判定调用接线并实现可信回执；沿用“开发，推送代码”的授权，只正常提交推送 master。
+未创建分支，未手工 dispatch/rerun，未改变任何 Workflow、依赖锁、冻结文件或业务实现。
+
+任务观察基线仍为 `31d701f1437aa179df85a8e8f37de15581b705fa`。
+批准后开发起点 HEAD / origin/master / 实时 GitHub master 均为
+`35143411e696549d5aba02a8dc0658b69675cfbf`，它仅在 BASE_SHA 上增加第1～7节停点报告。
+该版本 Main Run 42734748470 当时仍 in_progress，另外三条 push 工作流 success；均不能代替新修复 CI。
+
+实际交付严格限于五个文件：
+
+| 文件 | 实际变更 |
+| --- | --- |
+| scripts/a42331_ci_evidence.py | 固定 Skip 原始判定、私有认证回执、计数/策略/执行结果分离及安全导出 |
+| scripts/a42331_pytest_safety.py | 仅替换导入与 unconfigure 的 sanitizer 调用，保持其余钩子和测试结果处理 |
+| tests/unit/test_a42331_ci_evidence.py | 增加原始正负例、CLI 退出码、认证/重放/隐私回归 |
+| tests/unit/test_a42331_failure_evidence_regression.py | 增加实际插件→实际 collector CLI 子进程验证 |
+| 本报告 | 保留首次停点历史，追加获批实现、测试与剩余门禁 |
+
+既有测试的断言、30秒子进程超时和安全插件保持；原有 child subprocess 仅增加 stdin=DEVNULL，
+避免继承交互式输入。未删除或跳过原测试，未修改 R1 原件中的身份、哈希、许可和 NO_GO。
+开发起点1552个跟踪文件中，除上述5项外1547项逐个比较原始 SHA256，全部不变。
+最终 diff/numstat、五文件大小和 SHA256 在仓库外交付回执记录，避免文档自身哈希递归。
+
+### 8.2 现在的原始判定与信任边界
+
+固定白名单仍只有第2节的唯一三元组，使用原始 message 属性逐字比较，不 trim、不规范化、
+不依赖已脱敏身份推断原始理由。唯一获批 ID 在完整输入中只能出现一次，包括同名成功节点；
+不禁止 pytest 原生 unittest 非跳过子报告正常重复 ID。所有 targeted Skip 均拒绝。
+
+插件在脱敏前调用 sanitize_junit_for_pytest。对固定 CI JUnit 源路径，先核对声明/实际计数，
+再作原始策略判定，然后保留节点/计数并擦除理由。XML DTD/ENTITY、NUL/UTF16实体绕过、
+非法结构、空报告、超50MB、非普通文件均拒绝。安全 XML 通过同目录临时文件 fsync/replace 原子替换；
+字节已经规范化时不重写，重复导出保持摘要和文件实例身份。
+未知 Skip 的 classname/name 即使形似合法标识符也摘要化，只有固定公开批准 ID 可原样保留。
+
+认证回执采用标准库 HMAC-SHA256，绑定：检查器版本、源码 HEAD、run/attempt、仓库路径摘要、
+固定 JUnit 源路径、原始和安全字节 SHA256、真实计数、策略判定/批准数量，以及安全文件的
+设备/文件号/ctime/mtime/大小。最后一组绑定防止新错误输入脱敏成相同字节且签发失败时复用旧 PASS。
+回执同样记录认证的 REJECT，区分“可信拒绝”和“回执缺失/无效”。
+
+密钥和认证回执放在 runner 用户的系统临时目录，位于仓库和工件上传目录之外；不写进安全 JUnit、
+failure.json 或公开日志。POSIX 目录0700、文件0600且验证 owner；Windows 密钥用当前用户 DPAPI
+加密，二进制文件用 O_BINARY 读写。验证过程不创建或重建密钥；缺失、篡改、上下文改变、
+安全字节/文件实例改变均 fail closed。安全 XML 没有可验证回执时仍拒绝，不能单凭 ID 放行。
+
+信任边界为同一可信 runner OS 用户和经审阅的插件代码；不声称抵御掌握该用户权限/密钥或 root
+的恶意代码。此通道只证明本次 CI 脱敏前的判定，不签发 Linux 实验许可，不跨 runner/新 run 重放。
+原始含私密理由的 XML 不作为工件归档，私有密钥也不归档。
+
+failure.json 新增固定字段 skip_policy_status、approved_skip_count、skip_policy_version 和
+full_skip_proof_source。原有 qualification 字段始终 false。证据完整、策略通过和上游成功分别判断：
+未知 Skip 可完整归档，但 INCOMPLETE 且 CLI exit1；上游真实失败可完整归档、保持失败计数与
+INCOMPLETE，CLI沿用归档成功exit0，不伪装上游成功；五阶段success且零Skip或唯一获批Skip才可COMPLETE。
+
+### 8.3 RED、GREEN 和 AC01～AC15
+
+旧实现的真实 collect/CLI RED 保留于第3～4节。
+批准后先运行新增原始批准 Skip 回归：1 failed、exit1（red.xml）；随后实现修复。
+又以形似合法标识符的私密 Skip 名称复现2 failed、exit1，再完成对应脱敏修复，2 passed、exit0。
+两个 RED 均保留安全插件，没有泄漏原始异常、密码或 SQL。
+
+| AC | 断言及当前结果 |
+| --- | --- |
+| 01 | 既有零Skip全成功用例：COMPLETE，计数保留 |
+| 02、14 | 精确原始三元组+五阶段success：COMPLETE、approved=1、skipped=1，CLI exit0 |
+| 03、04 | 未知ID、错误/缺失/尾随空格理由：REJECT、CLI exit1 |
+| 05、06 | 第二个Skip、重复批准Skip及同ID成功节点：REJECT、CLI exit1 |
+| 07 | full_tests=success而实际failure/error：INCOMPLETE、计数保留、CLI exit1 |
+| 08、09 | 计数不符、缺失、坏XML、DTD/ENTITY、UTF16实体、超限：固定失败回执、CLI exit1 |
+| 10 | targeted任意Skip：REJECT、CLI exit1 |
+| 11 | 既有失败归档和实际子pytest失败验证保留；不误报COMPLETE |
+| 12 | 注入敏感理由/名称/属性/SQL：安全输出无哨兵明文；名称新增2项RED→GREEN |
+| 13 | 脱敏后无证明拒绝；认证MAC/载荷篡改、缺失、SHA/run/attempt重放及安全字节变更拒绝 |
+| 15 | AST核对REVIEWED_LAB_PERMIT=None；真实bridge仍抛R1_REAL_EXECUTION_NOT_AUTHORIZED |
+
+实际子进程端到端测试使用自有无数据库 synthetic package，在原生 unittest skip 后运行两项安全插件，
+再独立运行 collector CLI。批准理由：子pytest1 skipped/exit0，collectorCOMPLETE/exit0；
+错误私密理由：子pytest仍1 skipped/exit0，collectorREJECT/exit1。两者安全XML均保留skipped=1，
+并验证 proof_source=AUTHENTICATED_PRIOR_SANITIZER；证明没有靠修改 pytest 结果制造成功。
+
+最终本地命令以既有隔离venv运行，原始完整参数和退出码保存在仓库外 command-results.json。
+下列 $PY/$EVIDENCE 分别指该解释器和仓库外证据目录；未将本机路径写入源码或任务合同：
+
+```powershell
+& $PY -B -m pytest -p scripts.a42331_pytest_safety -p no:cacheprovider --tb=short --show-capture=no -rN -q tests/unit/test_a42331_ci_evidence.py tests/unit/test_a42331_failure_evidence_regression.py --basetemp="$EVIDENCE/final-release-temp" --junitxml="$EVIDENCE/final-release.xml"
+& $PY -B -m pytest -p scripts.a42331_pytest_safety -p no:cacheprovider --tb=short --show-capture=no -rN -q tests/unit/test_perf03_lnx_w04a_offline_contract.py tests/unit/test_w04a_line_ending_integrity.py tests/unit/test_r1_*.py --basetemp="$EVIDENCE/final-r1-temp" --junitxml="$EVIDENCE/final-r1.xml"
+& $PY -B -m ruff check backend tests migrations scripts
+# py_compile.compile(..., cfile=<external evidence>, doraise=True): four Python files
+git diff --check
+```
+
+pytest默认source_contract_pytest保持，显式a42331_pytest_safety保持；仅禁用缓存插件避免缓存产物。
+R1命令中的通配在实际执行前由PowerShell展开为14份具体模块，包括W04-A、字节完整性和12份R1模块。
+本机未运行需要数据库的全量 pytest，完整数据库集成只验收正常push自动CI，不使用本机用户数据库。
+
+本机环境：CPython3.12.0、pytest9.1.1、pluggy1.7.0、pytest-cov7.1.0、Ruff0.16.4。
+按既有requirements.lock仅在该仓库外venv补装PyYAML6.0.2，锁文件/项目依赖和全局环境均未修改。
+首轮子pytest出现原30秒超时/中止的日志保留；同盘外部basetemp与stdin=DEVNULL后通过，未加长超时。
+Windows回执诊断还发现O_BINARY缺失会损坏随机DPAPI字节，已修复；不将失败前置验证当作有效证明。
+
+R1离线回归：**195 passed、1815 subtests passed、5 warnings，exit0，236.50s**。
+5条既有record_property/xunit2兼容警告不改变测试结果。
+最终A42331回归：**64 passed，exit0，50.74s**，包括各AC拒绝路径的CLI exit1断言及AC01/11 exit0断言。
+全仓Ruff、4份Python外部py_compile、git diff --check均exit0。
+JUnit真实节点数/摘要、编译与完整性结果见仓库外 delivery-verification.json / command-results.json。
+仅本次5份允许文件统一为既有Git Blob的LF形式；未转换任何冻结原件。
+
+### 8.4 Git、CI及独立审阅门禁
+
+提交前核对完整diff、白空格、文件范围、1552份起点哈希及4份Python编译；只暂存上述5份文件。
+完整提交SHA、HEAD/origin/master实时比对、4条自动push工作流Run/attempt/head_sha/status/conclusion
+保存到仓库外 git-ci-delivery.json 并在交付对话提供，不为写入自身SHA反复制造CI。
+
+**当前建议：REVIEW_PENDING；最终完整 Main CI 未完成前保持 CI_PENDING，不能宣称任务关闭或修复验收完成。**
+若新CI出现失败、必需Job跳过、工件缺失/污染，将保留实际证据并报告，不越界修改Workflow或业务。
+Windows本机测试不代表Linux完整CI，更不代表真实Linux实验资格。
+
+```text
+TASK=P0_A42331_JUNIT_SKIP_POLICY_FIX_01
+APPROVED_EXTENSION=MINIMAL_PLUGIN_WIRING_AND_AUTHENTICATED_RECEIPT
+R1=PARTIAL
+HISTORICAL_AC05=PARTIAL
+REAL_PG17_WORKER_OFF_ON=NO_GO
+PERFORMANCE_ACCEPTANCE=NOT_MEASURED
+REAL_PG17_CONNECTIONS=0
+REAL_WORKER_ROOTS=0
+REAL_OFF_ON_PAIRS=0
+MANUAL_RERUN_DISPATCH=0
+FINAL_NEW_SHA_MAIN_CI=PENDING
+INDEPENDENT_REVIEW=PENDING
+```
