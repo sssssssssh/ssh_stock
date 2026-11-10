@@ -1,0 +1,246 @@
+{
+  "schema_version": "r1.reviewed-evidence.v2",
+  "scope": "OFFLINE_GOLDEN_CONTRACT_ONLY",
+  "projection_scope": "MANUAL_PROJECTION_NOT_FULL_DATABASE",
+  "limits": {
+    "bytes": 1048576,
+    "nodes": 20000,
+    "depth": 24,
+    "text": 2048,
+    "items": 256,
+    "rows": 128
+  },
+  "projection_columns": {
+    "job_run": [
+      "id",
+      "execution_token",
+      "worker_id",
+      "status",
+      "cancel_requested",
+      "job_metadata"
+    ],
+    "data_publication": [
+      "job_id",
+      "execution_token",
+      "state",
+      "identity"
+    ],
+    "data_publication_source": [
+      "publication_id",
+      "source_job_id",
+      "role"
+    ],
+    "data_publication_row": [
+      "publication_id",
+      "source_id",
+      "table_name",
+      "row_key",
+      "row_data",
+      "base_row",
+      "is_deleted"
+    ],
+    "data_publication_preimage": [
+      "publication_id",
+      "table_name",
+      "row_key",
+      "row_data"
+    ],
+    "data_publication_scope": [
+      "id",
+      "publication_id",
+      "source_id",
+      "table_name",
+      "start_date",
+      "end_date"
+    ],
+    "stock_factor_daily": [
+      "trade_date",
+      "ts_code",
+      "ma20",
+      "calc_run_id"
+    ],
+    "sector": [
+      "id",
+      "name"
+    ],
+    "theme": [
+      "theme_code",
+      "name"
+    ],
+    "stock_opportunity_daily": [
+      "trade_date",
+      "ts_code",
+      "primary_sector_id",
+      "primary_theme_code",
+      "calc_run_id"
+    ],
+    "synthetic_type_probe": [
+      "decimal",
+      "float",
+      "sql_null",
+      "json_null",
+      "missing",
+      "empty_text",
+      "empty_array",
+      "zero",
+      "false",
+      "date",
+      "datetime",
+      "bytes"
+    ]
+  },
+  "identity_domains": [
+    "job",
+    "token",
+    "scope",
+    "worker",
+    "event"
+  ],
+  "cell_types": [
+    "sql_null",
+    "json_null",
+    "missing",
+    "bool",
+    "int",
+    "text",
+    "bytes",
+    "decimal",
+    "float",
+    "date",
+    "datetime",
+    "uuid",
+    "worker",
+    "event",
+    "array",
+    "object"
+  ],
+  "source_fields": [
+    "reviewed_head_sha",
+    "historical_baseline_sha",
+    "frozen_schema_sha256",
+    "tool_identity_sha256",
+    "golden_sha256",
+    "fixture_sha256",
+    "contract_sha256",
+    "fixture_namespace",
+    "golden_revision"
+  ],
+  "statuses": [
+    "OFFLINE_ORACLE_MATCH",
+    "UNEQUAL",
+    "INCOMPLETE",
+    "PENDING_OWNER_DECISION"
+  ],
+  "failure_codes": [
+    "V2_FIELDS",
+    "V2_LIMIT",
+    "V2_TYPE",
+    "V2_JSON",
+    "V2_DUPLICATE_KEY",
+    "V2_SOURCE",
+    "V2_IDENTITY",
+    "V2_REFERENCE",
+    "V2_TIME",
+    "V2_TIME_MAPPING",
+    "V2_SCHEMA",
+    "V2_DUPLICATE_ROW",
+    "V2_CONTRACT",
+    "V2_GOLDEN",
+    "V2_PROTOCOL",
+    "V2_AUTHORIZATION",
+    "V2_PHYSICAL_CLAIM",
+    "V2_CASE",
+    "V2_LIFECYCLE",
+    "V2_SENTINEL_UNKNOWN",
+    "V2_OUTSIDE_CHANGED",
+    "V2_ACK_UNKNOWN",
+    "V2_HEARTBEAT_UNKNOWN",
+    "V2_CLEANUP_UNKNOWN",
+    "V2_RELATION",
+    "V2_PREIMAGE",
+    "V2_CANDIDATE",
+    "V2_SCOPE",
+    "V2_ORACLE_MISMATCH",
+    "V2_PENDING_D04",
+    "V2_INVALID_INPUT"
+  ],
+  "packet_fields": [
+    "schema_version",
+    "evidence_kind",
+    "scope",
+    "authorization",
+    "source_context",
+    "subject",
+    "domains",
+    "controls"
+  ],
+  "subject_fields": [
+    "case_id",
+    "arm",
+    "lifecycle",
+    "commit_ack",
+    "root_id",
+    "worker_id",
+    "execution_token",
+    "scope_identity",
+    "input_ref"
+  ],
+  "domain_fields": {
+    "RAW_INPUT": [
+      "status",
+      "fixture_id",
+      "rows",
+      "declared_sha256"
+    ],
+    "TYPED_OUTPUT": [
+      "status",
+      "rows",
+      "sentinels"
+    ],
+    "BUSINESS_EXPECTATION": [
+      "status",
+      "case_id",
+      "revision"
+    ],
+    "TELEMETRY": [
+      "status",
+      "heartbeat",
+      "local_cleanup",
+      "measurements"
+    ]
+  },
+  "controls": {
+    "pg_physical_attestation": "NOT_PROVEN",
+    "os_reaped": "NOT_PROVEN",
+    "cleanup_absent": "NOT_PROVEN",
+    "external_owner_ack": "NOT_PROVEN",
+    "business_policy_approval": "PENDING_D04"
+  },
+  "digest_prefixes": [
+    "R1-V2-RAW\u0000",
+    "R1-V2-TYPED\u0000",
+    "R1-V2-BUSINESS\u0000",
+    "R1-V2-TELEMETRY\u0000"
+  ],
+  "provenance_trust": "CALLER_SUPPLIED_NOT_AUTHENTICATED",
+  "cell_shapes": {
+    "nulls": [
+      "type"
+    ],
+    "scalars": [
+      "type",
+      "value"
+    ],
+    "mapped": [
+      "type",
+      "domain",
+      "value"
+    ],
+    "array": "recursive_cells_in_order",
+    "object": "string_keys_to_recursive_cells",
+    "float": "finite_canonical_binary64_hex",
+    "decimal": "exact_plain_decimal_scale",
+    "datetime": "UTC_microseconds_Z",
+    "missing": "semantic_probe_only"
+  }
+}

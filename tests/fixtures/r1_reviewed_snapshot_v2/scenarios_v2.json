@@ -1,0 +1,854 @@
+{
+  "schema_version": "r1.manual-scenarios.v2",
+  "authorship": "CODEX_MANUAL_DRAFT_NOT_OWNER_APPROVAL",
+  "source_context": {
+    "reviewed_head_sha": "e5c85c57da66f1becd3dd1ba562ee1ace71d6b3f",
+    "historical_baseline_sha": "b6ffb7bf8ec7d26f771d9b89923e4f7e926edbed",
+    "frozen_schema_sha256": "f6be0a5de1ce46e30758039a3ab345a308ff96cb36f6ee86ec3ccdc39759f297",
+    "fixture_namespace": "r1-w04c-manual-v2",
+    "golden_revision": "manual-draft-01"
+  },
+  "identities": {
+    "OFFLINE_LEFT": {
+      "$job": "00000000-0000-0000-0000-000000000001",
+      "$token": "00000000-0000-0000-0000-000000000002",
+      "$scope": "00000000-0000-0000-0000-000000000003",
+      "$scope2": "00000000-0000-0000-0000-000000000004",
+      "$worker": "offline-worker-a",
+      "$event": "2026-02-24T01:02:03.000001Z"
+    },
+    "OFFLINE_RIGHT": {
+      "$job": "00000000-0000-0000-0000-000000000011",
+      "$token": "00000000-0000-0000-0000-000000000012",
+      "$scope": "00000000-0000-0000-0000-000000000013",
+      "$scope2": "00000000-0000-0000-0000-000000000014",
+      "$worker": "offline-worker-b",
+      "$event": "2026-02-24T01:02:04.000001Z"
+    }
+  },
+  "packet": {
+    "schema_version": "r1.reviewed-evidence.v2",
+    "evidence_kind": "OFFLINE_REVIEW_PACKET",
+    "scope": "OFFLINE_GOLDEN_CONTRACT_ONLY",
+    "authorization": "NOT_AUTHORIZED",
+    "source_context": {},
+    "subject": {
+      "case_id": "C01",
+      "arm": "OFFLINE_LEFT",
+      "lifecycle": "SUCCESS",
+      "commit_ack": "KNOWN",
+      "root_id": "$job",
+      "worker_id": "$worker",
+      "execution_token": "$token",
+      "scope_identity": "$scope",
+      "input_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "domains": {
+      "RAW_INPUT": {
+        "status": "OFFLINE_FIXTURE_ONLY",
+        "fixture_id": "two-fictional-input-rows",
+        "rows": 2,
+        "declared_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "TYPED_OUTPUT": {
+        "status": "OFFLINE_FIXTURE_ONLY",
+        "rows": [
+          {
+            "table": "job_run",
+            "key": "root",
+            "ordinal": 0,
+            "values": {
+              "id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "execution_token": {
+                "type": "uuid",
+                "domain": "token",
+                "value": "$token"
+              },
+              "worker_id": {
+                "type": "worker",
+                "domain": "worker",
+                "value": "$worker"
+              },
+              "status": {
+                "type": "text",
+                "value": "SUCCESS"
+              },
+              "cancel_requested": {
+                "type": "bool",
+                "value": false
+              },
+              "job_metadata": {
+                "type": "object",
+                "value": {
+                  "calc_run_id": {
+                    "type": "uuid",
+                    "domain": "job",
+                    "value": "$job"
+                  },
+                  "queue_identity": {
+                    "type": "object",
+                    "value": {
+                      "analysis_version": {
+                        "type": "text",
+                        "value": "manual-projection-v1"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "table": "data_publication",
+            "key": "ledger",
+            "ordinal": 0,
+            "values": {
+              "job_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "execution_token": {
+                "type": "uuid",
+                "domain": "token",
+                "value": "$token"
+              },
+              "state": {
+                "type": "text",
+                "value": "PUBLISHED"
+              },
+              "identity": {
+                "type": "object",
+                "value": {
+                  "analysis_version": {
+                    "type": "text",
+                    "value": "manual-projection-v1"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "table": "data_publication_source",
+            "key": "source",
+            "ordinal": 0,
+            "values": {
+              "publication_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "source_job_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "role": {
+                "type": "text",
+                "value": "root"
+              }
+            }
+          },
+          {
+            "table": "data_publication_row",
+            "key": "candidate",
+            "ordinal": 0,
+            "values": {
+              "publication_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "source_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "table_name": {
+                "type": "text",
+                "value": "stock_factor_daily"
+              },
+              "row_key": {
+                "type": "array",
+                "value": [
+                  {
+                    "type": "date",
+                    "value": "2026-02-24"
+                  },
+                  {
+                    "type": "text",
+                    "value": "000001.SZ"
+                  }
+                ]
+              },
+              "row_data": {
+                "type": "object",
+                "value": {
+                  "ma20": {
+                    "type": "float",
+                    "value": "0x1.4000000000000p+0"
+                  },
+                  "calc_run_id": {
+                    "type": "uuid",
+                    "domain": "job",
+                    "value": "$job"
+                  }
+                }
+              },
+              "base_row": {
+                "type": "object",
+                "value": {
+                  "ma20": {
+                    "type": "float",
+                    "value": "0x1.0000000000000p+0"
+                  },
+                  "calc_run_id": {
+                    "type": "sql_null"
+                  }
+                }
+              },
+              "is_deleted": {
+                "type": "bool",
+                "value": false
+              }
+            }
+          },
+          {
+            "table": "data_publication_preimage",
+            "key": "first",
+            "ordinal": 0,
+            "values": {
+              "publication_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "table_name": {
+                "type": "text",
+                "value": "stock_factor_daily"
+              },
+              "row_key": {
+                "type": "array",
+                "value": [
+                  {
+                    "type": "date",
+                    "value": "2026-02-24"
+                  },
+                  {
+                    "type": "text",
+                    "value": "000001.SZ"
+                  }
+                ]
+              },
+              "row_data": {
+                "type": "object",
+                "value": {
+                  "ma20": {
+                    "type": "float",
+                    "value": "0x1.0000000000000p+0"
+                  },
+                  "calc_run_id": {
+                    "type": "sql_null"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "table": "data_publication_scope",
+            "key": "scope-1",
+            "ordinal": 0,
+            "values": {
+              "id": {
+                "type": "uuid",
+                "domain": "scope",
+                "value": "$scope"
+              },
+              "publication_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "source_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "table_name": {
+                "type": "text",
+                "value": "stock_factor_daily"
+              },
+              "start_date": {
+                "type": "date",
+                "value": "2026-02-23"
+              },
+              "end_date": {
+                "type": "date",
+                "value": "2026-02-24"
+              }
+            }
+          },
+          {
+            "table": "stock_factor_daily",
+            "key": "factor",
+            "ordinal": 0,
+            "values": {
+              "trade_date": {
+                "type": "date",
+                "value": "2026-02-24"
+              },
+              "ts_code": {
+                "type": "text",
+                "value": "000001.SZ"
+              },
+              "ma20": {
+                "type": "float",
+                "value": "0x1.4000000000000p+0"
+              },
+              "calc_run_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              }
+            }
+          },
+          {
+            "table": "synthetic_type_probe",
+            "key": "types",
+            "ordinal": 0,
+            "values": {
+              "decimal": {
+                "type": "decimal",
+                "value": "1.00"
+              },
+              "float": {
+                "type": "float",
+                "value": "-0x0.0p+0"
+              },
+              "sql_null": {
+                "type": "sql_null"
+              },
+              "json_null": {
+                "type": "json_null"
+              },
+              "missing": {
+                "type": "missing"
+              },
+              "empty_text": {
+                "type": "text",
+                "value": ""
+              },
+              "empty_array": {
+                "type": "array",
+                "value": []
+              },
+              "zero": {
+                "type": "int",
+                "value": 0
+              },
+              "false": {
+                "type": "bool",
+                "value": false
+              },
+              "date": {
+                "type": "date",
+                "value": "2026-02-24"
+              },
+              "datetime": {
+                "type": "datetime",
+                "value": "2026-02-24T01:02:03.000001Z"
+              },
+              "bytes": {
+                "type": "bytes",
+                "value": "00ff"
+              }
+            }
+          }
+        ],
+        "sentinels": {
+          "status": "OFFLINE_ASSERTED",
+          "revision": "0058_data_publication",
+          "schema_sha256": "f6be0a5de1ce46e30758039a3ab345a308ff96cb36f6ee86ec3ccdc39759f297",
+          "sequences": {
+            "strategy_signal": {
+              "last_value": 1,
+              "is_called": false
+            }
+          },
+          "outside_tables": {
+            "paper_account": {
+              "before": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "after": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          },
+          "physical": "NOT_PROVEN"
+        }
+      },
+      "BUSINESS_EXPECTATION": {
+        "status": "HUMAN_DRAFT_PENDING_D04",
+        "case_id": "C01",
+        "revision": "manual-draft-01"
+      },
+      "TELEMETRY": {
+        "status": "NOT_PROVEN",
+        "heartbeat": "OFFLINE_MODEL_CONFIRMED",
+        "local_cleanup": "OFFLINE_MODEL_COMPLETE",
+        "measurements": "NOT_MEASURED"
+      }
+    },
+    "controls": {
+      "pg_physical_attestation": "NOT_PROVEN",
+      "os_reaped": "NOT_PROVEN",
+      "cleanup_absent": "NOT_PROVEN",
+      "external_owner_ack": "NOT_PROVEN",
+      "business_policy_approval": "PENDING_D04"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "C01",
+      "changes": []
+    },
+    {
+      "case_id": "C02",
+      "changes": [
+        {
+          "path": [
+            "subject",
+            "lifecycle"
+          ],
+          "value": "FAILED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            0,
+            "values",
+            "status",
+            "value"
+          ],
+          "value": "FAILED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            1,
+            "values",
+            "state",
+            "value"
+          ],
+          "value": "ABORTED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6,
+            "values",
+            "ma20",
+            "value"
+          ],
+          "value": "0x1.0000000000000p+0"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6,
+            "values",
+            "calc_run_id"
+          ],
+          "value": {
+            "type": "sql_null"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "C03",
+      "changes": [
+        {
+          "path": [
+            "subject",
+            "lifecycle"
+          ],
+          "value": "CANCELLED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            0,
+            "values",
+            "status",
+            "value"
+          ],
+          "value": "CANCELLED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            0,
+            "values",
+            "cancel_requested",
+            "value"
+          ],
+          "value": true
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            1,
+            "values",
+            "state",
+            "value"
+          ],
+          "value": "ABORTED"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6,
+            "values",
+            "ma20",
+            "value"
+          ],
+          "value": "0x1.0000000000000p+0"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6,
+            "values",
+            "calc_run_id"
+          ],
+          "value": {
+            "type": "sql_null"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "C04",
+      "changes": [
+        {
+          "path": [
+            "subject",
+            "commit_ack"
+          ],
+          "value": "UNKNOWN"
+        }
+      ]
+    },
+    {
+      "case_id": "C05",
+      "changes": []
+    },
+    {
+      "case_id": "C06",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            3,
+            "values",
+            "is_deleted",
+            "value"
+          ],
+          "value": true
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            3,
+            "values",
+            "row_data"
+          ],
+          "value": {
+            "type": "sql_null"
+          }
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6
+          ],
+          "value": null
+        }
+      ]
+    },
+    {
+      "case_id": "C07",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            8
+          ],
+          "value": {
+            "table": "data_publication_scope",
+            "key": "scope-2",
+            "ordinal": 1,
+            "values": {
+              "id": {
+                "type": "uuid",
+                "domain": "scope",
+                "value": "$scope2"
+              },
+              "publication_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "source_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              },
+              "table_name": {
+                "type": "text",
+                "value": "stock_factor_daily"
+              },
+              "start_date": {
+                "type": "date",
+                "value": "2026-02-23"
+              },
+              "end_date": {
+                "type": "date",
+                "value": "2026-02-24"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "C08",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            8
+          ],
+          "value": {
+            "table": "sector",
+            "key": "sector",
+            "ordinal": 0,
+            "values": {
+              "id": {
+                "type": "int",
+                "value": 101
+              },
+              "name": {
+                "type": "text",
+                "value": "fictional-sector"
+              }
+            }
+          }
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            9
+          ],
+          "value": {
+            "table": "theme",
+            "key": "theme",
+            "ordinal": 0,
+            "values": {
+              "theme_code": {
+                "type": "text",
+                "value": "TH001"
+              },
+              "name": {
+                "type": "text",
+                "value": "fictional-theme"
+              }
+            }
+          }
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            10
+          ],
+          "value": {
+            "table": "stock_opportunity_daily",
+            "key": "opportunity",
+            "ordinal": 0,
+            "values": {
+              "trade_date": {
+                "type": "date",
+                "value": "2026-02-24"
+              },
+              "ts_code": {
+                "type": "text",
+                "value": "000001.SZ"
+              },
+              "primary_sector_id": {
+                "type": "int",
+                "value": 101
+              },
+              "primary_theme_code": {
+                "type": "text",
+                "value": "TH001"
+              },
+              "calc_run_id": {
+                "type": "uuid",
+                "domain": "job",
+                "value": "$job"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "C09",
+      "changes": []
+    },
+    {
+      "case_id": "C10",
+      "changes": []
+    },
+    {
+      "case_id": "C11",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            7,
+            "values",
+            "datetime"
+          ],
+          "value": {
+            "type": "event",
+            "domain": "event",
+            "value": "$event"
+          }
+        }
+      ]
+    },
+    {
+      "case_id": "C12",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "sentinels",
+            "status"
+          ],
+          "value": "UNKNOWN"
+        }
+      ]
+    },
+    {
+      "case_id": "C13",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "sentinels",
+            "outside_tables",
+            "paper_account",
+            "after"
+          ],
+          "value": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ]
+    },
+    {
+      "case_id": "C14",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            3,
+            "values",
+            "row_data",
+            "value",
+            "ma20",
+            "value"
+          ],
+          "value": "0x1.8000000000000p+0"
+        },
+        {
+          "path": [
+            "domains",
+            "TYPED_OUTPUT",
+            "rows",
+            6,
+            "values",
+            "ma20",
+            "value"
+          ],
+          "value": "0x1.8000000000000p+0"
+        }
+      ]
+    },
+    {
+      "case_id": "C15",
+      "changes": [
+        {
+          "path": [
+            "source_context",
+            "reviewed_head_sha"
+          ],
+          "value": "0000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "case_id": "C16",
+      "changes": [
+        {
+          "path": [
+            "domains",
+            "TELEMETRY",
+            "local_cleanup"
+          ],
+          "value": "UNKNOWN"
+        }
+      ]
+    }
+  ]
+}
