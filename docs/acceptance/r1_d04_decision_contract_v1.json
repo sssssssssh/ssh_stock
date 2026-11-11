@@ -1,0 +1,230 @@
+{
+  "schema_version": "r1.d04.decision-contract.v1",
+  "request_protocol": "r1.d04.business-decision-request.v1",
+  "purpose": "OWNER_DECISION_PREPARATION",
+  "evidence_kind": "OFFLINE_OWNER_DECISION_REQUEST",
+  "authorization": "NOT_AUTHORIZED",
+  "provenance_trust": "CALLER_SUPPLIED_NOT_AUTHENTICATED",
+  "source_fields": [
+    {
+      "name": "reviewed_head_sha",
+      "type": "git_sha40"
+    },
+    {
+      "name": "historical_baseline_sha",
+      "type": "git_sha40"
+    },
+    {
+      "name": "frozen_schema_sha256",
+      "type": "sha256_hex64"
+    },
+    {
+      "name": "v2_commit_sha",
+      "type": "git_sha40"
+    },
+    {
+      "name": "d04_inventory_sha256",
+      "type": "sha256_hex64"
+    },
+    {
+      "name": "d04_contract_sha256",
+      "type": "sha256_hex64"
+    },
+    {
+      "name": "v2_oracle_sha256",
+      "type": "sha256_hex64"
+    },
+    {
+      "name": "v2_scenarios_sha256",
+      "type": "sha256_hex64"
+    },
+    {
+      "name": "v2_contract_sha256",
+      "type": "sha256_hex64"
+    }
+  ],
+  "timestamp_columns": 49,
+  "seed_frozen_columns": 5,
+  "golden_cases": 16,
+  "allowed_methods": [
+    "NOT_SELECTED",
+    "BASELINE_SNAPSHOT_ONCE_THEN_LOAD_TWICE",
+    "EXPLICIT_PER_ARM_TIMESTAMP_MAPPING"
+  ],
+  "decision_ids": [
+    "D04-01",
+    "D04-02",
+    "D04-03",
+    "D04-04",
+    "D04-05",
+    "D04-06",
+    "D04-07",
+    "D04-08",
+    "D04-09"
+  ],
+  "signature_state": "NOT_SIGNED",
+  "time_role": [
+    "SEED_INPUT",
+    "ROOT_RUNTIME",
+    "EVIDENCE"
+  ],
+  "owner_decision": "PENDING",
+  "physical_evidence_state": "NOT_PROVEN",
+  "G05": "MISSING",
+  "G08": "PARTIAL",
+  "G09": "PARTIAL",
+  "R1": "PARTIAL",
+  "limits": {
+    "bytes": 1048576,
+    "depth": 24,
+    "nodes": 20000,
+    "text": 2048,
+    "items": 256,
+    "integer_bits": 63
+  },
+  "sequence_columns": [
+    "data_quality_daily.id",
+    "sector.sector_id",
+    "sector_member.id"
+  ],
+  "sequence_state_fields": [
+    "last_value",
+    "is_called",
+    "increment"
+  ],
+  "generator_state_fields": [
+    "algorithm",
+    "state_sha256"
+  ],
+  "event_copy_policy": [
+    "JOB_UUID_TO_PUBLICATION_AND_METADATA",
+    "EXECUTION_TOKEN_TO_PUBLICATION",
+    "PUBLISHED_AT_TO_JOB_METADATA_PUBLICATION"
+  ],
+  "review_statuses": [
+    "D04_BLOCKED",
+    "PACKET_STRUCTURALLY_VALID",
+    "READY_FOR_OWNER_REVIEW"
+  ],
+  "record_fields": {
+    "request": [
+      "schema_version",
+      "evidence_kind",
+      "source",
+      "decision",
+      "authorization",
+      "real_input_equal",
+      "real_worker_output_equal",
+      "performance_pass",
+      "reviewer",
+      "signed_at",
+      "seed",
+      "questions",
+      "seed_times",
+      "sequence_policy",
+      "method",
+      "golden"
+    ],
+    "inventory": [
+      "schema_version",
+      "frozen_schema_sha256",
+      "columns"
+    ],
+    "column": [
+      "table",
+      "column",
+      "source",
+      "policy",
+      "role",
+      "timezone",
+      "precision",
+      "owner_decision",
+      "source_ref",
+      "freeze",
+      "event_mapping"
+    ],
+    "column_source": [
+      "path",
+      "line",
+      "declaration"
+    ],
+    "seed": [
+      "fixture",
+      "strategy_sha256",
+      "calendar_start",
+      "calendar_end",
+      "weekday_only",
+      "source_ref"
+    ],
+    "question": [
+      "id",
+      "background",
+      "options",
+      "recommendation",
+      "risk",
+      "evidence",
+      "on_invalidation",
+      "owner_choice",
+      "owner_reason",
+      "reviewer",
+      "signed_at"
+    ],
+    "seed_time": [
+      "column",
+      "value"
+    ],
+    "sequence_policy": [
+      "columns",
+      "state_fields",
+      "generator_fields",
+      "status"
+    ],
+    "method": [
+      "selection",
+      "raw_byte_identical",
+      "source_hash_policy",
+      "arms",
+      "events",
+      "event_copy_policy"
+    ],
+    "arm": [
+      "arm",
+      "raw_sha256",
+      "business_source_sha256"
+    ],
+    "event": [
+      "column",
+      "domain",
+      "source_ref",
+      "pairs"
+    ],
+    "event_pair": [
+      "left",
+      "right",
+      "left_id",
+      "right_id"
+    ],
+    "golden": [
+      "case_id",
+      "observed_draft_status",
+      "draft_error",
+      "source_ref",
+      "scope",
+      "policy_owner_decision",
+      "business_semantics_approved",
+      "financial_values_approved",
+      "review_note"
+    ]
+  },
+  "proposal_rules": {
+    "NOT_SELECTED": "EMPTY_ARMS_AND_EVENTS",
+    "BASELINE_SNAPSHOT_ONCE_THEN_LOAD_TWICE": "TWO_ARMS_SAME_DECLARED_RAW_DIGEST_NO_EVENTS",
+    "EXPLICIT_PER_ARM_TIMESTAMP_MAPPING": "TWO_DISTINCT_RAW_DIGESTS_FIVE_ORDERED_SEED_EVENT_DOMAINS",
+    "raw_byte_identical": false,
+    "business_source_hash": "PRESERVE_ORIGINAL_AND_REQUIRE_MATCH",
+    "signatures": "UNSUPPORTED",
+    "event_copy_observation": "PENDING_OWNER_EVIDENCE",
+    "json_numbers": "INTEGERS_ONLY",
+    "time_format": "YYYY-MM-DDTHH:MM:SS.ffffffZ"
+  }
+}

@@ -1,0 +1,446 @@
+{
+  "schema_version": "r1.d04.business-decision-request.v1",
+  "evidence_kind": "OFFLINE_OWNER_DECISION_REQUEST",
+  "source": {
+    "reviewed_head_sha": "f7d8e264041db4f7d5600e1ce5b2bbd6b7ff0345",
+    "historical_baseline_sha": "b6ffb7bf8ec7d26f771d9b89923e4f7e926edbed",
+    "frozen_schema_sha256": "f6be0a5de1ce46e30758039a3ab345a308ff96cb36f6ee86ec3ccdc39759f297",
+    "v2_commit_sha": "997f0a26f259424e3c566bff96bcae407e69f674",
+    "d04_inventory_sha256": "25eac0b98acd3ac67046cf5be7a690b09b8ed790d59338df3f27316cf62eb65b",
+    "d04_contract_sha256": "45f4d2e8d9c8c4aa8f144ff55b1794d9a0e50977e9e15789cc34d9ea57f9dcdc",
+    "v2_oracle_sha256": "7351e99af94b9de89105d0a2ee9ec75b093f04a3c5ed09d1ed32627a7efda825",
+    "v2_scenarios_sha256": "851365e3a60eb47b054c1e6da8fb83a99e4260069e510e13cca821225d0b98b7",
+    "v2_contract_sha256": "610faf751e344b05732eb67310b39e0ced825376bd27301e8e58624d01a1734b"
+  },
+  "decision": "NO_GO",
+  "authorization": "NOT_AUTHORIZED",
+  "real_input_equal": false,
+  "real_worker_output_equal": false,
+  "performance_pass": false,
+  "reviewer": "NOT_SIGNED",
+  "signed_at": "NOT_SIGNED",
+  "seed": {
+    "fixture": {
+      "seed": "tests.integration.test_business_recalc_performance.seed",
+      "fixture_id": "R1_ORIGINAL_420_V1",
+      "symbols": [
+        "000001.SZ",
+        "000002.SZ"
+      ],
+      "history_days": 420,
+      "include_closed": false,
+      "start": "2026-02-23",
+      "end": "2026-02-24",
+      "evaluate_signals": false,
+      "mode": "manual",
+      "dirty_ranges": [],
+      "warmup_trading_days": 250,
+      "lookback_calendar_days": 430
+    },
+    "strategy_sha256": "2ac50c63f3b522ae84e97dad2c9eb2eabd2206c224cea25f83d8d049e7d2864b",
+    "calendar_start": "2025-01-01",
+    "calendar_end": "2026-02-24",
+    "weekday_only": true,
+    "source_ref": "scripts/r1_seed_snapshot_recipe.py#recipe_template"
+  },
+  "questions": [
+    {
+      "id": "D04-01",
+      "background": "原 seed 的服务端时间默认值可能在两臂不同",
+      "options": [
+        "BASELINE_SNAPSHOT_ONCE_THEN_LOAD_TWICE",
+        "EXPLICIT_PER_ARM_TIMESTAMP_MAPPING"
+      ],
+      "recommendation": "建议 A，保留一次原 seed 的完整来源",
+      "risk": "逐臂 seed 无法推出字节相同",
+      "evidence": [
+        "scripts/r1_seed_snapshot_recipe.py#recipe_template",
+        "scripts/r1_seed_snapshot_recipe.py#compare_load_recipes"
+      ],
+      "on_invalidation": "保留未选并停止输入等价主张",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-02",
+      "background": "五列含原 seed 的服务器时间默认值",
+      "options": [
+        "CAPTURE_ACTUAL",
+        "UNKNOWN"
+      ],
+      "recommendation": "保存同一次原 seed 实际值、NULL 性、UTC 微秒和默认生成语义",
+      "risk": "猜测或删列会掩盖输入差异",
+      "evidence": [
+        "scripts/r1_seed_snapshot_recipe.py#recipe_template",
+        "scripts/r1_seed_snapshot_recipe.py#frozen_manifest"
+      ],
+      "on_invalidation": "缺值记 UNKNOWN 并请求原始证据",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-03",
+      "background": "49 列的角色来自冻结列策略",
+      "options": [
+        "REVIEW_EACH_COLUMN",
+        "DEFER"
+      ],
+      "recommendation": "逐列审定角色与 runtime 事件策略，排除业务日期",
+      "risk": "域内冲突可能被错误折叠",
+      "evidence": [
+        "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md",
+        "scripts/r1_seed_snapshot_recipe.py#recipe_template"
+      ],
+      "on_invalidation": "C11 保持待决",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-04",
+      "background": "序列和生成器状态影响再次加载",
+      "options": [
+        "REQUIRE_COMPLETE_STATE",
+        "DEFER"
+      ],
+      "recommendation": "保存所有序列 last_value、is_called、increment 及生成器状态",
+      "risk": "显式插入 ID 不代表序列已推进",
+      "evidence": [
+        "scripts/r1_seed_snapshot_recipe.py#frozen_manifest"
+      ],
+      "on_invalidation": "G05 保持 MISSING",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-05",
+      "background": "原始字节与 canonical 语义摘要分层",
+      "options": [
+        "COMMON_SNAPSHOT_BYTES",
+        "MAPPED_SEMANTICS"
+      ],
+      "recommendation": "A 用共同快照证明字节来源，B 保留独立原字节和业务 source hash",
+      "risk": "归一化业务 source hash 会抹除真实差异",
+      "evidence": [
+        "scripts/r1_seed_snapshot_recipe.py#compare_load_recipes",
+        "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md"
+      ],
+      "on_invalidation": "重新核对原始摘要",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-06",
+      "background": "发布和 metadata 存在复制引用",
+      "options": [
+        "REQUIRE_ORDERED_BIJECTION",
+        "DEFER"
+      ],
+      "recommendation": "明确域、行自然键、排序、多重集、复制及 NULL 关系",
+      "risk": "重复、反序或跨域会破坏归属",
+      "evidence": [
+        "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md",
+        "scripts/r1_seed_snapshot_recipe.py#compare_load_recipes"
+      ],
+      "on_invalidation": "歧义时保持 NO_GO",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-07",
+      "background": "16 个独立草稿用例只覆盖投影",
+      "options": [
+        "REVIEW_EACH_CASE",
+        "DEFER"
+      ],
+      "recommendation": "逐例审定演示语义，ma20=1.25 作为虚构探针",
+      "risk": "把示例误签为因子计算真值",
+      "evidence": [
+        "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json"
+      ],
+      "on_invalidation": "逐例保留草稿结论",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-08",
+      "background": "37 表 520 列冻结结构覆盖宽于 V2 投影",
+      "options": [
+        "REQUIRE_TYPED_ORIGINAL_EVIDENCE",
+        "DEFER"
+      ],
+      "recommendation": "另审真实原件、typed 导出、JSON 路径、物理清理和独立全量 Golden",
+      "risk": "结构检查不足以证明真实全等",
+      "evidence": [
+        "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md",
+        "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json"
+      ],
+      "on_invalidation": "G09 保持 PARTIAL",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    },
+    {
+      "id": "D04-09",
+      "background": "业务 owner 与独立 reviewer 分工",
+      "options": [
+        "NEW_VERSION_AND_REVIEW",
+        "DEFER"
+      ],
+      "recommendation": "绑定主体、证据版本与复审触发，方法或 schema 变化时重新签认",
+      "risk": "自填名称无法证明签认来源",
+      "evidence": [
+        "docs/acceptance/BIZ_PERF_03_A_R1_LNX_W04_READINESS.md",
+        "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json"
+      ],
+      "on_invalidation": "无可靠签认保持 NO_GO",
+      "owner_choice": "NOT_SELECTED",
+      "owner_reason": "PENDING",
+      "reviewer": "NOT_SIGNED",
+      "signed_at": "NOT_SIGNED"
+    }
+  ],
+  "seed_times": [
+    {
+      "column": "data_quality_daily.checked_at",
+      "value": "PENDING_OWNER_VALUE"
+    },
+    {
+      "column": "stock_basic.updated_at",
+      "value": "PENDING_OWNER_VALUE"
+    },
+    {
+      "column": "stock_daily.source_updated_at",
+      "value": "PENDING_OWNER_VALUE"
+    },
+    {
+      "column": "stock_limit_daily.created_at",
+      "value": "PENDING_OWNER_VALUE"
+    },
+    {
+      "column": "stock_limit_daily.updated_at",
+      "value": "PENDING_OWNER_VALUE"
+    }
+  ],
+  "sequence_policy": {
+    "columns": [
+      "data_quality_daily.id",
+      "sector.sector_id",
+      "sector_member.id"
+    ],
+    "state_fields": [
+      "last_value",
+      "is_called",
+      "increment"
+    ],
+    "generator_fields": [
+      "algorithm",
+      "state_sha256"
+    ],
+    "status": "PENDING"
+  },
+  "method": {
+    "selection": "NOT_SELECTED",
+    "raw_byte_identical": false,
+    "source_hash_policy": "PRESERVE_ORIGINAL",
+    "arms": [],
+    "events": [],
+    "event_copy_policy": [
+      "JOB_UUID_TO_PUBLICATION_AND_METADATA",
+      "EXECUTION_TOKEN_TO_PUBLICATION",
+      "PUBLISHED_AT_TO_JOB_METADATA_PUBLICATION"
+    ]
+  },
+  "golden": [
+    {
+      "case_id": "C01",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C01",
+      "scope": "FICTIONAL_TYPE_PROBE",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C02",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C02",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C03",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C03",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C04",
+      "observed_draft_status": "INCOMPLETE",
+      "draft_error": "V2_ACK_UNKNOWN",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C04",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C05",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C05",
+      "scope": "FICTIONAL_TYPE_PROBE",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C06",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C06",
+      "scope": "FICTIONAL_TYPE_PROBE",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C07",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C07",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C08",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C08",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C09",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C09",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C10",
+      "observed_draft_status": "OFFLINE_ORACLE_MATCH",
+      "draft_error": null,
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C10",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C11",
+      "observed_draft_status": "PENDING_OWNER_DECISION",
+      "draft_error": "V2_PENDING_D04",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C11",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "EVENT_MAPPING_UNDECIDED",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C12",
+      "observed_draft_status": "INCOMPLETE",
+      "draft_error": "V2_SENTINEL_UNKNOWN",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C12",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C13",
+      "observed_draft_status": "INCOMPLETE",
+      "draft_error": "V2_OUTSIDE_CHANGED",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C13",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C14",
+      "observed_draft_status": "UNEQUAL",
+      "draft_error": "V2_ORACLE_MISMATCH",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C14",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C15",
+      "observed_draft_status": "INCOMPLETE",
+      "draft_error": "V2_SOURCE",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C15",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    },
+    {
+      "case_id": "C16",
+      "observed_draft_status": "INCOMPLETE",
+      "draft_error": "V2_CLEANUP_UNKNOWN",
+      "source_ref": "tests/fixtures/r1_reviewed_snapshot_v2/expected_oracle_v2.json#C16",
+      "scope": "DRAFT_PROJECTION",
+      "policy_owner_decision": "PENDING",
+      "business_semantics_approved": false,
+      "financial_values_approved": false,
+      "review_note": "PENDING"
+    }
+  ]
+}

@@ -1,0 +1,839 @@
+{
+  "schema_version": "r1.d04.timestamp-inventory.v1",
+  "frozen_schema_sha256": "f6be0a5de1ce46e30758039a3ab345a308ff96cb36f6ee86ec3ccdc39759f297",
+  "columns": [
+    {
+      "table": "data_dirty_range",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 388,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_dirty_range/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_dirty_range",
+      "column": "last_failed_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 386,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_dirty_range/columns/last_failed_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_dirty_range",
+      "column": "processing_started_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 387,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_dirty_range/columns/processing_started_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_dirty_range",
+      "column": "resolved_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 389,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_dirty_range/columns/resolved_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_publication",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/data_publication.py",
+        "line": 36,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_publication/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "data_publication",
+      "column": "publish_started_at",
+      "source": {
+        "path": "backend/app/models/data_publication.py",
+        "line": 37,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_publication/columns/publish_started_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "data_publication",
+      "column": "published_at",
+      "source": {
+        "path": "backend/app/models/data_publication.py",
+        "line": 38,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_publication/columns/published_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "data_publication_source",
+      "column": "validated_at",
+      "source": {
+        "path": "backend/app/models/data_publication.py",
+        "line": 55,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_publication_source/columns/validated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "data_quality_daily",
+      "column": "checked_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 365,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "SEED_INPUT",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_quality_daily/columns/checked_at",
+      "freeze": "PENDING_OWNER_VALUE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "data_schedule_intent",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/data_schedule.py",
+        "line": 32,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_schedule_intent/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_schedule_intent",
+      "column": "next_attempt_at",
+      "source": {
+        "path": "backend/app/models/data_schedule.py",
+        "line": 31,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_schedule_intent/columns/next_attempt_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "data_schedule_intent",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/data_schedule.py",
+        "line": 33,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/data_schedule_intent/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "job_run",
+      "column": "cancel_requested_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 52,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/cancel_requested_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "job_run",
+      "column": "execution_started_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 51,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/execution_started_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "job_run",
+      "column": "finished_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 45,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/finished_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "job_run",
+      "column": "heartbeat_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 43,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/heartbeat_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "job_run",
+      "column": "last_progress_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 53,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/last_progress_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "job_run",
+      "column": "started_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 42,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/job_run/columns/started_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "market_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 273,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/market_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "provider_api_log",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 79,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/provider_api_log/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "sector_factor_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 342,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/sector_factor_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "service_heartbeat",
+      "column": "heartbeat_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 93,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/service_heartbeat/columns/heartbeat_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "service_heartbeat",
+      "column": "started_at",
+      "source": {
+        "path": "backend/app/models/job.py",
+        "line": 92,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/service_heartbeat/columns/started_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "signal_forward_eval",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 520,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/signal_forward_eval/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "stock_basic",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 40,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "SEED_INPUT",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_basic/columns/updated_at",
+      "freeze": "PENDING_OWNER_VALUE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_daily",
+      "column": "source_updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 72,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "SEED_INPUT",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_daily/columns/source_updated_at",
+      "freeze": "PENDING_OWNER_VALUE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_factor_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 242,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_factor_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_limit_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 173,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "SEED_INPUT",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_limit_daily/columns/created_at",
+      "freeze": "PENDING_OWNER_VALUE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_limit_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 174,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "SEED_INPUT",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_limit_daily/columns/updated_at",
+      "freeze": "PENDING_OWNER_VALUE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_opportunity_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 743,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_opportunity_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_st_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 142,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_st_daily/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "stock_st_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 143,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_st_daily/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "stock_state_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 449,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_state_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "stock_suspend_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 156,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_suspend_daily/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "stock_suspend_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 157,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_suspend_daily/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "stock_trade_status_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 418,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/stock_trade_status_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "strategy_signal",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 479,
+        "declaration": "mapped_column(DateTime(timezone=True))"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/strategy_signal/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "strategy_signal",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 480,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/strategy_signal/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "theme",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 538,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 599,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_daily/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 600,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_daily/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_factor_daily",
+      "column": "calculated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 696,
+        "declaration": "mapped_column(DateTime(timezone=True), nullable=False)"
+      },
+      "policy": "TIMESTAMP_EVENT_MAPPING",
+      "role": "ROOT_RUNTIME",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_factor_daily/columns/calculated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "PENDING_OWNER_POLICY"
+    },
+    {
+      "table": "theme_limit_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 640,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_limit_daily/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_limit_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 641,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_limit_daily/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_member_interval",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 573,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_member_interval/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_member_interval",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 574,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_member_interval/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_member_snapshot",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 556,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_member_snapshot/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_moneyflow_daily",
+      "column": "created_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 621,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_moneyflow_daily/columns/created_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    },
+    {
+      "table": "theme_moneyflow_daily",
+      "column": "updated_at",
+      "source": {
+        "path": "backend/app/models/market_data.py",
+        "line": 622,
+        "declaration": "mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())"
+      },
+      "policy": "EXACT_TYPED_VALUE",
+      "role": "EVIDENCE",
+      "timezone": "UTC",
+      "precision": "microsecond",
+      "owner_decision": "PENDING",
+      "source_ref": "docs/acceptance/r1_business_compare_schema_v1.json#tables/theme_moneyflow_daily/columns/updated_at",
+      "freeze": "NOT_APPLICABLE",
+      "event_mapping": "NOT_APPLICABLE"
+    }
+  ]
+}
