@@ -65,13 +65,50 @@ def safe_error(error):
             and re.fullmatch(r'A4233[1]?_[A-Z0-9_]{1,80}',code) else 'A42331_TEST_FAILURE')
 
 
+_SAFE_OBSERVER_NODEID = (
+    "tests/integration/test_a4233_observer_pg17.py::"
+    "test_real_pg17_observer_role_has_no_business_data_or_maintenance_privileges"
+)
+_SAFE_OBSERVER_BLOB = "1655f824271a7abc2eda1017a04c2f5fd5175262"
+_SAFE_OBSERVER_FUNCTION = "test_real_pg17_observer_role_has_no_business_data_or_maintenance_privileges"
+_SAFE_OBSERVER_LINES = {
+    128: "A_TABLE_PRIVILEGE",
+    131: "B_ROLE_ATTRIBUTES",
+    135: "C_OBSERVER_STATUS",
+}
+
+
+def safe_assertion_site(item, call):
+    """Only a reviewed test's verified source line can produce a fixed safe site."""
+    try:
+        if item.nodeid != _SAFE_OBSERVER_NODEID:
+            return "UNKNOWN"
+        info = call.excinfo
+        if info is None or info.type is not AssertionError:
+            return "UNKNOWN"
+        source = (Path(__file__).resolve().parents[1] /
+                  "tests/integration/test_a4233_observer_pg17.py").resolve()
+        raw = source.read_bytes().replace(b"\r\n", b"\n")
+        header = ("blob " + str(len(raw)) + "\0").encode("ascii")
+        if hashlib.sha1(header + raw).hexdigest() != _SAFE_OBSERVER_BLOB:
+            return "UNKNOWN"
+        for entry in reversed(list(info.traceback)):
+            if (entry.frame.code.co_name == _SAFE_OBSERVER_FUNCTION
+                    and Path(entry.path).resolve() == source):
+                return _SAFE_OBSERVER_LINES.get(entry.lineno + 1, "UNKNOWN")
+    except (AttributeError, OSError, TypeError, ValueError):
+        pass
+    return "UNKNOWN"
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     result = yield
     report = result.get_result()
     if report.failed:
         entry = dict(phase=report.when, **safe_error(call.excinfo.value),
-                     test_identity_sha256=hashlib.sha256(item.nodeid.encode()).hexdigest())
+                     test_identity_sha256=hashlib.sha256(item.nodeid.encode()).hexdigest(),
+                     assertion_site=safe_assertion_site(item, call))
         ERRORS.append(entry)
         report.longrepr = 'A42331_TEST_FAILURE'
         report.sections = []
@@ -103,3 +140,11 @@ def pytest_unconfigure(config):
             attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1'),
             failures=ERRORS,junit_sanitized=sanitized,capacity_ready=False,
             performance_eligible=False,production_read_authorized=False))
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_terminal_summary(terminalreporter):
+    # Only finite, reviewed labels are visible. No traceback or exception text.
+    for entry in ERRORS:
+        if entry.get("assertion_site") in _SAFE_OBSERVER_LINES.values():
+            terminalreporter.write_line("A42331_SAFE_ASSERTION_SITE=" + entry["assertion_site"])
