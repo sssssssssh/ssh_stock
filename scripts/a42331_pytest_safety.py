@@ -70,7 +70,9 @@ _SAFE_OBSERVER_NODEID = (
     "test_real_pg17_observer_role_has_no_business_data_or_maintenance_privileges"
 )
 _SAFE_OBSERVER_BLOB = "1655f824271a7abc2eda1017a04c2f5fd5175262"
-_SAFE_OBSERVER_FUNCTION = "test_real_pg17_observer_role_has_no_business_data_or_maintenance_privileges"
+_SAFE_OBSERVER_FUNCTION = (
+    "test_real_pg17_observer_role_has_no_business_data_or_maintenance_privileges"
+)
 _SAFE_OBSERVER_LINES = {
     128: "A_TABLE_PRIVILEGE",
     131: "B_ROLE_ATTRIBUTES",
