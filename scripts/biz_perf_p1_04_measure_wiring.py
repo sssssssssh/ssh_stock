@@ -119,7 +119,15 @@ class MonotonicClock:
 
 
 class ProcessStats:
-    """Injected process CPU and peak RSS reader."""
+    """Injected process CPU and peak RSS readers.
+
+    `cpu_ms` MUST return a CUMULATIVE process CPU time in whole milliseconds
+    (the same semantic as `time.process_time()` scaled by 1000). The recorder
+    takes the delta between the root-start sample and the root-freeze sample;
+    it never reports the raw cumulative value as an interval.
+
+    `rss_peak_bytes` returns the current peak resident set in bytes.
+    """
 
     def __init__(self, cpu_reader=None, rss_reader=None):
         self._cpu = cpu_reader
@@ -188,8 +196,7 @@ class OfflineRootRecorder:
         self._counts = RootCounts()
         self._cpu_start = None
         self._rss_peak = 0
-        self._fetch_ms = 0
-        self._fetched_rows = 0
+        self._worker_returned_ms = None
         self._root_started_ms = 0
         self._worker_started_ms = 0
         self._root_frozen_ms = None
@@ -214,15 +221,25 @@ class OfflineRootRecorder:
         _require(value >= self._last_elapsed, "CLOCK_REGRESSION")
         return value
 
-    def _emit(self, kind, **fields):
+    def _emit(self, kind, *, _forced_elapsed=None, **fields):
         _require(self._root_id is not None or kind == "root_started", "ROOT_NOT_OPENED")
+        if _forced_elapsed is None:
+            elapsed = self._elapsed()
+        else:
+            # M03: the caller-observed interval end is authoritative. It must
+            # still be monotonic against already emitted events and not future.
+            _require(_duration(_forced_elapsed), "STAGE_INTERVAL_REJECTED")
+            _require(_forced_elapsed >= self._last_elapsed, "CLOCK_REGRESSION")
+            _require(_forced_elapsed <= self._now_ms() - self._origin,
+                     "STAGE_END_IN_FUTURE")
+            elapsed = _forced_elapsed
         event = {
             "seq": self._seq + 1,
             "event_kind": kind,
             "run_uuid": self._run_uuid,
             "root_job_id": self._root_id,
             "utc": self._stamp(),
-            "elapsed_ms": self._elapsed(),
+            "elapsed_ms": elapsed,
             **fields,
         }
         _require(self._seq < MAX_EVENTS, "EVENT_LIMIT")
@@ -260,15 +277,29 @@ class OfflineRootRecorder:
                      instrumented=True):
         """Record one stage interval.
 
-        `begin_ms` / `end_ms` are offsets from the recorder origin (the same
-        clock as `elapsed_ms`). Stages may overlap; they never sum to root.
+        `begin_ms` / `end_ms` are offsets from the recorder origin, on the same
+        clock as `elapsed_ms`.
+
+        Ordering rules (M02/M03):
+          * the whole interval must sit inside the worker window, and the end
+            must not be in the future relative to the observed clock;
+          * `end_ms` IS the observed stage end: the emitted event's `elapsed_ms`
+            is forced to equal it, so the validator's `elapsed - started` wall
+            can never silently disagree with the caller's interval;
+          * a stage may start before the previously emitted event when it is a
+            nested/overlapping child. Only the emitted event times must be
+            monotonic, not the historical stage starts.
         """
         self._expect("worker_started", "stage")
         _require(stage_name in STAGES, "STAGE_REJECTED")
         _require(_duration(begin_ms) and _duration(end_ms) and end_ms >= begin_ms,
                  "STAGE_INTERVAL_REJECTED")
         _require(begin_ms >= self._worker_started_ms, "STAGE_INTERVAL_REJECTED")
-        _require(begin_ms >= self._last_elapsed, "CLOCK_REGRESSION")
+        # The stage must have finished by the time it is recorded; a future end
+        # would let a caller declare work that has not happened yet.
+        now = self._now_ms() - self._origin
+        _require(end_ms <= now, "STAGE_END_IN_FUTURE")
+        _require(self._last_elapsed <= MAX_ELAPSED_MS, "ELAPSED_LIMIT")
 
         if instrumented:
             for value in (sql_execute_ms, sql_calls, fetch_observed_ms, fetched_rows):
@@ -285,32 +316,80 @@ class OfflineRootRecorder:
             instrumented=bool(instrumented), coverage_reason=coverage,
             sql_execute_ms=sql_execute_ms, sql_calls=sql_calls,
             fetch_observed_ms=fetch_observed_ms, fetched_rows=fetched_rows,
+            _forced_elapsed=end_ms,
         )
         self._stage_ends.append(end_ms)
         return event
 
-    def freeze_root(self, *, cpu_ms=None, rss_peak_bytes=None):
+    def freeze_root(self, *, cpu_ms=None, rss_peak_bytes=None, fetch=None):
         """Freeze root counters and emit root_frozen.
 
-        Root SQL counts are frozen here; any later counter attempt is refused by
-        RootCounts itself. Post-root reads must never reach this counter.
+        Contract points enforced here:
+
+        * M01 -- `process_cpu_ms` is `cpu_end - cpu_start` over the root window.
+          The reader is cumulative; a raw cumulative value is never reported.
+          Non-integer, negative, regressing or non-finite samples yield UNKNOWN
+          instead of a fabricated interval.
+        * M04 -- root FETCH is UNKNOWN unless a validated root-level fetch port
+          supplied it. Stage fetch values are never summed: stages may nest.
+        * M05 -- the freeze instant is captured from the clock, and the emitted
+          event's elapsed is that instant. A caller that advances the clock
+          after the worker returned therefore records the later value only if
+          it explicitly asks for it via `frozen_at_ms`; otherwise the worker
+          interval would absorb post-return bookkeeping.
         """
         self._expect("worker_started", "stage")
         _require(not self._frozen, "ALREADY_FROZEN")
         counts = self._counts.freeze()
         self._frozen = True
-        cpu = self._stats.cpu_ms() if cpu_ms is None else cpu_ms
+
+        cpu = self._interval_cpu(cpu_ms)
         rss = self._stats.rss_peak_bytes() if rss_peak_bytes is None else rss_peak_bytes
-        _require(cpu == UNKNOWN or (type(cpu) is int and cpu >= 0), "METRIC_REJECTED")
         _require(rss == UNKNOWN or (type(rss) is int and rss >= 0), "METRIC_REJECTED")
+
+        if fetch is None:
+            fetch_ms = fetch_rows = UNKNOWN
+        else:
+            _require(isinstance(fetch, dict)
+                     and set(fetch) == {"observed_ms", "rows"}, "FETCH_REJECTED")
+            fetch_ms, fetch_rows = fetch["observed_ms"], fetch["rows"]
+            _require(fetch_ms == UNKNOWN or _duration(fetch_ms), "FETCH_REJECTED")
+            _require(fetch_rows == UNKNOWN
+                     or (type(fetch_rows) is int and fetch_rows >= 0), "FETCH_REJECTED")
+
+        # M05: bind to the captured worker-return instant. If the inline path
+        # was not used the current clock is the boundary; the value is still
+        # captured once, here, so later work cannot leak into the interval.
+        if self._worker_returned_ms is None:
+            self._worker_returned_ms = self._now_ms() - self._origin
+        frozen_at = self._worker_returned_ms
+        _require(frozen_at >= self._last_elapsed, "CLOCK_REGRESSION")
+
         event = self._emit(
             "root_frozen", sql_counts=counts, process_cpu_ms=cpu,
-            rss_peak_bytes=rss, fetch_observed_ms=self._fetch_ms,
-            fetched_rows=self._fetched_rows,
+            rss_peak_bytes=rss, fetch_observed_ms=fetch_ms, fetched_rows=fetch_rows,
+            _forced_elapsed=frozen_at,
         )
         _require(event["elapsed_ms"] > self._root_started_ms, "ROOT_INTERVAL_REJECTED")
         self._root_frozen_ms = event["elapsed_ms"]
         return event
+
+    def _interval_cpu(self, override):
+        """Return the root-window CPU interval, or UNKNOWN when unprovable."""
+        if override is not None:
+            end = override
+        else:
+            end = self._stats.cpu_ms()
+        start = self._cpu_start
+        if start == UNKNOWN or end == UNKNOWN:
+            return UNKNOWN
+        for value in (start, end):
+            if type(value) is not int or value < 0:
+                return UNKNOWN
+        # A regressing cumulative reader cannot yield a valid interval.
+        if end < start:
+            return UNKNOWN
+        return end - start
 
     def record_post_validation(self, *, job_status, publication_state, quality_verified,
                                no_candidate_leak, atomic_publication_verified,
@@ -359,6 +438,16 @@ class OfflineRootRecorder:
     def run_offline(self, *, stages=()):
         """Drive one fully simulated root through the injected executor port.
 
+        M05: the worker-return instant is captured from the injected clock
+        immediately after `execute_claimed_job()` returns (which includes the
+        worker's own finally). `freeze_root()` then binds to THAT instant, so
+        any later bookkeeping — post-root reads, archive work, clock advances —
+        can never be absorbed into `execute_claimed_job_ms`.
+
+        Root SQL counting must happen inside the root observation window. The
+        offline driver performs it before the worker is considered returned so
+        the counter reflects root work rather than post-return activity.
+
         Real execution is impossible here: the default executor refuses, and
         every supported caller injects an offline double.
         """
@@ -382,6 +471,8 @@ class OfflineRootRecorder:
             )
             cursor = end
         self._executor.execute_claimed_job(root)
+        # Boundary: the worker is done the moment this call returns.
+        self._worker_returned_ms = self._now_ms() - self._origin
         return self
 
     def _advance_to(self, target_ms):
@@ -425,7 +516,16 @@ class OfflineRootRecorder:
 
 
 class ListSink:
-    """In-memory append-only sink used by the offline contract tests."""
+    """NON-PERSISTENT in-memory test double. It is NOT a durable sink.
+
+    `append()` only extends a Python list: nothing reaches disk, and no fsync
+    happens until `write_jsonl()` is called at the very end. A crash before that
+    call loses every event. Any durability claim must use `FileJsonlSink`
+    instead; the offline `T34` prefix contract therefore proves only the
+    in-memory prefix, never post-crash file survival.
+    """
+
+    DURABLE = False
 
     def __init__(self):
         self.events = []
@@ -444,6 +544,58 @@ class ListSink:
             if fsync:
                 os.fsync(stream.fileno())
         return hashlib.sha256(raw).hexdigest()
+
+
+class FileJsonlSink:
+    """Durable offline sink: each append is written, flushed and fsynced.
+
+    Safety rules, all fail-closed:
+      * the target file must not already exist (never overwrite prior evidence);
+      * the parent directory must exist and be a real directory;
+      * re-entrant appends are refused.
+    No external service, database or network is involved.
+    """
+
+    DURABLE = True
+
+    def __init__(self, path):
+        self._path = Path(path)
+        if self._path.exists() or self._path.is_symlink():
+            raise WiringRejected("SINK_EXISTS")
+        parent = self._path.parent
+        _require(parent.is_dir() and not parent.is_symlink(), "SINK_PARENT_REJECTED")
+        self._fh = open(self._path, "xb")
+        self._busy = False
+        self._count = 0
+
+    def append(self, event):
+        _require(not self._busy, "SINK_REENTRANT")
+        self._busy = True
+        try:
+            raw = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
+            self._fh.write(raw.encode())
+            self._fh.flush()
+            os.fsync(self._fh.fileno())
+            self._count += 1
+        finally:
+            self._busy = False
+
+    def close(self):
+        if not self._fh.closed:
+            self._fh.flush()
+            os.fsync(self._fh.fileno())
+            self._fh.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
+
+    @property
+    def count(self):
+        return self._count
 
 
 def build_preflight(*, preflight_sha256=None, run_uuid=None, dataset="0" * 64,
@@ -529,10 +681,51 @@ class OfflineExecutor:
         return {"root_job_id": root_job_id, "status": "SUCCESS"}
 
 
+class CountingExecutor(OfflineExecutor):
+    """Offline executor that performs counted root SQL inside the call window.
+
+    M05: root SQL attempts belong to the root observation window, i.e. they
+    happen while the worker call is in flight, never after it returned.
+    """
+
+    def __init__(self, *, counts, calls=None):
+        super().__init__(calls=calls)
+        self._counts = counts
+
+    def execute_claimed_job(self, root_job_id):
+        self.calls.append("execute_claimed_job")
+        for operation, repeat in (("SELECT", 9), ("WITH", 2)):
+            for _ in range(repeat):
+                self._counts.begin(operation)
+                self._counts.end()
+        return {"root_job_id": root_job_id, "status": "SUCCESS"}
+
+
 DEFAULT_STAGES = (
     {"stage_name": "factors.compute", "stage_ms": 20, "sql_execute_ms": 3,
      "sql_calls": 2, "fetch_observed_ms": 2, "fetched_rows": 10},
 )
+
+
+class CumulativeCpuReader:
+    """Cumulative process CPU in milliseconds, advancing with the clock.
+
+    Models a real `process_time()` reader: strictly non-decreasing, and only
+    meaningful as a delta across a window. It records its own baseline on first
+    use so it needs no private state from the clock.
+    """
+
+    def __init__(self, clock, *, base_ms=100):
+        self._clock = clock
+        self._base = base_ms
+        self._origin = None
+
+    def __call__(self):
+        now = self._clock.ms()
+        if self._origin is None:
+            self._origin = now
+        # Half a millisecond of CPU per elapsed millisecond, offset by base.
+        return self._base + (now - self._origin) // 2
 
 
 def emit_fixture(directory, *, contract=None, stages=None, clock=None):
@@ -549,26 +742,21 @@ def emit_fixture(directory, *, contract=None, stages=None, clock=None):
     clock = clock or FakeClock()
     sink = ListSink()
     calls = []
-    executor = OfflineExecutor(calls=calls)
+    cpu = CumulativeCpuReader(clock)
 
     recorder = OfflineRootRecorder(
         contract=contract, clock=clock,
-        stats=ProcessStats(cpu_reader=lambda: 10, rss_reader=lambda: 1024), sink=sink,
-        executor=executor,
+        stats=ProcessStats(cpu_reader=cpu, rss_reader=lambda: 1024), sink=sink,
+        executor=OfflineExecutor(calls=calls),
     )
+    executor = CountingExecutor(counts=recorder.counts(), calls=calls)
     executor.current_root_id = recorder.root_id_factory()
+    recorder._executor = executor
+
+    # Root SQL is counted INSIDE the worker call (CountingExecutor), and the
+    # freeze binds to the worker-return instant captured by run_offline, so no
+    # post-return clock advance can inflate execute_claimed_job_ms.
     recorder.run_offline(stages=stages)
-
-    # Root SQL attempts are counted before the freeze; the summary requires a
-    # non-zero root total plus at least one instrumented stage, otherwise the
-    # evidence is INCOMPLETE by contract.
-    counts = recorder.counts()
-    for operation, repeat in (("SELECT", 9), ("WITH", 2)):
-        for _ in range(repeat):
-            counts.begin(operation)
-            counts.end()
-
-    clock.advance(recorder.frozen_after_ms())
     recorder.freeze_root()
 
     clock.advance(7)  # independent post-root read window
