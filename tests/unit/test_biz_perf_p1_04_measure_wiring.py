@@ -103,7 +103,8 @@ class CountingExecutor(Executor):
         return super().execute_claimed_job(root_job_id)
 
 
-def drive(recorder, clock, *, stages=((5, 20),), post=7, cleanup=3, executor=None):
+def drive(recorder, clock, *, stages=((5, 20),), post=7, cleanup=3, executor=None,
+          tables=None):
     """Drive one root. Root SQL is counted inside the worker call (M05).
 
     When `executor` is supplied the wrapper delegates to it so its call log
@@ -123,7 +124,7 @@ def drive(recorder, clock, *, stages=((5, 20),), post=7, cleanup=3, executor=Non
     recorder.record_post_validation(
         job_status="SUCCESS", publication_state="PUBLISHED", quality_verified=True,
         no_candidate_leak=True, atomic_publication_verified=True,
-        tables_sha256={"stock_factor_daily": "9" * 64}, source_mismatches=0,
+        tables_sha256=tables or {"stock_factor_daily": "9" * 64}, source_mismatches=0,
     )
     clock.advance(cleanup)
     recorder.record_cleanup(cleanup_status="COMPLETE",
@@ -260,16 +261,16 @@ def test_T29_missing_measurements_stay_unknown():
 
 def test_T30_zero_cpu_ratio_is_undefined_and_rss_is_peak(tmp_path):
     source, output = tmp_path / "fixture", tmp_path / "validated"
-    clock = w.FakeClock()
-    contract = w.build_preflight(implementation_sha=IMPL)
-    w.emit_fixture(source, contract=contract, clock=clock)
+    rec, clock, sink = _cpu_recorder(CumulativeCpu([100, 100]))
+    drive(rec, clock, tables=dict.fromkeys(w.TRACKED_TABLES, "9" * 64))
+    write_recorded_fixture(source, rec._contract, sink.events)
     d.validate_bundle(source, output, IMPL)
     summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
     # A zero CPU reading must yield UNDEFINED, never a fabricated ratio.
-    assert summary.get("wall_per_cpu") in (w.UNKNOWN, "UNDEFINED") or \
-        summary.get("wall_per_cpu") is not None
+    assert summary["wall_per_cpu"] == "UNDEFINED"
     snapshot = json.loads((output / "root_snapshot.json").read_text(encoding="utf-8"))
-    assert "rss_peak_bytes" in snapshot
+    assert snapshot["process_cpu_ms"] == 0
+    assert snapshot["rss_peak_bytes"] == 2048
 
 
 # --------------------------------------------------------------- T31-T33
@@ -737,3 +738,322 @@ def test_M06_file_sink_survives_abort_after_partial_writes(tmp_path):
     assert len(lines) == 2
     assert json.loads(lines[0]) == {"seq": 1}
     assert json.loads(lines[1]) == {"seq": 2}
+
+
+# E-02-R2: stable probes of the actual recorder/RootCounts path.
+def returned_boundary():
+    clock = Clock()
+    cpu = {"value": 100}
+    reads = []
+
+    def reader():
+        reads.append(cpu["value"])
+        return cpu["value"]
+
+    rec, _, sink = _cpu_recorder(reader, clock=clock)
+
+    class Worker(Executor):
+        def execute_claimed_job(self, root_job_id):
+            self.calls.append("execute_claimed_job")
+            try:
+                clock.advance(40)
+                cpu["value"] = 120
+                for _ in range(2):
+                    assert rec.counts().begin("SELECT") is True
+                    rec.counts().end()
+            finally:
+                self.finally_done = True
+
+    worker = Worker()
+    worker.root_id = ROOT
+    rec._executor = worker
+    rec.run_offline()
+    assert worker.finally_done
+    assert worker.calls == ["create_claim", "execute_claimed_job"]
+    return rec, clock, sink, cpu, reads
+
+
+def test_R2_cpu_window_closes_at_worker_return():
+    rec, clock, _, cpu, reads = returned_boundary()
+    clock.advance(20)
+    cpu["value"] = 140
+    frozen = rec.freeze_root()
+    assert frozen["elapsed_ms"] == 40
+    assert frozen["process_cpu_ms"] == 20
+    assert reads == [100, 120]
+
+
+def test_R2_sql_window_closes_at_worker_return():
+    rec, _, _, _, _ = returned_boundary()
+    assert rec.counts().begin("UPDATE") is False
+    frozen = rec.freeze_root()
+    assert frozen["sql_counts"] == {"SELECT": 2}
+
+
+def test_R2_post_return_clock_cpu_sql_cannot_pollute_snapshot():
+    rec, clock, sink, cpu, reads = returned_boundary()
+    clock.advance(20)
+    cpu["value"] = 140
+    accepted = rec.counts().begin("UPDATE")
+    if accepted:
+        rec.counts().end()
+    frozen = rec.freeze_root()
+    assert (frozen["elapsed_ms"], frozen["process_cpu_ms"], frozen["sql_counts"]) == (
+        40, 20, {"SELECT": 2})
+    assert accepted is False
+    assert reads == [100, 120]
+    assert frozen["fetch_observed_ms"] == frozen["fetched_rows"] == w.UNKNOWN
+    assert len([e for e in sink.events if e["event_kind"] == "root_frozen"]) == 1
+
+
+
+def write_recorded_fixture(source, contract, events):
+    source.mkdir()
+    (source / "preflight.json").write_bytes(d.encode(
+        {k: v for k, v in contract.items() if k != "preflight_sha256"}))
+    (source / "events.jsonl").write_bytes(b"".join(d.encode(e) for e in events))
+
+
+@pytest.mark.parametrize("fault", ["short", "write", "flush", "fsync"])
+def test_R2_sink_fault_is_sticky_and_bundle_is_incomplete(tmp_path, monkeypatch, fault):
+    path = tmp_path / "events.jsonl"
+    sink = w.FileJsonlSink(path)
+    real = sink._fh
+    rec, clock, _, _, contract = build(sink=sink)
+    rec.begin_root(contract["preflight_sha256"])
+
+    class FaultFile:
+        def write(self, raw):
+            if fault == "write":
+                raise OSError("private error detail")
+            if fault == "short":
+                return real.write(raw[:len(raw) // 2])
+            return real.write(raw)
+
+        def flush(self):
+            if fault == "flush":
+                raise OSError("private error detail")
+            real.flush()
+
+        def fileno(self):
+            return real.fileno()
+
+        def close(self):
+            real.close()
+
+        @property
+        def closed(self):
+            return real.closed
+
+    sink._fh = FaultFile()
+    with monkeypatch.context() as patch:
+        if fault == "fsync":
+            def broken_sync(fd):
+                raise OSError("private error detail")
+            patch.setattr(w.os, "fsync", broken_sync)
+        with pytest.raises(w.WiringRejected, match="^SINK_FAILED$"):
+            rec.begin_worker()
+        assert sink.count == 1
+        with pytest.raises(w.WiringRejected):
+            sink.append({"seq": 999})
+        with pytest.raises(w.WiringRejected):
+            rec.begin_worker()
+    real.close()  # release descriptor; never claim an uncertain last line durable
+    source = tmp_path / "fixture"
+    source.mkdir()
+    (source / "preflight.json").write_bytes(d.encode(
+        {k: v for k, v in contract.items() if k != "preflight_sha256"}))
+    (source / "events.jsonl").write_bytes(path.read_bytes())
+    output = tmp_path / "validated"
+    with pytest.raises(d.Rejected):
+        d.validate_bundle(source, output, IMPL)
+    assert not (output / "integrity.json").exists()
+    assert not (output / "summary.json").exists()
+
+
+@pytest.mark.parametrize("end", [w.UNKNOWN, 90, 100])
+def test_R2_return_cpu_missing_regressing_zero_preserved(tmp_path, end):
+    reader = CumulativeCpu([100, end])
+    rec, clock, sink = _cpu_recorder(reader)
+    rec._executor = CountingExecutor([rec], inner=rec._executor)
+    rec.run_offline(stages=[{"stage_name": "factors.compute", "stage_ms": 20}])
+    clock.advance(20)
+    frozen = rec.freeze_root()
+    assert reader.calls == 2
+    assert frozen["process_cpu_ms"] == (0 if end == 100 else w.UNKNOWN)
+    clock.advance(1)
+    rec.record_post_validation(
+        job_status="SUCCESS", publication_state="PUBLISHED", quality_verified=True,
+        no_candidate_leak=True, atomic_publication_verified=True,
+        tables_sha256=dict.fromkeys(w.TRACKED_TABLES, "9" * 64), source_mismatches=0)
+    clock.advance(1)
+    rec.record_cleanup(cleanup_status="COMPLETE", instance=rec._contract["expected_instance"])
+    source = tmp_path / "fixture"
+    write_recorded_fixture(source, rec._contract, sink.events)
+    output = tmp_path / "validated"
+    result = d.validate_bundle(source, output, IMPL)
+    assert result["root_attempts"] == 0
+    summary = json.loads((output / "summary.json").read_text(encoding="utf-8"))
+    assert summary["wall_per_cpu"] == "UNDEFINED"
+
+
+def test_R2_worker_exception_seals_attempt_and_keeps_failure_prefix(tmp_path):
+    rec, clock, sink, executor, contract = build()
+
+    def broken(root):
+        executor.calls.append("execute_claimed_job")
+        try:
+            clock.advance(40)
+            assert rec.counts().begin("SELECT")
+        finally:
+            rec.counts().end()
+        raise RuntimeError("private worker detail")
+
+    executor.execute_claimed_job = broken
+    with pytest.raises(w.WiringRejected, match="^ROOT_FAILED$"):
+        rec.run_offline()
+    assert rec.phase == "failure"
+    assert rec.counts().begin("UPDATE") is False
+    assert sink.events[-1]["failure_code"] == "ROOT_FAILED"
+    with pytest.raises(w.WiringRejected):
+        rec.freeze_root()
+    with pytest.raises(w.WiringRejected):
+        rec.run_offline()
+    assert executor.calls == ["create_claim", "execute_claimed_job"]
+    source, output = tmp_path / "fixture", tmp_path / "validated"
+    write_recorded_fixture(source, contract, sink.events)
+    with pytest.raises(d.Rejected):
+        d.validate_bundle(source, output, IMPL)
+    assert not (output / "integrity.json").exists()
+
+
+def test_R2_manual_boundary_is_freeze_time_and_late_override_is_refused():
+    rec, clock, _ = _cpu_recorder(CumulativeCpu([100, 140]))
+    rec.begin_root(rec._contract["preflight_sha256"])
+    rec.begin_worker()
+    clock.advance(60)
+    frozen = rec.freeze_root(fetch={"observed_ms": 3, "rows": 7})
+    assert (frozen["elapsed_ms"], frozen["process_cpu_ms"]) == (60, 40)
+    assert (frozen["fetch_observed_ms"], frozen["fetched_rows"]) == (3, 7)
+    rec, _, _, _, _ = returned_boundary()
+    with pytest.raises(w.WiringRejected, match="^ROOT_ALREADY_CAPTURED$"):
+        rec.freeze_root(cpu_ms=999, fetch={"observed_ms": 5, "rows": 99})
+    with pytest.raises(w.WiringRejected, match="^ALREADY_FROZEN$"):
+        rec.record_stage("factors.compute", begin_ms=0, end_ms=40)
+    assert rec.freeze_root()["process_cpu_ms"] == 20
+
+
+def test_R2_sink_failure_on_first_event_cannot_reopen_root():
+    rec, _, _, executor, contract = build(sink=Sink(fail_at=1))
+    with pytest.raises(w.WiringRejected, match="^SINK_FAILED$"):
+        rec.begin_root(contract["preflight_sha256"])
+    with pytest.raises(w.WiringRejected, match="^ONE_ATTEMPT_CONSUMED$"):
+        rec.begin_root(contract["preflight_sha256"])
+    assert executor.calls == []
+
+
+
+def test_R2_file_sink_writes_original_fd_after_path_replacement(tmp_path):
+    path = tmp_path / "events.jsonl"
+    original = tmp_path / "original.jsonl"
+    sink = w.FileJsonlSink(path)
+    if w.os.name == "posix":
+        path.rename(original)
+        path.write_text("replacement\n", encoding="utf-8")
+        sink.append({"seq": 1})
+        assert path.read_text(encoding="utf-8") == "replacement\n"
+        assert json.loads(original.read_bytes()) == {"seq": 1}
+    else:
+        # Windows sharing rules may prevent rename while open. No hostile-path
+        # or directory crash-durability guarantee is inferred on this platform.
+        sink.append({"seq": 1})
+        assert json.loads(path.read_bytes()) == {"seq": 1}
+    assert sink.directory_synced is (w.os.name == "posix")
+    sink.close()
+
+
+def test_R2_parent_directory_sync_follows_exclusive_creation(tmp_path, monkeypatch):
+    calls = []
+    real_sync = w.os.fsync
+
+    def sync(fd):
+        calls.append(fd)
+        return real_sync(fd)
+
+    monkeypatch.setattr(w.os, "fsync", sync)
+    sink = w.FileJsonlSink(tmp_path / "events.jsonl")
+    assert len(calls) == (1 if w.os.name == "posix" else 0)
+    sink.append({"seq": 1})
+    assert calls[-1] == sink._fh.fileno()
+    assert len(calls) == (2 if w.os.name == "posix" else 1)
+    sink.close()
+
+
+def test_R2_parent_sync_failure_refuses_sink_on_posix(tmp_path, monkeypatch):
+    path = tmp_path / "events.jsonl"
+    if w.os.name == "posix":
+        def broken(fd):
+            raise OSError("private directory detail")
+        monkeypatch.setattr(w.os, "fsync", broken)
+        with pytest.raises(w.WiringRejected, match="^SINK_OPEN_FAILED$"):
+            w.FileJsonlSink(path)
+        assert path.exists() and path.read_bytes() == b""
+    else:
+        sink = w.FileJsonlSink(path)
+        assert sink.directory_synced is False
+        sink.close()
+
+
+def test_R2_return_rss_sample_is_not_replaced_by_later_read():
+    rec, clock, _ = _cpu_recorder(CumulativeCpu([100, 120]))
+    rss = {"value": 2048, "reads": 0}
+
+    def peak():
+        rss["reads"] += 1
+        return rss["value"]
+
+    rec._stats._rss = peak
+    rec.run_offline(stages=[{"stage_name": "factors.compute", "stage_ms": 40}])
+    rss["value"] = 9999
+    clock.advance(20)
+    assert rec.freeze_root()["rss_peak_bytes"] == 2048
+    assert rss["reads"] == 1
+
+
+
+def test_R2_create_claim_remains_inside_root_and_worker_is_child():
+    rec, clock, sink, executor, _ = build()
+
+    def claim(identity):
+        executor.calls.append("create_claim")
+        clock.advance(5)
+        return ROOT
+
+    def worker(root):
+        executor.calls.append("execute_claimed_job")
+        clock.advance(40)
+
+    executor.create_and_claim = claim
+    executor.execute_claimed_job = worker
+    rec.run_offline()
+    clock.advance(20)
+    frozen = rec.freeze_root()
+    started = next(e for e in sink.events if e["event_kind"] == "worker_started")
+    assert frozen["elapsed_ms"] == 45
+    assert started["elapsed_ms"] == 5
+    assert frozen["elapsed_ms"] - started["elapsed_ms"] == 40
+    assert executor.calls == ["create_claim", "execute_claimed_job"]
+
+
+def test_R2_failed_return_capture_cannot_be_repaired_by_late_clock():
+    rec, clock, sink, executor, _ = build()
+    with pytest.raises(w.WiringRejected, match="^ROOT_INTERVAL_REJECTED$"):
+        rec.run_offline()  # no elapsed time at the actual return
+    clock.advance(40)
+    with pytest.raises(w.WiringRejected):
+        rec.freeze_root()
+    with pytest.raises(w.WiringRejected):
+        rec.run_offline()
+    assert rec.counts().begin("UPDATE") is False
+    assert executor.calls == ["create_claim", "execute_claimed_job"]
+    assert not any(e["event_kind"] == "root_frozen" for e in sink.events)

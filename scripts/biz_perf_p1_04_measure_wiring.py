@@ -89,6 +89,10 @@ def _require(condition, code):
         raise WiringRejected(code)
 
 
+class SinkRejected(WiringRejected, OSError):
+    """Fixed-code failure compatible with existing I/O-error callers."""
+
+
 def _duration(value):
     return type(value) is int and 0 <= value <= MAX_ELAPSED_MS
 
@@ -193,6 +197,9 @@ class OfflineRootRecorder:
         self._last_elapsed = 0
         self._last_utc = None
         self._frozen = False
+        self._root_snapshot = None
+        self._sink_failed = False
+        self._attempt_consumed = False
         self._counts = RootCounts()
         self._cpu_start = None
         self._rss_peak = 0
@@ -243,7 +250,12 @@ class OfflineRootRecorder:
             **fields,
         }
         _require(self._seq < MAX_EVENTS, "EVENT_LIMIT")
-        self._sink.append(event)  # persisted before anything derived
+        _require(not self._sink_failed, "SINK_FAILED")
+        try:
+            self._sink.append(event)  # persisted before anything derived
+        except Exception:
+            self._sink_failed = True
+            raise SinkRejected("SINK_FAILED") from None
         self._seq = event["seq"]
         self._last_elapsed = event["elapsed_ms"]
         self._last_utc = event["utc"]
@@ -251,12 +263,15 @@ class OfflineRootRecorder:
         return event
 
     def _expect(self, *kinds):
+        _require(not self._sink_failed, "SINK_FAILED")
         _require(self._phase in kinds, "STATE_TRANSITION_REJECTED")
 
     # ------------------------------------------------------------- lifecycle
     def begin_root(self, preflight_sha256):
         """Open the single root. Second call on the same recorder is refused."""
-        _require(self._phase == "INITIAL", "ONE_ATTEMPT_CONSUMED")
+        _require(self._phase == "INITIAL" and not self._attempt_consumed,
+                 "ONE_ATTEMPT_CONSUMED")
+        self._attempt_consumed = True
         _require(_hex64(preflight_sha256), "IDENTITY_REJECTED")
         self._origin = self._now_ms()
         if self._root_id is None:
@@ -291,6 +306,7 @@ class OfflineRootRecorder:
             monotonic, not the historical stage starts.
         """
         self._expect("worker_started", "stage")
+        _require(not self._frozen, "ALREADY_FROZEN")
         _require(stage_name in STAGES, "STAGE_REJECTED")
         _require(_duration(begin_ms) and _duration(end_ms) and end_ms >= begin_ms,
                  "STAGE_INTERVAL_REJECTED")
@@ -321,32 +337,9 @@ class OfflineRootRecorder:
         self._stage_ends.append(end_ms)
         return event
 
-    def freeze_root(self, *, cpu_ms=None, rss_peak_bytes=None, fetch=None):
-        """Freeze root counters and emit root_frozen.
-
-        Contract points enforced here:
-
-        * M01 -- `process_cpu_ms` is `cpu_end - cpu_start` over the root window.
-          The reader is cumulative; a raw cumulative value is never reported.
-          Non-integer, negative, regressing or non-finite samples yield UNKNOWN
-          instead of a fabricated interval.
-        * M04 -- root FETCH is UNKNOWN unless a validated root-level fetch port
-          supplied it. Stage fetch values are never summed: stages may nest.
-        * M05 -- the freeze instant is captured from the clock, and the emitted
-          event's elapsed is that instant. A caller that advances the clock
-          after the worker returned therefore records the later value only if
-          it explicitly asks for it via `frozen_at_ms`; otherwise the worker
-          interval would absorb post-return bookkeeping.
-        """
-        self._expect("worker_started", "stage")
+    def _capture_root(self, *, cpu_ms=None, rss_peak_bytes=None, fetch=None):
+        """Capture all root observations synchronously, once, at the boundary."""
         _require(not self._frozen, "ALREADY_FROZEN")
-        counts = self._counts.freeze()
-        self._frozen = True
-
-        cpu = self._interval_cpu(cpu_ms)
-        rss = self._stats.rss_peak_bytes() if rss_peak_bytes is None else rss_peak_bytes
-        _require(rss == UNKNOWN or (type(rss) is int and rss >= 0), "METRIC_REJECTED")
-
         if fetch is None:
             fetch_ms = fetch_rows = UNKNOWN
         else:
@@ -356,21 +349,40 @@ class OfflineRootRecorder:
             _require(fetch_ms == UNKNOWN or _duration(fetch_ms), "FETCH_REJECTED")
             _require(fetch_rows == UNKNOWN
                      or (type(fetch_rows) is int and fetch_rows >= 0), "FETCH_REJECTED")
-
-        # M05: bind to the captured worker-return instant. If the inline path
-        # was not used the current clock is the boundary; the value is still
-        # captured once, here, so later work cannot leak into the interval.
-        if self._worker_returned_ms is None:
-            self._worker_returned_ms = self._now_ms() - self._origin
-        frozen_at = self._worker_returned_ms
-        _require(frozen_at >= self._last_elapsed, "CLOCK_REGRESSION")
-
-        event = self._emit(
-            "root_frozen", sql_counts=counts, process_cpu_ms=cpu,
-            rss_peak_bytes=rss, fetch_observed_ms=fetch_ms, fetched_rows=fetch_rows,
-            _forced_elapsed=frozen_at,
+        frozen_at = self._elapsed()
+        _require(frozen_at > self._root_started_ms, "ROOT_INTERVAL_REJECTED")
+        # Seal counts before injected readers can do any post-boundary work.
+        self._frozen = True
+        try:
+            counts = self._counts.freeze()
+            cpu = self._interval_cpu(cpu_ms)
+            rss = self._stats.rss_peak_bytes() if rss_peak_bytes is None else rss_peak_bytes
+            _require(rss == UNKNOWN or (type(rss) is int and rss >= 0), "METRIC_REJECTED")
+        except Exception:
+            self._phase = "failure"
+            raise WiringRejected("ROOT_SNAPSHOT_REJECTED") from None
+        self._root_snapshot = dict(
+            sql_counts=counts, process_cpu_ms=cpu, rss_peak_bytes=rss,
+            fetch_observed_ms=fetch_ms, fetched_rows=fetch_rows,
         )
-        _require(event["elapsed_ms"] > self._root_started_ms, "ROOT_INTERVAL_REJECTED")
+        self._worker_returned_ms = frozen_at
+
+    def freeze_root(self, *, cpu_ms=None, rss_peak_bytes=None, fetch=None):
+        """Publish the captured return snapshot without resampling metrics.
+
+        Manual begin_root/begin_worker callers have no return signal: this call
+        captures their current boundary. Overrides are only valid on that path;
+        late overrides cannot replace an already captured return snapshot.
+        Missing root FETCH stays UNKNOWN, never a sum of overlapping stages.
+        """
+        self._expect("worker_started", "stage")
+        if self._root_snapshot is None:
+            self._capture_root(cpu_ms=cpu_ms, rss_peak_bytes=rss_peak_bytes, fetch=fetch)
+        else:
+            _require(cpu_ms is None and rss_peak_bytes is None and fetch is None,
+                     "ROOT_ALREADY_CAPTURED")
+        event = self._emit("root_frozen", **self._root_snapshot,
+                           _forced_elapsed=self._worker_returned_ms)
         self._root_frozen_ms = event["elapsed_ms"]
         return event
 
@@ -438,18 +450,9 @@ class OfflineRootRecorder:
     def run_offline(self, *, stages=()):
         """Drive one fully simulated root through the injected executor port.
 
-        M05: the worker-return instant is captured from the injected clock
-        immediately after `execute_claimed_job()` returns (which includes the
-        worker's own finally). `freeze_root()` then binds to THAT instant, so
-        any later bookkeeping — post-root reads, archive work, clock advances —
-        can never be absorbed into `execute_claimed_job_ms`.
-
-        Root SQL counting must happen inside the root observation window. The
-        offline driver performs it before the worker is considered returned so
-        the counter reflects root work rather than post-return activity.
-
-        Real execution is impossible here: the default executor refuses, and
-        every supported caller injects an offline double.
+        Wall, CPU delta, root SQL and root FETCH are captured synchronously
+        after the injected worker returns with its finally complete. Later
+        freeze_root only publishes that snapshot. The default executor refuses.
         """
         preflight = self._contract.get("preflight_sha256")
         _require(_hex64(preflight), "IDENTITY_REJECTED")
@@ -470,9 +473,33 @@ class OfflineRootRecorder:
                 fetched_rows=stage.get("fetched_rows", 0),
             )
             cursor = end
-        self._executor.execute_claimed_job(root)
-        # Boundary: the worker is done the moment this call returns.
-        self._worker_returned_ms = self._now_ms() - self._origin
+        try:
+            self._executor.execute_claimed_job(root)
+        except Exception:
+            # The worker finally has unwound. Never emit a successful snapshot
+            # or allow the consumed attempt to be retried.
+            self._frozen = True
+            try:
+                self._counts.freeze()
+            except Exception:
+                self._phase = "failure"
+                raise WiringRejected("ROOT_SNAPSHOT_REJECTED") from None
+            self.fail("ROOT_FAILED")
+            raise WiringRejected("ROOT_FAILED") from None
+        try:
+            self._capture_root()
+        except WiringRejected:
+            # A failed return capture is terminal; a later manual freeze must
+            # not manufacture a different, successful return boundary.
+            if not self._frozen:
+                self._frozen = True
+                try:
+                    self._counts.freeze()
+                except Exception:
+                    self._phase = "failure"
+                    raise WiringRejected("ROOT_SNAPSHOT_REJECTED") from None
+            self._phase = "failure"
+            raise
         return self
 
     def _advance_to(self, target_ms):
@@ -508,7 +535,7 @@ class OfflineRootRecorder:
         return self._root_id
 
     def counts(self):
-        """Root SQL counter handle (freeze is performed by freeze_root)."""
+        """Root SQL handle; sealed at worker return, or manual freeze_root."""
         return self._counts
 
 
@@ -547,44 +574,81 @@ class ListSink:
 
 
 class FileJsonlSink:
-    """Durable offline sink: each append is written, flushed and fsynced.
+    """Append-only offline sink with acknowledged, file-fsynced line count.
 
-    Safety rules, all fail-closed:
-      * the target file must not already exist (never overwrite prior evidence);
-      * the parent directory must exist and be a real directory;
-      * re-entrant appends are refused.
-    No external service, database or network is involved.
+    Ancestors must be trusted and stable. On POSIX a no-follow directory fd
+    pins the immediate parent; creation is exclusive and relative to that fd,
+    followed by parent fsync. Windows uses exclusive open under the same trust
+    assumption and does NOT prove directory-entry crash durability. Neither
+    mode is a power-loss test or a guarantee against a hostile ancestor/volume.
+    The open file fd is retained: later path replacement never redirects writes.
+
+    A failed append poisons the sink. `count` includes only fully written,
+    flushed and fsynced lines; any uncertain final bytes are NOT acknowledged.
+    No complete-bundle claim is made by this sink, ListSink, or emit_fixture.
     """
 
-    DURABLE = True
+    DURABLE = True  # File contents acknowledged by successful append fsync only.
 
     def __init__(self, path):
         self._path = Path(path)
         if self._path.exists() or self._path.is_symlink():
             raise WiringRejected("SINK_EXISTS")
         parent = self._path.parent
-        _require(parent.is_dir() and not parent.is_symlink(), "SINK_PARENT_REJECTED")
-        self._fh = open(self._path, "xb")
+        _require(parent.is_dir() and not parent.is_symlink()
+                 and not parent.is_junction(), "SINK_PARENT_REJECTED")
         self._busy = False
+        self._failed = False
         self._count = 0
+        self.directory_synced = False
+        self._fh = None
+        directory_fd = None
+        try:
+            if os.name == "posix":
+                directory_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                fd = os.open(self._path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                             | os.O_NOFOLLOW, 0o600, dir_fd=directory_fd)
+                try:
+                    self._fh = os.fdopen(fd, "wb")
+                except Exception:
+                    os.close(fd)
+                    raise
+                os.fsync(directory_fd)
+                self.directory_synced = True
+            else:
+                self._fh = open(self._path, "xb")
+        except Exception:
+            if self._fh is not None:
+                self._fh.close()
+            raise SinkRejected("SINK_OPEN_FAILED") from None
+        finally:
+            if directory_fd is not None:
+                os.close(directory_fd)
 
     def append(self, event):
+        _require(not self._failed and not self._fh.closed, "SINK_FAILED")
         _require(not self._busy, "SINK_REENTRANT")
         self._busy = True
         try:
-            raw = (json.dumps(event, sort_keys=True, separators=(",", ":")) + "\n")
-            self._fh.write(raw.encode())
+            raw = (json.dumps(event, sort_keys=True, separators=(",", ":"),
+                              allow_nan=False) + "\n").encode()
+            if self._fh.write(raw) != len(raw):
+                raise SinkRejected("SINK_FAILED")
             self._fh.flush()
             os.fsync(self._fh.fileno())
             self._count += 1
+        except Exception:
+            self._failed = True
+            raise SinkRejected("SINK_FAILED") from None
         finally:
             self._busy = False
 
     def close(self):
-        if not self._fh.closed:
-            self._fh.flush()
-            os.fsync(self._fh.fileno())
+        try:
             self._fh.close()
+        except Exception:
+            self._failed = True
+            raise SinkRejected("SINK_FAILED") from None
 
     def __enter__(self):
         return self
@@ -735,6 +799,8 @@ def emit_fixture(directory, *, contract=None, stages=None, clock=None):
     `scripts.biz_perf_p1_04_diagnostic.validate_bundle` for end-to-end checking.
     A non-empty default stage set is required because the reviewed validator
     rejects evidence with no instrumented stage (EVIDENCE_INCOMPLETE).
+    This uses ListSink and writes only after simulated success. It proves no
+    crash-prefix durability and supplies no real execution persistence layer.
     """
     directory = Path(directory)
     contract = contract or build_preflight()
