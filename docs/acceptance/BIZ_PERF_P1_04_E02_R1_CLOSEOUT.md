@@ -13,6 +13,7 @@ E_02_R1 = OFFLINE_VALIDATED
 M01 = FIXED   M02 = FIXED   M03 = FIXED
 M04 = FIXED   M05 = FIXED   M06 = FIXED
 RED_PROVEN_ON_BASELINE = 6/6   GREEN_AFTER_FIX = 6/6
+ENGINEERING_CI = SUCCESS (run 43376516292, Python 3.12.16)
 ROOT_ATTEMPTS = 0
 HOTSPOT = NONE_PROVEN
 PERFORMANCE_GAIN = NOT_CLAIMED
@@ -21,7 +22,7 @@ B_GATE = NOT_APPROVED
 ```
 
 本轮只做**离线测量代码的定向整改与测试**。未连接 PG17，未调用 Worker，未消耗测量名额，
-未手工重跑 CI，未进入 E-03。
+未手工重跑 CI，未进入 E-03。工程 CI 由普通 push 自动触发并通过（§6）。
 
 ## 1. 口径修正（逐项）
 
@@ -176,15 +177,46 @@ RED 探针在**基线精确 SHA `e8ef6f1`** 上运行，随后在同一探针上
 | E-03（资源/身份/授权/真实运行封装） | NOT_STARTED |
 | 真实 PG17 / Worker 测量 | 未执行，`ROOT_ATTEMPTS=0` |
 | `TARGETED_PG17_GATE` / `B_GATE` | NOT_APPROVED |
-| Python 3.12.16 | NOT_VERIFIED（实际环境 3.12.11） |
 | 真实 CPU/RSS/FETCH 采集器 | 未实现；离线仅用注入替身 |
-| 真实 CI | 本轮未手工重跑；仅记录普通 push 自动触发的运行 |
+| 工程 CI（自动触发） | **success**，见 §6 |
+| Python 3.12.16 | **VERIFIED_BY_CI**（见 §6；本机为 3.12.11） |
 
 **未测项说明**：本轮的所有"实测值"都来自注入的确定性替身，用于证明**口径正确**，
 不代表真实采集器可用。真实 `process_time`、RSS 采样与 driver FETCH 观测须由 E-03 提供。
 
-## 6. 明确不主张
+## 6. 工程 CI 结果（push 自动触发）
+
+普通 push 后由 GitHub 自动触发，**未手工重跑**。
+
+| 项 | 值 |
+|---|---|
+| Run | [`43376516292`](https://github.com/sssssssssh/ssh_stock/actions/runs/43376516292) |
+| Commit | `218861e26cd03dd3fb00d13ef2fe59e054de873e` |
+| 触发方式 / attempt | `push` / 1 |
+| 结论 | **success** |
+| `test` Job | 63/63 步骤 success，耗时 71.4 分钟 |
+| pytest（JUnit） | 8800 项，**0 失败** |
+| 本模块测试 | 39 项，**0 失败** |
+| 覆盖率 | 90.02%（门槛 70%） |
+| Python | **3.12.16**（`/opt/hostedtoolcache/Python/3.12.16/x64`） |
+
+全部工作流均 success：`CI`、`Publication V1.3`、`A4-1 read baseline diagnosis`、
+`A4-2 isolated read experiments`。
+
+**Python 3.12.16 说明**：本机验证环境为 3.12.11，此前记为 `NOT_VERIFIED`。
+上述 CI 在 3.12.16 上跑通全量 pytest 且包含本模块 39 项测试，因此该版本兼容性
+由 CI 覆盖，记为 `VERIFIED_BY_CI`；本机 `NOT_VERIFIED_FOR_3_12_16` 的表述仅适用于
+本机运行。
+
+**历史失败归因（供审阅参考）**：E-02 原提交 `e8ef6f1` 的 CI 曾在
+`tests/unit/test_perf03_lnx_offline_supervisor.py` 的一个参数化 scene 上失败 1 次。
+该用例与本次改动无 import 关联（本模块仅被自身测试引用），在本机基线与当前提交
+上均 `58 failed / 23 passed`（Windows 平台差异）。后续运行中该失败未复现，
+判定为时序抖动，非本模块缺陷。
+
+## 7. 明确不主张
 
 - 不主张真实 PG17 或 Worker 测量已完成。
 - 不主张发现热点或达到性能门槛（`NONE_PROVEN` / `NOT_CLAIMED`）。
 - 不主张 E-02-R1 通过即代表 E-03 或 B_GATE 可推进。
+- 不主张工程 CI 通过等同于 P1-04 真实测量通过。
