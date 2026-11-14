@@ -1,0 +1,36 @@
+{
+  "name": "w05-${W05_RUN_UUID:?missing}",
+  "services": {
+    "pg17": {
+      "image": "${W05_PG17_PINNED_IMAGE:?missing}",
+      "platform": "linux/amd64",
+      "profiles": ["w05-manual"],
+      "restart": "no",
+      "stop_signal": "SIGINT",
+      "stop_grace_period": "30s",
+      "mem_limit": "4g",
+      "memswap_limit": "4g",
+      "environment": {
+        "POSTGRES_DB": "w05_lab_test",
+        "POSTGRES_USER": "w05_lab_owner",
+        "POSTGRES_PASSWORD_FILE": "/run/secrets/pg_password",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256 --auth-local=scram-sha-256",
+        "PGDATA": "/var/lib/postgresql/data/pgdata"
+      },
+      "command": ["postgres", "-c", "v14.test_instance=${W05_RUN_UUID:?missing}"],
+      "secrets": ["pg_password"],
+      "volumes": [{"type": "volume", "source": "pgdata", "target": "/var/lib/postgresql/data", "volume": {"nocopy": true}}],
+      "networks": ["private"],
+      "labels": {"w05.run": "${W05_RUN_UUID:?missing}"}
+    }
+  },
+  "volumes": {
+    "pgdata": {"name": "w05-${W05_RUN_UUID:?missing}-pgdata", "labels": {"w05.run": "${W05_RUN_UUID:?missing}"}}
+  },
+  "networks": {
+    "private": {"name": "w05-${W05_RUN_UUID:?missing}-private", "internal": true, "driver": "bridge", "labels": {"w05.run": "${W05_RUN_UUID:?missing}"}}
+  },
+  "secrets": {
+    "pg_password": {"file": "${W05_PG17_PASSWORD_SECRET_FILE:?missing}"}
+  }
+}
