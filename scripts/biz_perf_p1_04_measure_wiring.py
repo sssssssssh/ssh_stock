@@ -171,7 +171,7 @@ class OfflineRootRecorder:
     """
 
     def __init__(self, *, contract, clock, stats, sink, root_id_factory=None,
-                 utc_factory=None, executor=None):
+                 utc_factory=None, executor=None, fetch_reader=None):
         _require(isinstance(contract, dict), "CONTRACT_REJECTED")
         _require(contract.get("schema_version") == SCHEMA_VERSION, "CONTRACT_REJECTED")
         _require(contract.get("evidence_kind") == EVIDENCE_KIND, "CONTRACT_REJECTED")
@@ -188,6 +188,7 @@ class OfflineRootRecorder:
         self._root_id_factory = root_id_factory or (lambda: str(uuid.uuid4()))
         self._utc_factory = utc_factory
         self._executor = executor or RefusedExecutor()
+        self._fetch_reader = fetch_reader
 
         self._seq = 0
         self._phase = "INITIAL"
@@ -358,6 +359,16 @@ class OfflineRootRecorder:
             cpu = self._interval_cpu(cpu_ms)
             rss = self._stats.rss_peak_bytes() if rss_peak_bytes is None else rss_peak_bytes
             _require(rss == UNKNOWN or (type(rss) is int and rss >= 0), "METRIC_REJECTED")
+            # Optional offline injection only: sample once after the wall/SQL
+            # boundary has closed, alongside CPU/RSS. No Worker hook is installed.
+            if fetch is None and self._fetch_reader is not None:
+                observed = self._fetch_reader()
+                _require(type(observed) is dict
+                         and set(observed) == {"observed_ms", "rows"}, "FETCH_REJECTED")
+                fetch_ms, fetch_rows = observed["observed_ms"], observed["rows"]
+                _require(fetch_ms == UNKNOWN or _duration(fetch_ms), "FETCH_REJECTED")
+                _require(fetch_rows == UNKNOWN
+                         or (type(fetch_rows) is int and fetch_rows >= 0), "FETCH_REJECTED")
         except Exception:
             self._phase = "failure"
             raise WiringRejected("ROOT_SNAPSHOT_REJECTED") from None
