@@ -151,7 +151,7 @@ def assess(request, expected_sha):
              "WINDOW_INVALID")
         evidence = request["evidence"]
         keys(evidence, {"ci", "review", "resource"})
-        for kind, row in evidence.items():
+        for row in evidence.values():
             keys(row, {"source", "sha", "run_uuid", "reference"})
             need(label(row["source"]) and label(row["reference"]), "EVIDENCE_INCOMPLETE")
             need(row["sha"] == expected_sha, "SHA_MISMATCH")
