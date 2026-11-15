@@ -440,7 +440,15 @@ class PublicationWorkspace:
 
     def record_scope(self, model, filters):
         source = self.db.info["calculation_job_id"]
-        self.register_source(source, invalidate=True)
+        self.register_source(source)
+        self.db.execute(
+            update(DataPublicationSource)
+            .where(
+                DataPublicationSource.publication_id == self.job_id,
+                DataPublicationSource.source_job_id == source,
+            )
+            .values(validated_at=None, validation=None)
+        )
         dates = []
         for expression in filters:
             for value in visitors.iterate(expression):

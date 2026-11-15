@@ -50,6 +50,11 @@ class RecordingSession(Session):
         elif "UPDATE data_publication_source" in sql:
             self.calls.append(("source_update", sql, None))
             self.source.update(validated_at=None, validation=None)
+            # Model the original ORM UPDATE's known-value session synchronization.
+            for cached in self.identity_map.values():
+                if isinstance(cached, DataPublicationSource):
+                    cached.validated_at = None
+                    cached.validation = None
         elif "WITH input_keys" in sql:
             requested = json.loads(params["keys"])
             self.calls.append(("lookup", sql, dict(params)))
@@ -91,7 +96,7 @@ def candidate_session(**options):
     return db, ws
 
 
-def test_factor_scope_invalidates_source_in_one_statement():
+def test_factor_scope_invalidates_source_with_original_statement_sequence():
     db, ws = candidate_session()
     cached = DataPublicationSource(publication_id=ROOT, source_job_id=ROOT,
                                    role="CANDIDATE", validated_at=NOW, validation={"ok": True})
@@ -99,10 +104,11 @@ def test_factor_scope_invalidates_source_in_one_statement():
     db.identity_map.add(inspect(cached))
     ws.record_scope(StockFactorDaily, [StockFactorDaily.trade_date >= DAY,
                                      StockFactorDaily.trade_date <= DAY])
-    assert [kind for kind, _, _ in db.calls] == ["source_insert"]
-    assert "DO UPDATE SET validated_at" in db.calls[0][1]
+    assert [kind for kind, _, _ in db.calls] == ["source_insert", "source_update"]
+    assert "DO NOTHING" in db.calls[0][1]
+    assert "validated_at" in db.calls[1][1] and "validation" in db.calls[1][1]
     assert db.source == {"role": "CANDIDATE", "validated_at": None, "validation": None}
-    assert {"validated_at", "validation"} <= inspect(cached).expired_attributes
+    assert cached.validated_at is None and cached.validation is None
     assert len(db.scopes) == 1
     scope = db.scopes[0]
     assert (scope.publication_id, scope.source_id, scope.table_name) == (
@@ -135,16 +141,19 @@ def test_factor_candidate_path_bounds_queries_and_preserves_rows(size):
         db.calls.clear()
         assert replace_slice_rows(
             db, StockFactorDaily, rows,
-            scope_filters=[StockFactorDaily.trade_date >= start, StockFactorDaily.trade_date <= end],
+            scope_filters=[
+                StockFactorDaily.trade_date >= start,
+                StockFactorDaily.trade_date <= end,
+            ],
             key_columns=["trade_date", "ts_code"],
         ) == size
         kinds = [kind for kind, _, _ in db.calls]
         batches = (size + 499) // 500
         assert kinds.count("source_insert") == 2
-        assert kinds.count("source_update") == 0
+        assert kinds.count("source_update") == 1
         assert kinds.count("reconcile") == 1
         assert kinds.count("lookup") == kinds.count("store") == batches
-        assert len(kinds) == 3 + 2 * batches
+        assert len(kinds) == 4 + 2 * batches
         lookups = [params for kind, _, params in db.calls if kind == "lookup"]
         assert [len(json.loads(p["keys"])) for p in lookups] == [
             min(500, size - start) for start in range(0, size, 500)
