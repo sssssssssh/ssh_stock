@@ -69,8 +69,8 @@ class FactorService:
             config=config,
             trade_status=trade_status,
             optimize_cpu=optimize_cpu,
-            check_cancelled=checkpoint if self.input_window is not None
-            or optimize_cpu else None,
+            # Cancellation/ownership checks apply even when every optimization is off.
+            check_cancelled=checkpoint,
         )
         if self.input_window is not None:
             check_calculation_memory()
