@@ -1,0 +1,30 @@
+{
+  "name": "w05-${W05_RUN_UUID:?missing}",
+  "services": {
+    "w05_worker": {
+      "image": "${W05_WORKER_PINNED_IMAGE:?missing}",
+      "pull_policy": "never",
+      "platform": "linux/amd64",
+      "profiles": ["w05-worker-manual"],
+      "restart": "no",
+      "init": true,
+      "user": "10001:10001",
+      "working_dir": "/app",
+      "entrypoint": ["python", "-B", "-m", "scripts.biz_perf_p1_04_w05_worker_gate"],
+      "command": ["review-offline"],
+      "read_only": true,
+      "cap_drop": ["ALL"],
+      "security_opt": ["no-new-privileges:true"],
+      "pids_limit": 64,
+      "mem_limit": "3g",
+      "memswap_limit": "3g",
+      "environment": {
+        "W05_DB_HOST": "pg17",
+        "W05_DB_PORT": "5432",
+        "W05_DB_NAME": "w05_lab_test",
+        "W05_DB_USER": "w05_lab_worker"
+      },
+      "networks": ["private"]
+    }
+  }
+}
