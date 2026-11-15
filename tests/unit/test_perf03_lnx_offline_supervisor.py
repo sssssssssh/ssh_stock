@@ -478,30 +478,49 @@ def test_rev1_close_error_revokes_scope_without_rewriting_candidate(tmp_path, mo
         c.consume_final(raw, authority=owner)
 
 
+class _SynchronousBlockClock:
+    """Exclude preparation I/O; count real time from the one injected call onward."""
+
+    def __init__(self, observed):
+        self.observed = observed
+        self.started = None
+        self.blocked_seconds = None
+
+    def __call__(self):
+        return 0 if self.started is None else time.perf_counter() - self.started
+
+    def block(self):
+        assert self.started is None
+        self.started = time.perf_counter()
+        self.observed.append('entered')
+        time.sleep(.025)
+        self.blocked_seconds = time.perf_counter() - self.started
+        self.observed.append('returned')
+
+
 @pytest.mark.parametrize('point', ['popen', 'prefix_io', 'fsync'])
 def test_rev1_synchronous_blocking_call_is_not_hard_preempted(tmp_path, monkeypatch, point):
     observed = []
+    clock = _SynchronousBlockClock(observed)
+    owner, tickets = c.MockConsumptionAuthority(), {}
     original_write = s.OwnedDirectory.write
     original_fsync = s.os.fsync
 
     def slow_spawn(*args, **kw):
-        observed.append('entered')
-        time.sleep(.025)
-        observed.append('returned')
+        if point == 'popen':
+            clock.block()
+        # A missing injection must fail before launching/polling with a frozen clock.
+        assert observed == ['entered', 'returned'], 'MOCK_BLOCKING_INJECTION_MISSING'
         return subprocess.Popen(*args, **kw)
 
     def slow_write(self, name, value):
         if name == 'prefix.json':
-            observed.append('entered')
-            time.sleep(.025)
-            observed.append('returned')
+            clock.block()
         return original_write(self, name, value)
 
     def slow_fsync(fd):
         if not observed:
-            observed.append('entered')
-            time.sleep(.025)
-            observed.append('returned')
+            clock.block()
         return original_fsync(fd)
 
     if point == 'prefix_io':
@@ -510,12 +529,43 @@ def test_rev1_synchronous_blocking_call_is_not_hard_preempted(tmp_path, monkeypa
         monkeypatch.setattr(s.os, 'fsync', slow_fsync)
     began = time.monotonic()
     r = s.supervise(tmp_path.resolve(), 'SYNTHETIC_BLOCKING', limits=(.01, .01, .01),
-                    popen=slow_spawn if point == 'popen' else subprocess.Popen)
+                    clock=clock, popen=slow_spawn, authority=owner, confirmations=tickets)
     elapsed = time.monotonic() - began
     assert elapsed >= .025  # No preemption at the .01 deadline inside the synchronous call.
     assert observed == ['entered', 'returned']
+    assert clock.blocked_seconds >= .025
+    assert clock() >= .025
     assert r['phase'] != 'COMPLETE_MOCK'
     assert r['first_failure'] in {'MOCK_START_TIMEOUT', 'MOCK_PHASE_TIMEOUT'}
+    assert float(r['supervision']['observed_elapsed_seconds']) >= .025
+    assert r['supervision']['phases'] == []
+    assert r['supervision']['child_reaped'] == (point == 'popen')
+    assert not tickets and not owner._tickets and not owner._pending
+    assert not any(r['authorization'].values())
+    c.validate_receipt(r, supervised=True)
+
+
+@pytest.mark.parametrize('point', ['popen', 'prefix_io', 'fsync'])
+def test_rev1_blocking_injection_survives_slow_preparation(tmp_path, monkeypatch, point):
+    original = s.OwnedDirectory.__init__
+    preparations = []
+
+    def delayed_directory(self, *args, **kwargs):
+        began = time.perf_counter()
+        time.sleep(.025)
+        preparations.append(time.perf_counter() - began)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(s.OwnedDirectory, '__init__', delayed_directory)
+    test_rev1_synchronous_blocking_call_is_not_hard_preempted(tmp_path, monkeypatch, point)
+    assert len(preparations) == 1 and preparations[0] >= .025
+
+
+@pytest.mark.parametrize('point', ['popen', 'prefix_io', 'fsync'])
+def test_rev1_missing_blocking_injection_is_rejected(tmp_path, monkeypatch, point):
+    monkeypatch.setattr(_SynchronousBlockClock, 'block', lambda self: None)
+    with pytest.raises(AssertionError, match='MOCK_BLOCKING_INJECTION_MISSING'):
+        test_rev1_synchronous_blocking_call_is_not_hard_preempted(tmp_path, monkeypatch, point)
 
 
 @pytest.mark.parametrize('entry', ['batch', 'cli', 'duplicate_final'])
