@@ -235,6 +235,7 @@ def execute_claimed_job(
     bind_task(job, metadata, get_settings())
     stop_heartbeat = threading.Event()
     heartbeat_thread: threading.Thread | None = None
+    heartbeat_started = False
     publication_workspace = None
     policy_token = query_observer = None
     diagnostics_token = registry = recorder = None
@@ -276,6 +277,7 @@ def execute_claimed_job(
                 name=f"job-heartbeat-{job.id}",
             )
             heartbeat_thread.start()
+            heartbeat_started = True
         checkpoint()
         if job.job_type == "recalculate" and isinstance(db, Session):
             # Refuse stale/invalid queued requests before even creating a ledger
@@ -461,7 +463,7 @@ def execute_claimed_job(
     finally:
         try:
             stop_heartbeat.set()
-            if heartbeat_thread is not None:
+            if heartbeat_thread is not None and heartbeat_started:
                 heartbeat_thread.join(timeout=5)
             try:
                 if publication_workspace is not None:

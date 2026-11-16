@@ -72,7 +72,7 @@ class OfflineIntegrationComponents:
             and isinstance(self.facade, OfflineFacade),
             "CONTROLLER_FAKE_ONLY",
         )
-        verify_business_sources()
+        verify_business_sources(version="r1.current-business-sources.v2")
         self.source = source_identity()
         self.receipt = self.pg_guard.inspect(self.connector, self.target)
         self.pg_guard.require_ready(self.receipt, self.target.owner_scope)

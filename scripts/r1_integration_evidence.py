@@ -1,6 +1,7 @@
 """Versioned safe evidence helpers; digests never confer execution authority."""
 
 import hashlib
+import json
 import math
 import re
 from pathlib import Path
@@ -79,8 +80,11 @@ def source_identity():
     }
 
 
-def verify_business_sources():
+def verify_business_sources(*, version="r1.business-compare.v1"):
     """Read pinned text sources without importing application/settings code."""
+    if version == CURRENT_SOURCE_VERSION:
+        return verify_current_business_sources()
+    require(version == "r1.business-compare.v1", "INTEGRATION_SOURCE_VERSION")
     from scripts.r1_business_snapshot_contract import load_schema
 
     root = Path(__file__).resolve().parents[1]
@@ -122,3 +126,45 @@ def empty_measurements():
             "speedup_30pct",
         )
     }
+
+
+CURRENT_SOURCE_VERSION = "r1.current-business-sources.v2"
+CURRENT_SOURCE_BASELINE = "232baf9e13cd7b23731e59188c86e0e253c3a394"
+CURRENT_MANIFEST_SHA256 = "9d7cd00c9883a04a65e147ef71611015340955503dce2b36227db940d1b799f6"
+
+
+def verify_current_business_sources():
+    """Offline integrity only; never an execution permit or a v1 fallback."""
+    root = Path(__file__).resolve().parents[1]
+
+    def read(name):
+        path = root / name
+        for part in (path, *path.parents):
+            if part == root:
+                break
+            require(not part.is_symlink() and not part.is_junction(), "INTEGRATION_SOURCE_LINK")
+        require(path.is_file(), "INTEGRATION_SOURCE_MISSING")
+        return path.read_bytes().replace(b"\r\n", b"\n")
+
+    raw = read("docs/acceptance/r1_current_business_sources_v2.json")
+    require(hashlib.sha256(raw).hexdigest() == CURRENT_MANIFEST_SHA256,
+            "INTEGRATION_CURRENT_MANIFEST_DRIFT")
+    manifest = json.loads(raw)
+    require(set(manifest) == {"version", "baseline", "purpose", "execution_authorized", "sources"}
+            and manifest["version"] == CURRENT_SOURCE_VERSION
+            and manifest["baseline"] == CURRENT_SOURCE_BASELINE
+            and manifest["purpose"] == "OFFLINE_INTEGRITY_ONLY"
+            and manifest["execution_authorized"] is False, "INTEGRATION_CURRENT_MANIFEST")
+    # Read the immutable schema canonically here without changing v1's loader.
+    schema_raw = read("docs/acceptance/r1_business_compare_schema_v1.json")
+    require(hashlib.sha256(schema_raw).hexdigest() == SCHEMA_SHA256,
+            "INTEGRATION_CURRENT_SCHEMA_DRIFT")
+    expected = set(json.loads(schema_raw)["sources"]) | {
+        "scripts/r1_integration_controller.py", "scripts/r1_integration_seed_loader.py"}
+    sources = manifest["sources"]
+    require(type(sources) is dict and set(sources) == expected, "INTEGRATION_CURRENT_PATHS")
+    for name, digest in sources.items():
+        require(type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) is not None,
+                "INTEGRATION_CURRENT_HASH")
+        require(hashlib.sha256(read(name)).hexdigest() == digest, "INTEGRATION_BUSINESS_DRIFT")
+    return True

@@ -90,7 +90,7 @@ def original_fixture_oracle():
     The fixed 420-day/weekday call layout is separately pinned by source hashes.
     Every populated field carries its origin; only five listed times are frozen.
     """
-    verify_business_sources()
+    verify_business_sources(version="r1.current-business-sources.v2")
     root, schema = Path(__file__).resolve().parents[1], load_schema()
     fixture = "tests/integration/test_business_recalc_performance.py"
     tree = ast.parse((root / fixture).read_text("utf8"))

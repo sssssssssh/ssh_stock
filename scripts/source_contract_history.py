@@ -32,6 +32,47 @@ def validate_result(returncode, xml, expected):
                 source_sha=HISTORICAL_SHA, performance_eligible=False, g1_authorized=False)
 
 
+def read_r1_historical_file(root, path, *, version="r1.historical-bytes.v1",
+                            commit="232baf9e13cd7b23731e59188c86e0e253c3a394"):
+    """Read verified regular blobs only; no checkout, network or working-tree edits."""
+    from scripts.source_contract_governance import (
+        R1_HISTORICAL_PATHS,
+        R1_HISTORICAL_SHA,
+        R1_HISTORICAL_TREE,
+        R1_HISTORICAL_VERSION,
+    )
+
+    if (version != R1_HISTORICAL_VERSION or commit != R1_HISTORICAL_SHA
+            or path not in R1_HISTORICAL_PATHS):
+        raise ValueError("R1_HISTORY_UNREGISTERED_IDENTITY")
+
+    def git(*args):
+        try:
+            return subprocess.check_output(
+                ["git", "--no-replace-objects", "-C", str(root), *args],
+                stderr=subprocess.PIPE, timeout=30)
+        except subprocess.CalledProcessError:
+            raise ValueError("R1_HISTORY_OBJECT_UNAVAILABLE") from None
+
+    if (git("rev-parse", commit + "^{commit}").decode().strip() != commit
+            or git("rev-parse", commit + "^{tree}").decode().strip() != R1_HISTORICAL_TREE):
+        raise ValueError("R1_HISTORY_OBJECT_IDENTITY")
+    entry = git("ls-tree", "-z", commit, "--", path).split(b"\0")
+    if len(entry) != 2 or entry[1] or b"\t" not in entry[0]:
+        raise ValueError("R1_HISTORY_PATH")
+    identity, name = entry[0].split(b"\t", 1)
+    mode, kind, blob = identity.split()
+    if mode != b"100644" or kind != b"blob" or name.decode() != path:
+        raise ValueError("R1_HISTORY_PATH")
+    raw = git("cat-file", "blob", blob.decode())
+    import hashlib
+
+    actual = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+    if actual != blob.decode():
+        raise ValueError("R1_HISTORY_BLOB_IDENTITY")
+    return raw
+
+
 def verify_test_sources(root, paths):
     from scripts.business_source_contract import git
 
@@ -46,6 +87,10 @@ def verify_test_sources(root, paths):
 
 
 def run(root, *, node=None):
+    from scripts.source_contract_governance import R1_HISTORICAL_NODE
+
+    if node == R1_HISTORICAL_NODE:
+        return run_r1_node(root, node)
     root = Path(root).resolve()
     if node is not None and node not in HISTORICAL_NODES:
         raise ValueError("SOURCE_CONTRACT_UNREGISTERED_HISTORICAL_NODE")
@@ -88,6 +133,90 @@ def run(root, *, node=None):
         if not output.is_file():
             raise ValueError("SOURCE_CONTRACT_HISTORICAL_JUNIT_MISSING")
         return validate_result(result.returncode, output.read_bytes(), 73 if node is None else 1)
+
+
+def run_r1_node(root, node):
+    from scripts.source_contract_governance import (
+        R1_HISTORICAL_NODE,
+        R1_HISTORICAL_SHA,
+    )
+
+    if node != R1_HISTORICAL_NODE:
+        raise ValueError("SOURCE_CONTRACT_UNREGISTERED_HISTORICAL_NODE")
+    root = Path(root).resolve()
+    path = node.split("::")[0]
+    original = read_r1_historical_file(root, path)
+    current = root / path
+    if (current.is_symlink() or current.is_junction()
+            or current.read_bytes().replace(b"\r\n", b"\n") != original):
+        raise ValueError("SOURCE_CONTRACT_HISTORICAL_TEST_SOURCE_CHANGED")
+    parent = root / ".codex_tmp"
+    parent.mkdir(exist_ok=True)
+    if parent.is_symlink() or parent.is_junction() or not parent.resolve().is_relative_to(root):
+        raise ValueError("SOURCE_CONTRACT_UNSAFE_HISTORY_DIRECTORY")
+    with tempfile.TemporaryDirectory(prefix="r1-history-", dir=parent) as name:
+        directory = Path(name).resolve()
+        if not directory.is_relative_to(parent.resolve()):
+            raise ValueError("SOURCE_CONTRACT_UNSAFE_HISTORY_DIRECTORY")
+        checkout = directory / "repo"
+        subprocess.run(["git", "--no-replace-objects", "-c", "core.autocrlf=false",
+                        "clone", "--shared", "--no-checkout", "--", str(root), str(checkout)],
+                       check=True, capture_output=True, timeout=60)
+        subprocess.run(["git", "--no-replace-objects", "-C", str(checkout), "-c",
+                        "core.autocrlf=false", "checkout", "--detach", R1_HISTORICAL_SHA],
+                       check=True, capture_output=True, timeout=60)
+        if read_r1_historical_file(checkout, path) != original:
+            raise ValueError("R1_HISTORY_OBJECT_IDENTITY")
+        if (checkout / ".env").exists():
+            raise ValueError("SOURCE_CONTRACT_HISTORY_DOTENV_REJECTED")
+        env = {k: v for k, v in os.environ.items() if not k.startswith("PG")
+               and k not in {"DATABASE_URL", "TEST_DATABASE_URL", "PYTEST_ADDOPTS",
+                             "PYTEST_PLUGINS", "PYTHONPATH"}}
+        env.update(PYTHONPATH=str(checkout), PYTHONDONTWRITEBYTECODE="1",
+                   PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_ADDOPTS="", LLM_ENABLED="false")
+        output = directory / "historical.xml"
+        code = '''
+import os,sys,platform,unittest
+from pathlib import Path
+import pytest
+platform.platform()
+phases = []
+target = "test_r1_real_root_protocol.ProtocolTests.test_AC31_source_sha_and_every_new_utf8_file"
+for attribute, phase in (("_callSetUp", "setup"), ("_callTestMethod", "body"),
+                         ("_callTearDown", "teardown")):
+    original = getattr(unittest.TestCase, attribute)
+    def observed(self, *args, _original=original, _phase=phase, **kwargs):
+        if self.id() == target: phases.append(_phase)
+        return _original(self, *args, **kwargs)
+    setattr(unittest.TestCase, attribute, observed)
+def guard(event,args):
+    if event == "open" and isinstance(args[0],(str,bytes)):
+        if Path(os.fsdecode(args[0])).name == ".env": raise RuntimeError("NO_ENV")
+    if event in {"socket.connect","socket.bind","socket.getaddrinfo","subprocess.Popen",
+                 "os.system"}: raise RuntimeError("NO_EXTERNAL")
+sys.addaudithook(guard)
+result = pytest.main(sys.argv[1:])
+if phases != ["setup", "body", "teardown"]: raise SystemExit(1)
+print("R1_ORIGINAL_LIFECYCLE_SETUP_BODY_TEARDOWN")
+raise SystemExit(result)
+'''
+        result = subprocess.run([sys.executable, "-B", "-c", code, node, "-q",
+                                 "-p", "no:cacheprovider", "--junitxml=" + str(output)],
+                                cwd=checkout, env=env, capture_output=True, text=True, timeout=120)
+        if not output.is_file():
+            raise ValueError("SOURCE_CONTRACT_HISTORICAL_JUNIT_MISSING")
+        xml = output.read_bytes()
+        receipt = validate_result(result.returncode, xml, 1)
+        case = next(ElementTree.fromstring(xml).iter("testcase"))
+        if (case.get("classname") != "tests.unit.test_r1_real_root_protocol.ProtocolTests"
+                or case.get("name") != node.split("::")[-1]
+                or result.stdout.splitlines().count(
+                    "R1_ORIGINAL_LIFECYCLE_SETUP_BODY_TEARDOWN") != 1):
+            raise ValueError("SOURCE_CONTRACT_HISTORICAL_NODE_MISMATCH")
+        receipt["source_sha"] = R1_HISTORICAL_SHA
+        receipt["scope"] = "HISTORICAL_ONLY_NOT_CURRENT_AUTHORITY"
+        receipt["lifecycle"] = ["setup", "body", "teardown"]
+        return receipt
 
 
 def main(argv=None):

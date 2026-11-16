@@ -27,6 +27,27 @@ HISTORICAL_NODES = frozenset((
     "test_AT_W09_historical_manifests_and_all_original_tests_keep_their_blobs",
 ))
 
+# Separate namespace: these objects prove historical bytes, never current safety.
+R1_HISTORICAL_SHA = "232baf9e13cd7b23731e59188c86e0e253c3a394"
+R1_HISTORICAL_TREE = "d21c4a1d870c68177175ebee276b7c1f350345f7"
+R1_HISTORICAL_VERSION = "r1.historical-bytes.v1"
+R1_HISTORICAL_PATHS = frozenset((
+    "scripts/r1_real_root_protocol.py",
+    "scripts/r1_business_snapshot_contract.py",
+    "scripts/r1_integration_pg_export.py",
+    "scripts/r1_seed_snapshot_recipe.py",
+    "scripts/r1_integration_seed_loader.py",
+    "docs/acceptance/r1_business_compare_schema_v1.json",
+    "tests/unit/test_r1_business_snapshot_contract.py",
+    "tests/unit/test_r1_integration_pg_export.py",
+    "tests/unit/test_r1_reviewed_snapshot_v2.py",
+    "tests/unit/test_r1_real_root_protocol.py",
+))
+R1_HISTORICAL_NODE = (
+    "tests/unit/test_r1_real_root_protocol.py::ProtocolTests::"
+    "test_AC31_source_sha_and_every_new_utf8_file"
+)
+
 
 @lru_cache(maxsize=8)
 def historical_manifests(root):

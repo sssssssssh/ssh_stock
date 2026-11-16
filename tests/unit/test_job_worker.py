@@ -45,6 +45,228 @@ def test_worker_reconnects_after_database_error_without_replaying_job(monkeypatc
     assert calls == ["loop", "backoff", "loop", "stopped"]
 
 
+@pytest.fixture
+def heartbeat_dispatch(monkeypatch):
+    """Real current dispatcher/repository, fake sessions and never-started OS threads."""
+    from contextlib import nullcontext
+
+    import app.core.config as config
+    import app.services.data_publication as publication
+
+    state = SimpleNamespace(start_failures=0, join_error=None, threads=[], calls=[],
+                            jobs={}, sessions=[], cas_rows=1, publications=[])
+
+    class Db:
+        def __init__(self):
+            self.info = {}
+            self.no_autoflush = nullcontext()
+            state.sessions.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, model, key):
+            return state.jobs[key]
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def commit(self):
+            state.calls.append("commit")
+
+        def rollback(self):
+            state.calls.append("rollback")
+
+        def refresh(self, job):
+            pass
+
+        def execute(self, statement):
+            # Compile the real repository CAS; no SQL is sent to any engine.
+            compiled = statement.compile(dialect=postgresql.dialect())
+            sql = str(compiled)
+            assert "job_run.worker_id =" in sql and "job_run.execution_token =" in sql
+            assert "job_run.status =" in sql
+            state.calls.append("cas")
+            if state.cas_rows == 1:
+                execution = worker_module.current_execution.get()
+                job = state.jobs[execution.job_id]
+                for key in ("status", "error_message", "step"):
+                    if key in compiled.params:
+                        setattr(job, key, compiled.params[key])
+            return SimpleNamespace(rowcount=state.cas_rows)
+
+    class Thread:
+        def __init__(self, **kwargs):
+            self.started = False
+            self.joins = []
+            self.stop = kwargs["args"][2]
+            state.threads.append(self)
+
+        def start(self):
+            if state.start_failures:
+                state.start_failures -= 1
+                raise RuntimeError("SYNTHETIC_THREAD_START_FAILURE")
+            self.started = True
+
+        def join(self, timeout):
+            self.joins.append(timeout)
+            if not self.started:
+                raise RuntimeError("cannot join thread before it is started")
+            if state.join_error:
+                raise state.join_error
+
+    def job():
+        value = SimpleNamespace(id=uuid4(), job_type="validate_data", status="RUNNING",
+                                job_metadata={}, worker_id="offline-worker",
+                                execution_token=uuid4(),
+                                step=None, target_trade_date=None)
+        state.jobs[value.id] = value
+        return value
+
+    def dispatch(db, value):
+        return execute_claimed_job(db, value.id, expected_worker=value.worker_id,
+                                   expected_token=value.execution_token)
+
+    def finish(db, value, status):
+        state.publications.append(status)
+        assert "publication_workspace" not in db.info
+        return None
+
+    # Only external effects are substituted. The dispatcher and update_job are real.
+    monkeypatch.setattr(worker_module.threading, "Thread", Thread)
+    monkeypatch.setattr(worker_module, "checkpoint", lambda: None)
+    monkeypatch.setattr(worker_module, "run_validate_data_job",
+                        lambda db, value, metadata: state.calls.append(("business", value.id)))
+    monkeypatch.setattr(publication, "finish_publication", finish)
+    monkeypatch.setattr(config, "get_settings", lambda: SimpleNamespace(
+        perf_diagnostics_enabled=False))
+    monkeypatch.setattr(worker_module, "get_settings", lambda: SimpleNamespace(
+        perf_diagnostics_enabled=False))
+    monkeypatch.setattr(worker_module.logger, "exception", lambda *a, **k: None)
+    state.Db, state.job, state.dispatch = Db, job, dispatch
+    return state
+
+
+def _assert_heartbeat_context_clean(db, execution, progress):
+    assert worker_module.current_execution.get() is execution
+    assert worker_module.current_progress.get() is progress
+    assert "data_task_timeouts" not in db.info
+    assert "data_execution_job_id" not in db.info
+
+
+def test_heartbeat_start_failure_records_failed_without_join_or_replay(heartbeat_dispatch):
+    state = heartbeat_dispatch
+    state.start_failures = 1
+    job, db = state.job(), state.Db()
+    execution = worker_module.current_execution.get()
+    progress = worker_module.current_progress.get()
+    state.dispatch(db, job)
+    assert job.status == "FAILED"
+    assert job.error_message == "SYNTHETIC_THREAD_START_FAILURE"
+    assert state.calls.count("rollback") == 1 and state.calls.count("cas") == 1
+    assert state.threads[0].joins == [] and state.threads[0].stop.is_set()
+    assert state.publications == ["FAILED"]
+    assert not any(isinstance(call, tuple) for call in state.calls)
+    _assert_heartbeat_context_clean(db, execution, progress)
+    state.dispatch(db, job)
+    assert len(state.threads) == 1 and state.calls.count("cas") == 1
+
+
+@pytest.mark.parametrize("join_fails", [False, True])
+def test_started_heartbeat_keeps_join_timeout_and_error(heartbeat_dispatch, join_fails):
+    state = heartbeat_dispatch
+    job, db = state.job(), state.Db()
+    execution = worker_module.current_execution.get()
+    progress = worker_module.current_progress.get()
+    error = RuntimeError("SYNTHETIC_JOIN_FAILURE")
+    if join_fails:
+        state.join_error = error
+        with pytest.raises(RuntimeError) as caught:
+            state.dispatch(db, job)
+        assert caught.value is error
+    else:
+        state.dispatch(db, job)
+    assert state.threads[0].joins == [5] and state.threads[0].stop.is_set()
+    assert ("business", job.id) in state.calls
+    assert state.publications == [] and job.status == "RUNNING"
+    _assert_heartbeat_context_clean(db, execution, progress)
+
+
+@pytest.mark.parametrize("error", [worker_module.JobCancelled, worker_module.JobOwnershipLost])
+def test_heartbeat_cleanup_preserves_cancel_and_ownership(heartbeat_dispatch, monkeypatch, error):
+    state = heartbeat_dispatch
+    job, db = state.job(), state.Db()
+    execution = worker_module.current_execution.get()
+    progress = worker_module.current_progress.get()
+
+    def stop():
+        raise error("SYNTHETIC_STOP")
+
+    monkeypatch.setattr(worker_module, "checkpoint", stop)
+    monkeypatch.setattr(worker_module, "_finish_data_cancellation",
+                        lambda db, value: state.calls.append("cancelled"))
+    state.dispatch(db, job)
+    assert state.calls.count("rollback") == 1
+    assert ("cancelled" in state.calls) is (error is worker_module.JobCancelled)
+    assert state.threads[0].joins == [5] and state.threads[0].stop.is_set()
+    assert state.publications == [] and "cas" not in state.calls
+    assert not any(isinstance(call, tuple) for call in state.calls)
+    _assert_heartbeat_context_clean(db, execution, progress)
+
+
+def test_heartbeat_start_failure_allows_next_poll(heartbeat_dispatch, monkeypatch):
+    state = heartbeat_dispatch
+    first, second = state.job(), state.job()
+    state.start_failures = 1
+    claims = iter((first, second))
+
+    def claim(db, worker_id):
+        try:
+            job = next(claims)
+        except StopIteration:
+            raise KeyboardInterrupt from None
+        db.info["data_claim"] = (job.id, job.worker_id, job.execution_token)
+        return job.id
+
+    monkeypatch.setattr(worker_module, "SessionLocal", state.Db)
+    monkeypatch.setattr(worker_module, "claim_next_job", claim)
+    monkeypatch.setattr(worker_module, "worker_identity", lambda: "offline-worker")
+    monkeypatch.setattr(worker_module, "scheduler_setting", lambda name, default: default)
+    monkeypatch.setattr(worker_module.time, "monotonic", lambda: 0.0)
+    with pytest.raises(KeyboardInterrupt):
+        worker_module._run_worker_loop()
+    assert first.status == "FAILED" and second.status == "RUNNING"
+    assert state.threads[0].joins == [] and state.threads[1].joins == [5]
+    assert [c for c in state.calls if isinstance(c, tuple)] == [("business", second.id)]
+    assert state.publications == ["FAILED"]
+    assert all(not db.info for db in state.sessions)
+
+
+def test_heartbeat_start_failure_cannot_override_lost_cas(heartbeat_dispatch, monkeypatch):
+    import app.services.job_execution as execution_module
+
+    state = heartbeat_dispatch
+    state.start_failures, state.cas_rows = 1, 0
+    job, db = state.job(), state.Db()
+    execution = worker_module.current_execution.get()
+    progress = worker_module.current_progress.get()
+
+    def lost():
+        raise worker_module.JobOwnershipLost("SYNTHETIC_LOST_CAS")
+
+    monkeypatch.setattr(execution_module, "checkpoint", lost)
+    with pytest.raises(worker_module.JobOwnershipLost):
+        state.dispatch(db, job)
+    assert job.status == "RUNNING" and state.calls.count("cas") == 1
+    assert state.calls.count("rollback") == 2
+    assert state.threads[0].joins == [] and state.threads[0].stop.is_set()
+    assert not any(isinstance(call, tuple) for call in state.calls)
+    _assert_heartbeat_context_clean(db, execution, progress)
+
+
 def test_heartbeat_database_errors_do_not_log_connection_details(monkeypatch):
     class Stop:
         waits = 0

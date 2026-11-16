@@ -1,0 +1,15 @@
+# BIZ-PERF-FACTOR-RECOVERY-03-R4-VALIDATE-01
+2026-11-16. Goal: resolve R4's only outstanding gate, real current-module Worker RED/GREEN and safe CI readiness; NOT another historical contract rewrite.
+
+Baseline HEAD=origin/master=232baf9e13cd7b23731e59188c86e0e253c3a394. Preserve all existing tracked modifications and untracked files; read R4 closeout and AGENTS first. Do not run concurrently with any writer.
+
+Independent reviewer found: R4 has 9 tracked modified files, 1 existing untracked test, 1 new manifest, 88 current/history contract tests passed; Worker 7 new native cases NOT EXECUTED because fastapi/loguru absent. Thus NO commit/push until actual Worker native RED/GREEN.
+
+1. Identify an ALREADY AVAILABLE offline Python environment on the authorized machine with exact compatible installed dependencies, or a fully cached, verifiable local wheelhouse and pinned lock from this repository. Do NOT pip install to existing interpreter, modify repo dependencies, access internet, pull Docker images, start app or connect DB. If no suitable environment, report ENV_BLOCKED with exact missing distributions and stop. Do not synthesize fake fastapi/loguru/SQLAlchemy modules.
+2. If existing compatible environment is found, execute native current-module pytest tests/unit/test_job_worker.py -k heartbeat, plus existing cancellation/publication/candidate-write regression. Install a strict Python audit hook or equivalent to deny network/socket, .env, subprocess, Engine.connect; ensure no real Worker or PG17 connection.
+3. True RED: in an isolated temporary copy of the changed job_worker.py, restore ONLY the original join guard (without touching worktree), run new native tests and capture expected failure on start-before-join; GREEN: run unchanged R4 worktree and show 7 new native cases pass plus relevant existing regression. Do not accept import failure as RED.
+4. Review new test fake Session/CAS/Thread semantics, real production path, no hidden bypass, and old A42366 + current v2 manifest and 88 contract tests. Verify source digest, AST, git diff --check, no unauthorized files.
+5. If test defects found, fix only tests/unit/test_job_worker.py (and if indispensable the three-line Worker patch) under existing R4 whitelist; record exact diffs and tests. Do not alter source-contract history or manifests unless a proven bug and then STOP for independent review.
+6. Produce docs/acceptance/BIZ_PERF_FACTOR_RECOVERY03_R4_VALIDATE01_CLOSEOUT.md, including environment evidence, actual RED/GREEN counts, regressions, exact changed files, SHA, no-DB proof, and clear PASS/FAIL/ENV_BLOCKED. Do not commit/push; ChatGPT independently reviews before any submission.
+7. If no environment, inspect GitHub Actions workflow definitions READ ONLY and recommend the narrowest safe CI validation path; DO NOT dispatch CI, commit, push, or spend cloud resources without review.
+Keep B_GATE=NOT_APPROVED, TARGETED_PG17_GATE=NOT_APPROVED, REAL_FACTOR_RUN=NOT_RUN; do not touch Raw/Derived or business DB.

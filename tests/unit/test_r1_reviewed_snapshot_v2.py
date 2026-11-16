@@ -619,9 +619,15 @@ print("V2_IMPORT_NO_IO")
                 self.assertFalse(result["real_worker_output_equal"])
 
     def test_T26_all_frozen_boundaries_and_oracle_authorship(self):
+        # HISTORICAL_ONLY: exact old bytes, never current execution authority.
+        from scripts.source_contract_history import read_r1_historical_file
+
         for path, hashes in FROZEN.items():
             with self.subTest(path=path):
-                self.assertIn(hashlib.sha256((ROOT / path).read_bytes()).hexdigest(), hashes)
+                raw = read_r1_historical_file(ROOT, path)
+                self.assertIn(hashlib.sha256(raw).hexdigest(), hashes)
+
+    def test_T26_current_oracle_authorship_and_fixture_bytes(self):
         oracle = json.loads(material()[1])
         self.assertEqual(oracle["approval"], "PENDING_D04")
         self.assertEqual(oracle["reviewer"], "NOT_SIGNED")
