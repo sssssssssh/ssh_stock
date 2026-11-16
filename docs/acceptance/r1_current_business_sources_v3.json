@@ -1,0 +1,28 @@
+{
+  "baseline": "bf7b6a35a453c7d82be363dec2e0f5157221db92",
+  "execution_authorized": false,
+  "purpose": "OFFLINE_INTEGRITY_ONLY",
+  "sources": {
+    "backend/app/core/config.py": "e182f18f8e1f00fac17c25b836210a459b0cd66083c747d82a59fbcc7fc6fcf7",
+    "backend/app/models/data_publication.py": "c9163a6e8386404d3b9faf9eaa1bf064d4a476b986e8fcc452ba9ce382aca63c",
+    "backend/app/models/data_schedule.py": "1c02583b6d8b455be81a3fc7f34c7aa93c167a6e516395e6688c24939fdf48c2",
+    "backend/app/models/job.py": "fc795d1d4fb92ff3b8a10d41e19898e392e236ca84c661e78dfa2b02519ecc11",
+    "backend/app/models/market_data.py": "c0207d196fb9777bfd5c83284ca9d36f5b2cbf9ea5191ca149fbce9afcee9261",
+    "backend/app/repositories/job_run.py": "599f7275f5e58d96bc25c1a8a343389e96326fd976be48b45002f04ed6381624",
+    "backend/app/services/calculation_policy.py": "11801e7198f3cb41a008f38abc99f39cb66f178c70f1bff0a628a6574ba27ab0",
+    "backend/app/services/calculation_progress.py": "0086476cf51480281701a4bd4c10e0327d41004ebb0d9849444fa7772d0fdc1a",
+    "backend/app/services/data_publication.py": "7eb0e0b3e5b623f1ef74d616e76301e116492f13a095d49cef9ac7776bf61efe",
+    "backend/app/services/job_guard.py": "e9654107d525ca03bf412c3199f2add1ed0b376b648a9a20af5590b2cd80462b",
+    "backend/app/services/job_worker.py": "7f137e4db226711697b4128028d2e6b4a495da1508d740c1215e0420870b2d44",
+    "backend/app/services/recalculation.py": "ac3d9625079277b0e4031f3b1b43a167905230458cf1958e3b1862564c76ae4c",
+    "backend/app/services/worker_observation.py": "d6cac9bca33c87a7d245c7c57feef5937ec90290fbbef05676e8d4eb0e2529e5",
+    "config/strategy.yaml": "2ac50c63f3b522ae84e97dad2c9eb2eabd2206c224cea25f83d8d049e7d2864b",
+    "requirements-biz-perf-linux-py312-v1.lock": "88549dce3164364430e20970fa10eb2125b60ff05f456d7bef4474876a98dcfc",
+    "scripts/performance_diagnostics_overhead.py": "98dbd99f94f2c784ca862bbadce43228350d72aca4f36ac4eca9110c9e763693",
+    "scripts/r1_integration_controller.py": "b84eee215faeb28ddbf785d4f3c5b944553dbe936ab01498b9ec9ba13d379e65",
+    "scripts/r1_integration_seed_loader.py": "a1aa4c76f84991cc0bbec85b57f0e1dd9cf92ffa571147498e2043ef48763282",
+    "scripts/v14_test_database.py": "5a7edc5707b5b21a97e711d043dbcff082739699376be88955f74c6c3625f1ca",
+    "tests/integration/test_business_recalc_performance.py": "c6cc8cf4145d3dbefd259417e08c06ac7470a39adeca654ce9fe2f5483f2ba27"
+  },
+  "version": "r1.current-business-sources.v3"
+}

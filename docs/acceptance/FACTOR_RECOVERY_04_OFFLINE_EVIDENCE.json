@@ -1,0 +1,369 @@
+{
+  "baseline_sha": "bf7b6a35a453c7d82be363dec2e0f5157221db92",
+  "cases": [
+    {
+      "baseline": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "51a6ec1a7ef880b04ffe617772b930c0a2b840c2885d9e5d75d3e66ad3c4a78b",
+        "primary_key_checks": 54,
+        "rows": 1,
+        "seconds": 0.0002401999954599887
+      },
+      "memory_only_trial": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "51a6ec1a7ef880b04ffe617772b930c0a2b840c2885d9e5d75d3e66ad3c4a78b",
+        "primary_key_checks": 54,
+        "rows": 1,
+        "seconds": 0.00016880000475794077
+      },
+      "size": 1
+    },
+    {
+      "baseline": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ]
+        ],
+        "output_sha256": "f28f8b79698deb21d68cc03277b9a1b80e6fc2df794a0063891e8411a11f239a",
+        "primary_key_checks": 27000,
+        "rows": 500,
+        "seconds": 0.055313799995929
+      },
+      "memory_only_trial": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ]
+        ],
+        "output_sha256": "f28f8b79698deb21d68cc03277b9a1b80e6fc2df794a0063891e8411a11f239a",
+        "primary_key_checks": 54,
+        "rows": 500,
+        "seconds": 0.04105379999964498
+      },
+      "size": 500
+    },
+    {
+      "baseline": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "399f8098562f3da0bf655a1dfa056b8896eb445b88dc84e8601b73ff23ba2530",
+        "primary_key_checks": 27054,
+        "rows": 501,
+        "seconds": 0.05204110001795925
+      },
+      "memory_only_trial": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "399f8098562f3da0bf655a1dfa056b8896eb445b88dc84e8601b73ff23ba2530",
+        "primary_key_checks": 108,
+        "rows": 501,
+        "seconds": 0.043423600000096485
+      },
+      "size": 501
+    },
+    {
+      "baseline": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "b5f387fe529d891340e1c6fa6ab40c35832e287a597e8c8a6978472f5fd33f6d",
+        "primary_key_checks": 54054,
+        "rows": 1001,
+        "seconds": 0.09988259998499416
+      },
+      "memory_only_trial": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            1
+          ],
+          [
+            "store",
+            1
+          ]
+        ],
+        "output_sha256": "b5f387fe529d891340e1c6fa6ab40c35832e287a597e8c8a6978472f5fd33f6d",
+        "primary_key_checks": 162,
+        "rows": 1001,
+        "seconds": 0.07747899999958463
+      },
+      "size": 1001
+    },
+    {
+      "baseline": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            450
+          ],
+          [
+            "store",
+            450
+          ]
+        ],
+        "output_sha256": "22536c7fafe93e02e9bad3b0698b7d8ebb49250921c1b7161d442c2a871ba199",
+        "primary_key_checks": 186300,
+        "rows": 3450,
+        "seconds": 0.4195616999932099
+      },
+      "memory_only_trial": {
+        "calls": [
+          [
+            "source",
+            1
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            500
+          ],
+          [
+            "store",
+            500
+          ],
+          [
+            "lookup",
+            450
+          ],
+          [
+            "store",
+            450
+          ]
+        ],
+        "output_sha256": "22536c7fafe93e02e9bad3b0698b7d8ebb49250921c1b7161d442c2a871ba199",
+        "primary_key_checks": 378,
+        "rows": 3450,
+        "seconds": 0.2854578999977093
+      },
+      "size": 3450
+    }
+  ],
+  "formal_performance": false,
+  "production_patch_applied": false,
+  "scope": "SOURCE_ISOLATED_FAKE_IO_MEMORY_ONLY_TRIAL",
+  "source_sha256": "e5cd2f21fa4d0f93063f1694fcfa664f109e4892360d5b02d42bee559b955775",
+  "tests": 3
+}

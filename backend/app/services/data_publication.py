@@ -317,6 +317,15 @@ class PublicationWorkspace:
                         )
                     )
             staged = []
+            updates = (
+                update_columns
+                if update_columns is not None
+                else [
+                    c.name
+                    for c in model.__table__.columns
+                    if not c.primary_key and c.name not in conflict_columns
+                ]
+            )
             for row in batch:
                 key = tuple(row[k] for k in KEYS[name])
                 previous = existing.get(key, {})
@@ -343,15 +352,6 @@ class PublicationWorkspace:
                     ):
                         value = int(value)
                     prepared[col.name] = value
-                updates = (
-                    update_columns
-                    if update_columns is not None
-                    else [
-                        c.name
-                        for c in model.__table__.columns
-                        if not c.primary_key and c.name not in conflict_columns
-                    ]
-                )
                 if previous:
                     final = dict(previous)
                     for col in updates:

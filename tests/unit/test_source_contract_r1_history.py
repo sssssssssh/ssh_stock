@@ -84,22 +84,56 @@ def test_unknown_source_version_refuses_before_io(monkeypatch, version):
         verify_business_sources(version=version)
 
 
-def test_v2_canonical_bytes_work_without_v1_schema_read_patch():
+def test_v3_canonical_bytes_work_without_v1_schema_read_patch():
     from scripts.r1_integration_evidence import verify_business_sources
 
-    assert verify_business_sources(version="r1.current-business-sources.v2") is True
+    assert verify_business_sources(version="r1.current-business-sources.v3") is True
 
 
-def test_v1_and_v2_remain_separate(current_controller, monkeypatch):
+def test_v2_manifest_still_refuses_tamper_before_business_drift(monkeypatch):
     from scripts.r1_integration_evidence import verify_business_sources
 
-    assert verify_business_sources(version="r1.current-business-sources.v2") is True
-    # The original default still validates v1, independently of the new manifest.
     original = Path.read_bytes
-    manifest = ROOT / "docs/acceptance/r1_current_business_sources_v2.json"
-    monkeypatch.setattr(Path, "read_bytes", lambda p: b"{}" if p == manifest else original(p))
+    target = ROOT / "docs/acceptance/r1_current_business_sources_v2.json"
+    monkeypatch.setattr(Path, "read_bytes", lambda p: b"{}" if p == target else original(p))
     with pytest.raises(Refused, match="^INTEGRATION_CURRENT_MANIFEST_DRIFT$"):
         verify_business_sources(version="r1.current-business-sources.v2")
+
+
+def test_v2_accepts_its_pinned_previous_source_tree(tmp_path, monkeypatch):
+    import json
+
+    from scripts import r1_integration_evidence as evidence
+
+    sha = "bf7b6a35a453c7d82be363dec2e0f5157221db92"
+    git = business_source_contract.git
+    assert git(ROOT, "rev-parse", sha + "^{commit}").decode().strip() == sha
+    manifest_path = "docs/acceptance/r1_current_business_sources_v2.json"
+    manifest = json.loads(git(ROOT, "show", sha + ":" + manifest_path))
+    paths = [*manifest["sources"], manifest_path,
+             "docs/acceptance/r1_business_compare_schema_v1.json"]
+    for name in paths:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(git(ROOT, "show", sha + ":" + name))
+    # Verify real files in a historical byte tree, never substitute old bytes
+    # into current Controller/Seed execution or claim current v2 acceptance.
+    monkeypatch.setattr(evidence, "__file__", str(tmp_path / "scripts/r1_integration_evidence.py"))
+    assert evidence.verify_business_sources(version="r1.current-business-sources.v2") is True
+
+
+def test_v1_v2_and_v3_remain_separate(current_controller, monkeypatch):
+    from scripts.r1_integration_evidence import verify_business_sources
+
+    assert verify_business_sources(version="r1.current-business-sources.v3") is True
+    with pytest.raises(Refused, match="^INTEGRATION_BUSINESS_DRIFT$"):
+        verify_business_sources(version="r1.current-business-sources.v2")
+    # The original default still validates v1, independently of the new manifest.
+    original = Path.read_bytes
+    manifest = ROOT / "docs/acceptance/r1_current_business_sources_v3.json"
+    monkeypatch.setattr(Path, "read_bytes", lambda p: b"{}" if p == manifest else original(p))
+    with pytest.raises(Refused, match="^INTEGRATION_CURRENT_MANIFEST_DRIFT$"):
+        verify_business_sources(version="r1.current-business-sources.v3")
     # Worker may legitimately differ after the production fix, so compare v1's
     # result to the unchanged schema rather than requiring current bytes to match.
     import hashlib
@@ -118,9 +152,9 @@ def test_v1_and_v2_remain_separate(current_controller, monkeypatch):
 
 @pytest.mark.parametrize("name", [
     "scripts/r1_integration_seed_loader.py", "scripts/r1_integration_controller.py",
-    "backend/app/services/job_worker.py",
+    "backend/app/services/job_worker.py", "backend/app/services/data_publication.py",
 ])
-def test_current_v2_covers_each_changed_source(current_controller, monkeypatch, name):
+def test_current_v3_covers_each_changed_source(current_controller, monkeypatch, name):
     from scripts.r1_integration_evidence import verify_business_sources
 
     original = Path.read_bytes
@@ -128,22 +162,46 @@ def test_current_v2_covers_each_changed_source(current_controller, monkeypatch, 
     monkeypatch.setattr(Path, "read_bytes", lambda p: original(p) + b"# tamper\n"
                         if p == target else original(p))
     with pytest.raises(Refused, match="^INTEGRATION_BUSINESS_DRIFT$"):
-        verify_business_sources(version="r1.current-business-sources.v2")
+        verify_business_sources(version="r1.current-business-sources.v3")
 
 
 @pytest.mark.parametrize("problem,code", [
     ("link", "INTEGRATION_SOURCE_LINK"), ("missing", "INTEGRATION_SOURCE_MISSING"),
 ])
-def test_v2_rejects_link_and_missing_file(current_controller, monkeypatch, problem, code):
+@pytest.mark.parametrize("version", [
+    "r1.current-business-sources.v2", "r1.current-business-sources.v3",
+])
+def test_current_versions_reject_link_and_missing_file(
+    current_controller, monkeypatch, problem, code, version,
+):
     from scripts.r1_integration_evidence import verify_business_sources
 
-    target = ROOT / "backend/app/services/job_worker.py"
+    target = ROOT / "backend/app/services/data_publication.py"
     attribute = "is_symlink" if problem == "link" else "is_file"
     original = getattr(Path, attribute)
     monkeypatch.setattr(Path, attribute, lambda p: problem == "link"
                         if p == target else original(p))
     with pytest.raises(Refused, match="^" + code + "$"):
-        verify_business_sources(version="r1.current-business-sources.v2")
+        verify_business_sources(version=version)
+
+
+def test_v3_rejects_unregistered_manifest_path(monkeypatch):
+    import hashlib
+    import json
+
+    from scripts import r1_integration_evidence as evidence
+
+    target = ROOT / "docs/acceptance/r1_current_business_sources_v3.json"
+    original = Path.read_bytes
+    manifest = json.loads(original(target))
+    manifest["sources"]["../outside"] = manifest["sources"].pop(
+        "backend/app/services/data_publication.py")
+    raw = json.dumps(manifest, sort_keys=True).encode()
+    # Independently exercise the path allowlist even with a bound document digest.
+    monkeypatch.setattr(evidence, "SOURCE_V3_MANIFEST_SHA256", hashlib.sha256(raw).hexdigest())
+    monkeypatch.setattr(Path, "read_bytes", lambda p: raw if p == target else original(p))
+    with pytest.raises(Refused, match="^INTEGRATION_CURRENT_PATHS$"):
+        evidence.verify_business_sources(version="r1.current-business-sources.v3")
 
 
 @pytest.mark.parametrize("version,commit,path", [
